@@ -44,7 +44,7 @@ private:
   RenderMode renderMode;
   Orientation orientation;
   bool fadingFix;
-  bool pendingFullRefresh;
+  bool pendingHalfRefresh;
   bool textDarkeningEnabled;
   uint8_t *frameBuffer = nullptr;
   uint8_t *bwBufferChunks[BW_BUFFER_NUM_CHUNKS] = {nullptr};
@@ -59,7 +59,7 @@ private:
 public:
   explicit GfxRenderer(HalDisplay &halDisplay)
       : display(halDisplay), renderMode(BW), orientation(Portrait),
-        fadingFix(false), pendingFullRefresh(false), textDarkeningEnabled(false) {}
+        fadingFix(false), pendingHalfRefresh(false), textDarkeningEnabled(false) {}
   ~GfxRenderer() { freeBwBufferChunks(); }
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;
@@ -79,8 +79,8 @@ public:
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
 
-  // Request a full refresh on the next displayBuffer() call (e.g. on screen transitions)
-  void requestFullRefresh() { pendingFullRefresh = true; }
+  // Request a half refresh on the next displayBuffer() call (e.g. on screen transitions)
+  void requestHalfRefresh() { pendingHalfRefresh = true; }
 
   // Screen ops
   int getScreenWidth() const;
