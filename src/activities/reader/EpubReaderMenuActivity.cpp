@@ -4,6 +4,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
@@ -27,7 +28,7 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
 
 std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes) {
   std::vector<MenuItem> items;
-  items.reserve(14);
+  items.reserve(15);
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   if (hasFootnotes) {
     items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
@@ -53,6 +54,8 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
     items.push_back({MenuAction::TRIAGE_MOVE_PAUSE, StrId::STR_MOVE_TO_SLEEP_PAUSE});
     items.push_back({MenuAction::TRIAGE_DELETE, StrId::STR_TRIAGE_DELETE});
   }
+
+  items.push_back({MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT, StrId::STR_RANDOM_BOOK_ON_BOOT});
 
   return items;
 }
@@ -94,6 +97,12 @@ void EpubReaderMenuActivity::loop() {
     if (selectedAction == MenuAction::ROTATE_SCREEN) {
       // Cycle orientation preview locally; actual rotation happens on menu exit.
       pendingOrientation = (pendingOrientation + 1) % orientationLabels.size();
+      requestUpdate();
+      return;
+    }
+    if (selectedAction == MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT) {
+      SETTINGS.randomBookOnBoot = !SETTINGS.randomBookOnBoot;
+      SETTINGS.saveToFile();
       requestUpdate();
       return;
     }
@@ -180,6 +189,10 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
     if (item.action == MenuAction::ROTATE_SCREEN) {
       // Render current orientation value on the right edge of the content area.
       const char* value = I18N.get(orientationLabels[pendingOrientation]);
+      const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
+      renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
+    } else if (item.action == MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT) {
+      const char* value = SETTINGS.randomBookOnBoot ? I18N.get(StrId::STR_STATE_ON) : I18N.get(StrId::STR_STATE_OFF);
       const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
       renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
     }
