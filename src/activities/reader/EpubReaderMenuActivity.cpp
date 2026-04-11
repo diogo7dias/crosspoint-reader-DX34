@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <Logging.h>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -28,7 +29,7 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
 
 std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes) {
   std::vector<MenuItem> items;
-  items.reserve(15);
+  items.reserve(16);
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   if (hasFootnotes) {
     items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
@@ -55,6 +56,8 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
     items.push_back({MenuAction::TRIAGE_DELETE, StrId::STR_TRIAGE_DELETE});
   }
 
+  // Quick Settings section (always visible)
+  items.push_back({MenuAction::NONE, StrId::STR_QUICK_SETTINGS, nullptr, true});
   items.push_back({MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT, StrId::STR_RANDOM_BOOK_ON_BOOT});
 
   return items;
@@ -102,7 +105,9 @@ void EpubReaderMenuActivity::loop() {
     }
     if (selectedAction == MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT) {
       SETTINGS.randomBookOnBoot = !SETTINGS.randomBookOnBoot;
-      SETTINGS.saveToFile();
+      if (!SETTINGS.saveToFile()) {
+        LOG_ERR("MENU", "Failed to save randomBookOnBoot toggle");
+      }
       requestUpdate();
       return;
     }

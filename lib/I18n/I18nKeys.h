@@ -452,6 +452,7 @@ enum class StrId : uint16_t {
   STR_UNFAVORITE,
   STR_TRIAGE_PAUSE,
   STR_TRIAGE_UNPAUSE,
+  STR_QUICK_SETTINGS,
   // Sentinel - must be last
   _COUNT
 };
