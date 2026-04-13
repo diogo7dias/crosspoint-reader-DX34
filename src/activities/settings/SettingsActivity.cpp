@@ -213,13 +213,19 @@ void SettingsActivity::buildSettingsList() {
     // Web-only categories (KOReader Sync, OPDS Browser) are skipped for device UI
   }
 
-  // Filter margin entries based on uniform/separate mode.
+  // Filter margin entries based on dynamic/uniform/separate mode.
   {
+    const bool dynamic = SETTINGS.dynamicMargins;
     const bool uniform = SETTINGS.uniformMargins;
     readerSettings.erase(
         std::remove_if(readerSettings.begin(), readerSettings.end(),
-                       [uniform](const SettingInfo& s) {
-                         if (uniform) {
+                       [dynamic, uniform](const SettingInfo& s) {
+                         if (dynamic) {
+                           // Dynamic: hide all manual horizontal margin controls
+                           return s.nameId == StrId::STR_UNIFORM_MARGINS ||
+                                  s.nameId == StrId::STR_SCREEN_MARGIN ||
+                                  s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL;
+                         } else if (uniform) {
                            // Uniform: hide separate margin entries
                            return s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL ||
                                   s.nameId == StrId::STR_SCREEN_MARGIN_TOP ||
@@ -480,6 +486,10 @@ void SettingsActivity::toggleCurrentSetting() {
         SETTINGS.screenMarginTop = SETTINGS.screenMarginHorizontal;
         SETTINGS.screenMarginBottom = SETTINGS.screenMarginHorizontal;
       }
+      buildSettingsList();
+      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+    }
+    if (setting.valuePtr == &CrossPointSettings::dynamicMargins) {
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     }

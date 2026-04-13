@@ -413,6 +413,23 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
     layout.chapterPercentageTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
   }
 
+  if (SETTINGS.statusBarShowBookPageCounter && epub && section->pageCount > 0) {
+    const size_t bookSize = epub->getBookSize();
+    const size_t prevChapterSize =
+        (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+    const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
+    if (curChapterSize > 0 && bookSize > 0) {
+      const float pagesPerByte = static_cast<float>(section->pageCount) / static_cast<float>(curChapterSize);
+      const int totalEstimatedPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
+      const int currentAbsPage = std::max(1, std::min(totalEstimatedPages,
+          static_cast<int>(layout.bookProgress / 100.0f * static_cast<float>(totalEstimatedPages) + 0.5f)));
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%d/%d", currentAbsPage, totalEstimatedPages);
+      layout.bookPageCounterText = buf;
+      layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+    }
+  }
+
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
@@ -1179,8 +1196,21 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
                                    &orientedMarginLeft);
   normalizeReaderMargins(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom, &orientedMarginLeft);
   orientedMarginTop += SETTINGS.screenMarginTop;
-  orientedMarginLeft += SETTINGS.screenMarginHorizontal;
-  orientedMarginRight += SETTINGS.screenMarginHorizontal;
+  if (SETTINGS.dynamicMargins) {
+    // Auto-calculate horizontal margins to target ~62 characters per line
+    const int fontId = SETTINGS.getReaderFontId();
+    const int sampleWidth = renderer.getTextWidth(fontId, "abcdefghijklmnopqrstuvwxyz");
+    const int avgCharWidth = (sampleWidth > 0) ? sampleWidth / 26 : 8;
+    constexpr int targetCPL = 62;
+    const int targetTextWidth = targetCPL * avgCharWidth;
+    const int availableWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
+    const int dynamicMargin = std::max(0, std::min(55, (availableWidth - targetTextWidth) / 2));
+    orientedMarginLeft += dynamicMargin;
+    orientedMarginRight += dynamicMargin;
+  } else {
+    orientedMarginLeft += SETTINGS.screenMarginHorizontal;
+    orientedMarginRight += SETTINGS.screenMarginHorizontal;
+  }
   orientedMarginBottom += SETTINGS.screenMarginBottom;
   const int minContentHeight =
       std::max(ReaderLayoutSafety::kMinViewportHeight, renderer.getLineHeight(SETTINGS.getReaderFontId()) * 2);
@@ -1197,13 +1227,17 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
         (SETTINGS.statusBarShowPageCounter && statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
         (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
-         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition));
+         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const bool showBottomStatusTextRow =
         (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
         (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
-         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition));
+         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     int titleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
     if (SETTINGS.statusBarShowChapterTitle && SETTINGS.statusBarNoTitleTruncation) {
       constexpr int titlePadding = 4;

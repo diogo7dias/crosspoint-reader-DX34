@@ -47,6 +47,8 @@ inline std::vector<SettingInfo> getSettingsList() {
                         StrId::STR_CAT_READER),
       SettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {65, 150, 5},
                          "lineSpacingPercent", StrId::STR_CAT_READER),
+      SettingInfo::Toggle(StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins,
+                          "dynamicMargins", StrId::STR_CAT_READER),
       SettingInfo::Toggle(StrId::STR_UNIFORM_MARGINS, &CrossPointSettings::uniformMargins,
                           "uniformMargins", StrId::STR_CAT_READER),
       // Uniform margin entry (shown when uniformMargins == 1)
@@ -141,6 +143,13 @@ inline std::vector<SettingInfo> getSettingsList() {
                         {StrId::STR_STATUS_FONT_MIN, StrId::STR_STATUS_FONT_MAX}, "statusBarFontSize", StrId::STR_STATUS_BAR),
       SettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
                         {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE}, "statusBarBarThickness", StrId::STR_STATUS_BAR),
+      SettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER, &CrossPointSettings::statusBarShowBookPageCounter,
+                          "statusBarShowBookPageCounter", StrId::STR_STATUS_BAR),
+      SettingInfo::Enum(StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
+                        {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER,
+                         StrId::STR_STATUS_POS_TOP_RIGHT, StrId::STR_STATUS_POS_BOTTOM_LEFT,
+                         StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
+                        "statusBarBookPageCounterPosition", StrId::STR_STATUS_BAR),
 
       // --- Controls ---
       SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,

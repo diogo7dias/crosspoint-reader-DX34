@@ -245,8 +245,15 @@ void ReaderSettingsActivity::buildSettingsList() {
     if (txt && s.valuePtr == &CrossPointSettings::readerStyleMode) {
       return;
     }
-    // Filter margin entries based on uniform/separate mode
-    if (SETTINGS.uniformMargins) {
+    // Filter margin entries based on dynamic/uniform/separate mode
+    if (SETTINGS.dynamicMargins) {
+      // When dynamic margins is on, hide all manual horizontal margin controls
+      if (s.nameId == StrId::STR_UNIFORM_MARGINS ||
+          s.nameId == StrId::STR_SCREEN_MARGIN ||
+          s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL) {
+        return;
+      }
+    } else if (SETTINGS.uniformMargins) {
       if (s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL ||
           s.nameId == StrId::STR_SCREEN_MARGIN_TOP ||
           s.nameId == StrId::STR_SCREEN_MARGIN_BOTTOM) {
@@ -273,6 +280,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   pushReader(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
       {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(SettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {65, 150, 5}));
+  pushReader(SettingInfo::Toggle(StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins));
   pushReader(SettingInfo::Toggle(StrId::STR_UNIFORM_MARGINS, &CrossPointSettings::uniformMargins));
   pushReader(SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
   pushReader(SettingInfo::Value(StrId::STR_SCREEN_MARGIN_HORIZONTAL, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
@@ -332,6 +340,10 @@ void ReaderSettingsActivity::buildSettingsList() {
   statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
       {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
   statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION, &CrossPointSettings::statusBarNoTitleTruncation));
+  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER, &CrossPointSettings::statusBarShowBookPageCounter));
+  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
+      {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+       StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
 
   // --- Build flat row index ---
   flatRows.reserve(2 + readerSettings.size() + statusBarSettings.size());
@@ -384,6 +396,11 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
         SETTINGS.screenMarginTop = SETTINGS.screenMarginHorizontal;
         SETTINGS.screenMarginBottom = SETTINGS.screenMarginHorizontal;
       }
+      buildSettingsList();
+      selectedRowIndex =
+          std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+    }
+    if (setting.valuePtr == &CrossPointSettings::dynamicMargins) {
       buildSettingsList();
       selectedRowIndex =
           std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);

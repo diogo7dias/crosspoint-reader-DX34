@@ -127,7 +127,11 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
     const bool showBandChapterPercentage =
         !statusBarLayout.chapterPercentageText.empty() &&
         (statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition) == renderTopBand);
-    const bool showBandProgressText = showBandPageCounter || showBandBookPercentage || showBandChapterPercentage;
+    const bool showBandBookPageCounter =
+        !statusBarLayout.bookPageCounterText.empty() &&
+        (statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition) == renderTopBand);
+    const bool showBandProgressText = showBandPageCounter || showBandBookPercentage || showBandChapterPercentage ||
+                                      showBandBookPageCounter;
     const bool showBandTitle = SETTINGS.statusBarShowChapterTitle && !statusBarLayout.titleLines.empty() &&
                                (statusBarItemIsTop(SETTINGS.statusBarTitlePosition) == renderTopBand);
     const bool showBandBookBar =
@@ -236,6 +240,8 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
               SETTINGS.statusBarBookPercentagePosition);
       addItem(showBandChapterPercentage, &statusBarLayout.chapterPercentageText,
               statusBarLayout.chapterPercentageTextWidth, SETTINGS.statusBarChapterPercentagePosition);
+      addItem(showBandBookPageCounter, &statusBarLayout.bookPageCounterText,
+              statusBarLayout.bookPageCounterTextWidth, SETTINGS.statusBarBookPageCounterPosition);
 
       const auto drawGroup = [&](const std::vector<TextEntry>& items, const int startX) {
         int x = startX;

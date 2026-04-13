@@ -297,6 +297,8 @@ public:
   uint8_t statusBarProgressStyle = STATUS_BAR_THICK;
   uint8_t statusBarFontSize = STATUS_FONT_SMALL;
   uint8_t statusBarBarThickness = STATUS_BAR_THICKNESS_NORMAL;
+  uint8_t statusBarShowBookPageCounter = 0;
+  uint8_t statusBarBookPageCounterPosition = STATUS_TEXT_BOTTOM_CENTER;
   // Text rendering settings
   uint8_t extraParagraphSpacingLevel = EXTRA_SPACING_M;
   // Legacy field name retained for storage compatibility; value stores a
@@ -348,6 +350,7 @@ public:
   uint8_t screenMargin = 20;
   // Reader screen margin settings
   uint8_t uniformMargins = 0; // 0 = separate margins, 1 = uniform (all sides equal)
+  uint8_t dynamicMargins = 0; // 0 = manual margins, 1 = auto-calculate horizontal margins from font
   uint8_t screenMarginHorizontal = 20;
   uint8_t screenMarginTop = 20;
   uint8_t screenMarginBottom = 20;

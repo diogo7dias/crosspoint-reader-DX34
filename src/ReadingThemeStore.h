@@ -13,6 +13,7 @@ struct ReadingTheme {
   uint8_t fontSize = CrossPointSettings::SIZE_16;
   uint8_t lineSpacingPercent = 110;
   uint8_t uniformMargins = 0;
+  uint8_t dynamicMargins = 0;
   uint8_t screenMarginHorizontal = 20;
   uint8_t screenMarginTop = 20;
   uint8_t screenMarginBottom = 20;
@@ -49,6 +50,9 @@ struct ReadingTheme {
   uint8_t statusBarProgressStyle = CrossPointSettings::STATUS_BAR_THICK;
   uint8_t statusBarFontSize = CrossPointSettings::STATUS_FONT_SMALL;
   uint8_t statusBarBarThickness = CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
+  uint8_t statusBarShowBookPageCounter = 0;
+  uint8_t statusBarBookPageCounterPosition =
+      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
 };
 
 class ReadingThemeStore;

@@ -222,6 +222,14 @@ TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(
         SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
   }
 
+  if (SETTINGS.statusBarShowBookPageCounter && totalPages > 0) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d/%d", currentPage + 1, totalPages);
+    layout.bookPageCounterText = buf;
+    layout.bookPageCounterTextWidth =
+        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  }
+
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
@@ -530,7 +538,20 @@ void TxtReaderActivity::initializeReader() {
 
   // Store current settings for cache validation
   cachedFontId = SETTINGS.getReaderFontId();
-  cachedScreenMarginHorizontal = SETTINGS.screenMarginHorizontal;
+  if (SETTINGS.dynamicMargins) {
+    // Auto-calculate horizontal margins to target ~62 characters per line
+    const int sampleWidth = renderer.getTextWidth(cachedFontId, "abcdefghijklmnopqrstuvwxyz");
+    const int avgCharWidth = (sampleWidth > 0) ? sampleWidth / 26 : 8;
+    constexpr int targetCPL = 62;
+    const int targetTextWidth = targetCPL * avgCharWidth;
+    int baseLeft, baseRight, baseTop, baseBottom;
+    renderer.getOrientedViewableTRBL(&baseTop, &baseRight, &baseBottom, &baseLeft);
+    const int baseHorizontal = std::max(baseLeft, baseRight);
+    const int availableWidth = renderer.getScreenWidth() - 2 * baseHorizontal;
+    cachedScreenMarginHorizontal = std::max(0, std::min(55, (availableWidth - targetTextWidth) / 2));
+  } else {
+    cachedScreenMarginHorizontal = SETTINGS.screenMarginHorizontal;
+  }
   cachedScreenMarginTop = SETTINGS.screenMarginTop;
   cachedScreenMarginBottom = SETTINGS.screenMarginBottom;
   cachedParagraphAlignment =
@@ -568,7 +589,9 @@ void TxtReaderActivity::initializeReader() {
          statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition));
+             SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const bool showBottomStatusTextRow =
         (SETTINGS.statusBarShowBattery &&
          !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
@@ -578,7 +601,9 @@ void TxtReaderActivity::initializeReader() {
          !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition));
+             SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
             ? (SETTINGS.statusBarNoTitleTruncation
@@ -1029,7 +1054,9 @@ void TxtReaderActivity::renderPage() {
          statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition));
+             SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const bool showBottomStatusTextRow =
         (SETTINGS.statusBarShowBattery &&
          !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
@@ -1039,7 +1066,9 @@ void TxtReaderActivity::renderPage() {
          !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition));
+             SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
             ? (SETTINGS.statusBarNoTitleTruncation

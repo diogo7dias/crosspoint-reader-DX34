@@ -115,6 +115,7 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name,
   theme.fontSize = settings.fontSize;
   theme.lineSpacingPercent = settings.lineSpacingPercent;
   theme.uniformMargins = settings.uniformMargins;
+  theme.dynamicMargins = settings.dynamicMargins;
   theme.screenMarginHorizontal = settings.screenMarginHorizontal;
   theme.screenMarginTop = settings.screenMarginTop;
   theme.screenMarginBottom = settings.screenMarginBottom;
@@ -149,6 +150,9 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name,
   theme.statusBarProgressStyle = settings.statusBarProgressStyle;
   theme.statusBarFontSize = settings.statusBarFontSize;
   theme.statusBarBarThickness = settings.statusBarBarThickness;
+  theme.statusBarShowBookPageCounter = settings.statusBarShowBookPageCounter;
+  theme.statusBarBookPageCounterPosition =
+      settings.statusBarBookPageCounterPosition;
   return theme;
 }
 
@@ -165,6 +169,7 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme,
   settings.lineSpacingPercent =
       clampRange(theme.lineSpacingPercent, 65, 150, 110);
   settings.uniformMargins = theme.uniformMargins ? 1 : 0;
+  settings.dynamicMargins = theme.dynamicMargins ? 1 : 0;
   settings.screenMarginHorizontal =
       clampRange(theme.screenMarginHorizontal, 0, 55, 20);
   settings.screenMarginTop = clampRange(theme.screenMarginTop, 0, 55, 20);
@@ -261,6 +266,12 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme,
       theme.statusBarBarThickness, 0,
       CrossPointSettings::STATUS_BAR_BAR_THICKNESS_COUNT - 1,
       CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL);
+  settings.statusBarShowBookPageCounter =
+      theme.statusBarShowBookPageCounter ? 1 : 0;
+  settings.statusBarBookPageCounterPosition = clampRange(
+      theme.statusBarBookPageCounterPosition, 0,
+      CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER);
 }
 
 bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
@@ -269,6 +280,7 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.fontSize == theme.fontSize &&
          current.lineSpacingPercent == theme.lineSpacingPercent &&
          current.uniformMargins == theme.uniformMargins &&
+         current.dynamicMargins == theme.dynamicMargins &&
          current.screenMarginHorizontal == theme.screenMarginHorizontal &&
          current.screenMarginTop == theme.screenMarginTop &&
          current.screenMarginBottom == theme.screenMarginBottom &&
@@ -311,7 +323,11 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.statusBarTextAlignment == theme.statusBarTextAlignment &&
          current.statusBarProgressStyle == theme.statusBarProgressStyle &&
          current.statusBarFontSize == theme.statusBarFontSize &&
-         current.statusBarBarThickness == theme.statusBarBarThickness;
+         current.statusBarBarThickness == theme.statusBarBarThickness &&
+         current.statusBarShowBookPageCounter ==
+             theme.statusBarShowBookPageCounter &&
+         current.statusBarBookPageCounterPosition ==
+             theme.statusBarBookPageCounterPosition;
 }
 
 int ReadingThemeStore::findMatchingTheme() const {
@@ -537,6 +553,7 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.lineSpacingPercent =
       clampRange(theme.lineSpacingPercent, 65, 150, 110);
   normalized.uniformMargins = theme.uniformMargins ? 1 : 0;
+  normalized.dynamicMargins = theme.dynamicMargins ? 1 : 0;
   normalized.screenMarginHorizontal =
       clampRange(theme.screenMarginHorizontal, 0, 55, 20);
   normalized.screenMarginTop = clampRange(theme.screenMarginTop, 0, 55, 20);
@@ -631,5 +648,11 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
       theme.statusBarBarThickness, 0,
       CrossPointSettings::STATUS_BAR_BAR_THICKNESS_COUNT - 1,
       CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL);
+  normalized.statusBarShowBookPageCounter =
+      theme.statusBarShowBookPageCounter ? 1 : 0;
+  normalized.statusBarBookPageCounterPosition = clampRange(
+      theme.statusBarBookPageCounterPosition, 0,
+      CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER);
   return normalized;
 }

@@ -24,6 +24,7 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["fontSize"] = theme.fontSize;
   obj["lineSpacingPercent"] = theme.lineSpacingPercent;
   obj["uniformMargins"] = theme.uniformMargins;
+  obj["dynamicMargins"] = theme.dynamicMargins;
   obj["screenMarginHorizontal"] = theme.screenMarginHorizontal;
   obj["screenMarginTop"] = theme.screenMarginTop;
   obj["screenMarginBottom"] = theme.screenMarginBottom;
@@ -62,6 +63,9 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["statusBarProgressStyle"] = theme.statusBarProgressStyle;
   obj["statusBarFontSize"] = theme.statusBarFontSize;
   obj["statusBarBarThickness"] = theme.statusBarBarThickness;
+  obj["statusBarShowBookPageCounter"] = theme.statusBarShowBookPageCounter;
+  obj["statusBarBookPageCounterPosition"] =
+      theme.statusBarBookPageCounterPosition;
 }
 
 void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
@@ -79,6 +83,8 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.lineSpacingPercent = obj["lineSpacingPercent"] | (uint8_t)110;
   theme.uniformMargins = obj["uniformMargins"] | (uint8_t)0;
   if (theme.uniformMargins > 1) theme.uniformMargins = 0;
+  theme.dynamicMargins = obj["dynamicMargins"] | (uint8_t)0;
+  if (theme.dynamicMargins > 1) theme.dynamicMargins = 0;
   theme.screenMarginHorizontal = obj["screenMarginHorizontal"] | (uint8_t)20;
   theme.screenMarginTop = obj["screenMarginTop"] | (uint8_t)20;
   theme.screenMarginBottom = obj["screenMarginBottom"] | (uint8_t)20;
@@ -198,6 +204,11 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.statusBarBarThickness =
       obj["statusBarBarThickness"] |
       (uint8_t)CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
+  theme.statusBarShowBookPageCounter =
+      obj["statusBarShowBookPageCounter"] | (uint8_t)0;
+  theme.statusBarBookPageCounterPosition =
+      obj["statusBarBookPageCounterPosition"] |
+      (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
   theme = ReadingThemeStore::normalizeTheme(theme);
 }
 } // namespace
