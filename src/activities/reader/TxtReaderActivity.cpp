@@ -539,15 +539,17 @@ void TxtReaderActivity::initializeReader() {
   // Store current settings for cache validation
   cachedFontId = SETTINGS.getReaderFontId();
   if (SETTINGS.dynamicMargins) {
-    // Auto-calculate horizontal margins to target ~62 characters per line
+    // Auto-calculate horizontal margins to target ~62 characters per line.
+    // Use normalized oriented margins (same as EpubReaderActivity) so both
+    // readers produce identical horizontal margins for the same font/screen.
     const int sampleWidth = renderer.getTextWidth(cachedFontId, "abcdefghijklmnopqrstuvwxyz");
     const int avgCharWidth = (sampleWidth > 0) ? sampleWidth / 26 : 8;
     constexpr int targetCPL = 62;
     const int targetTextWidth = targetCPL * avgCharWidth;
-    int baseLeft, baseRight, baseTop, baseBottom;
+    int baseTop, baseRight, baseBottom, baseLeft;
     renderer.getOrientedViewableTRBL(&baseTop, &baseRight, &baseBottom, &baseLeft);
-    const int baseHorizontal = std::max(baseLeft, baseRight);
-    const int availableWidth = renderer.getScreenWidth() - 2 * baseHorizontal;
+    normalizeReaderMargins(&baseTop, &baseRight, &baseBottom, &baseLeft);
+    const int availableWidth = renderer.getScreenWidth() - baseLeft - baseRight;
     cachedScreenMarginHorizontal = std::max(0, std::min(55, (availableWidth - targetTextWidth) / 2));
   } else {
     cachedScreenMarginHorizontal = SETTINGS.screenMarginHorizontal;

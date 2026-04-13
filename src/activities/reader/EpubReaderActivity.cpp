@@ -414,6 +414,10 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
   }
 
   if (SETTINGS.statusBarShowBookPageCounter && epub && section->pageCount > 0) {
+    // Estimate total book pages by extrapolating the current chapter's
+    // pages-per-byte ratio to the entire book. This is approximate —
+    // chapters with images or code have different density than prose,
+    // so the total may fluctuate when navigating between chapter types.
     const size_t bookSize = epub->getBookSize();
     const size_t prevChapterSize =
         (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
