@@ -29,6 +29,7 @@ class OtaUpdater {
     UPDATE_OLDER_ERROR,
     INTERNAL_UPDATE_ERROR,
     OOM_ERROR,
+    RATE_LIMITED,
   };
 
   size_t getOtaSize() const { return otaSize; }

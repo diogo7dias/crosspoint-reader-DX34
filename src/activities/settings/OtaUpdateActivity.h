@@ -18,10 +18,13 @@ class OtaUpdateActivity : public ActivityWithSubactivity {
   // Can't initialize this to 0 or the first render doesn't happen
   static constexpr unsigned int UNINITIALIZED_PERCENTAGE = 111;
 
+  static constexpr int OTA_CHECK_MAX_RETRIES = 2;
+
   const std::function<void()> goBack;
   State state = WIFI_SELECTION;
   unsigned int lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
   OtaUpdater updater;
+  OtaUpdater::OtaUpdaterError lastError = OtaUpdater::OK;
 
   void onWifiSelectionComplete(bool success);
 

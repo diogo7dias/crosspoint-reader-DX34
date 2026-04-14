@@ -27,11 +27,27 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   }
   requestUpdateAndWait();
 
-  const auto res = updater.checkForUpdate();
+  OtaUpdater::OtaUpdaterError res = OtaUpdater::HTTP_ERROR;
+  for (int attempt = 0; attempt <= OTA_CHECK_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      LOG_INF("OTA", "Retry attempt %d/%d", attempt, OTA_CHECK_MAX_RETRIES);
+      delay(2000 * attempt);
+    }
+    res = updater.checkForUpdate();
+    if (res == OtaUpdater::OK || res == OtaUpdater::NO_UPDATE)
+      break;
+    if (res == OtaUpdater::RATE_LIMITED && attempt < OTA_CHECK_MAX_RETRIES) {
+      LOG_INF("OTA", "Rate limited, waiting before retry...");
+      delay(5000);
+      continue;
+    }
+  }
+
   if (res != OtaUpdater::OK) {
     LOG_DBG("OTA", "Update check failed: %d", res);
     {
       RenderLock lock(*this);
+      lastError = res;
       state = FAILED;
     }
     requestUpdate();
@@ -138,6 +154,9 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
 
   if (state == FAILED) {
     renderer.drawCenteredText(UI_10_FONT_ID, 300, tr(STR_UPDATE_FAILED), true, EpdFontFamily::REGULAR);
+    if (lastError == OtaUpdater::RATE_LIMITED) {
+      renderer.drawCenteredText(UI_10_FONT_ID, 340, "Try again in a few minutes");
+    }
     renderer.displayBuffer();
     return;
   }
@@ -176,6 +195,7 @@ void OtaUpdateActivity::loop() {
         LOG_DBG("OTA", "Update failed: %d", res);
         {
           RenderLock lock(*this);
+          lastError = res;
           state = FAILED;
         }
         requestUpdate();

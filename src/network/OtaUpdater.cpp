@@ -11,6 +11,22 @@ namespace {
 constexpr char latestReleaseUrl[] =
     "https://api.github.com/repos/diogo7dias/crosspoint-reader-DX34/releases/"
     "latest";
+/* Find the start of a semver-like "N.N.N" substring, skipping noise like "DX34".
+ * Scans for a digit whose run is immediately followed by '.digit', which
+ * distinguishes "34-" (no dot) from "0.0.11" (real version). */
+const char *findSemverStart(const char *str) {
+  for (const char *p = str; *p; ++p) {
+    if (isdigit(static_cast<unsigned char>(*p))) {
+      const char *q = p;
+      while (isdigit(static_cast<unsigned char>(*q)))
+        q++;
+      if (*q == '.' && isdigit(static_cast<unsigned char>(*(q + 1))))
+        return p;
+      p = q;  // skip past this digit group
+    }
+  }
+  return str;
+}
 
 /* Buffer and length tracker for incremental HTTP response from latestReleaseUrl.
  * Static storage is zero-initialized by C++, but explicit init makes intent clear
@@ -129,12 +145,23 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
     return HTTP_ERROR;
   }
 
+  int statusCode = esp_http_client_get_status_code(client_handle);
+
   /* esp_http_client_close will be called inside cleanup as well*/
   esp_err = esp_http_client_cleanup(client_handle);
   if (esp_err != ESP_OK) {
     LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s",
             esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
+  }
+
+  if (statusCode == 403 || statusCode == 429) {
+    LOG_ERR("OTA", "GitHub API rate limited (HTTP %d)", statusCode);
+    return RATE_LIMITED;
+  }
+  if (statusCode != 200) {
+    LOG_ERR("OTA", "Unexpected HTTP status %d from GitHub API", statusCode);
+    return HTTP_ERROR;
   }
 
   filter["tag_name"] = true;
@@ -195,15 +222,8 @@ bool OtaUpdater::isUpdateNewer() const {
 
   const auto currentVersion = CROSSPOINT_VERSION;
 
-  // Skip any leading non-digit prefix (e.g. "b.", "p.") before parsing
-  // semantic version segments
-  const char *latestDigits = latestVersion.c_str();
-  while (*latestDigits && !isdigit(static_cast<unsigned char>(*latestDigits)))
-    latestDigits++;
-  const char *currentDigits = currentVersion;
-  while (*currentDigits &&
-         !isdigit(static_cast<unsigned char>(*currentDigits)))
-    currentDigits++;
+  const char *latestDigits = findSemverStart(latestVersion.c_str());
+  const char *currentDigits = findSemverStart(currentVersion);
 
   sscanf(latestDigits, "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
   sscanf(currentDigits, "%d.%d.%d", &currentMajor, &currentMinor,
