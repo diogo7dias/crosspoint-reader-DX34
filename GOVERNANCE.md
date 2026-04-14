@@ -34,5 +34,5 @@ To keep the project healthy, we keep our "work" in the open.
 The maintainers are responsible for keeping the community a safe place to contribute.
 - We reserve the right to hide comments, lock threads, or block users who repeatedly violate these principles or engage
   in harassment.
-- **Reporting:** If you feel you are being harassed or see behavior that is damaging the community, please reach out
-  privately to @daveallie.
+- **Reporting:** If you feel you are being harassed or see behavior that is damaging the community, please open a
+  private report through [GitHub Issues](https://github.com/diogo7dias/crosspoint-reader-DX34/issues).

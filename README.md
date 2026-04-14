@@ -518,7 +518,7 @@ See [docs/webserver.md](./docs/webserver.md) and [docs/webserver-endpoints.md](.
 
 ### Calibre wireless transfer
 
-Supported through the CrossPoint Reader Calibre plugin workflow. The device starts a web server optimized for Calibre transfers and displays connection instructions on screen.
+The device starts a web server optimized for Calibre wireless transfers and displays connection instructions on screen.
 
 ### OPDS browser
 
@@ -656,6 +656,7 @@ python3 scripts/debugging_monitor.py /dev/cu.usbmodem101
 - Ideas: [GitHub Discussions](https://github.com/diogo7dias/crosspoint-reader-DX34/discussions/categories/ideas)
 - Bugs: [GitHub Issues](https://github.com/diogo7dias/crosspoint-reader-DX34/issues)
 - Governance: [GOVERNANCE.md](./GOVERNANCE.md)
+- Tip jar: [Ko-fi](https://ko-fi.com/d7d7m) — if you enjoy the firmware and want to support development
 
 ---
 
@@ -663,6 +664,7 @@ python3 scripts/debugging_monitor.py /dev/cu.usbmodem101
 
 This project is independent and unaffiliated with Xteink.
 
-Inspired in part by:
+DX34 is a fork of **CrossPoint**, originally created by [@daveallie](https://github.com/daveallie) and the CrossPoint team. Their work laid the foundation that this firmware builds on.
 
+- [CrossPoint (upstream)](https://github.com/crosspoint-reader/crosspoint-reader) — original firmware by @daveallie and contributors
 - [atomic14/diy-esp32-epub-reader](https://github.com/atomic14/diy-esp32-epub-reader)
