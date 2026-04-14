@@ -23,6 +23,13 @@ void ActivityWithSubactivity::exitActivity() {
     LOG_DBG("ACT", "Exiting subactivity...");
     subActivity->onExit();
     subActivity.reset();
+    // Restore parent render task (was suspended to free 8 KB of heap for the
+    // subactivity).  Must happen after subActivity is destroyed so only one
+    // render task is live at a time.
+    if (!renderTaskHandle) {
+      xTaskCreate(&renderTaskTrampoline, name.c_str(), 8192, this, 1,
+                  &renderTaskHandle);
+    }
     // Suppress stale button events so that the press/release that closed the
     // subactivity (e.g. Confirm on a dialog) doesn't leak into the parent's
     // loop() and trigger an unintended action (like opening a book).
@@ -33,6 +40,13 @@ void ActivityWithSubactivity::exitActivity() {
 void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
   // Acquire lock to avoid 2 activities rendering at the same time during transition
   RenderLock lock(*this);
+  // Delete the parent render task to free 8 KB of stack.  The parent's
+  // renderTaskLoop skips rendering while a subactivity is active, so the task
+  // is pure overhead.  It is recreated in exitActivity().
+  if (renderTaskHandle) {
+    vTaskDelete(renderTaskHandle);
+    renderTaskHandle = nullptr;
+  }
   // Suppress stale button events so the press that opened this subactivity
   // doesn't immediately trigger an action inside it.
   mappedInput.suppressUntilAllReleased();

@@ -21,7 +21,7 @@ std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
 }
 
 int getValueEditHoldStep(const MappedInputManager& mappedInput,
-                         const SettingInfo&) {
+                         const ReaderSettingInfo&) {
   return mappedInput.getHeldTime() >= 1200 ? 5 : 1;
 }
 
@@ -103,7 +103,7 @@ void ReaderSettingsActivity::persistSettings(const char* context) {
   dirty = true;
 }
 
-const std::vector<SettingInfo>* ReaderSettingsActivity::settingsForCategory(
+const std::vector<ReaderSettingInfo>* ReaderSettingsActivity::settingsForCategory(
     const int categoryIndex) const {
   switch (categoryIndex) {
     case 0:
@@ -133,7 +133,7 @@ int ReaderSettingsActivity::findNextEditableRow(const int startIndex,
 }
 
 bool ReaderSettingsActivity::isPopupValueSetting(
-    const SettingInfo& setting) const {
+    const ReaderSettingInfo& setting) const {
   if (setting.type != SettingType::VALUE || setting.valuePtr == nullptr) {
     return false;
   }
@@ -163,7 +163,7 @@ void ReaderSettingsActivity::applyFontSizeEdit() {
   persistSettings("reader settings font size");
 }
 
-void ReaderSettingsActivity::startValueEdit(const SettingInfo& setting,
+void ReaderSettingsActivity::startValueEdit(const ReaderSettingInfo& setting,
                                             const int categoryIndex,
                                             const int settingIndex) {
   valueEditMode = true;
@@ -224,8 +224,8 @@ std::string ReaderSettingsActivity::currentValueEditText() const {
 
 void ReaderSettingsActivity::buildSettingsList() {
   // Free old memory fully before allocating new entries.
-  { std::vector<SettingInfo>().swap(readerSettings); }
-  { std::vector<SettingInfo>().swap(statusBarSettings); }
+  { std::vector<ReaderSettingInfo>().swap(readerSettings); }
+  { std::vector<ReaderSettingInfo>().swap(statusBarSettings); }
   { std::vector<FlatSettingRow>().swap(flatRows); }
 
   // Pre-allocate to avoid repeated reallocations (critical on low-heap devices)
@@ -235,7 +235,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   const bool txt = isTxtContext();
 
   // --- Helper: conditionally push a reader setting, applying filters ---
-  auto pushReader = [&](SettingInfo&& s) {
+  auto pushReader = [&](ReaderSettingInfo&& s) {
     // Skip entries never shown in the in-reader settings screen
     if (s.valuePtr == &CrossPointSettings::orientation ||
         s.valuePtr == &CrossPointSettings::debugBorders ||
@@ -275,74 +275,74 @@ void ReaderSettingsActivity::buildSettingsList() {
   };
 
   // --- Build reader settings directly (no intermediate vector) ---
-  pushReader(SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
       {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN}));
-  pushReader(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
       {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
-  pushReader(SettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {65, 150, 5}));
-  pushReader(SettingInfo::Enum(StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins,
+  pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {65, 150, 5}));
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins,
       {StrId::STR_DYNAMIC_MARGINS_OFF, StrId::STR_DYNAMIC_MARGINS_10, StrId::STR_DYNAMIC_MARGINS_20}));
-  pushReader(SettingInfo::Toggle(StrId::STR_UNIFORM_MARGINS, &CrossPointSettings::uniformMargins));
-  pushReader(SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
-  pushReader(SettingInfo::Value(StrId::STR_SCREEN_MARGIN_HORIZONTAL, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
-  pushReader(SettingInfo::Value(StrId::STR_SCREEN_MARGIN_TOP, &CrossPointSettings::screenMarginTop, {0, 55, 5}));
-  pushReader(SettingInfo::Value(StrId::STR_SCREEN_MARGIN_BOTTOM, &CrossPointSettings::screenMarginBottom, {0, 55, 5}));
-  pushReader(SettingInfo::Enum(StrId::STR_PARA_ALIGNMENT, &CrossPointSettings::paragraphAlignment,
+  pushReader(ReaderSettingInfo::Toggle(StrId::STR_UNIFORM_MARGINS, &CrossPointSettings::uniformMargins));
+  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
+  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_HORIZONTAL, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
+  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_TOP, &CrossPointSettings::screenMarginTop, {0, 55, 5}));
+  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_BOTTOM, &CrossPointSettings::screenMarginBottom, {0, 55, 5}));
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_PARA_ALIGNMENT, &CrossPointSettings::paragraphAlignment,
       {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE}));
-  pushReader(SettingInfo::Enum(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::firstLineIndentMode,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::firstLineIndentMode,
       {StrId::STR_BOOK_STYLE_OPT, StrId::STR_NONE_OPT, StrId::STR_INDENT_SMALL, StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE}));
-  pushReader(SettingInfo::Enum(StrId::STR_READER_STYLE_MODE, &CrossPointSettings::readerStyleMode,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_READER_STYLE_MODE, &CrossPointSettings::readerStyleMode,
       {StrId::STR_READER_STYLE_USER, StrId::STR_READER_STYLE_HYBRID}));
   // Highlight mode removed — word-based selection is the only mode
-  pushReader(SettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
       {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW}));
-  pushReader(SettingInfo::Enum(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacingPercent,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacingPercent,
       {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80, StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240}));
-  pushReader(SettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
       {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25, StrId::STR_PARA_SPACING_33}));
-  pushReader(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
       {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
   if (!txt) {
-    readerSettings.push_back(SettingInfo::Toggle(
+    readerSettings.push_back(ReaderSettingInfo::Toggle(
         StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled));
   }
 
   // --- Build status bar settings directly ---
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BAR, &CrossPointSettings::statusBarEnabled));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_FONT_SIZE, &CrossPointSettings::statusBarFontSize,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BAR, &CrossPointSettings::statusBarEnabled));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_FONT_SIZE, &CrossPointSettings::statusBarFontSize,
       {StrId::STR_STATUS_FONT_MIN, StrId::STR_STATUS_FONT_MAX}));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
       {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BATTERY, &CrossPointSettings::statusBarShowBattery));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_BATTERY_POSITION, &CrossPointSettings::statusBarBatteryPosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BATTERY, &CrossPointSettings::statusBarShowBattery));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BATTERY_POSITION, &CrossPointSettings::statusBarBatteryPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_PAGE_COUNTER, &CrossPointSettings::statusBarShowPageCounter));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_MODE, &CrossPointSettings::statusBarPageCounterMode,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_PAGE_COUNTER, &CrossPointSettings::statusBarShowPageCounter));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_MODE, &CrossPointSettings::statusBarPageCounterMode,
       {StrId::STR_STATUS_PAGE_MODE_CURRENT_TOTAL, StrId::STR_STATUS_PAGE_MODE_LEFT_CHAPTER}));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarPageCounterPosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarPageCounterPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BOOK_PERCENT, &CrossPointSettings::statusBarShowBookPercentage));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_BOOK_PERCENT_POSITION, &CrossPointSettings::statusBarBookPercentagePosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PERCENT, &CrossPointSettings::statusBarShowBookPercentage));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_PERCENT_POSITION, &CrossPointSettings::statusBarBookPercentagePosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PERCENT, &CrossPointSettings::statusBarShowChapterPercentage));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_CHAPTER_PERCENT_POSITION, &CrossPointSettings::statusBarChapterPercentagePosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PERCENT, &CrossPointSettings::statusBarShowChapterPercentage));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_PERCENT_POSITION, &CrossPointSettings::statusBarChapterPercentagePosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BOOK_BAR, &CrossPointSettings::statusBarShowBookBar));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_BOOK_BAR_POSITION, &CrossPointSettings::statusBarBookBarPosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_BAR, &CrossPointSettings::statusBarShowBookBar));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_BAR_POSITION, &CrossPointSettings::statusBarBookBarPosition,
       {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_BAR, &CrossPointSettings::statusBarShowChapterBar));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_CHAPTER_BAR_POSITION, &CrossPointSettings::statusBarChapterBarPosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_BAR, &CrossPointSettings::statusBarShowChapterBar));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_BAR_POSITION, &CrossPointSettings::statusBarChapterBarPosition,
       {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_TITLE, &CrossPointSettings::statusBarShowChapterTitle));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_TITLE, &CrossPointSettings::statusBarShowChapterTitle));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
       {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION, &CrossPointSettings::statusBarNoTitleTruncation));
-  statusBarSettings.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER, &CrossPointSettings::statusBarShowBookPageCounter));
-  statusBarSettings.push_back(SettingInfo::Enum(StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION, &CrossPointSettings::statusBarNoTitleTruncation));
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER, &CrossPointSettings::statusBarShowBookPageCounter));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
 

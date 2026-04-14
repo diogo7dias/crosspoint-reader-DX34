@@ -4,9 +4,56 @@
 #include <string>
 #include <vector>
 
+#include <I18n.h>
+
 #include "activities/Activity.h"
 #include "activities/settings/SettingsActivity.h"
 #include "util/ButtonNavigator.h"
+
+// Slim version of SettingInfo for the in-reader settings screen.
+// Drops unused fields (key, category, stringPtr, std::function accessors)
+// to reduce per-entry heap cost from ~160 bytes to ~40 bytes.
+struct ReaderSettingInfo {
+  StrId nameId;
+  SettingType type;
+  uint8_t CrossPointSettings::* valuePtr = nullptr;
+  std::vector<StrId> enumValues;
+
+  struct ValueRange {
+    uint8_t min;
+    uint8_t max;
+    uint8_t step;
+  };
+  ValueRange valueRange = {};
+
+  static ReaderSettingInfo Toggle(StrId nameId, uint8_t CrossPointSettings::* ptr) {
+    ReaderSettingInfo s;
+    s.nameId = nameId;
+    s.type = SettingType::TOGGLE;
+    s.valuePtr = ptr;
+    return s;
+  }
+
+  static ReaderSettingInfo Enum(StrId nameId, uint8_t CrossPointSettings::* ptr,
+                                std::vector<StrId> values) {
+    ReaderSettingInfo s;
+    s.nameId = nameId;
+    s.type = SettingType::ENUM;
+    s.valuePtr = ptr;
+    s.enumValues = std::move(values);
+    return s;
+  }
+
+  static ReaderSettingInfo Value(StrId nameId, uint8_t CrossPointSettings::* ptr,
+                                 const ValueRange valueRange) {
+    ReaderSettingInfo s;
+    s.nameId = nameId;
+    s.type = SettingType::VALUE;
+    s.valuePtr = ptr;
+    s.valueRange = valueRange;
+    return s;
+  }
+};
 
 class ReaderSettingsActivity final : public Activity {
  public:
@@ -31,8 +78,8 @@ class ReaderSettingsActivity final : public Activity {
   };
 
   ButtonNavigator buttonNavigator;
-  std::vector<SettingInfo> readerSettings;
-  std::vector<SettingInfo> statusBarSettings;
+  std::vector<ReaderSettingInfo> readerSettings;
+  std::vector<ReaderSettingInfo> statusBarSettings;
   std::vector<FlatSettingRow> flatRows;
   int selectedRowIndex = 0;
   bool dirty = false;
@@ -50,13 +97,13 @@ class ReaderSettingsActivity final : public Activity {
 
   void buildSettingsList();
   bool isTxtContext() const;
-  const std::vector<SettingInfo>* settingsForCategory(int categoryIndex) const;
+  const std::vector<ReaderSettingInfo>* settingsForCategory(int categoryIndex) const;
   int findNextEditableRow(int startIndex, int direction) const;
-  bool isPopupValueSetting(const SettingInfo& setting) const;
+  bool isPopupValueSetting(const ReaderSettingInfo& setting) const;
   void startFontSizeEdit();
   void adjustFontSizeEdit(int delta);
   void applyFontSizeEdit();
-  void startValueEdit(const SettingInfo& setting, int categoryIndex,
+  void startValueEdit(const ReaderSettingInfo& setting, int categoryIndex,
                       int settingIndex);
   void adjustValueEdit(int delta);
   void applyValueEdit();
