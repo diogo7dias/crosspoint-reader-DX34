@@ -12,7 +12,6 @@
 
 ### AI Usage
 
-While CrossPoint-Mod-DX34 doesn't have restrictions on AI tools in contributing, please be transparent about their usage as it 
-helps set the right context for reviewers.
+CrossPoint-Mod-DX34 doesn't have restrictions on AI tools in contributing, I used it most of the time + plenty of testing. I did start building this as a personal only project..
 
-Did you use AI tools to help write this code? _**< YES | PARTIALLY | NO >**_
+Did you use AI tools to help write this code? _**< YES | PARTIALLY | NO >**_. Just for information sake. 
