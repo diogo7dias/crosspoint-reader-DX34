@@ -38,8 +38,18 @@ static size_t bionicSplitOffset(const char* s, const size_t len) {
 
   if (cpCount <= 1) return len;  // 0-1 char words: whole word bold
 
-  // Bold prefix = ceil(cpCount / 2), minimum 1
-  const size_t prefixCps = (cpCount + 1) / 2;
+  // Graduated bold prefix: shorter words get less bold for a subtler effect.
+  //   2-3 chars: bold first letter only
+  //   4-6 chars: bold first 2 chars (~40%)
+  //   7+  chars: bold first ~40% (rounded up)
+  size_t prefixCps;
+  if (cpCount <= 3) {
+    prefixCps = 1;
+  } else if (cpCount <= 6) {
+    prefixCps = 2;
+  } else {
+    prefixCps = (cpCount * 2 + 4) / 5;  // ceil(cpCount * 0.4)
+  }
 
   // Advance pos by prefixCps codepoints to find byte offset
   size_t counted = 0;

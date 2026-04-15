@@ -302,7 +302,7 @@ public:
   // Text rendering settings
   uint8_t extraParagraphSpacingLevel = EXTRA_SPACING_M;
   // Legacy field name retained for storage compatibility; value stores a
-  // word-spacing level (0..6) instead of a raw percentage.
+  // word-spacing level (0..4, see WORD_SPACING_MODE enum) instead of a raw percentage.
   uint8_t wordSpacingPercent = WORD_SPACING_NORMAL;
   uint8_t firstLineIndentMode = INDENT_BOOK;
   uint8_t readerStyleMode = READER_STYLE_USER;

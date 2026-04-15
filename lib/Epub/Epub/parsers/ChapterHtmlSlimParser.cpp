@@ -444,6 +444,10 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       displayOnly.defined.display = 1;
     }
     cssStyle = displayOnly;
+  } else {
+    // Hybrid mode: honour publisher layout styles except line-height, which
+    // the user controls via the line-spacing setting.
+    cssStyle.defined.lineHeight = 0;
   }
 
   const float emSize = static_cast<float>(self->renderer.getFontAscenderSize(self->fontId));

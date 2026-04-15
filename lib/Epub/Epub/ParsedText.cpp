@@ -20,13 +20,15 @@ constexpr size_t SOFT_HYPHEN_BYTES = 2;
 int wordSpacingSettingToPixelDelta(const uint8_t mode,
                                    const int baseSpaceWidth) {
   switch (mode) {
-    case 0:  // Tight
+    case 0:  // Tight (-30%)
       return -(baseSpaceWidth * 3 / 10);
-    case 2:  // Wide
+    case 2:  // Wide (+80%)
       return (baseSpaceWidth * 4 / 5);
-    case 3:  // Extra Wide
+    case 3:  // Very Wide (+150%)
+      return (baseSpaceWidth * 3 / 2);
+    case 4:  // Extra Wide (+240%)
       return (baseSpaceWidth * 12 / 5);
-    case 1:  // Normal
+    case 1:  // Normal (0%)
     default:
       return 0;
   }
