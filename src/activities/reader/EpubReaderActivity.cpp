@@ -1112,39 +1112,63 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::DELETE_BOOK: {
-      std::string deletingPath;
-      StatusPopup::showBlocking(renderer, "Deleting book");
-      {
-        RenderLock lock(*this);
-        if (epub) {
-          deletingPath = epub->getPath();
-          clearPageCache();
-          section.reset();
-          epub->clearCache();
-        }
-      }
-
-      if (!deletingPath.empty()) {
-        RECENT_BOOKS.removeBook(deletingPath);
-        if (APP_STATE.openEpubPath == deletingPath) {
-          APP_STATE.openEpubPath = "";
-          APP_STATE.saveToFile();
-        }
-        const bool removed = Storage.remove(deletingPath.c_str());
-        LOG_DBG("ERS", "Delete book '%s': %s", deletingPath.c_str(), removed ? "ok" : "failed");
-      }
-      pendingGoLibrary = true;
+      const std::string bookTitle = epub ? epub->getTitle() : "";
+      exitActivity();
+      enterNewActivity(new ConfirmDialogActivity(
+          renderer, mappedInput,
+          "Delete \"" + bookTitle + "\" from device?",
+          [this]() {
+            exitActivity();
+            std::string deletingPath;
+            StatusPopup::showBlocking(renderer, "Deleting book");
+            {
+              RenderLock lock(*this);
+              if (epub) {
+                deletingPath = epub->getPath();
+                clearPageCache();
+                section.reset();
+                epub->clearCache();
+              }
+            }
+            if (!deletingPath.empty()) {
+              RECENT_BOOKS.removeBook(deletingPath);
+              if (APP_STATE.openEpubPath == deletingPath) {
+                APP_STATE.openEpubPath = "";
+                APP_STATE.saveToFile();
+              }
+              const bool removed = Storage.remove(deletingPath.c_str());
+              LOG_DBG("ERS", "Delete book '%s': %s", deletingPath.c_str(),
+                      removed ? "ok" : "failed");
+            }
+            pendingGoLibrary = true;
+          },
+          [this]() {
+            exitActivity();
+            requestUpdate();
+          }));
       break;
     }
     case EpubReaderMenuActivity::MenuAction::REMOVE_FROM_RECENT: {
-      if (epub) {
-        RECENT_BOOKS.removeBook(epub->getPath());
-        if (APP_STATE.openEpubPath == epub->getPath()) {
-          APP_STATE.openEpubPath = "";
-          APP_STATE.saveToFile();
-        }
-      }
-      pendingGoHome = true;
+      const std::string bookTitle = epub ? epub->getTitle() : "";
+      exitActivity();
+      enterNewActivity(new ConfirmDialogActivity(
+          renderer, mappedInput,
+          "Remove \"" + bookTitle + "\" from recents?",
+          [this]() {
+            exitActivity();
+            if (epub) {
+              RECENT_BOOKS.removeBook(epub->getPath());
+              if (APP_STATE.openEpubPath == epub->getPath()) {
+                APP_STATE.openEpubPath = "";
+                APP_STATE.saveToFile();
+              }
+            }
+            pendingGoHome = true;
+          },
+          [this]() {
+            exitActivity();
+            requestUpdate();
+          }));
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SHARE_QR: {

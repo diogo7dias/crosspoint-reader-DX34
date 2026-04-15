@@ -20,6 +20,7 @@
 #include "LibrarySearchSupport.h"
 #include "MappedInputManager.h"
 #include "activities/boot_sleep/SleepActivity.h"
+#include "activities/util/ConfirmDialogActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
@@ -859,17 +860,27 @@ void MyLibraryActivity::loopFileActions() {
           return;
         case 5: {
           const std::string pathToDelete = selectedFilePath;
-          if (deleteSelectedFile()) {
-            if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
-                rawIndex.has_value()) {
-              files.erase(files.begin() + static_cast<long>(*rawIndex));
-              rebuildFilteredFileIndexes();
-              clampSelectorIndex();
-            }
-          }
-          mode = Mode::BROWSE;
-          requestCleanRefresh();
-          break;
+          const std::string fileName = getBasename(pathToDelete);
+          enterNewActivity(new ConfirmDialogActivity(
+              renderer, mappedInput, "Delete \"" + fileName + "\"?",
+              [this, pathToDelete]() {
+                exitActivity();
+                if (deleteSelectedFile()) {
+                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
+                      rawIndex.has_value()) {
+                    files.erase(files.begin() + static_cast<long>(*rawIndex));
+                    rebuildFilteredFileIndexes();
+                    clampSelectorIndex();
+                  }
+                }
+                mode = Mode::BROWSE;
+                requestCleanRefresh();
+              },
+              [this]() {
+                exitActivity();
+                requestUpdate();
+              }));
+          return;
         }
         default:
           mode = Mode::BROWSE;
@@ -890,19 +901,29 @@ void MyLibraryActivity::loopFileActions() {
           return;
         case 3: {
           const std::string pathToDelete = selectedFilePath;
-          StatusPopup::showBlocking(renderer, "Deleting file");
-          if (deleteSelectedFile()) {
-            progressPrefixCache.erase(pathToDelete);
-            if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
-                rawIndex.has_value()) {
-              files.erase(files.begin() + static_cast<long>(*rawIndex));
-              rebuildFilteredFileIndexes();
-              clampSelectorIndex();
-            }
-          }
-          mode = Mode::BROWSE;
-          requestCleanRefresh();
-          break;
+          const std::string fileName = getBasename(pathToDelete);
+          enterNewActivity(new ConfirmDialogActivity(
+              renderer, mappedInput, "Delete \"" + fileName + "\"?",
+              [this, pathToDelete]() {
+                exitActivity();
+                StatusPopup::showBlocking(renderer, "Deleting file");
+                if (deleteSelectedFile()) {
+                  progressPrefixCache.erase(pathToDelete);
+                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
+                      rawIndex.has_value()) {
+                    files.erase(files.begin() + static_cast<long>(*rawIndex));
+                    rebuildFilteredFileIndexes();
+                    clampSelectorIndex();
+                  }
+                }
+                mode = Mode::BROWSE;
+                requestCleanRefresh();
+              },
+              [this]() {
+                exitActivity();
+                requestUpdate();
+              }));
+          return;
         }
         default:
           mode = Mode::BROWSE;

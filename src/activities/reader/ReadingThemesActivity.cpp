@@ -9,6 +9,7 @@
 #include "MappedInputManager.h"
 #include "ReadingThemeStore.h"
 #include "ReaderSettingsActivity.h"
+#include "activities/util/ConfirmDialogActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -162,12 +163,24 @@ void ReadingThemesActivity::executeThemeAction() {
       return;
     case 3: {
       actionPopupOpen = false;
-      if (!READING_THEMES.deleteTheme(actionPopupThemeIndex)) {
-        showMessage(tr(STR_DELETE_THEME_FAILED));
-        return;
-      }
-      selectedRowIndex = clampSelectedRow(selectedRowIndex);
-      requestUpdate();
+      const ReadingTheme* delTheme = READING_THEMES.getTheme(actionPopupThemeIndex);
+      const std::string themeName = delTheme ? delTheme->name : "theme";
+      const int delIndex = actionPopupThemeIndex;
+      enterNewActivity(new ConfirmDialogActivity(
+          renderer, mappedInput, "Delete theme \"" + themeName + "\"?",
+          [this, delIndex]() {
+            exitActivity();
+            if (!READING_THEMES.deleteTheme(delIndex)) {
+              showMessage(tr(STR_DELETE_THEME_FAILED));
+              return;
+            }
+            selectedRowIndex = clampSelectedRow(selectedRowIndex);
+            requestUpdate();
+          },
+          [this]() {
+            exitActivity();
+            requestUpdate();
+          }));
       return;
     }
     case 4:
