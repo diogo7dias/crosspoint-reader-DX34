@@ -138,7 +138,7 @@ void SettingsActivity::adjustValueEdit(const int delta) {
 namespace {
 int getValueEditHoldStep(const MappedInputManager& mappedInput,
                          const SettingInfo&) {
-  return mappedInput.getHeldTime() >= 1200 ? 5 : 1;
+  return mappedInput.getHeldTime() >= 3000 ? 10 : 1;
 }
 }
 

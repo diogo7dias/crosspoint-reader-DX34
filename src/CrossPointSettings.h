@@ -330,7 +330,7 @@ public:
   uint8_t fontSize = SIZE_16;
   // Legacy line spacing setting (kept for migration from old settings files)
   uint8_t lineSpacing = NORMAL;
-  // Reader line spacing percentage (65..150)
+  // Reader line spacing percentage (35..150)
   uint8_t lineSpacingPercent = 110;
   uint8_t paragraphAlignment = JUSTIFIED;
   // Reader-only style swap: Regular <-> Bold (italics unchanged)

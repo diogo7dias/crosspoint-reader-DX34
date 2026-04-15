@@ -809,8 +809,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
                         S::LINE_COMPRESSION_COUNT, S::NORMAL);
   if (!doc["lineSpacingPercent"].isNull()) {
     const uint8_t parsed = doc["lineSpacingPercent"] | (uint8_t)110;
-    if (parsed < 65) {
-      s.lineSpacingPercent = 65;
+    if (parsed < 35) {
+      s.lineSpacingPercent = 35;
     } else if (parsed > 150) {
       s.lineSpacingPercent = 150;
     } else {

@@ -167,7 +167,7 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme,
   settings.fontSize = CrossPointSettings::normalizeFontSizeForFamily(
       settings.fontFamily, theme.fontSize);
   settings.lineSpacingPercent =
-      clampRange(theme.lineSpacingPercent, 65, 150, 110);
+      clampRange(theme.lineSpacingPercent, 35, 150, 110);
   settings.uniformMargins = theme.uniformMargins ? 1 : 0;
   settings.dynamicMargins = (theme.dynamicMargins > 2) ? 0 : theme.dynamicMargins;
   settings.screenMarginHorizontal =
@@ -411,6 +411,7 @@ bool ReadingThemeStore::addTheme(const std::string& name) {
   }
   themes.push_back(captureCurrent(makeUniqueName(name)));
   lastEditedThemeIndex = static_cast<int>(themes.size()) - 1;
+  lastAppliedThemeName = themes.back().name;
   return saveToFile();
 }
 
@@ -420,6 +421,7 @@ bool ReadingThemeStore::updateTheme(const size_t index) {
   }
   themes[index] = captureCurrent(themes[index].name);
   lastEditedThemeIndex = static_cast<int>(index);
+  lastAppliedThemeName = themes[index].name;
   return saveToFile();
 }
 
@@ -551,7 +553,7 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.fontSize = CrossPointSettings::normalizeFontSizeForFamily(
       normalized.fontFamily, theme.fontSize);
   normalized.lineSpacingPercent =
-      clampRange(theme.lineSpacingPercent, 65, 150, 110);
+      clampRange(theme.lineSpacingPercent, 35, 150, 110);
   normalized.uniformMargins = theme.uniformMargins ? 1 : 0;
   normalized.dynamicMargins = theme.dynamicMargins ? 1 : 0;
   normalized.screenMarginHorizontal =

@@ -22,7 +22,7 @@ std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
 
 int getValueEditHoldStep(const MappedInputManager& mappedInput,
                          const ReaderSettingInfo&) {
-  return mappedInput.getHeldTime() >= 1200 ? 5 : 1;
+  return mappedInput.getHeldTime() >= 3000 ? 10 : 1;
 }
 
 int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
@@ -279,7 +279,7 @@ void ReaderSettingsActivity::buildSettingsList() {
       {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
       {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
-  pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {65, 150, 5}));
+  pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins,
       {StrId::STR_DYNAMIC_MARGINS_OFF, StrId::STR_DYNAMIC_MARGINS_10, StrId::STR_DYNAMIC_MARGINS_20}));
   pushReader(ReaderSettingInfo::Toggle(StrId::STR_UNIFORM_MARGINS, &CrossPointSettings::uniformMargins));
