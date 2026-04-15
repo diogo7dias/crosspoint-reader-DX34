@@ -372,6 +372,8 @@ public:
   uint8_t highlightMode = HIGHLIGHT_WORD;
   // Dark mode: invert display output (white-on-black)
   uint8_t darkMode = 0;
+  // Books folder display order: 0 = alphabetical (default), 1 = random
+  uint8_t booksFolderOrder = 0;
 
   ~CrossPointSettings() = default;
 

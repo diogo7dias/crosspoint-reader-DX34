@@ -174,6 +174,9 @@ inline std::vector<SettingInfo> getSettingsList() {
                         StrId::STR_CAT_SYSTEM));
   s.push_back(SettingInfo::Toggle(StrId::STR_RANDOM_BOOK_ON_BOOT, &CrossPointSettings::randomBookOnBoot, "randomBookOnBoot",
                         StrId::STR_CAT_SYSTEM));
+  s.push_back(SettingInfo::Enum(StrId::STR_BOOKS_FOLDER_ORDER, &CrossPointSettings::booksFolderOrder,
+                      {StrId::STR_BOOKS_ORDER_ABC, StrId::STR_BOOKS_ORDER_RANDOM},
+                      "booksFolderOrder", StrId::STR_CAT_SYSTEM));
 
   // --- KOReader Sync (web-only, uses KOReaderCredentialStore) ---
   s.push_back(SettingInfo::DynamicString(

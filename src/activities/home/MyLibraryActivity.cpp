@@ -291,7 +291,9 @@ void MyLibraryActivity::loadFilesWithLimit() {
   sortFileList(files);
 
   // Randomize display order for media-browsing folders
-  if (basepath == "/sleep pause" || basepath == "/sleep library" || basepath == "/books") {
+  bool shouldShuffle = (basepath == "/sleep pause" || basepath == "/sleep library");
+  if (basepath == "/books" && SETTINGS.booksFolderOrder == 1) shouldShuffle = true;
+  if (shouldShuffle) {
     // Directories stay sorted at top; shuffle only files
     auto firstFile = std::partition_point(files.begin(), files.end(),
         [](const std::string& s) { return !s.empty() && s.back() == '/'; });
