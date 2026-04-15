@@ -4,11 +4,13 @@
 #include <I18n.h>
 
 #include "MappedInputManager.h"
+#include "activities/util/ConfirmDialogActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 namespace {
 constexpr int kButtonHintsReserve = 50;
+constexpr unsigned long kHoldDeleteMs = 2000;
 }  // namespace
 
 void BookmarkListActivity::onEnter() {
@@ -61,6 +63,32 @@ void BookmarkListActivity::loop() {
     return;
   }
 
+  // Hold Select: fire delete dialog as soon as threshold is reached (while held)
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+      mappedInput.getHeldTime() >= kHoldDeleteMs &&
+      selectorIndex >= 0 && selectorIndex < totalItems) {
+    mappedInput.suppressUntilAllReleased();
+    const int deleteIdx = selectorIndex;
+    const std::string label = formatBookmark(store.getAll()[deleteIdx]);
+    const std::string msg = "Delete bookmark?\n" + label;
+    enterNewActivity(new ConfirmDialogActivity(
+        renderer, mappedInput, msg,
+        [this, deleteIdx] {
+          store.remove(deleteIdx);
+          store.save(cachePath);
+          if (selectorIndex >= store.count() && selectorIndex > 0)
+            selectorIndex--;
+          exitActivity();
+          requestUpdate();
+        },
+        [this] {
+          exitActivity();
+          requestUpdate();
+        }));
+    return;
+  }
+
+  // Short press Select: jump to bookmark
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (selectorIndex >= 0 && selectorIndex < totalItems) {
       const auto& bm = store.getAll()[selectorIndex];
@@ -69,7 +97,6 @@ void BookmarkListActivity::loop() {
       if (isCurrent) {
         onGoBack();
       } else {
-        // Jump to bookmark
         const int spine = bm.spineIndex;
         const int page = bm.pageNumber;
         onJump(spine, page);
@@ -140,7 +167,7 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
     return;
   }
 
-  const int listStartY = 60 + contentY;
+  const int listStartY = 72 + contentY;
   const int availableHeight = screenHeight - listStartY - kButtonHintsReserve;
   const int itemsPerPage =
       std::max(1, availableHeight / kLineHeight);
@@ -188,7 +215,7 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
     currentY += kLineHeight;
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT),
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Select\n/hold",
                                             tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
                       labels.btn4);

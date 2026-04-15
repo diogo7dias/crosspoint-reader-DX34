@@ -482,6 +482,7 @@ enum class StrId : uint16_t {
   STR_NO_BOOKMARKS,
   STR_QUOTES_WALLPAPER,
   STR_QUOTES_CUSTOM,
+  STR_FREEZE,
   // Sentinel - must be last
   _COUNT
 };

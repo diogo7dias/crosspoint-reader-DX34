@@ -250,7 +250,12 @@ void drawSleepFilenameLabel(const GfxRenderer &renderer, const char *filename) {
 
 void SleepActivity::onEnter() {
   Activity::onEnter();
-  GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+
+  // Freeze mode keeps the current framebuffer intact — skip the popup
+  // so it doesn't get baked into the frozen screen.
+  if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::FREEZE) {
+    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+  }
 
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
@@ -278,6 +283,8 @@ void SleepActivity::onEnter() {
         APP_STATE.saveToFile();
         return renderQuotesSleepScreen();
       }
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::FREEZE):
+      return renderFreezeSleepScreen();
     default:
       return renderDefaultSleepScreen();
   }
@@ -901,14 +908,12 @@ void SleepActivity::renderQuotesSleepScreen() const {
   renderer.clearScreen(0xFF);
 
   // Layout constants
-  const int marginX = 30;
+  const int marginX = 20;
   const int contentWidth = W - marginX * 2;
-  const int lineSpacing = 28;        // space between notebook lines
   const int headerTopY = 40;
 
   // ── Header: book title (bold, centered) ──
   const int titleFontId = UI_12_FONT_ID;
-  const int quoteFontId = CHAREINK_14_FONT_ID;
   const int chapterFontId = UI_10_FONT_ID;
 
   // Wrap and draw book title
@@ -922,69 +927,93 @@ void SleepActivity::renderQuotesSleepScreen() const {
     y += renderer.getLineHeight(titleFontId) + 2;
   }
 
-  // ── Chapter name (italic, centered, smaller) ──
+  // ── Chapter name (italic, centered, smaller — wrapped, not truncated) ──
   if (!entry.chapter.empty()) {
     y += 4;
-    std::string chapterDisplay = entry.chapter;
-    // Truncate if too long
-    chapterDisplay = renderer.truncatedText(chapterFontId, chapterDisplay.c_str(), contentWidth,
-                                            EpdFontFamily::ITALIC);
-    const int chW = renderer.getTextWidth(chapterFontId, chapterDisplay.c_str(), EpdFontFamily::ITALIC);
-    renderer.drawText(chapterFontId, (W - chW) / 2, y, chapterDisplay.c_str(), true, EpdFontFamily::ITALIC);
-    y += renderer.getLineHeight(chapterFontId) + 4;
+    auto chapterLines = ReaderLayoutSafety::wrapText(renderer, chapterFontId, entry.chapter, contentWidth);
+    if (chapterLines.size() > 2) chapterLines.resize(2); // max 2 lines
+    for (const auto& chLine : chapterLines) {
+      const int chW = renderer.getTextWidth(chapterFontId, chLine.c_str(), EpdFontFamily::ITALIC);
+      renderer.drawText(chapterFontId, (W - chW) / 2, y, chLine.c_str(), true, EpdFontFamily::ITALIC);
+      y += renderer.getLineHeight(chapterFontId) + 2;
+    }
+    y += 2;
   }
 
-  // ── Divider line ──
+  // ── Divider line — edge-to-edge, 3px thick ──
   y += 8;
-  renderer.drawLine(marginX + 20, y, W - marginX - 20, y, 1, true);
-  y += 16;
+  renderer.fillRect(-20, y, W + 40, 3, true);
+  y += 10; // margin below divider
 
-  // ── Notebook lines + quote text ──
-  // Draw notebook ruled lines from here to near bottom
-  const int notebookStartY = y;
-  const int notebookEndY = H - 40;
+  // ── Quote text — vertically centered in remaining space ──
+  const int quoteTopY = y;
+  const int quoteBottomY = H; // use full bottom
+  const int quoteAreaH = quoteBottomY - quoteTopY;
+  const int lineSpacing = 28;
 
-  // Pre-calculate how many lines fit
-  const int quoteLineH = renderer.getLineHeight(quoteFontId);
-
-  // Draw faint grey ruled lines across the notebook area
-  // Use dithered rects for grey appearance (1px height)
-  for (int lineY = notebookStartY + lineSpacing; lineY < notebookEndY; lineY += lineSpacing) {
-    renderer.fillRectDither(marginX, lineY + quoteLineH - 2, contentWidth, 1,
-                            Color::LightGray);
-  }
-
-  // Draw a red margin line (left side, like a notebook)
-  renderer.drawLine(marginX + 8, notebookStartY, marginX + 8, notebookEndY, 1, true);
-  renderer.fillRectDither(marginX + 8, notebookStartY, 1, notebookEndY - notebookStartY,
-                          Color::DarkGray);
-
-  // Wrap quote text and draw centered on lines
-  const int quoteMarginX = marginX + 20; // indent past the margin line
-  const int quoteContentWidth = W - quoteMarginX - marginX;
-  auto quoteLines = ReaderLayoutSafety::wrapText(renderer, quoteFontId, entry.text, quoteContentWidth);
-
-  // Cap to lines that fit in notebook area
-  const int maxQuoteLines = (notebookEndY - notebookStartY) / lineSpacing;
-  if (static_cast<int>(quoteLines.size()) > maxQuoteLines) {
-    quoteLines.resize(maxQuoteLines);
-    // Add ellipsis to last line
-    if (!quoteLines.empty()) {
-      auto& last = quoteLines.back();
-      last = renderer.truncatedText(quoteFontId, last.c_str(), quoteContentWidth, EpdFontFamily::REGULAR);
+  // Determine quote font: use smaller font if quote is long
+  int quoteFontId = CHAREINK_14_FONT_ID;
+  {
+    auto testLines = ReaderLayoutSafety::wrapText(renderer, quoteFontId, entry.text, contentWidth);
+    const int maxLines = quoteAreaH / lineSpacing;
+    if (static_cast<int>(testLines.size()) > maxLines) {
+      quoteFontId = UI_12_FONT_ID;
     }
   }
 
-  // Draw quote text lines aligned to notebook lines
-  int quoteY = notebookStartY;
+  auto quoteLines = ReaderLayoutSafety::wrapText(renderer, quoteFontId, entry.text, contentWidth);
+
+  // Cap to lines that fit
+  const int maxQuoteLines = quoteAreaH / lineSpacing;
+  if (static_cast<int>(quoteLines.size()) > maxQuoteLines) {
+    quoteLines.resize(maxQuoteLines);
+    if (!quoteLines.empty()) {
+      auto& last = quoteLines.back();
+      last = renderer.truncatedText(quoteFontId, last.c_str(), contentWidth, EpdFontFamily::REGULAR);
+    }
+  }
+
+  // Vertically center the block of quote lines in the available space
+  const int totalTextH = static_cast<int>(quoteLines.size()) * lineSpacing;
+  int quoteY = quoteTopY + (quoteAreaH - totalTextH) / 2;
+
   for (const auto& line : quoteLines) {
-    // Center each line horizontally in the quote content area
     const int lineW = renderer.getTextWidth(quoteFontId, line.c_str(), EpdFontFamily::REGULAR);
-    const int lineX = quoteMarginX + (quoteContentWidth - lineW) / 2;
+    const int lineX = marginX + (contentWidth - lineW) / 2;
     renderer.drawText(quoteFontId, lineX, quoteY, line.c_str(), true, EpdFontFamily::REGULAR);
     quoteY += lineSpacing;
   }
 
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   renderer.setDarkMode(wasDarkMode);
+}
+
+void SleepActivity::renderFreezeSleepScreen() const {
+  clearLastSleepWallpaperPath();
+
+  const int W = renderer.getScreenWidth();
+  const int H = renderer.getScreenHeight();
+
+  // The framebuffer still contains the last render. Draw a small black
+  // pill at the bottom center with "Sleeping" label so the user knows
+  // the device is locked.
+
+  const int fontId = UI_10_FONT_ID;
+  const char* label = "SLEEPING.";
+  const int textW = renderer.getTextWidth(fontId, label, EpdFontFamily::REGULAR);
+  const int textH = renderer.getLineHeight(fontId);
+  const int padY = 11;
+  const int bannerH = textH + padY * 2;
+  // Extend banner beyond screen edges so offset displays still show full black
+  const int bannerX = -20;
+  const int bannerW = W + 40;
+  const int bannerY = H - bannerH - 10;
+
+  // Full-width black banner
+  renderer.fillRect(bannerX, bannerY, bannerW, bannerH, true);
+  // Centered white text
+  const int textX = (W - textW) / 2;
+  renderer.drawText(fontId, textX, bannerY + padY, label, false, EpdFontFamily::REGULAR);
+
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }

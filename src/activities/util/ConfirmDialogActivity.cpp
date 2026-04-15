@@ -3,6 +3,9 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
+#include <string>
+#include <vector>
+
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -53,10 +56,21 @@ void ConfirmDialogActivity::render(Activity::RenderLock&&) {
   constexpr int rowH = 28;
   const int popupW = pageWidth - 48;
 
-  // Wrap message text to fit popup width
+  // Split message on newlines and truncate each line to fit popup width
   const int textMaxW = popupW - 24;
-  const std::string truncatedMsg = renderer.truncatedText(UI_10_FONT_ID, message.c_str(), textMaxW);
-  const int textH = renderer.getLineHeight(UI_10_FONT_ID);
+  const int lineH = renderer.getLineHeight(UI_10_FONT_ID);
+  std::vector<std::string> msgLines;
+  {
+    size_t start = 0;
+    while (start <= message.size()) {
+      auto nl = message.find('\n', start);
+      if (nl == std::string::npos) nl = message.size();
+      std::string line = message.substr(start, nl - start);
+      msgLines.push_back(renderer.truncatedText(UI_10_FONT_ID, line.c_str(), textMaxW));
+      start = nl + 1;
+    }
+  }
+  const int textH = static_cast<int>(msgLines.size()) * (lineH + 2);
 
   const int popupH = 20 + textH + 16 + kOptionCount * rowH;
   const int popupX = (pageWidth - popupW) / 2;
@@ -65,8 +79,12 @@ void ConfirmDialogActivity::render(Activity::RenderLock&&) {
   renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);
   renderer.fillRect(popupX, popupY, popupW, popupH, false);
 
-  // Draw message
-  renderer.drawText(UI_10_FONT_ID, popupX + 12, popupY + 10, truncatedMsg.c_str(), true);
+  // Draw message lines
+  int msgY = popupY + 10;
+  for (const auto& line : msgLines) {
+    renderer.drawText(UI_10_FONT_ID, popupX + 12, msgY, line.c_str(), true);
+    msgY += lineH + 2;
+  }
 
   // Draw options
   const int optionsStartY = popupY + 20 + textH + 8;

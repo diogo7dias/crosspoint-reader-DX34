@@ -38,6 +38,7 @@ public:
     COVER_CUSTOM = 5,
     QUOTES = 6,
     QUOTES_CUSTOM = 7,
+    FREEZE = 8,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE {

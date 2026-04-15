@@ -167,7 +167,7 @@ void ReadingThemesActivity::executeThemeAction() {
       const std::string themeName = delTheme ? delTheme->name : "theme";
       const int delIndex = actionPopupThemeIndex;
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, "Delete theme \"" + themeName + "\"?",
+          renderer, mappedInput, "Delete theme?\n" + themeName,
           [this, delIndex]() {
             exitActivity();
             if (!READING_THEMES.deleteTheme(delIndex)) {

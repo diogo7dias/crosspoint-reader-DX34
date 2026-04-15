@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -470,24 +471,92 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   const GfxRenderer::Orientation orig_orientation = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
-  constexpr int buttonWidth = 106;
   constexpr int buttonHeight = BaseMetrics::values.buttonHintsHeight;
-  constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;  // Distance from bottom
-  constexpr int textYOffset = 7;                                  // Distance from top of button to text baseline
-  constexpr int buttonPositions[] = {25, 130, 245, 350};
+  constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;
+  constexpr int textYOffset = 7;
+  constexpr int padX = 10;       // horizontal padding inside button
+  constexpr int marginX = 20;    // margin from screen edges
+  constexpr int gapBetween = 6;  // gap between buttons
+  constexpr int minButtonW = 60; // minimum button width
+
   const char* labels[] = {btn1, btn2, btn3, btn4};
 
+  // Measure the text width each button needs
+  int textWidths[4] = {};
+  int activeCount = 0;
   for (int i = 0; i < 4; i++) {
-    // Only draw if the label is non-empty
     if (labels[i] != nullptr && labels[i][0] != '\0') {
-      const int x = buttonPositions[i];
-      renderer.fillRect(x, pageHeight - buttonY, buttonWidth, buttonHeight, false);
-      renderer.drawRect(x, pageHeight - buttonY, buttonWidth, buttonHeight);
-      const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
-      const int textX = x + (buttonWidth - 1 - textWidth) / 2;
+      const char* sep = strchr(labels[i], '\n');
+      if (sep) {
+        const std::string mainPart(labels[i], sep - labels[i]);
+        const int mainW = renderer.getTextWidth(UI_10_FONT_ID, mainPart.c_str());
+        const int holdW = renderer.getTextWidth(SMALL_FONT_ID, sep + 1);
+        textWidths[i] = mainW + 2 + holdW;
+      } else {
+        textWidths[i] = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
+      }
+      activeCount++;
+    }
+  }
+
+  if (activeCount == 0) {
+    renderer.setOrientation(orig_orientation);
+    return;
+  }
+
+  // Compute button widths: text + padding, with minimum
+  int buttonWidths[4] = {};
+  int totalNeeded = 0;
+  for (int i = 0; i < 4; i++) {
+    if (labels[i] != nullptr && labels[i][0] != '\0') {
+      buttonWidths[i] = std::max(minButtonW, textWidths[i] + padX * 2);
+      totalNeeded += buttonWidths[i];
+    }
+  }
+
+  // Available space for buttons
+  const int availableW = pageWidth - marginX * 2;
+  const int totalGaps = (activeCount - 1) * gapBetween;
+  int remaining = availableW - totalNeeded - totalGaps;
+
+  // Distribute extra space equally across active buttons
+  if (remaining > 0) {
+    const int extra = remaining / activeCount;
+    for (int i = 0; i < 4; i++) {
+      if (buttonWidths[i] > 0) buttonWidths[i] += extra;
+    }
+  }
+
+  // Position and draw
+  int x = marginX;
+  for (int i = 0; i < 4; i++) {
+    if (labels[i] == nullptr || labels[i][0] == '\0') continue;
+
+    const int bw = buttonWidths[i];
+    renderer.fillRect(x, pageHeight - buttonY, bw, buttonHeight, false);
+    renderer.drawRect(x, pageHeight - buttonY, bw, buttonHeight);
+
+    const char* sep = strchr(labels[i], '\n');
+    if (sep) {
+      const std::string mainLabel(labels[i], sep - labels[i]);
+      const char* holdLabel = sep + 1;
+      const int mainW = renderer.getTextWidth(UI_10_FONT_ID, mainLabel.c_str());
+      const int holdW = renderer.getTextWidth(SMALL_FONT_ID, holdLabel);
+      const int totalW = mainW + 2 + holdW;
+      const int startX = x + (bw - totalW) / 2;
+      renderer.drawText(UI_10_FONT_ID, startX, pageHeight - buttonY + textYOffset,
+                        mainLabel.c_str());
+      renderer.drawText(SMALL_FONT_ID, startX + mainW + 2,
+                        pageHeight - buttonY + textYOffset + 3, holdLabel);
+    } else {
+      const int tw = textWidths[i];
+      const int textX = x + (bw - tw) / 2;
       renderer.drawText(UI_10_FONT_ID, textX, pageHeight - buttonY + textYOffset, labels[i]);
     }
+
+    x += bw + gapBetween;
   }
 
   renderer.setOrientation(orig_orientation);

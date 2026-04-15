@@ -1121,7 +1121,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       exitActivity();
       enterNewActivity(new ConfirmDialogActivity(
           renderer, mappedInput,
-          "Delete \"" + bookTitle + "\" from device?",
+          "Delete from device?\n" + bookTitle,
           [this]() {
             exitActivity();
             std::string deletingPath;
@@ -1158,7 +1158,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       exitActivity();
       enterNewActivity(new ConfirmDialogActivity(
           renderer, mappedInput,
-          "Remove \"" + bookTitle + "\" from recents?",
+          "Remove from recents?\n" + bookTitle,
           [this]() {
             exitActivity();
             if (epub) {

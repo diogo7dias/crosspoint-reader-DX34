@@ -89,7 +89,7 @@ void EpubReaderChapterSelectionActivity::loop() {
     } else {
       // Different chapter — show confirmation
       const auto tocItem = epub->getTocItem(selectorIndex);
-      const std::string msg = std::string(tr(STR_JUMP_TO_CHAPTER)) + " " + tocItem.title + "?";
+      const std::string msg = std::string(tr(STR_JUMP_TO_CHAPTER)) + "?\n" + tocItem.title;
       const int selectedIdx = selectorIndex;
       enterNewActivity(new ConfirmDialogActivity(
           renderer, mappedInput, msg,

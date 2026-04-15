@@ -238,7 +238,7 @@ void HomeActivity::loop() {
         const std::string path = selectedPath;
         enterNewActivity(new ConfirmDialogActivity(
             renderer, mappedInput,
-            std::string(tr(STR_REMOVE_FROM_RECENTS)) + "? " + title,
+            std::string(tr(STR_REMOVE_FROM_RECENTS)) + "?\n" + title,
             [this, path]() {
               RECENT_BOOKS.removeBook(path);
               auto metrics = UITheme::getInstance().getMetrics();

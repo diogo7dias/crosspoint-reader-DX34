@@ -671,31 +671,37 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir,
   return true;
 }
 
-bool MyLibraryActivity::deleteSelectedFile() {
-  if (selectedFilePath.empty()) return false;
-  if (isBookFile(selectedFilePath)) {
-    RECENT_BOOKS.removeBook(selectedFilePath);
-    if (StringUtils::checkFileExtension(selectedFilePath, ".epub")) {
-      Epub(selectedFilePath, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(selectedFilePath, ".xtc") ||
-               StringUtils::checkFileExtension(selectedFilePath, ".xtch")) {
-      Xtc(selectedFilePath, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(selectedFilePath, ".txt") ||
-               StringUtils::checkFileExtension(selectedFilePath, ".md")) {
-      Txt txt(selectedFilePath, Paths::kDataDir);
+bool MyLibraryActivity::deleteFile(const std::string& path) {
+  if (path.empty()) return false;
+  esp_task_wdt_reset();
+  if (isBookFile(path)) {
+    RECENT_BOOKS.removeBook(path);
+    if (StringUtils::checkFileExtension(path, ".epub")) {
+      Epub(path, Paths::kDataDir).clearCache();
+    } else if (StringUtils::checkFileExtension(path, ".xtc") ||
+               StringUtils::checkFileExtension(path, ".xtch")) {
+      Xtc(path, Paths::kDataDir).clearCache();
+    } else if (StringUtils::checkFileExtension(path, ".txt") ||
+               StringUtils::checkFileExtension(path, ".md")) {
+      Txt txt(path, Paths::kDataDir);
       Storage.removeDir(txt.getCachePath().c_str());
     }
+    esp_task_wdt_reset();
   }
 
-  const bool deleted = Storage.remove(selectedFilePath.c_str());
+  const bool deleted = Storage.remove(path.c_str());
   if (deleted) {
-    if (isBmpFile(selectedFilePath)) {
-      FavoriteBmp::removePathReferences(selectedFilePath);
+    if (isBmpFile(path)) {
+      FavoriteBmp::removePathReferences(path);
       APP_STATE.saveToFile();
     }
-    selectedFilePath.clear();
+    if (selectedFilePath == path) selectedFilePath.clear();
   }
   return deleted;
+}
+
+bool MyLibraryActivity::deleteSelectedFile() {
+  return deleteFile(selectedFilePath);
 }
 
 void MyLibraryActivity::requestCleanRefresh() {
@@ -864,10 +870,11 @@ void MyLibraryActivity::loopFileActions() {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
           enterNewActivity(new ConfirmDialogActivity(
-              renderer, mappedInput, "Delete \"" + fileName + "\"?",
+              renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
                 exitActivity();
-                if (deleteSelectedFile()) {
+                StatusPopup::showBlocking(renderer, "Deleting file");
+                if (deleteFile(pathToDelete)) {
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
                     files.erase(files.begin() + static_cast<long>(*rawIndex));
@@ -905,11 +912,11 @@ void MyLibraryActivity::loopFileActions() {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
           enterNewActivity(new ConfirmDialogActivity(
-              renderer, mappedInput, "Delete \"" + fileName + "\"?",
+              renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
                 exitActivity();
                 StatusPopup::showBlocking(renderer, "Deleting file");
-                if (deleteSelectedFile()) {
+                if (deleteFile(pathToDelete)) {
                   progressPrefixCache.erase(pathToDelete);
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
@@ -992,15 +999,30 @@ void MyLibraryActivity::loopFileMoveBrowser() {
 }
 
 void MyLibraryActivity::loopBrowse() {
-  // Long press BACK (1s+) goes to root folder
+  // Long press BACK (1s+) goes to root folder — fires while held
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= GO_HOME_MS &&
       basepath != "/") {
+    mappedInput.suppressUntilAllReleased();
     basepath = "/";
     loadFiles();
     clearSearch();
     selectorIndex = 0;
     requestUpdate();
     return;
+  }
+
+  // Long press CONFIRM (1s+) on a file — opens file actions while held
+  {
+    const auto rawIndex = rawFileIndexForListIndex(selectorIndex);
+    if (rawIndex.has_value() &&
+        mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+        mappedInput.getHeldTime() >= GO_HOME_MS &&
+        isManagedFile(files[*rawIndex])) {
+      const std::string selectedPath = makeAbsolutePath(files[*rawIndex]);
+      mappedInput.suppressUntilAllReleased();
+      enterFileActions(selectedPath);
+      return;
+    }
   }
 
   const int pageItems = UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, false);
@@ -1039,9 +1061,7 @@ void MyLibraryActivity::loopBrowse() {
       selectorIndex = 0;
       requestUpdate();
     } else if (isManagedFile(selectedEntry)) {
-      if (mappedInput.getHeldTime() >= GO_HOME_MS) {
-        enterFileActions(selectedPath);
-      } else if (isBmpFile(selectedEntry)) {
+      if (isBmpFile(selectedEntry)) {
         enterBmpView(selectedPath);
       } else {
         onSelectBook(selectedPath);
@@ -1053,25 +1073,22 @@ void MyLibraryActivity::loopBrowse() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    // Short press: go up one directory, or go home if at root
-    if (mappedInput.getHeldTime() < GO_HOME_MS) {
-      if (basepath != "/") {
-        const std::string oldPath = basepath;
+    if (basepath != "/") {
+      const std::string oldPath = basepath;
 
-        const auto lastSlash = basepath.find_last_of('/');
-        if (lastSlash != std::string::npos) basepath.replace(lastSlash, std::string::npos, "");
-        if (basepath.empty()) basepath = "/";
-        loadFiles();
-        clearSearch();
+      const auto lastSlash = basepath.find_last_of('/');
+      if (lastSlash != std::string::npos) basepath.replace(lastSlash, std::string::npos, "");
+      if (basepath.empty()) basepath = "/";
+      loadFiles();
+      clearSearch();
 
-        const auto pos = oldPath.find_last_of('/');
-        const std::string dirName = oldPath.substr(pos + 1) + "/";
-        selectorIndex = listIndexForRawFileIndex(findEntry(dirName));
+      const auto pos = oldPath.find_last_of('/');
+      const std::string dirName = oldPath.substr(pos + 1) + "/";
+      selectorIndex = listIndexForRawFileIndex(findEntry(dirName));
 
-        requestUpdate();
-      } else {
-        onGoHome();
-      }
+      requestUpdate();
+    } else {
+      onGoHome();
     }
   }
 
@@ -1221,9 +1238,10 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   } else if (isClearSearchRow(selectorIndex)) {
     confirmLabel = "Clear";
   } else if (hasSelectedFile) {
-    confirmLabel = hasSelectedBmp ? "View/Menu" : "Open/Menu";
+    confirmLabel = hasSelectedBmp ? "View\n/hold" : "Open\n/hold";
   }
-  const auto labels = mappedInput.mapLabels(basepath == "/" ? tr(STR_HOME) : tr(STR_BACK),
+  const char* backLabel = basepath == "/" ? tr(STR_HOME) : "Back\n/hold";
+  const auto labels = mappedInput.mapLabels(backLabel,
                                             confirmLabel, tr(STR_DIR_UP),
                                             tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

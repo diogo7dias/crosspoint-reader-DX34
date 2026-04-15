@@ -96,6 +96,7 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   void showMessagePopup(const std::string& message);
   bool copyFile(const std::string& srcPath, const std::string& dstPath) const;
   bool moveSelectedFileTo(const std::string& targetDir, std::string* destinationPath = nullptr) const;
+  bool deleteFile(const std::string& path);
   bool deleteSelectedFile();
   void requestCleanRefresh();
   void loopSubActivity();
