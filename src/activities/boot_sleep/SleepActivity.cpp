@@ -12,6 +12,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
+#include "activities/reader/ReaderLayoutSafety.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/StatusPopup.h"
@@ -263,6 +264,19 @@ void SleepActivity::onEnter() {
         return renderCoverSleepScreen();
       } else {
         return renderCustomSleepScreen();
+      }
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::QUOTES):
+      return renderQuotesSleepScreen();
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::QUOTES_CUSTOM):
+      // Alternate between quotes and custom wallpaper each sleep cycle.
+      if (APP_STATE.lastSleepWasQuotes) {
+        APP_STATE.lastSleepWasQuotes = false;
+        APP_STATE.saveToFile();
+        return renderCustomSleepScreen();
+      } else {
+        APP_STATE.lastSleepWasQuotes = true;
+        APP_STATE.saveToFile();
+        return renderQuotesSleepScreen();
       }
     default:
       return renderDefaultSleepScreen();
@@ -739,4 +753,238 @@ void SleepActivity::renderBlankSleepScreen() const {
   clearLastSleepWallpaperPath();
   renderer.clearScreen();
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+}
+
+// ── Quotes wallpaper ────────────────────────────────────────────────────────
+
+namespace {
+
+/// Parse a _QUOTES.txt file into (chapter, quote) pairs.
+struct QuoteEntry {
+  std::string chapter;
+  std::string text;
+};
+
+std::vector<QuoteEntry> parseQuotesFile(const std::string& path) {
+  std::vector<QuoteEntry> entries;
+  FsFile file;
+  if (!Storage.openFileForRead("SLP", path, file)) return entries;
+
+  // Read entire file (cap at 8 KB to stay heap-safe)
+  constexpr size_t kMaxRead = 8192;
+  const size_t fileSize = file.size();
+  const size_t readSize = (fileSize < kMaxRead) ? fileSize : kMaxRead;
+  std::string buf(readSize, '\0');
+  file.read(&buf[0], readSize);
+  file.close();
+
+  // Format:  [Chapter Title]\nquote text\n---\n\n
+  size_t pos = 0;
+  while (pos < buf.size()) {
+    // Skip whitespace
+    while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == ' '))
+      ++pos;
+    if (pos >= buf.size()) break;
+
+    QuoteEntry entry;
+
+    // Parse optional [Chapter] header
+    if (buf[pos] == '[') {
+      auto close = buf.find(']', pos);
+      if (close != std::string::npos) {
+        entry.chapter = buf.substr(pos + 1, close - pos - 1);
+        pos = close + 1;
+        // Skip newline after header
+        while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r'))
+          ++pos;
+      }
+    }
+
+    // Read quote text until --- separator
+    auto sep = buf.find("\n---", pos);
+    if (sep == std::string::npos) {
+      // Last entry without separator
+      entry.text = buf.substr(pos);
+    } else {
+      entry.text = buf.substr(pos, sep - pos);
+      pos = sep + 4; // skip \n---
+    }
+
+    // Trim trailing whitespace from quote
+    while (!entry.text.empty() &&
+           (entry.text.back() == '\n' || entry.text.back() == '\r' || entry.text.back() == ' '))
+      entry.text.pop_back();
+
+    if (!entry.text.empty())
+      entries.push_back(std::move(entry));
+
+    if (sep == std::string::npos) break;
+  }
+  return entries;
+}
+
+/// Scan /recents/ for all _QUOTES.txt files. Returns full paths.
+std::vector<std::string> findAllQuotesFiles() {
+  std::vector<std::string> result;
+  auto dir = Storage.open("/recents");
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return result;
+  }
+
+  dir.rewindDirectory();
+  char name[256];
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    file.getName(name, sizeof(name));
+    const std::string filename(name);
+    // Match *_QUOTES.txt
+    if (filename.size() > 11 &&
+        filename.compare(filename.size() - 11, 11, "_QUOTES.txt") == 0) {
+      result.push_back("/recents/" + filename);
+    }
+    file.close();
+  }
+  dir.close();
+  return result;
+}
+
+/// Derive a human-readable book title from a _QUOTES.txt path.
+/// E.g. "/recents/My Great Book_QUOTES.txt" → "My Great Book"
+std::string bookTitleFromQuotesPath(const std::string& quotesPath) {
+  auto slash = quotesPath.rfind('/');
+  std::string filename = (slash != std::string::npos)
+      ? quotesPath.substr(slash + 1)
+      : quotesPath;
+  // Strip _QUOTES.txt suffix
+  const std::string suffix = "_QUOTES.txt";
+  if (filename.size() > suffix.size() &&
+      filename.compare(filename.size() - suffix.size(), suffix.size(), suffix) == 0) {
+    filename = filename.substr(0, filename.size() - suffix.size());
+  }
+  return filename;
+}
+
+} // namespace
+
+void SleepActivity::renderQuotesSleepScreen() const {
+  clearLastSleepWallpaperPath();
+
+  // Find all QUOTES files in /recents/
+  auto quotesFiles = findAllQuotesFiles();
+  if (quotesFiles.empty()) {
+    LOG_DBG("SLP", "No quotes files found in /recents/");
+    return renderDefaultSleepScreen();
+  }
+
+  // Pick a random quotes file
+  const std::string& chosenFile = quotesFiles[random(static_cast<long>(quotesFiles.size()))];
+
+  auto quotes = parseQuotesFile(chosenFile);
+  if (quotes.empty()) {
+    return renderDefaultSleepScreen();
+  }
+
+  // Pick a random quote from that file
+  const auto& entry = quotes[random(static_cast<long>(quotes.size()))];
+
+  // Derive book title from the quotes filename
+  const std::string bookTitle = bookTitleFromQuotesPath(chosenFile);
+
+  // --- Render notebook-style wallpaper ---
+  const bool wasDarkMode = renderer.getDarkMode();
+  renderer.setDarkMode(false);
+
+  const int W = renderer.getScreenWidth();   // 480
+  const int H = renderer.getScreenHeight();  // 800
+
+  // White background
+  renderer.clearScreen(0xFF);
+
+  // Layout constants
+  const int marginX = 30;
+  const int contentWidth = W - marginX * 2;
+  const int lineSpacing = 28;        // space between notebook lines
+  const int headerTopY = 40;
+
+  // ── Header: book title (bold, centered) ──
+  const int titleFontId = UI_12_FONT_ID;
+  const int quoteFontId = CHAREINK_14_FONT_ID;
+  const int chapterFontId = UI_10_FONT_ID;
+
+  // Wrap and draw book title
+  auto titleLines = ReaderLayoutSafety::wrapText(renderer, titleFontId, bookTitle, contentWidth);
+  if (titleLines.size() > 2) titleLines.resize(2); // max 2 lines for title
+
+  int y = headerTopY;
+  for (const auto& line : titleLines) {
+    const int textW = renderer.getTextWidth(titleFontId, line.c_str(), EpdFontFamily::BOLD);
+    renderer.drawText(titleFontId, (W - textW) / 2, y, line.c_str(), true, EpdFontFamily::BOLD);
+    y += renderer.getLineHeight(titleFontId) + 2;
+  }
+
+  // ── Chapter name (italic, centered, smaller) ──
+  if (!entry.chapter.empty()) {
+    y += 4;
+    std::string chapterDisplay = entry.chapter;
+    // Truncate if too long
+    chapterDisplay = renderer.truncatedText(chapterFontId, chapterDisplay.c_str(), contentWidth,
+                                            EpdFontFamily::ITALIC);
+    const int chW = renderer.getTextWidth(chapterFontId, chapterDisplay.c_str(), EpdFontFamily::ITALIC);
+    renderer.drawText(chapterFontId, (W - chW) / 2, y, chapterDisplay.c_str(), true, EpdFontFamily::ITALIC);
+    y += renderer.getLineHeight(chapterFontId) + 4;
+  }
+
+  // ── Divider line ──
+  y += 8;
+  renderer.drawLine(marginX + 20, y, W - marginX - 20, y, 1, true);
+  y += 16;
+
+  // ── Notebook lines + quote text ──
+  // Draw notebook ruled lines from here to near bottom
+  const int notebookStartY = y;
+  const int notebookEndY = H - 40;
+
+  // Pre-calculate how many lines fit
+  const int quoteLineH = renderer.getLineHeight(quoteFontId);
+
+  // Draw faint grey ruled lines across the notebook area
+  // Use dithered rects for grey appearance (1px height)
+  for (int lineY = notebookStartY + lineSpacing; lineY < notebookEndY; lineY += lineSpacing) {
+    renderer.fillRectDither(marginX, lineY + quoteLineH - 2, contentWidth, 1,
+                            Color::LightGray);
+  }
+
+  // Draw a red margin line (left side, like a notebook)
+  renderer.drawLine(marginX + 8, notebookStartY, marginX + 8, notebookEndY, 1, true);
+  renderer.fillRectDither(marginX + 8, notebookStartY, 1, notebookEndY - notebookStartY,
+                          Color::DarkGray);
+
+  // Wrap quote text and draw centered on lines
+  const int quoteMarginX = marginX + 20; // indent past the margin line
+  const int quoteContentWidth = W - quoteMarginX - marginX;
+  auto quoteLines = ReaderLayoutSafety::wrapText(renderer, quoteFontId, entry.text, quoteContentWidth);
+
+  // Cap to lines that fit in notebook area
+  const int maxQuoteLines = (notebookEndY - notebookStartY) / lineSpacing;
+  if (static_cast<int>(quoteLines.size()) > maxQuoteLines) {
+    quoteLines.resize(maxQuoteLines);
+    // Add ellipsis to last line
+    if (!quoteLines.empty()) {
+      auto& last = quoteLines.back();
+      last = renderer.truncatedText(quoteFontId, last.c_str(), quoteContentWidth, EpdFontFamily::REGULAR);
+    }
+  }
+
+  // Draw quote text lines aligned to notebook lines
+  int quoteY = notebookStartY;
+  for (const auto& line : quoteLines) {
+    // Center each line horizontally in the quote content area
+    const int lineW = renderer.getTextWidth(quoteFontId, line.c_str(), EpdFontFamily::REGULAR);
+    const int lineX = quoteMarginX + (quoteContentWidth - lineW) / 2;
+    renderer.drawText(quoteFontId, lineX, quoteY, line.c_str(), true, EpdFontFamily::REGULAR);
+    quoteY += lineSpacing;
+  }
+
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.setDarkMode(wasDarkMode);
 }

@@ -480,6 +480,8 @@ enum class StrId : uint16_t {
   STR_REMOVE_BOOKMARK,
   STR_BOOKMARKS,
   STR_NO_BOOKMARKS,
+  STR_QUOTES_WALLPAPER,
+  STR_QUOTES_CUSTOM,
   // Sentinel - must be last
   _COUNT
 };

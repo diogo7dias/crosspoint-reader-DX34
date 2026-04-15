@@ -36,6 +36,8 @@ public:
     COVER = 3,
     BLANK = 4,
     COVER_CUSTOM = 5,
+    QUOTES = 6,
+    QUOTES_CUSTOM = 7,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE {
