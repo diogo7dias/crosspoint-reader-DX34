@@ -814,6 +814,11 @@ void EpubReaderActivity::jumpToPercent(int percent) {
 
 void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action) {
   switch (action) {
+    case EpubReaderMenuActivity::MenuAction::HIGHLIGHT_QUOTE: {
+      exitActivity();
+      enterHighlightMode();
+      break;
+    }
     case EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER: {
       // Calculate values BEFORE we start destroying things
       const int spineIdx = currentSpineIndex;

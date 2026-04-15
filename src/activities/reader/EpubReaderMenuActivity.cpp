@@ -34,6 +34,7 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   std::vector<MenuItem> items;
   items.reserve(18);
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
+  items.push_back({MenuAction::HIGHLIGHT_QUOTE, StrId::STR_HIGHLIGHT_MODE});
   items.push_back({MenuAction::BOOKMARK_TOGGLE,
                    isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
   if (bookmarkCount > 0) {

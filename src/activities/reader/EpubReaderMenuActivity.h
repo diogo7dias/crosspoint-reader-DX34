@@ -15,6 +15,7 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
   enum class MenuAction {
     NONE,
     SELECT_CHAPTER,
+    HIGHLIGHT_QUOTE,
     BOOKMARK_TOGGLE,
     BOOKMARK_LIST,
     FOOTNOTES,
