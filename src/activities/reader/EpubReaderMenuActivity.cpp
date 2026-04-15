@@ -14,10 +14,12 @@
 EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                                const std::string& title, const int currentPage, const int totalPages,
                                                const int bookProgressPercent, const uint8_t currentOrientation,
-                                               const bool hasFootnotes, const std::function<void(uint8_t)>& onBack,
+                                               const bool hasFootnotes, const bool isPageBookmarked,
+                                               const int bookmarkCount,
+                                               const std::function<void(uint8_t)>& onBack,
                                                const std::function<void(MenuAction)>& onAction)
     : ActivityWithSubactivity("EpubReaderMenu", renderer, mappedInput),
-      menuItems(buildMenuItems(hasFootnotes)),
+      menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount)),
       title(title),
       pendingOrientation(currentOrientation),
       currentPage(currentPage),
@@ -26,10 +28,17 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
       onBack(onBack),
       onAction(onAction) {}
 
-std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes) {
+std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes,
+                                                                                     bool isPageBookmarked,
+                                                                                     int bookmarkCount) {
   std::vector<MenuItem> items;
-  items.reserve(15);
+  items.reserve(18);
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
+  items.push_back({MenuAction::BOOKMARK_TOGGLE,
+                   isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
+  if (bookmarkCount > 0) {
+    items.push_back({MenuAction::BOOKMARK_LIST, StrId::STR_BOOKMARKS});
+  }
   if (hasFootnotes) {
     items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
   }

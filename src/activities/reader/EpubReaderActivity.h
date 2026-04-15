@@ -15,6 +15,7 @@
 #include <array>
 #include <string>
 
+#include "BookmarkStore.h"
 #include "EpubReaderMenuActivity.h"
 #include "ReaderStatusBar.h"
 #include "activities/ActivityWithSubactivity.h"
@@ -159,6 +160,9 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // Footnote navigation
   void navigateToHref(const char* href, bool savePosition = false);
   void restoreSavedPosition();
+
+  // Bookmarks
+  BookmarkStore bookmarkStore;
 
  public:
   explicit EpubReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Epub> epub,

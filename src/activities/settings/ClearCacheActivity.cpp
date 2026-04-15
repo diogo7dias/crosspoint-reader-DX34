@@ -106,27 +106,38 @@ void ClearCacheActivity::clearCache() {
   }
   root.close();
 
+  // Files to preserve during cache clear (reading progress, per-book settings, bookmarks).
+  static constexpr const char* kPreserveFiles[] = {
+      "/progress.bin",
+      "/reader_settings.json",
+      "/bookmarks.json",
+  };
+
   // Pass 2: process each cache directory independently.
   for (const auto& fullPath : cacheDirs) {
     LOG_DBG("CLEAR_CACHE", "Removing cache: %s", fullPath.c_str());
 
-    std::vector<uint8_t> progressData;
-    bool hasProgress = false;
-    {
-      FsFile progressFile;
-      const std::string progressPath = fullPath + "/progress.bin";
-      if (Storage.openFileForRead("CLEAR_CACHE", progressPath, progressFile)) {
-        const auto progressSize = static_cast<size_t>(progressFile.size());
-        if (progressSize > 0 && progressSize <= 16) {
-          progressData.resize(progressSize);
-          const int read = progressFile.read(progressData.data(), progressSize);
-          if (read == static_cast<int>(progressSize)) {
-            hasProgress = true;
-          } else {
-            progressData.clear();
-          }
+    // Back up all preserve-worthy files before nuking the directory.
+    struct PreservedFile {
+      const char* suffix;
+      std::vector<uint8_t> data;
+      bool valid = false;
+    };
+    PreservedFile preserved[3];  // matches kPreserveFiles count
+
+    for (int i = 0; i < 3; i++) {
+      preserved[i].suffix = kPreserveFiles[i];
+      FsFile f;
+      const std::string path = fullPath + kPreserveFiles[i];
+      if (Storage.openFileForRead("CLEAR_CACHE", path, f)) {
+        const auto sz = static_cast<size_t>(f.size());
+        if (sz > 0 && sz <= 4096) {
+          preserved[i].data.resize(sz);
+          const int rd = f.read(preserved[i].data.data(), sz);
+          preserved[i].valid = (rd == static_cast<int>(sz));
+          if (!preserved[i].valid) preserved[i].data.clear();
         }
-        progressFile.close();
+        f.close();
       }
     }
 
@@ -142,22 +153,28 @@ void ClearCacheActivity::clearCache() {
       continue;
     }
 
-    if (hasProgress) {
-      FsFile progressOut;
-      const std::string progressPath = fullPath + "/progress.bin";
-      if (!Storage.openFileForWrite("CLEAR_CACHE", progressPath, progressOut) ||
-          progressOut.write(progressData.data(), progressData.size()) != progressData.size()) {
-        LOG_ERR("CLEAR_CACHE", "Failed to restore progress: %s", progressPath.c_str());
-        failedCount++;
-        if (progressOut) {
-          progressOut.close();
-        }
-        continue;
+    // Restore preserved files.
+    bool restoreFailed = false;
+    for (int i = 0; i < 3; i++) {
+      if (!preserved[i].valid) continue;
+      FsFile out;
+      const std::string path = fullPath + preserved[i].suffix;
+      if (!Storage.openFileForWrite("CLEAR_CACHE", path, out) ||
+          out.write(preserved[i].data.data(), preserved[i].data.size()) !=
+              preserved[i].data.size()) {
+        LOG_ERR("CLEAR_CACHE", "Failed to restore: %s", path.c_str());
+        restoreFailed = true;
+        if (out) out.close();
+      } else {
+        out.close();
       }
-      progressOut.close();
     }
 
-    clearedCount++;
+    if (restoreFailed) {
+      failedCount++;
+    } else {
+      clearedCount++;
+    }
   }
 
   LOG_DBG("CLEAR_CACHE", "Cache cleared: %d removed, %d failed", clearedCount, failedCount);

@@ -16,6 +16,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "BookmarkListActivity.h"
 #include "EpubReaderChapterSelectionActivity.h"
 #include "EpubReaderFootnotesActivity.h"
 #include "KOReaderCredentialStore.h"
@@ -183,6 +184,9 @@ void EpubReaderActivity::onEnter() {
       LOG_DBG("ERS", "Opened for first time, navigating to text reference at index %d", textSpineIndex);
     }
   }
+
+  // Load bookmarks for this book
+  bookmarkStore.load(epub->getCachePath());
 
   // Save current epub as last opened epub and add to recent books
   APP_STATE.openEpubPath = epub->getPath();
@@ -675,10 +679,13 @@ void EpubReaderActivity::openReaderMenu() {
     bookProgress = epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
   }
   const int bookProgressPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
+  const int pageNum = section ? section->currentPage : 0;
+  const bool isBookmarked = bookmarkStore.has(currentSpineIndex, pageNum);
+  const int bmCount = bookmarkStore.count();
   exitActivity();
   enterNewActivity(new EpubReaderMenuActivity(
       this->renderer, this->mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
-      SETTINGS.orientation, !currentPageFootnotes.empty(),
+      SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount,
       [this](const uint8_t orientation) { onReaderMenuBack(orientation); },
       [this](EpubReaderMenuActivity::MenuAction action) { onReaderMenuConfirm(action); }));
 }
@@ -856,6 +863,54 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
             requestUpdate();
           }));
 
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::BOOKMARK_TOGGLE: {
+      const int pageNum = section ? section->currentPage : 0;
+      const bool alreadyExists = bookmarkStore.has(currentSpineIndex, pageNum);
+      if (!alreadyExists && bookmarkStore.count() >= BookmarkStore::MAX_BOOKMARKS) {
+        // Full — show brief feedback then return to menu
+        StatusPopup::showBlocking(renderer, "Bookmarks full (20 max)");
+        exitActivity();
+        requestUpdate();
+        break;
+      }
+      bookmarkStore.toggle(currentSpineIndex, pageNum);
+      bookmarkStore.save(epub->getCachePath());
+      exitActivity();
+      requestUpdate();
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::BOOKMARK_LIST: {
+      const int spineIdx = currentSpineIndex;
+      const int pageNum = section ? section->currentPage : 0;
+      exitActivity();
+      enterNewActivity(new BookmarkListActivity(
+          this->renderer, this->mappedInput, epub, bookmarkStore,
+          epub->getCachePath(), spineIdx, pageNum,
+          [this] {
+            exitActivity();
+            requestUpdate();
+          },
+          [this](const int targetSpine, const int targetPage) {
+            // Save current position for "go back" (reuse footnote stack)
+            if (section && footnoteDepth < MAX_FOOTNOTE_DEPTH) {
+              savedPositions[footnoteDepth] = {currentSpineIndex,
+                                               section->currentPage};
+              footnoteDepth++;
+            }
+            // Jump to bookmark
+            if (currentSpineIndex != targetSpine || !section ||
+                section->currentPage != targetPage) {
+              TransitionFeedback::show(renderer, tr(STR_LOADING));
+              currentSpineIndex = targetSpine;
+              nextPageNumber = targetPage;
+              clearPageCache();
+              section.reset();
+            }
+            exitActivity();
+            requestUpdate();
+          }));
       break;
     }
     case EpubReaderMenuActivity::MenuAction::FOOTNOTES: {
