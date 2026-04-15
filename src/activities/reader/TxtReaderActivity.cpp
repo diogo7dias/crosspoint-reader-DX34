@@ -1137,9 +1137,22 @@ void TxtReaderActivity::renderPage() {
   renderer.setRenderMode(GfxRenderer::BW);
   renderer.setTextRenderStyle(SETTINGS.textRenderMode);
 
+  // Vertically center text on full pages to distribute leftover space evenly
+  // between top and bottom, so the visual gap matches the configured margins.
+  // Only full pages qualify — partial (last) pages stay top-aligned.
+  int verticalCenterOffset = 0;
+  if (static_cast<int>(currentPageLines.size()) == linesPerPage && linesPerPage > 0) {
+    const int usedHeight = linesPerPage * lineHeight;
+    const int vpHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
+    const int slack = vpHeight - usedHeight;
+    if (slack > 0 && slack < lineHeight) {
+      verticalCenterOffset = slack / 2;
+    }
+  }
+
   // Render text lines with alignment
   auto renderLines = [&]() {
-    int y = orientedMarginTop;
+    int y = orientedMarginTop + verticalCenterOffset;
     for (const auto &line : currentPageLines) {
       if (!line.text.empty()) {
         drawFlowLine(line, orientedMarginLeft, y, contentWidth);

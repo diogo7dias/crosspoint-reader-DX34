@@ -2013,7 +2013,24 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   renderer.setTextRenderStyle(SETTINGS.textRenderMode);
 
   const int viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
-  const int contentY = orientedMarginTop;
+  // Vertically center text on full pages to distribute leftover space evenly
+  // between top and bottom, so the visual gap matches the configured margins.
+  // Only text-only full pages qualify — partial (last) pages stay top-aligned.
+  int contentY = orientedMarginTop;
+  if (page.isTextOnly()) {
+    const int lineHeight = renderer.getLineHeight(SETTINGS.getReaderFontId());
+    if (lineHeight > 0) {
+      const int usedHeight = page.getUsedHeight(lineHeight);
+      if (usedHeight > 0 && usedHeight < viewportHeight) {
+        const int slack = viewportHeight - usedHeight;
+        // Only center if slack is less than one line — that means
+        // the page is full (just has rounding leftover).
+        if (slack < lineHeight) {
+          contentY += slack / 2;
+        }
+      }
+    }
+  }
 
   // Two-pass font prewarm: scan pass collects text, then decompress needed glyphs.
   // The actual render must happen inside the scope so page buffers stay alive.
