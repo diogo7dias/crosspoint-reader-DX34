@@ -526,6 +526,11 @@ void SleepActivity::renderDefaultSleepScreen() const {
   clearLastSleepWallpaperPath();
   const auto pageHeight = renderer.getScreenHeight();
 
+  // Sleep screen has its own inversion logic; bypass dark mode to avoid
+  // double-invert cancellation.
+  const bool wasDarkMode = renderer.getDarkMode();
+  renderer.setDarkMode(false);
+
   renderer.clearScreen();
   renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10,
                             tr(STR_CROSSPOINT), true, EpdFontFamily::REGULAR);
@@ -538,10 +543,16 @@ void SleepActivity::renderDefaultSleepScreen() const {
   }
 
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.setDarkMode(wasDarkMode);
 }
 
 void SleepActivity::renderBitmapSleepScreen(const Bitmap &bitmap,
                                             const char *sourceFilename) const {
+  // Sleep screen has its own inversion logic; bypass dark mode to avoid
+  // double-invert cancellation.
+  const bool wasDarkMode = renderer.getDarkMode();
+  renderer.setDarkMode(false);
+
   int x, y;
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -636,6 +647,8 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap &bitmap,
     renderer.displayGrayBuffer();
     renderer.setRenderMode(GfxRenderer::BW);
   }
+
+  renderer.setDarkMode(wasDarkMode);
 }
 
 void SleepActivity::renderCoverSleepScreen() const {

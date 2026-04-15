@@ -472,6 +472,7 @@ enum class StrId : uint16_t {
   STR_DYNAMIC_MARGINS_20,
   STR_STATUS_BOOK_PAGE_COUNTER,
   STR_STATUS_BOOK_PAGE_COUNTER_POSITION,
+  STR_DARK_MODE,
   // Sentinel - must be last
   _COUNT
 };

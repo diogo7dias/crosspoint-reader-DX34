@@ -915,7 +915,11 @@ void GfxRenderer::displayBuffer(HalDisplay::RefreshMode refreshMode) {
   }
   auto elapsed = millis() - start_ms;
   LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);
+  // Dark mode: invert framebuffer before display, then invert back so
+  // subsequent drawing operations remain in normal polarity.
+  if (darkModeInvert) invertScreen();
   display.displayBuffer(refreshMode, fadingFix);
+  if (darkModeInvert) invertScreen();
 }
 
 std::string GfxRenderer::truncatedText(const int fontId, const char *text,

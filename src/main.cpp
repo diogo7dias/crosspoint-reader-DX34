@@ -535,6 +535,15 @@ void loop() {
     }
   }
 
+  // Sync dark mode inversion flag with renderer when setting changes
+  {
+    static uint8_t lastDarkMode = !SETTINGS.darkMode;  // Force first-time update
+    if (SETTINGS.darkMode != lastDarkMode) {
+      lastDarkMode = SETTINGS.darkMode;
+      renderer.setDarkMode(lastDarkMode != 0);
+    }
+  }
+
   if (Serial && millis() - lastMemPrint >= 10000) {
     LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes", ESP.getFreeHeap(), ESP.getHeapSize(),
             ESP.getMinFreeHeap());

@@ -16,6 +16,8 @@ inline std::vector<SettingInfo> getSettingsList() {
   s.reserve(55);
 
   // --- Display ---
+  s.push_back(SettingInfo::Toggle(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode, "darkMode",
+                        StrId::STR_CAT_DISPLAY));
   s.push_back(SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
                       {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER, StrId::STR_NONE_OPT,
                        StrId::STR_COVER_CUSTOM},

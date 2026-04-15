@@ -370,6 +370,8 @@ public:
   uint8_t debugBorders = 0;
   // Highlight/quote selection method: HIGHLIGHT_WORD (pick start/end) or HIGHLIGHT_PAGE (full page narrow-down)
   uint8_t highlightMode = HIGHLIGHT_WORD;
+  // Dark mode: invert display output (white-on-black)
+  uint8_t darkMode = 0;
 
   ~CrossPointSettings() = default;
 

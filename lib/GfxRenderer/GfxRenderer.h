@@ -46,6 +46,7 @@ private:
   RenderMode renderMode;
   Orientation orientation;
   bool fadingFix;
+  bool darkModeInvert;
   bool pendingFullRefresh;
   bool pendingHalfRefresh;
   uint8_t textRenderStyle;  // 0=crisp, 1=dark
@@ -67,7 +68,7 @@ private:
 public:
   explicit GfxRenderer(HalDisplay &halDisplay)
       : display(halDisplay), renderMode(BW), orientation(Portrait),
-        fadingFix(false), pendingFullRefresh(false), pendingHalfRefresh(false), textRenderStyle(0) {}
+        fadingFix(false), darkModeInvert(false), pendingFullRefresh(false), pendingHalfRefresh(false), textRenderStyle(0) {}
   ~GfxRenderer() { freeBwBufferChunks(); }
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;
@@ -86,6 +87,10 @@ public:
 
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
+
+  // Dark mode: invert framebuffer before sending to display
+  void setDarkMode(const bool enabled) { darkModeInvert = enabled; }
+  bool getDarkMode() const { return darkModeInvert; }
 
   // Request a full refresh on the next displayBuffer() call (e.g. on screen transitions)
   void requestFullRefresh() { pendingFullRefresh = true; }
