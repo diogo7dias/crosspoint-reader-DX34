@@ -14,7 +14,6 @@ void showBlockingImpl(GfxRenderer& renderer, const std::string& message) {
   if (message.empty()) {
     return;
   }
-  TransitionFeedback::dismiss(renderer);
   const std::string uppercaseMessage = StringUtils::toUpperAscii(message);
   GUI.drawPopup(renderer, uppercaseMessage.c_str());
 }

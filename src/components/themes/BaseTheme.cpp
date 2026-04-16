@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+
+#include "util/TransitionFeedback.h"
 #include <vector>
 
 extern HalGPIO gpio;
@@ -1135,7 +1137,9 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
 
 Rect BaseTheme::drawPopup(GfxRenderer& renderer, const char* message) const {
   constexpr int margin = 15;
-  constexpr int y = 60;
+  constexpr int startY = 60;
+  constexpr int gap = 8;
+  const int y = TransitionFeedback::isActive() ? (TransitionFeedback::bottomY() + gap) : startY;
   const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, message, EpdFontFamily::REGULAR);
   const int textHeight = renderer.getLineHeight(UI_12_FONT_ID);
   const int w = textWidth + margin * 2;

@@ -9,18 +9,18 @@
 namespace TransitionFeedback {
 namespace {
 bool sActive = false;
+int sBottomY = 0;
 }  // namespace
 
 void show(GfxRenderer& renderer, const char* message) {
-  sActive = false;
   if (!message || message[0] == '\0') {
+    sActive = false;
     return;
   }
 
   const std::string upper = StringUtils::toUpperAscii(message);
 
   const int screenW = renderer.getScreenWidth();
-  const int screenH = renderer.getScreenHeight();
   const int textWidth =
       renderer.getTextWidth(UI_12_FONT_ID, upper.c_str(), EpdFontFamily::REGULAR);
   const int textHeight = renderer.getLineHeight(UI_12_FONT_ID);
@@ -28,10 +28,12 @@ void show(GfxRenderer& renderer, const char* message) {
   constexpr int paddingX = 20;
   constexpr int paddingY = 12;
   constexpr int border = 2;
+  constexpr int startY = 60;
+  constexpr int gap = 8;
   const int boxW = textWidth + paddingX * 2;
   const int boxH = textHeight + paddingY * 2;
   const int boxX = (screenW - boxW) / 2;
-  const int boxY = (screenH - boxH) / 2;
+  const int boxY = sActive ? (sBottomY + gap) : startY;
 
   renderer.fillRect(boxX - border, boxY - border,
                     boxW + border * 2, boxH + border * 2, true);
@@ -43,6 +45,7 @@ void show(GfxRenderer& renderer, const char* message) {
                     EpdFontFamily::REGULAR);
 
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  sBottomY = boxY + boxH + border;
   sActive = true;
 }
 
@@ -51,12 +54,17 @@ void dismiss(GfxRenderer& renderer) {
     return;
   }
   sActive = false;
+  sBottomY = 0;
   renderer.clearScreen();
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }
 
 bool isActive() {
   return sActive;
+}
+
+int bottomY() {
+  return sActive ? sBottomY : 0;
 }
 
 }  // namespace TransitionFeedback
