@@ -60,9 +60,11 @@ esp_err_t event_handler(esp_http_client_event_t *event) {
     int copy_len = 0;
 
     if (local_buf == NULL) {
-      /* Guard against bogus or malicious content-length values */
-      if (content_len <= 0 || content_len > 32768) {
-        LOG_ERR("OTA", "Rejecting content_len %d (max 32768)", content_len);
+      /* Guard against bogus or malicious content-length values.
+       * GitHub API /releases/latest JSON is typically 2-4 KB;
+       * 8 KB is generous while staying safe on ~180 KB free heap. */
+      if (content_len <= 0 || content_len > 8192) {
+        LOG_ERR("OTA", "Rejecting content_len %d (max 8192)", content_len);
         return ESP_ERR_NO_MEM;
       }
       /* local_buf life span is tracked by caller checkForUpdate */

@@ -23,7 +23,7 @@
 #include "MappedInputManager.h"
 #include "activities/boot_sleep/SleepActivity.h"
 #include "activities/util/ConfirmDialogActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
 #include "util/FavoriteBmp.h"
@@ -78,8 +78,16 @@ std::string joinPath(const std::string& parent, const std::string& child) {
   return parent + "/" + child;
 }
 
+// maxDepth caps recursion to prevent stack overflow on deeply nested trees.
+// Each level uses ~512 bytes of stack (name[256] + locals + childDirs vector);
+// 5 levels ≈ 2.5 KB which is safe on the ESP32-C3's ~15 KB stack.
+constexpr int kMaxMoveDestDepth = 5;
+
 void collectMoveDestinationPaths(const std::string& basePath,
-                                 std::vector<std::string>& outPaths) {
+                                 std::vector<std::string>& outPaths,
+                                 int depth = 0) {
+  if (depth >= kMaxMoveDestDepth) return;
+
   auto dir = Storage.open(basePath.c_str());
   if (!dir || !dir.isDirectory()) {
     if (dir) dir.close();
@@ -109,7 +117,7 @@ void collectMoveDestinationPaths(const std::string& basePath,
     const std::string fullPath = joinPath(basePath, folderName);
     outPaths.push_back(fullPath);
     if (!shouldCollapseMoveFolder(folderName)) {
-      collectMoveDestinationPaths(fullPath, outPaths);
+      collectMoveDestinationPaths(fullPath, outPaths, depth + 1);
     }
   }
 }
@@ -1050,7 +1058,7 @@ void MyLibraryActivity::loopBrowse() {
     }
   }
 
-  const int pageItems = UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, false);
+  const int pageItems = BaseTheme::getNumberOfItemsPerPage(renderer, true, false, true, false);
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (isSearchActionRow(selectorIndex)) {
@@ -1167,7 +1175,7 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
 
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
 
   std::string folderName = (basepath == "/") ? tr(STR_SD_CARD) : basepath.substr(basepath.rfind('/') + 1);
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName.c_str());
@@ -1395,7 +1403,7 @@ void MyLibraryActivity::renderFileMoveBrowser() {
   renderer.clearScreen();
   const int screenW = renderer.getScreenWidth();
   const int screenH = renderer.getScreenHeight();
-  const auto metrics = UITheme::getInstance().getMetrics();
+  const auto metrics = BaseMetrics::values;
   const int popupX = 12;
   const int popupY = 12;
   const int popupW = screenW - popupX * 2;

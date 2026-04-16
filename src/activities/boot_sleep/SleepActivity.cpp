@@ -7,13 +7,13 @@
 #include <Txt.h>
 #include <Xtc.h>
 #include <algorithm>
-#include <string_view>
+#include <cstring>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
 #include "activities/reader/ReaderLayoutSafety.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
@@ -136,22 +136,21 @@ void syncSleepPlaylistWithFiles(const std::vector<std::string> &files,
   }
 
   // Find newly-added files not yet in the playlist.
-  // Build a sorted vector of string_views (no string copies) for O(log n) lookup.
-  std::vector<std::string_view> sortedPlaylist;
-  sortedPlaylist.reserve(playlist.size());
-  std::transform(playlist.begin(), playlist.end(),
-                 std::back_inserter(sortedPlaylist),
-                 [](const std::string& entry) {
-                   return std::string_view(entry);
-                 });
-  std::sort(sortedPlaylist.begin(), sortedPlaylist.end());
+  // Sort a temporary copy of playlist pointers for O(log n) lookup without
+  // allocating a separate string_view vector (saves ~1.6 KB for 200 entries).
+  // We sort const char* pointers and compare via strcmp — no string copies.
+  std::vector<const char*> sortedPtrs;
+  sortedPtrs.reserve(playlist.size());
+  for (const auto& e : playlist) sortedPtrs.push_back(e.c_str());
+  std::sort(sortedPtrs.begin(), sortedPtrs.end(),
+            [](const char* a, const char* b) { return strcmp(a, b) < 0; });
 
   std::vector<std::string> newFiles;
   std::copy_if(files.begin(), files.end(), std::back_inserter(newFiles),
-               [&sortedPlaylist](const std::string& file) {
-                 return !std::binary_search(sortedPlaylist.begin(),
-                                            sortedPlaylist.end(),
-                                            std::string_view(file));
+               [&sortedPtrs](const std::string& file) {
+                 return !std::binary_search(
+                     sortedPtrs.begin(), sortedPtrs.end(), file.c_str(),
+                     [](const char* a, const char* b) { return strcmp(a, b) < 0; });
                });
 
   // Insert new files right after the current head so they show immediately.

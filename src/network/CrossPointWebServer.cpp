@@ -434,13 +434,14 @@ void CrossPointWebServer::handleClient() {
       if (len > 0) {
         buffer[len] = '\0';
         if (strcmp(buffer, "hello") == 0) {
-          String hostname = WiFi.getHostname();
-          if (hostname.isEmpty()) {
-            hostname = "crosspoint";
-          }
-          String message = "crosspoint (on " + hostname + ");" + String(wsPort);
+          const char* hostname = WiFi.getHostname();
+          if (!hostname || hostname[0] == '\0') hostname = "crosspoint";
+          char msg[128];
+          const int msgLen = snprintf(msg, sizeof(msg),
+                                      "crosspoint (on %s);%d", hostname, wsPort);
           udp.beginPacket(udp.remoteIP(), udp.remotePort());
-          udp.write(reinterpret_cast<const uint8_t*>(message.c_str()), message.length());
+          udp.write(reinterpret_cast<const uint8_t*>(msg),
+                    static_cast<size_t>(msgLen > 0 ? msgLen : 0));
           udp.endPacket();
         }
       }

@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <unordered_set>
 
 #include "CrossPointState.h"
 #include "util/StringUtils.h"
@@ -53,26 +52,25 @@ std::string makeRecentPathKey(const std::string &rawPath) {
 }
 
 void dedupeRecentBooks(std::vector<RecentBook> &books) {
-  std::vector<RecentBook> unique;
-  unique.reserve(books.size());
-  std::unordered_set<std::string> seen;
-  seen.reserve(books.size());
-
-  for (const auto &book : books) {
-    const std::string normalizedPath = normalizeRecentPath(book.path);
-    if (normalizedPath.empty()) {
+  // In-place dedupe: O(n²) but avoids allocating a full-size temp vector +
+  // unordered_set (~45 KB spike for 100 books). n ≤ 100 so this is fast.
+  for (size_t i = 0; i < books.size(); ++i) {
+    books[i].path = normalizeRecentPath(books[i].path);
+    if (books[i].path.empty()) {
+      books.erase(books.begin() + static_cast<long>(i));
+      --i;
       continue;
     }
-
-    const std::string key = makeRecentPathKey(normalizedPath);
-    if (seen.insert(key).second) {
-      RecentBook copy = book;
-      copy.path = normalizedPath;
-      unique.push_back(std::move(copy));
+    const std::string key = makeRecentPathKey(books[i].path);
+    for (size_t j = i + 1; j < books.size();) {
+      if (makeRecentPathKey(normalizeRecentPath(books[j].path)) == key) {
+        books.erase(books.begin() + static_cast<long>(j));
+      } else {
+        ++j;
+      }
     }
   }
 
-  books.swap(unique);
   if (books.size() > MAX_RECENT_BOOKS) {
     books.resize(MAX_RECENT_BOOKS);
   }
