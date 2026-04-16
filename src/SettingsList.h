@@ -39,6 +39,9 @@ inline std::vector<SettingInfo> getSettingsList() {
         "refreshFrequency", StrId::STR_CAT_DISPLAY));
   s.push_back(SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                         StrId::STR_CAT_DISPLAY));
+  s.push_back(SettingInfo::Enum(StrId::STR_XTC_CONTRAST, &CrossPointSettings::xtcContrast,
+                      {StrId::STR_NORMAL, StrId::STR_XTC_CONTRAST_HIGH, StrId::STR_XTC_CONTRAST_MAX},
+                      "xtcContrast", StrId::STR_CAT_DISPLAY));
   s.push_back(SettingInfo::Enum(StrId::STR_HOME_LAYOUT, &CrossPointSettings::homeLayout,
                       {StrId::STR_HOME_LAYOUT_CLASSIC, StrId::STR_HOME_LAYOUT_SINGLE_COVER},
                       "homeLayout", StrId::STR_CAT_DISPLAY));

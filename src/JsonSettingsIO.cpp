@@ -545,6 +545,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings &s,
   doc["highlightMode"] = s.highlightMode;
   doc["darkMode"] = s.darkMode;
   doc["booksFolderOrder"] = s.booksFolderOrder;
+  doc["xtcContrast"] = s.xtcContrast;
 
   // BLE HID controller
   doc["bleEnabled"] = s.bleEnabled;
@@ -888,6 +889,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
   if (s.darkMode > 1) s.darkMode = 0;
   s.booksFolderOrder = doc["booksFolderOrder"] | (uint8_t)0;
   if (s.booksFolderOrder > 1) s.booksFolderOrder = 0;
+  s.xtcContrast = clamp(doc["xtcContrast"] | (uint8_t)0, S::XTC_CONTRAST_COUNT, 0);
 
   // BLE HID controller
   s.bleEnabled = doc["bleEnabled"] | (uint8_t)0;

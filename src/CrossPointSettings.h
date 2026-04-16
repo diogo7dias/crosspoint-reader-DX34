@@ -228,6 +228,14 @@ public:
     HIGHLIGHT_MODE_COUNT
   };
 
+  // XTC comic contrast boost (for thin/light-colored text readability)
+  enum XTC_CONTRAST {
+    XTC_CONTRAST_NORMAL = 0,  // Full 4-level grayscale (default)
+    XTC_CONTRAST_HIGH = 1,    // Boost grays one step darker
+    XTC_CONTRAST_MAX = 2,     // All non-white → black (1-bit)
+    XTC_CONTRAST_COUNT
+  };
+
   // Auto-sleep timeout options (in minutes)
   enum SLEEP_TIMEOUT {
     SLEEP_1_MIN = 0,
@@ -377,6 +385,8 @@ public:
   uint8_t darkMode = 0;
   // Books folder display order: 0 = alphabetical (default), 1 = random
   uint8_t booksFolderOrder = 0;
+  // XTC comic contrast boost
+  uint8_t xtcContrast = XTC_CONTRAST_NORMAL;
 
   // BLE HID controller settings
   uint8_t bleEnabled = 0;             // Whether BLE auto-reconnect is active

@@ -501,6 +501,9 @@ enum class StrId : uint16_t {
   STR_BLE_DISCONNECTED,
   STR_BLE_RESCAN,
   STR_BLE_PAIRED_PREFIX,
+  STR_XTC_CONTRAST,
+  STR_XTC_CONTRAST_HIGH,
+  STR_XTC_CONTRAST_MAX,
   // Sentinel - must be last
   _COUNT
 };
