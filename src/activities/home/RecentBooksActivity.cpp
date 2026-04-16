@@ -51,6 +51,12 @@ void RecentBooksActivity::loadRecentBooks() {
   seenPaths.reserve(books.size());
 
   for (const auto &book : books) {
+    // Hide QUOTES sidecar files from the recents list
+    if (book.path.size() >= 11 &&
+        book.path.compare(book.path.size() - 11, 11, "_QUOTES.txt") == 0) {
+      continue;
+    }
+
     // Skip if file no longer exists
     if (!Storage.exists(book.path.c_str())) {
       continue;

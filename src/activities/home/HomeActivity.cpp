@@ -110,6 +110,12 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
       continue;
     }
 
+    // Hide QUOTES sidecar files from the recents list
+    if (book.path.size() >= 11 &&
+        book.path.compare(book.path.size() - 11, 11, "_QUOTES.txt") == 0) {
+      continue;
+    }
+
     // Once we have enough visible books, we only need to confirm one more
     // eligible entry to show "See all...", then we can stop iterating.
     if (recentBooks.size() >= maxVisibleBooks) {

@@ -9,6 +9,7 @@
 #include "ReadingThemeStore.h"
 #include "Txt.h"
 #include "TxtReaderActivity.h"
+#include "QuotesViewerActivity.h"
 #include "Xtc.h"
 #include "XtcReaderActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
@@ -31,6 +32,11 @@ bool ReaderActivity::isXtcFile(const std::string& path) {
 bool ReaderActivity::isTxtFile(const std::string& path) {
   return StringUtils::checkFileExtension(path, ".txt") ||
          StringUtils::checkFileExtension(path, ".md");  // Treat .md as txt files (until we have a markdown reader)
+}
+
+bool ReaderActivity::isQuotesFile(const std::string& path) {
+  return path.size() >= 11 &&
+         path.compare(path.size() - 11, 11, "_QUOTES.txt") == 0;
 }
 
 std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
@@ -147,6 +153,14 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
       exitActivity();
       enterNewActivity(new FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_XTC_FAILED)));
     }
+    return;
+  }
+
+  if (isQuotesFile(bookPath)) {
+    exitActivity();
+    enterNewActivity(new QuotesViewerActivity(
+        renderer, mappedInput, bookPath,
+        [this, bookPath] { goToLibrary(bookPath); }));
     return;
   }
 
