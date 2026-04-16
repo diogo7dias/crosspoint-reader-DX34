@@ -48,10 +48,11 @@ int bleIndexForButton(MappedInputManager::Button button) {
 }  // namespace
 
 bool MappedInputManager::checkWithZones(const uint8_t targetHw, bool (HalGPIO::*fn)(uint8_t) const) const {
-  // Only check physical positions whose zone is assigned to this action.
-  // This ensures a remapped button doesn't also fire its original action.
+  // Check the primary hardware button.
+  if ((gpio.*fn)(targetHw)) return true;
+  // Check any other physical positions whose zone delegates to this action.
   for (int i = 0; i < 4; i++) {
-    if (zoneOwner[i] == targetHw) {
+    if (zoneOwner[i] == targetHw && kFrontButtons[i] != targetHw) {
       if ((gpio.*fn)(kFrontButtons[i])) return true;
     }
   }
@@ -146,30 +147,10 @@ MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const
   const Labels result = {labelForHardware(HalGPIO::BTN_BACK), labelForHardware(HalGPIO::BTN_CONFIRM),
                          labelForHardware(HalGPIO::BTN_LEFT), labelForHardware(HalGPIO::BTN_RIGHT)};
 
-  // Compute zone owners for dynamic button mapping.
-  // When fewer than 4 buttons have labels, physical positions are divided into
-  // equal zones assigned to active buttons in display order so that pressing
-  // any physical button under an expanded visual button triggers that action.
-  const char* hwLabels[] = {result.btn1, result.btn2, result.btn3, result.btn4};
-  int activePositions[4];
-  int activeCount = 0;
-  for (int i = 0; i < 4; i++) {
-    if (hwLabels[i] != nullptr && hwLabels[i][0] != '\0') {
-      activePositions[activeCount++] = i;
-    }
-  }
-
-  if (activeCount == 0 || activeCount == 4) {
-    // No active or all active: 1:1 identity mapping.
-    for (int i = 0; i < 4; i++) zoneOwner[i] = kFrontButtons[i];
-  } else {
-    // Divide 4 physical positions into activeCount equal zones using the
-    // midpoint of each position to determine which zone it falls into.
-    for (int i = 0; i < 4; i++) {
-      const int zone = std::min((2 * i + 1) * activeCount / 8, activeCount - 1);
-      zoneOwner[i] = kFrontButtons[activePositions[zone]];
-    }
-  }
+  // Identity zone mapping: each physical position fires only its own
+  // hardware action.  Buttons are drawn in fixed slots over their physical
+  // positions, so zone redistribution is not needed.
+  for (int i = 0; i < 4; i++) zoneOwner[i] = kFrontButtons[i];
 
   return result;
 }

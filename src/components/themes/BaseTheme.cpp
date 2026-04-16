@@ -480,7 +480,6 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   constexpr int textYOffset = 7;
   constexpr int padX = 10;       // horizontal padding inside button
   constexpr int marginX = 20;    // margin from screen edges
-  constexpr int gapBetween = 6;  // gap between buttons
   constexpr int minButtonW = 60; // minimum button width
 
   const char* labels[] = {btn1, btn2, btn3, btn4};
@@ -510,33 +509,23 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
 
   // Compute button widths: text + padding, with minimum
   int buttonWidths[4] = {};
-  int totalNeeded = 0;
   for (int i = 0; i < 4; i++) {
     if (labels[i] != nullptr && labels[i][0] != '\0') {
       buttonWidths[i] = std::max(minButtonW, textWidths[i] + padX * 2);
-      totalNeeded += buttonWidths[i];
     }
   }
 
-  // Available space for buttons
+  // Each physical button owns a fixed slot across the screen width.
+  // Buttons are content-sized and centered within their slot.
   const int availableW = pageWidth - marginX * 2;
-  const int totalGaps = (activeCount - 1) * gapBetween;
-  int remaining = availableW - totalNeeded - totalGaps;
+  const int slotW = availableW / 4;
 
-  // Distribute extra space equally across active buttons
-  if (remaining > 0) {
-    const int extra = remaining / activeCount;
-    for (int i = 0; i < 4; i++) {
-      if (buttonWidths[i] > 0) buttonWidths[i] += extra;
-    }
-  }
-
-  // Position and draw
-  int x = marginX;
   for (int i = 0; i < 4; i++) {
     if (labels[i] == nullptr || labels[i][0] == '\0') continue;
 
+    const int slotX = marginX + i * slotW;
     const int bw = buttonWidths[i];
+    const int x = slotX + (slotW - bw) / 2;  // center button in slot
     renderer.fillRect(x, pageHeight - buttonY, bw, buttonHeight, false);
     renderer.drawRect(x, pageHeight - buttonY, bw, buttonHeight);
 
@@ -557,8 +546,6 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
       const int textX = x + (bw - tw) / 2;
       renderer.drawText(UI_10_FONT_ID, textX, pageHeight - buttonY + textYOffset, labels[i]);
     }
-
-    x += bw + gapBetween;
   }
 
   renderer.setOrientation(orig_orientation);
