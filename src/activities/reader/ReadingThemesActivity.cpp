@@ -298,6 +298,7 @@ void ReadingThemesActivity::loop() {
 }
 
 void ReadingThemesActivity::render(Activity::RenderLock&&) {
+  TransitionFeedback::resetStacking();
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();

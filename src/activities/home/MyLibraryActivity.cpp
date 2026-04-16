@@ -620,6 +620,7 @@ bool MyLibraryActivity::copyFile(const std::string& srcPath, const std::string& 
 
   uint8_t buffer[1024];
   while (src.available()) {
+    esp_task_wdt_reset();
     const auto bytesRead = src.read(buffer, sizeof(buffer));
     if (bytesRead == 0) break;
     if (dst.write(buffer, bytesRead) != bytesRead) {
@@ -653,14 +654,17 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir,
     return false;
   }
 
-  if (!copyFile(selectedFilePath, destination)) {
-    Storage.remove(destination.c_str());
-    return false;
-  }
-
-  if (!Storage.remove(selectedFilePath.c_str())) {
-    Storage.remove(destination.c_str());
-    return false;
+  // rename is instant on the same filesystem (SD card FAT32).
+  // Fall back to copy+delete only if rename fails (shouldn't happen).
+  if (!Storage.rename(selectedFilePath.c_str(), destination.c_str())) {
+    if (!copyFile(selectedFilePath, destination)) {
+      Storage.remove(destination.c_str());
+      return false;
+    }
+    if (!Storage.remove(selectedFilePath.c_str())) {
+      Storage.remove(destination.c_str());
+      return false;
+    }
   }
 
   if (isBookFile(selectedFilePath)) {
@@ -826,7 +830,7 @@ void MyLibraryActivity::loopFileActions() {
           std::string destinationPath;
           if (moveSelectedFileTo("/sleep", &destinationPath)) {
             SleepActivity::trimSleepFolderToLimit();
-            StatusPopup::showBlocking(renderer, "Moved");
+            StatusPopup::showConfirmation(renderer, "Moved");
             mode = Mode::BROWSE;
             if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
                 rawIndex.has_value()) {
@@ -853,7 +857,7 @@ void MyLibraryActivity::loopFileActions() {
               selectorIndex = listIndexForRawFileIndex(findEntry(newName));
             }
             selectedFilePath = updatedPath;
-            StatusPopup::showBlocking(renderer, makeFavorite ? "Favorited" : "Unfavorited");
+            StatusPopup::showConfirmation(renderer, makeFavorite ? "Favorited" : "Unfavorited");
           } else if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
             showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
             return;
@@ -931,10 +935,9 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                TransitionFeedback::show(renderer, "Deleting file");
+                StatusPopup::showBlocking(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
-                  TransitionFeedback::show(renderer, "Deleted");
-                  delay(1000);
+                  StatusPopup::showConfirmation(renderer, "Deleted");
                   progressPrefixCache.erase(pathToDelete);
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
@@ -944,8 +947,7 @@ void MyLibraryActivity::loopFileActions() {
                   }
                 } else {
                   LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  TransitionFeedback::show(renderer, "Delete failed");
-                  delay(1000);
+                  StatusPopup::showConfirmation(renderer, "Delete failed");
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
@@ -1002,7 +1004,7 @@ void MyLibraryActivity::loopFileMoveBrowser() {
       if (entry.path == "/sleep") {
         SleepActivity::trimSleepFolderToLimit();
       }
-      StatusPopup::showBlocking(renderer, "Moved");
+      StatusPopup::showConfirmation(renderer, "Moved");
       mode = Mode::BROWSE;
       progressPrefixCache.erase(selectedFilePath);
       if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
@@ -1026,6 +1028,7 @@ void MyLibraryActivity::loopBrowse() {
       basepath != "/") {
     mappedInput.suppressUntilAllReleased();
     basepath = "/";
+    StatusPopup::showBlocking(renderer, "Opening...");
     loadFiles();
     clearSearch();
     selectorIndex = 0;
@@ -1079,8 +1082,10 @@ void MyLibraryActivity::loopBrowse() {
     if (selectedEntry.back() == '/') {
       clearSearch();
       basepath = selectedPath.substr(0, selectedPath.length() - 1);
+      StatusPopup::showBlocking(renderer, "Opening...");
       loadFiles();
       selectorIndex = 0;
+      requestCleanRefresh();
       requestUpdate();
     } else if (isManagedFile(selectedEntry)) {
       if (isBmpFile(selectedEntry)) {
@@ -1102,6 +1107,7 @@ void MyLibraryActivity::loopBrowse() {
       const auto lastSlash = basepath.find_last_of('/');
       if (lastSlash != std::string::npos) basepath.replace(lastSlash, std::string::npos, "");
       if (basepath.empty()) basepath = "/";
+      StatusPopup::showBlocking(renderer, "Opening...");
       loadFiles();
       clearSearch();
 
@@ -1139,6 +1145,9 @@ void MyLibraryActivity::loopBrowse() {
 }
 
 void MyLibraryActivity::render(Activity::RenderLock&&) {
+  // Reset stacking so render-loop popups start at the top.
+  TransitionFeedback::resetStacking();
+
   if (mode == Mode::BMP_VIEW) {
     renderBmpView();
     return;

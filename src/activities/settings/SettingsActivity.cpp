@@ -22,6 +22,7 @@
 #include "components/UITheme.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "util/TransitionFeedback.h"
 
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
                                                               StrId::STR_STATUS_BAR, StrId::STR_CAT_CONTROLS,
@@ -604,6 +605,7 @@ void SettingsActivity::toggleCurrentSetting() {
 }
 
 void SettingsActivity::render(Activity::RenderLock&&) {
+  TransitionFeedback::resetStacking();
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();

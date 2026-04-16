@@ -28,12 +28,10 @@ void show(GfxRenderer& renderer, const char* message) {
   constexpr int paddingX = 20;
   constexpr int paddingY = 12;
   constexpr int border = 2;
-  constexpr int startY = 60;
-  constexpr int gap = 8;
   const int boxW = textWidth + paddingX * 2;
   const int boxH = textHeight + paddingY * 2;
   const int boxX = (screenW - boxW) / 2;
-  const int boxY = sActive ? (sBottomY + gap) : startY;
+  const int boxY = sActive ? (sBottomY + kGap) : kStartY;
 
   renderer.fillRect(boxX - border, boxY - border,
                     boxW + border * 2, boxH + border * 2, true);
@@ -65,6 +63,11 @@ bool isActive() {
 
 int bottomY() {
   return sActive ? sBottomY : 0;
+}
+
+void resetStacking() {
+  sActive = false;
+  sBottomY = 0;
 }
 
 }  // namespace TransitionFeedback

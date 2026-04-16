@@ -14,6 +14,7 @@
 #include <cstring>
 #include <string>
 
+#include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
 #include <vector>
 
@@ -1123,23 +1124,22 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
 }
 
 Rect BaseTheme::drawPopup(GfxRenderer& renderer, const char* message) const {
-  constexpr int margin = 15;
-  constexpr int startY = 60;
-  constexpr int gap = 8;
-  const int y = TransitionFeedback::isActive() ? (TransitionFeedback::bottomY() + gap) : startY;
-  const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, message, EpdFontFamily::REGULAR);
+  // Delegate to TransitionFeedback for consistent positioning and stacking.
+  TransitionFeedback::show(renderer, message);
+
+  // Compute the rect that was drawn so callers (e.g. fillPopupProgress) can
+  // reference it.  Must mirror the layout constants in TransitionFeedback::show.
+  const std::string upper = StringUtils::toUpperAscii(message);
+  constexpr int paddingX = 20;
+  constexpr int paddingY = 12;
+  constexpr int border = 2;
+  const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, upper.c_str(), EpdFontFamily::REGULAR);
   const int textHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int w = textWidth + margin * 2;
-  const int h = textHeight + margin * 2;
+  const int w = textWidth + paddingX * 2;
+  const int h = textHeight + paddingY * 2;
   const int x = (renderer.getScreenWidth() - w) / 2;
-
-  renderer.fillRect(x - 2, y - 2, w + 4, h + 4, true);  // frame thickness 2
-  renderer.fillRect(x, y, w, h, false);
-
-  const int textX = x + (w - textWidth) / 2;
-  const int textY = y + margin - 2;
-  renderer.drawText(UI_12_FONT_ID, textX, textY, message, true, EpdFontFamily::REGULAR);
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  // bottomY is past the border, so the box top is bottomY - h - border.
+  const int y = TransitionFeedback::bottomY() - h - border;
   return Rect{x, y, w, h};
 }
 
