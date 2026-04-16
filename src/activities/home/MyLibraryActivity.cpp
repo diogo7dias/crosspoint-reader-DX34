@@ -807,6 +807,7 @@ void MyLibraryActivity::loopBmpView() {
 void MyLibraryActivity::loopFileActions() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     mode = Mode::BROWSE;
+    requestCleanRefresh();
     requestUpdate();
     return;
   }
@@ -979,6 +980,7 @@ void MyLibraryActivity::loopFileActions() {
 void MyLibraryActivity::loopFileMoveBrowser() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     mode = Mode::FILE_ACTIONS;
+    requestCleanRefresh();
     requestUpdate();
     return;
   }
@@ -1123,6 +1125,7 @@ void MyLibraryActivity::loopBrowse() {
       const std::string dirName = oldPath.substr(pos + 1) + "/";
       selectorIndex = listIndexForRawFileIndex(findEntry(dirName));
 
+      requestCleanRefresh();
       requestUpdate();
     } else {
       onGoHome();
