@@ -690,6 +690,7 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
   }
 
   const bool deleted = Storage.remove(path.c_str());
+  LOG_DBG("LIB", "Delete '%s': %s", path.c_str(), deleted ? "ok" : "failed");
   if (deleted) {
     if (isBmpFile(path)) {
       FavoriteBmp::removePathReferences(path);
@@ -881,6 +882,9 @@ void MyLibraryActivity::loopFileActions() {
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
+                } else {
+                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
+                  StatusPopup::showBlocking(renderer, "Delete failed");
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
@@ -924,6 +928,9 @@ void MyLibraryActivity::loopFileActions() {
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
+                } else {
+                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
+                  StatusPopup::showBlocking(renderer, "Delete failed");
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
