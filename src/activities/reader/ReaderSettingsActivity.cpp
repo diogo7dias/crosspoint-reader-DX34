@@ -32,8 +32,8 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
   if (CrossPointSettings::normalizeFontFamily(family) ==
       CrossPointSettings::BOOKERLY) {
     switch (normalizedFontSize) {
-    case CrossPointSettings::SIZE_13:
-      return BOOKERLY_13_FONT_ID;
+    case CrossPointSettings::SIZE_10:
+      return BOOKERLY_10_FONT_ID;
     case CrossPointSettings::SIZE_14:
       return BOOKERLY_14_FONT_ID;
     case CrossPointSettings::MEDIUM:
@@ -41,17 +41,15 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
     case CrossPointSettings::SIZE_16:
       return BOOKERLY_16_FONT_ID;
     case CrossPointSettings::LARGE:
-      return BOOKERLY_17_FONT_ID;
-    case CrossPointSettings::SIZE_18:
     default:
-      return BOOKERLY_18_FONT_ID;
+      return BOOKERLY_17_FONT_ID;
     }
   }
   if (CrossPointSettings::normalizeFontFamily(family) ==
       CrossPointSettings::VOLLKORN) {
     switch (normalizedFontSize) {
-    case CrossPointSettings::SIZE_13:
-      return VOLLKORN_13_FONT_ID;
+    case CrossPointSettings::SIZE_10:
+      return VOLLKORN_10_FONT_ID;
     case CrossPointSettings::SIZE_14:
       return VOLLKORN_14_FONT_ID;
     case CrossPointSettings::MEDIUM:
@@ -59,13 +57,13 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
     case CrossPointSettings::SIZE_16:
       return VOLLKORN_16_FONT_ID;
     case CrossPointSettings::LARGE:
-      return VOLLKORN_17_FONT_ID;
-    case CrossPointSettings::SIZE_18:
     default:
-      return VOLLKORN_18_FONT_ID;
+      return VOLLKORN_17_FONT_ID;
     }
   }
   switch (normalizedFontSize) {
+    case CrossPointSettings::SIZE_10:
+      return CHAREINK_10_FONT_ID;
     case CrossPointSettings::SIZE_14:
       return CHAREINK_14_FONT_ID;
     case CrossPointSettings::MEDIUM:
@@ -73,10 +71,8 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
     case CrossPointSettings::SIZE_16:
       return CHAREINK_16_FONT_ID;
     case CrossPointSettings::LARGE:
-      return CHAREINK_17_FONT_ID;
-    case CrossPointSettings::SIZE_18:
     default:
-      return CHAREINK_18_FONT_ID;
+      return CHAREINK_17_FONT_ID;
     }
 }
 }  // namespace

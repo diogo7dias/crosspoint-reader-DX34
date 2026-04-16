@@ -161,14 +161,15 @@ public:
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
-    MEDIUM = 0,   // legacy 15 -> normalize to 16
-    LARGE = 1,    // legacy 17
-    X_LARGE = 2,  // legacy 19 -> normalize to SIZE_18
-    SIZE_14 = 3,  // legacy 14 -> normalize to 16
+    MEDIUM = 0,   // 15pt
+    LARGE = 1,    // 17pt
+    X_LARGE = 2,  // legacy 19 -> normalize to LARGE (17)
+    SIZE_14 = 3,
     SIZE_16 = 4,
-    SIZE_18 = 5,
-    SIZE_13 = 6,  // legacy 13 -> normalize to SIZE_14
-    SIZE_12 = 7,
+    SIZE_18 = 5,  // legacy -> normalize to LARGE (17)
+    SIZE_13 = 6,  // legacy -> normalize to SIZE_14
+    SIZE_12 = 7,  // legacy -> normalize to SIZE_14
+    SIZE_10 = 8,
     FONT_SIZE_COUNT
   };
   // Legacy line spacing enum (kept for settings migration compatibility)

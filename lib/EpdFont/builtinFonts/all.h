@@ -1,5 +1,8 @@
 #pragma once
 
+#include <builtinFonts/chareink_10_regular.h>
+#include <builtinFonts/chareink_10_bold.h>
+#include <builtinFonts/chareink_10_italic.h>
 #include <builtinFonts/chareink_14_regular.h>
 #include <builtinFonts/chareink_14_bold.h>
 #include <builtinFonts/chareink_14_italic.h>
@@ -12,13 +15,10 @@
 #include <builtinFonts/chareink_17_regular.h>
 #include <builtinFonts/chareink_17_bold.h>
 #include <builtinFonts/chareink_17_italic.h>
-#include <builtinFonts/chareink_18_regular.h>
-#include <builtinFonts/chareink_18_bold.h>
-#include <builtinFonts/chareink_18_italic.h>
 
-#include <builtinFonts/bookerly_13_regular.h>
-#include <builtinFonts/bookerly_13_bold.h>
-#include <builtinFonts/bookerly_13_italic.h>
+#include <builtinFonts/bookerly_10_regular.h>
+#include <builtinFonts/bookerly_10_bold.h>
+#include <builtinFonts/bookerly_10_italic.h>
 #include <builtinFonts/bookerly_14_regular.h>
 #include <builtinFonts/bookerly_14_bold.h>
 #include <builtinFonts/bookerly_14_italic.h>
@@ -31,13 +31,10 @@
 #include <builtinFonts/bookerly_17_regular.h>
 #include <builtinFonts/bookerly_17_bold.h>
 #include <builtinFonts/bookerly_17_italic.h>
-#include <builtinFonts/bookerly_18_regular.h>
-#include <builtinFonts/bookerly_18_bold.h>
-#include <builtinFonts/bookerly_18_italic.h>
 
-#include <builtinFonts/vollkorn_13_regular.h>
-#include <builtinFonts/vollkorn_13_bold.h>
-#include <builtinFonts/vollkorn_13_italic.h>
+#include <builtinFonts/vollkorn_10_regular.h>
+#include <builtinFonts/vollkorn_10_bold.h>
+#include <builtinFonts/vollkorn_10_italic.h>
 #include <builtinFonts/vollkorn_14_regular.h>
 #include <builtinFonts/vollkorn_14_bold.h>
 #include <builtinFonts/vollkorn_14_italic.h>
@@ -50,9 +47,6 @@
 #include <builtinFonts/vollkorn_17_regular.h>
 #include <builtinFonts/vollkorn_17_bold.h>
 #include <builtinFonts/vollkorn_17_italic.h>
-#include <builtinFonts/vollkorn_18_regular.h>
-#include <builtinFonts/vollkorn_18_bold.h>
-#include <builtinFonts/vollkorn_18_italic.h>
 
 #include <builtinFonts/unifont_14_regular.h>
 #include <builtinFonts/unifont_18_regular.h>
