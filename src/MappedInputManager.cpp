@@ -48,11 +48,10 @@ int bleIndexForButton(MappedInputManager::Button button) {
 }  // namespace
 
 bool MappedInputManager::checkWithZones(const uint8_t targetHw, bool (HalGPIO::*fn)(uint8_t) const) const {
-  // Check the primary hardware button.
-  if ((gpio.*fn)(targetHw)) return true;
-  // Check any other physical positions whose zone delegates to this action.
+  // Only check physical positions whose zone is assigned to this action.
+  // This ensures a remapped button doesn't also fire its original action.
   for (int i = 0; i < 4; i++) {
-    if (zoneOwner[i] == targetHw && kFrontButtons[i] != targetHw) {
+    if (zoneOwner[i] == targetHw) {
       if ((gpio.*fn)(kFrontButtons[i])) return true;
     }
   }
