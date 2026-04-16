@@ -15,7 +15,7 @@ class MappedInputManager {
 
   explicit MappedInputManager(HalGPIO& gpio) : gpio(gpio) {}
 
-  void update() const { gpio.update(); }
+  void update() const;  // Polls GPIO + BLE button state
   // Suppress all press/release events until every physical button is released.
   // Use during activity transitions to prevent the button event that triggered
   // the transition from leaking into the next screen.

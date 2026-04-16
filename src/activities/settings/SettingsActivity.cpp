@@ -6,6 +6,8 @@
 
 #include <HalStorage.h>
 
+#include "BleConnectActivity.h"
+#include "BleRemapActivity.h"
 #include "ButtonRemapActivity.h"
 #include "CalibreSettingsActivity.h"
 #include "ClearCacheActivity.h"
@@ -243,6 +245,7 @@ void SettingsActivity::buildSettingsList() {
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
+  controlsSettings.push_back(SettingInfo::Action(StrId::STR_BLUETOOTH_HID, SettingAction::BluetoothHID));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
@@ -549,6 +552,21 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::RemapFrontButtons:
         enterSubActivity(new ButtonRemapActivity(renderer, mappedInput, onComplete));
         break;
+      case SettingAction::BluetoothHID: {
+        // Always go to connect screen first — it shows paired device,
+        // allows unpair/re-pair, and transitions to remap on success.
+        auto onPaired = [this, onComplete](bool paired) {
+          if (paired) {
+            exitActivity();
+            enterNewActivity(new BleRemapActivity(renderer, mappedInput, onComplete));
+          } else {
+            exitActivity();
+            requestUpdate();
+          }
+        };
+        enterSubActivity(new BleConnectActivity(renderer, mappedInput, onPaired));
+        break;
+      }
       case SettingAction::KOReaderSync:
         enterSubActivity(new KOReaderSettingsActivity(renderer, mappedInput, onComplete));
         break;

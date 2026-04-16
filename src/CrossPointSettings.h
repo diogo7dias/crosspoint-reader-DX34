@@ -378,6 +378,15 @@ public:
   // Books folder display order: 0 = alphabetical (default), 1 = random
   uint8_t booksFolderOrder = 0;
 
+  // BLE HID controller settings
+  uint8_t bleEnabled = 0;             // Whether BLE auto-reconnect is active
+  char bleDeviceAddr[18] = "";        // Paired device address "AA:BB:CC:DD:EE:FF"
+  char bleDeviceName[32] = "";        // Human-readable name for display
+  uint16_t bleKeyMap[6] = {0, 0, 0, 0, 0, 0};  // HID keycodes mapped to:
+                                      // [0]=Back, [1]=Confirm, [2]=Left,
+                                      // [3]=Right, [4]=Up, [5]=Down
+  static constexpr uint8_t BLE_KEY_MAP_SIZE = 6;
+
   ~CrossPointSettings() = default;
 
   // Get singleton instance

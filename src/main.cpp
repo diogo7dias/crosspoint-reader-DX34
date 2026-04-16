@@ -26,8 +26,10 @@
 #include <builtinFonts/all.h>
 
 #include <cstring>
+#include <esp_task_wdt.h>
 
 #include "Battery.h"
+#include "BleHidManager.h"
 #include "CrossPointSettings.h"
 #include "Paths.h"
 #include "CrossPointState.h"
@@ -180,15 +182,17 @@ void verifyPowerButtonDuration() {
   // Subtract the current time, because inputManager only starts counting the HeldTime from the first update()
   // This way, we remove the time we already took to reach here from the duration,
   // assuming the button was held until now from millis()==0 (i.e. device start time).
-  const uint16_t calibration = start;
-  const uint16_t calibratedPressDuration =
-      (calibration < SETTINGS.getPowerButtonDuration()) ? SETTINGS.getPowerButtonDuration() - calibration : 1;
+  const unsigned long calibration = start;
+  const unsigned long targetDuration = SETTINGS.getPowerButtonDuration();
+  const unsigned long calibratedPressDuration =
+      (calibration < targetDuration) ? targetDuration - calibration : 1;
 
   gpio.update();
   // Needed because inputManager.isPressed() may take up to ~500ms to return the correct state
   while (!gpio.isPressed(HalGPIO::BTN_POWER) && millis() - start < 1000) {
     delay(10);  // only wait 10ms each iteration to not delay too much in case of short configured duration.
     gpio.update();
+    esp_task_wdt_reset();
   }
 
   t2 = millis();
@@ -196,6 +200,7 @@ void verifyPowerButtonDuration() {
     do {
       delay(10);
       gpio.update();
+      esp_task_wdt_reset();
     } while (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() < calibratedPressDuration);
     abort = gpio.getHeldTime() < calibratedPressDuration;
   } else {
@@ -219,6 +224,12 @@ void waitForPowerRelease() {
 
 // Enter deep sleep mode
 void enterDeepSleep() {
+  // Shut down BLE before sleep to free resources
+  if (BLE_HID.isInitialized()) {
+    BLE_HID.disconnect();
+    BLE_HID.deinit();
+  }
+
   APP_STATE.lastSleepFromReader = currentActivity && currentActivity->isReaderActivity();
   persistAppState("enter deep sleep");
   exitActivity();
@@ -429,6 +440,14 @@ void setup() {
   KOREADER_STORE.loadFromFile();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 
+  // Lazy BLE init: only start stack if a device was previously paired
+  if (SETTINGS.bleEnabled && SETTINGS.bleDeviceAddr[0] != '\0') {
+    LOG_INF("BLE", "Saved BLE device found, initializing for auto-reconnect");
+    if (BLE_HID.init()) {
+      BLE_HID.tryAutoReconnect();
+    }
+  }
+
   switch (gpio.getWakeupReason()) {
     case HalGPIO::WakeupReason::PowerButton:
       // For normal wakeups, verify power button press duration
@@ -495,7 +514,7 @@ void setup() {
 
   if (!goHome) {
     APP_STATE.openEpubPath = "";
-    APP_STATE.readerActivityLoadCount++;
+    if (APP_STATE.readerActivityLoadCount < 255) APP_STATE.readerActivityLoadCount++;
     APP_STATE.saveToFile();
   }
 

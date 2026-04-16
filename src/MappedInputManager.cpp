@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "BleHidManager.h"
 #include "CrossPointSettings.h"
 
 namespace {
@@ -20,6 +21,31 @@ constexpr SideLayoutMap kSideLayouts[] = {
 }  // namespace
 
 constexpr uint8_t MappedInputManager::kFrontButtons[4];
+
+void MappedInputManager::update() const {
+  gpio.update();
+  BLE_HID.updateButtonState();
+}
+
+namespace {
+// Map MappedInputManager::Button to BleHidManager button index.
+// Returns -1 for buttons that don't map (Power, PageBack, PageForward).
+int bleIndexForButton(MappedInputManager::Button button) {
+  switch (button) {
+    case MappedInputManager::Button::Back:        return 0;
+    case MappedInputManager::Button::Confirm:     return 1;
+    case MappedInputManager::Button::Left:        return 2;
+    case MappedInputManager::Button::Right:       return 3;
+    case MappedInputManager::Button::Up:          return 4;
+    case MappedInputManager::Button::Down:        return 5;
+    // PageBack/PageForward map to the same BLE buttons as Up/Down
+    // so BLE users can turn pages in the reader.
+    case MappedInputManager::Button::PageBack:    return 4;
+    case MappedInputManager::Button::PageForward: return 5;
+    default: return -1;
+  }
+}
+}  // namespace
 
 bool MappedInputManager::checkWithZones(const uint8_t targetHw, bool (HalGPIO::*fn)(uint8_t) const) const {
   // Check the primary hardware button.
@@ -61,13 +87,38 @@ bool MappedInputManager::mapButton(const Button button, bool (HalGPIO::*fn)(uint
   return false;
 }
 
-bool MappedInputManager::wasPressed(const Button button) const { return mapButton(button, &HalGPIO::wasPressed); }
+bool MappedInputManager::wasPressed(const Button button) const {
+  if (mapButton(button, &HalGPIO::wasPressed)) return true;
+  if (SETTINGS.bleEnabled && BLE_HID.isInitialized()) {
+    const int idx = bleIndexForButton(button);
+    if (idx >= 0 && BLE_HID.wasPressed(static_cast<uint8_t>(idx))) return true;
+  }
+  return false;
+}
 
-bool MappedInputManager::wasReleased(const Button button) const { return mapButton(button, &HalGPIO::wasReleased); }
+bool MappedInputManager::wasReleased(const Button button) const {
+  if (mapButton(button, &HalGPIO::wasReleased)) return true;
+  if (SETTINGS.bleEnabled && BLE_HID.isInitialized()) {
+    const int idx = bleIndexForButton(button);
+    if (idx >= 0 && BLE_HID.wasReleased(static_cast<uint8_t>(idx))) return true;
+  }
+  return false;
+}
 
-bool MappedInputManager::isPressed(const Button button) const { return mapButton(button, &HalGPIO::isPressed); }
+bool MappedInputManager::isPressed(const Button button) const {
+  if (mapButton(button, &HalGPIO::isPressed)) return true;
+  if (SETTINGS.bleEnabled && BLE_HID.isInitialized()) {
+    const int idx = bleIndexForButton(button);
+    if (idx >= 0 && BLE_HID.isPressed(static_cast<uint8_t>(idx))) return true;
+  }
+  return false;
+}
 
-bool MappedInputManager::wasAnyPressed() const { return gpio.wasAnyPressed(); }
+bool MappedInputManager::wasAnyPressed() const {
+  if (gpio.wasAnyPressed()) return true;
+  if (SETTINGS.bleEnabled && BLE_HID.isInitialized() && BLE_HID.wasAnyPressed()) return true;
+  return false;
+}
 
 bool MappedInputManager::wasAnyReleased() const { return gpio.wasAnyReleased(); }
 
