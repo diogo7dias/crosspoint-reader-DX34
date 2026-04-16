@@ -15,9 +15,13 @@ bool BookmarkStore::load(const std::string& cachePath) {
   if (cachePath.empty()) return false;
 
   const std::string path = cachePath + kBookmarksFile;
+  const std::string tmpPath = path + ".tmp";
   FsFile f;
   if (!Storage.openFileForRead("BKM", path, f)) {
-    return false;  // No bookmarks yet — not an error
+    // Try .tmp fallback — save may have been interrupted after write but before rename
+    if (!Storage.openFileForRead("BKM", tmpPath, f)) {
+      return false;  // No bookmarks yet — not an error
+    }
   }
 
   const auto sz = static_cast<size_t>(f.size());
@@ -57,7 +61,6 @@ bool BookmarkStore::save(const std::string& cachePath) const {
   const std::string path = cachePath + kBookmarksFile;
 
   if (bookmarks.empty()) {
-    // Remove file if no bookmarks
     Storage.remove(path.c_str());
     return true;
   }
@@ -70,9 +73,17 @@ bool BookmarkStore::save(const std::string& cachePath) const {
     obj["p"] = bm.pageNumber;
   }
 
+  // Atomic write: write to .tmp, close, remove original, rename .tmp.
+  // Power loss between remove and rename loses bookmarks (FAT32 limitation),
+  // but this prevents the much more common partial-write corruption.
+  const std::string tmpPath = path + ".tmp";
+  if (Storage.exists(tmpPath.c_str())) {
+    Storage.remove(tmpPath.c_str());
+  }
+
   FsFile f;
-  if (!Storage.openFileForWrite("BKM", path, f)) {
-    LOG_ERR("BKM", "Failed to write bookmarks: %s", path.c_str());
+  if (!Storage.openFileForWrite("BKM", tmpPath, f)) {
+    LOG_ERR("BKM", "Failed to write bookmarks tmp: %s", tmpPath.c_str());
     return false;
   }
 
@@ -81,22 +92,31 @@ bool BookmarkStore::save(const std::string& cachePath) const {
     f.close();
     return false;
   }
-
+  f.flush();
   f.close();
+
+  if (Storage.exists(path.c_str())) {
+    Storage.remove(path.c_str());
+  }
+  if (!Storage.rename(tmpPath.c_str(), path.c_str())) {
+    LOG_ERR("BKM", "Failed to promote bookmarks tmp to %s", path.c_str());
+    return false;
+  }
+
   LOG_DBG("BKM", "Saved %d bookmarks to %s", count(), path.c_str());
   return true;
 }
 
-bool BookmarkStore::toggle(int spineIndex, int pageNumber) {
+int BookmarkStore::toggle(int spineIndex, int pageNumber) {
   for (auto it = bookmarks.begin(); it != bookmarks.end(); ++it) {
     if (it->spineIndex == spineIndex && it->pageNumber == pageNumber) {
       bookmarks.erase(it);
-      return false;  // Removed
+      return 0;  // Removed
     }
   }
 
   if (static_cast<int>(bookmarks.size()) >= MAX_BOOKMARKS) {
-    return false;
+    return -1;  // At capacity
   }
 
   bookmarks.push_back({spineIndex, pageNumber});
@@ -108,7 +128,7 @@ bool BookmarkStore::toggle(int spineIndex, int pageNumber) {
               return a.pageNumber < b.pageNumber;
             });
 
-  return true;  // Added
+  return 1;  // Added
 }
 
 bool BookmarkStore::has(int spineIndex, int pageNumber) const {

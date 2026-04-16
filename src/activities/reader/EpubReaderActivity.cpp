@@ -469,6 +469,10 @@ void EpubReaderActivity::loop() {
     if (onGoBack) onGoBack();
     return;
   }
+  if (pendingSectionReset) {
+    pendingSectionReset = false;
+    section.reset();
+  }
 
   // Highlight mode intercepts all input while active
   if (highlightState != HighlightState::NONE) { loopHighlightMode(); return; }
@@ -1483,11 +1487,15 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       LOG_ERR("ERS", "Failed to load page from SD - clearing section cache (attempt %d)", pageLoadFailCount);
       section->clearCache();
       clearPageCache();
-      section.reset();
+      // Defer section.reset() to loop() to avoid race with main loop reading section.
+      pendingSectionReset = true;
       if (pageLoadFailCount < 3) {
         requestUpdate();  // Try again after clearing cache
       } else {
-        LOG_ERR("ERS", "Page load failed %d times, giving up to prevent infinite loop", pageLoadFailCount);
+        LOG_ERR("ERS", "Page load failed %d times, showing error", pageLoadFailCount);
+        renderer.clearScreen();
+        renderer.drawCenteredText(UI_12_FONT_ID, 300, "Page load failed", true, EpdFontFamily::REGULAR);
+        renderer.displayBuffer();
       }
       return;
     }

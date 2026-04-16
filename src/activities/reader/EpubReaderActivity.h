@@ -102,6 +102,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   int lastSavedPage = -1;
   int lastSavedPageCount = -1;
   int pageLoadFailCount = 0;  // Tracks consecutive page load failures to prevent infinite retry loops
+  bool pendingSectionReset = false;  // Defer section.reset() from render task to loop (avoids race)
   int cachedReserveSpineIndex = -1;
   int cachedReserveUsableWidth = -1;
   bool cachedReserveNoTitleTruncation = false;

@@ -21,8 +21,9 @@ class BookmarkStore {
   /// Save current bookmarks to cachePath/bookmarks.json.
   bool save(const std::string& cachePath) const;
 
-  /// Toggle bookmark at current position. Returns true if added, false if removed.
-  bool toggle(int spineIndex, int pageNumber);
+  /// Toggle bookmark at current position.
+  /// Returns 1 if added, 0 if removed, -1 if at capacity (not added).
+  int toggle(int spineIndex, int pageNumber);
 
   /// Check if a bookmark exists at this position.
   bool has(int spineIndex, int pageNumber) const;

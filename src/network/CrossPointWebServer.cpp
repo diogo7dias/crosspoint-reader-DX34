@@ -587,7 +587,7 @@ void CrossPointWebServer::handleFileListData() const {
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
   server->sendContent("[");
-  char output[512];
+  char output[1024];  // Must fit JSON with FAT32 max filename (255 chars) + metadata
   constexpr size_t outputSize = sizeof(output);
   bool seenFirst = false;
   JsonDocument doc;
@@ -1504,8 +1504,10 @@ void CrossPointWebServer::handlePostSettings() {
 // During shutdown, wsInstance is cleared after running is set to false.
 // Checking running prevents processing events in the teardown window.
 void CrossPointWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
-  if (wsInstance && wsInstance->running) {
-    wsInstance->onWebSocketEvent(num, type, payload, length);
+  // Local copy avoids TOCTOU if stop() nulls wsInstance between the check and the call.
+  auto* inst = wsInstance;
+  if (inst && inst->running) {
+    inst->onWebSocketEvent(num, type, payload, length);
   }
 }
 

@@ -942,7 +942,7 @@ void SleepActivity::renderQuotesSleepScreen() const {
 
   // ── Divider line — edge-to-edge, 3px thick ──
   y += 8;
-  renderer.fillRect(-20, y, W + 40, 3, true);
+  renderer.fillRect(0, y, W, 3, true);
   y += 10; // margin below divider
 
   // ── Quote text — vertically centered in remaining space ──

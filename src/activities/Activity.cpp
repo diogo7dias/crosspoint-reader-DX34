@@ -47,10 +47,12 @@ void Activity::onExit() {
 }
 
 void Activity::requestUpdate() {
-  // Using direct notification to signal the render task to update
-  // Increment counter so multiple rapid calls won't be lost
-  if (renderTaskHandle) {
-    xTaskNotify(renderTaskHandle, 1, eIncrement);
+  // Using direct notification to signal the render task to update.
+  // Increment counter so multiple rapid calls won't be lost.
+  // Local copy avoids TOCTOU if onExit() nulls the handle concurrently.
+  TaskHandle_t handle = renderTaskHandle;
+  if (handle) {
+    xTaskNotify(handle, 1, eIncrement);
   }
 }
 
