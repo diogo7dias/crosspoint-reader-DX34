@@ -236,6 +236,13 @@ public:
     XTC_CONTRAST_COUNT
   };
 
+  // Image dithering algorithm
+  enum IMAGE_DITHER {
+    IMAGE_DITHER_FAST = 0,     // Bayer ordered dither (default, fast)
+    IMAGE_DITHER_QUALITY = 1,  // Floyd-Steinberg error diffusion (better photos)
+    IMAGE_DITHER_COUNT
+  };
+
   // Auto-sleep timeout options (in minutes)
   enum SLEEP_TIMEOUT {
     SLEEP_1_MIN = 0,
@@ -387,6 +394,9 @@ public:
   uint8_t booksFolderOrder = 0;
   // XTC comic contrast boost
   uint8_t xtcContrast = XTC_CONTRAST_NORMAL;
+
+  // Image dithering algorithm: 0=fast (Bayer), 1=quality (Floyd-Steinberg)
+  uint8_t imageDither = IMAGE_DITHER_FAST;
 
   // BLE HID controller settings
   uint8_t bleEnabled = 0;             // Whether BLE auto-reconnect is active

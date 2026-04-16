@@ -504,6 +504,9 @@ enum class StrId : uint16_t {
   STR_XTC_CONTRAST,
   STR_XTC_CONTRAST_HIGH,
   STR_XTC_CONTRAST_MAX,
+  STR_IMAGE_DITHER,
+  STR_IMAGE_DITHER_FAST,
+  STR_IMAGE_DITHER_QUALITY,
   // Sentinel - must be last
   _COUNT
 };

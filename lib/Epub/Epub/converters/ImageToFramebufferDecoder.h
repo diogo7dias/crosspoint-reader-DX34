@@ -18,6 +18,7 @@ struct RenderConfig {
   bool useDithering = true;
   bool performanceMode = false;
   bool useExactDimensions = false;  // If true, use maxWidth/maxHeight as exact output size (no recalculation)
+  uint8_t ditherMode = 0;           // 0 = Bayer (fast), 1 = Floyd-Steinberg (quality)
   std::string cachePath;            // If non-empty, decoder will write pixel cache to this path
 };
 

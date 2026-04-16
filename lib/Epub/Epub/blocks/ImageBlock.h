@@ -24,7 +24,12 @@ public:
   bool serialize(FsFile &file);
   static std::unique_ptr<ImageBlock> deserialize(FsFile &file);
 
+  // Set global dither mode for all image rendering (0=Bayer, 1=Floyd-Steinberg)
+  static void setDitherMode(uint8_t mode) { ditherMode_ = mode; }
+  static uint8_t getDitherMode() { return ditherMode_; }
+
 private:
+  static uint8_t ditherMode_;
   std::string imagePath;
   int16_t width;
   int16_t height;

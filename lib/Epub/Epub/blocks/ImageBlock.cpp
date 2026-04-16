@@ -12,6 +12,8 @@
 // - uint16_t height
 // - uint8_t pixels[...] - 2 bits per pixel, packed (4 pixels per byte), row-major order
 
+uint8_t ImageBlock::ditherMode_ = 0;
+
 ImageBlock::ImageBlock(const std::string& imagePath, int16_t width, int16_t height)
     : imagePath(imagePath), width(width), height(height) {}
 
@@ -19,13 +21,15 @@ bool ImageBlock::imageExists() const { return Storage.exists(imagePath.c_str());
 
 namespace {
 
-std::string getCachePath(const std::string& imagePath) {
-  // Replace extension with .pxc (pixel cache)
+std::string getCachePath(const std::string& imagePath, uint8_t ditherMode) {
+  // Replace extension with .pxc (pixel cache), suffixed by dither mode
+  // so changing dither mode invalidates stale cache entries
+  const char* suffix = (ditherMode == 1) ? "_q.pxc" : ".pxc";
   size_t dotPos = imagePath.rfind('.');
   if (dotPos != std::string::npos) {
-    return imagePath.substr(0, dotPos) + ".pxc";
+    return imagePath.substr(0, dotPos) + suffix;
   }
-  return imagePath + ".pxc";
+  return imagePath + suffix;
 }
 
 bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x, int y, int expectedWidth,
@@ -110,7 +114,7 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
   }
 
   // Try to render from cache first
-  std::string cachePath = getCachePath(imagePath);
+  std::string cachePath = getCachePath(imagePath, ditherMode_);
   if (renderFromCache(renderer, cachePath, x, y, width, height)) {
     return;  // Successfully rendered from cache
   }
@@ -139,6 +143,7 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
   config.maxHeight = height;
   config.useGrayscale = true;
   config.useDithering = true;
+  config.ditherMode = ditherMode_;
   config.performanceMode = false;
   config.useExactDimensions = true;  // Use pre-calculated dimensions to avoid rounding mismatches
   config.cachePath = cachePath;      // Enable caching during decode

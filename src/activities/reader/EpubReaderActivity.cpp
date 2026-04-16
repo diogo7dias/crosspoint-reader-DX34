@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <EpdFontFamily.h>
+#include <Epub/blocks/ImageBlock.h>
 #include <Epub/Page.h>
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
@@ -145,6 +146,7 @@ void EpubReaderActivity::onEnter() {
   // NOTE: This affects layout math and must be applied before any render calls.
   applyReaderOrientation(renderer, SETTINGS.orientation);
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
+  ImageBlock::setDitherMode(SETTINGS.imageDither);
 
   epub->setupCacheDir();
 
