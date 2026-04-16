@@ -86,7 +86,14 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
 
 int HalPowerManager::getBatteryPercentage() const {
   static const BatteryMonitor battery = BatteryMonitor(BAT_GPIO0);
-  return battery.readPercentage();
+
+  // smooth the battery %.
+  if (_batteryCachedPercent == 0) {
+    _batteryCachedPercent = 10 * battery.readPercentage();
+  } else {
+    _batteryCachedPercent = (_batteryCachedPercent * 9 + battery.readPercentage() * 10) / 10;
+  }
+  return _batteryCachedPercent / 10;
 }
 
 HalPowerManager::Lock::Lock() {
