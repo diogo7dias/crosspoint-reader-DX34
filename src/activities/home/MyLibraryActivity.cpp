@@ -400,8 +400,10 @@ std::optional<size_t> MyLibraryActivity::rawFileIndexForListIndex(
 
 std::optional<size_t> MyLibraryActivity::rawFileIndexForPath(
     const std::string& path) const {
+  // Compare by basename to avoid N string allocations (OOM on large folders)
+  const std::string name = getBasename(path);
   for (size_t i = 0; i < files.size(); ++i) {
-    if (makeAbsolutePath(files[i]) == path) {
+    if (files[i] == name) {
       return i;
     }
   }
@@ -818,9 +820,11 @@ void MyLibraryActivity::loopFileActions() {
             showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
             return;
           }
+          StatusPopup::showBlocking(renderer, "Moving to sleep");
           std::string destinationPath;
           if (moveSelectedFileTo("/sleep", &destinationPath)) {
             SleepActivity::trimSleepFolderToLimit();
+            StatusPopup::showBlocking(renderer, "Moved");
             mode = Mode::BROWSE;
             if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
                 rawIndex.has_value()) {
@@ -834,6 +838,7 @@ void MyLibraryActivity::loopFileActions() {
         }
         case 3: {
           const bool makeFavorite = !FavoriteBmp::isFavoritePath(selectedFilePath);
+          StatusPopup::showBlocking(renderer, makeFavorite ? "Favoriting" : "Unfavoriting");
           std::string updatedPath;
           const auto result = FavoriteBmp::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
           if (result == FavoriteBmp::SetFavoriteResult::Success) {
@@ -846,6 +851,7 @@ void MyLibraryActivity::loopFileActions() {
               selectorIndex = listIndexForRawFileIndex(findEntry(newName));
             }
             selectedFilePath = updatedPath;
+            StatusPopup::showBlocking(renderer, makeFavorite ? "Favorited" : "Unfavorited");
           } else if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
             showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
             return;
@@ -876,6 +882,7 @@ void MyLibraryActivity::loopFileActions() {
                 exitActivity();
                 StatusPopup::showBlocking(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
+                  StatusPopup::showBlocking(renderer, "Deleted");
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
                     files.erase(files.begin() + static_cast<long>(*rawIndex));
@@ -921,6 +928,7 @@ void MyLibraryActivity::loopFileActions() {
                 exitActivity();
                 StatusPopup::showBlocking(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
+                  StatusPopup::showBlocking(renderer, "Deleted");
                   progressPrefixCache.erase(pathToDelete);
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
@@ -980,14 +988,13 @@ void MyLibraryActivity::loopFileMoveBrowser() {
       showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
       return;
     }
-    if (!isBmpFile(selectedFilePath)) {
-      StatusPopup::showBlocking(renderer, "Moving file");
-    }
+    StatusPopup::showBlocking(renderer, "Moving file");
     std::string destinationPath;
     if (moveSelectedFileTo(entry.path, &destinationPath)) {
       if (entry.path == "/sleep") {
         SleepActivity::trimSleepFolderToLimit();
       }
+      StatusPopup::showBlocking(renderer, "Moved");
       mode = Mode::BROWSE;
       progressPrefixCache.erase(selectedFilePath);
       if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
@@ -1321,7 +1328,7 @@ void MyLibraryActivity::renderFileActions() {
   renderer.drawRect(popupX, popupY, popupW, popupH, true);
   renderer.drawCenteredText(UI_12_FONT_ID, popupY + 10, "File Actions", true, EpdFontFamily::REGULAR);
 
-  const int rowStartY = popupY + 34;
+  const int rowStartY = popupY + 44;
   const int rowH = 26;
   const int actionCount = getFileActionCount();
   for (int i = 0; i < actionCount; i++) {
