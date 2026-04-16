@@ -533,6 +533,7 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
 void MyLibraryActivity::enterBmpView(const std::string& bmpPath) {
   selectedFilePath = bmpPath;
   mode = Mode::BMP_VIEW;
+  requestCleanRefresh();
   requestUpdate();
 }
 
@@ -540,6 +541,7 @@ void MyLibraryActivity::enterFileActions(const std::string& filePath) {
   selectedFilePath = filePath;
   fileActionIndex = 0;
   mode = Mode::FILE_ACTIONS;
+  requestCleanRefresh();
   requestUpdate();
 }
 
@@ -797,6 +799,7 @@ void MyLibraryActivity::loopBmpView() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     mode = Mode::BROWSE;
     requestCleanRefresh();
+    requestUpdate();
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && !selectedFilePath.empty()) {
@@ -894,12 +897,9 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                // Do all work BEFORE exitActivity() — it destroys this
-                // lambda and all captures (including `this`).
-                TransitionFeedback::show(renderer, "Deleting file");
+                StatusPopup::showBlocking(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
-                  TransitionFeedback::show(renderer, "Deleted");
-                  delay(1000);
+                  StatusPopup::showConfirmation(renderer, "Deleted");
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
                     files.erase(files.begin() + static_cast<long>(*rawIndex));
@@ -908,16 +908,21 @@ void MyLibraryActivity::loopFileActions() {
                   }
                 } else {
                   LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  TransitionFeedback::show(renderer, "Delete failed");
-                  delay(1000);
+                  StatusPopup::showConfirmation(renderer, "Delete failed");
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
-                exitActivity();  // MUST be last — destroys this lambda
+                // exitActivity() destroys the subActivity (and this lambda's
+                // closure), but `this` points to the parent MyLibraryActivity
+                // which is still alive — so requestUpdate() after is safe.
+                // It MUST come after exitActivity() because the parent's
+                // render task ignores updates while a subActivity exists.
+                exitActivity();
+                requestUpdate();
               },
               [this]() {
+                exitActivity();
                 requestUpdate();
-                exitActivity();  // MUST be last
               }));
           return;
         }
@@ -960,11 +965,12 @@ void MyLibraryActivity::loopFileActions() {
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
-                exitActivity();  // MUST be last — destroys this lambda
+                exitActivity();
+                requestUpdate();
               },
               [this]() {
+                exitActivity();
                 requestUpdate();
-                exitActivity();  // MUST be last
               }));
           return;
         }
@@ -988,6 +994,7 @@ void MyLibraryActivity::loopFileMoveBrowser() {
   const int targetCount = static_cast<int>(moveBrowseEntries.size());
   if (targetCount <= 0) {
     mode = Mode::FILE_ACTIONS;
+    requestCleanRefresh();
     requestUpdate();
     return;
   }
@@ -1345,11 +1352,12 @@ void MyLibraryActivity::renderBmpView() {
     GUI.drawPopup(renderer, messagePopupText.c_str());
   }
 
-  if (hasGreyscale) {
-    // Full refresh gives the cleanest base for the grayscale overlay.
-    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
-    nextRefreshMode = HalDisplay::FAST_REFRESH;
+  // Full refresh for all images — clears previous screen artifacts from
+  // white/light areas that HALF_REFRESH and FAST_REFRESH leave behind.
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  nextRefreshMode = HalDisplay::FAST_REFRESH;
 
+  if (hasGreyscale) {
     bitmap.rewindToData();
     renderer.clearScreen(0x00);
     renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
@@ -1364,8 +1372,6 @@ void MyLibraryActivity::renderBmpView() {
 
     renderer.displayGrayBuffer();
     renderer.setRenderMode(GfxRenderer::BW);
-  } else {
-    displayFrame();
   }
 }
 
