@@ -34,12 +34,12 @@ class QuotesViewerActivity final : public ActivityWithSubactivity {
   std::string bookTitle;
   std::vector<QuoteEntry> quotes;
   int selectorIndex = 0;
+  int scrollTopIndex = 0;
   ButtonNavigator buttonNavigator;
   const std::function<void()> onGoBack;
 
   void loadQuotes();
   bool saveQuotes() const;
   void deleteQuote(int index);
-  std::string formatQuoteRow(const QuoteEntry& entry, int maxWidth) const;
   static std::string deriveBookTitle(const std::string& path);
 };

@@ -8,13 +8,15 @@
 #include <algorithm>
 
 #include "MappedInputManager.h"
+#include "ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 namespace {
 constexpr unsigned long kHoldDeleteMs = 2000;
-constexpr int kLineHeight = 30;
+constexpr int kLineHeight = 22;
+constexpr int kQuoteGap = 8;  // vertical gap between quotes
 constexpr int kButtonHintsReserve = 50;
 constexpr size_t kMaxFileRead = 8192;
 }  // namespace
@@ -131,37 +133,16 @@ std::string QuotesViewerActivity::deriveBookTitle(const std::string& path) {
   return filename;
 }
 
-std::string QuotesViewerActivity::formatQuoteRow(const QuoteEntry& entry,
-                                                  int maxWidth) const {
-  std::string row;
+// Build the display string for a quote (chapter prefix + text, newlines → spaces).
+static std::string buildQuoteText(const QuotesViewerActivity::QuoteEntry& entry) {
+  std::string text;
   if (!entry.chapter.empty()) {
-    // Truncate chapter to ~15 chars max
-    std::string ch = entry.chapter;
-    if (ch.size() > 15) {
-      ch.resize(12);
-      ch += "...";
-    }
-    row = "[" + ch + "] ";
+    text = "[" + entry.chapter + "] ";
   }
-  row += entry.text;
-
-  // Replace newlines with spaces for single-line display
-  std::replace(row.begin(), row.end(), '\n', ' ');
-  std::replace(row.begin(), row.end(), '\r', ' ');
-
-  // Truncate to fit width
-  while (!row.empty() &&
-         renderer.getTextWidth(UI_10_FONT_ID, row.c_str()) > maxWidth) {
-    // Remove chars from end until it fits, then add ellipsis
-    if (row.size() > 3) {
-      row.resize(row.size() - 4);
-      row += "...";
-    } else {
-      row = "...";
-      break;
-    }
-  }
-  return row;
+  text += entry.text;
+  std::replace(text.begin(), text.end(), '\n', ' ');
+  std::replace(text.begin(), text.end(), '\r', ' ');
+  return text;
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -242,8 +223,8 @@ void QuotesViewerActivity::loop() {
 void QuotesViewerActivity::render(Activity::RenderLock&&) {
   renderer.clearScreen();
 
-  const auto pageWidth = renderer.getScreenWidth();
-  const auto screenHeight = renderer.getScreenHeight();
+  const int pageWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
   auto metrics = UITheme::getInstance().getMetrics();
 
   // Header — book title
@@ -273,26 +254,55 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   }
 
   const int listStartY = countY + 25;
-  const int availableHeight = screenHeight - listStartY - kButtonHintsReserve;
-  const int itemsPerPage = std::max(1, availableHeight / kLineHeight);
+  const int listEndY = screenHeight - kButtonHintsReserve;
   const int textMaxWidth = pageWidth - 40;  // 20px padding each side
 
-  // Pagination
-  const int pageStart = (selectorIndex / itemsPerPage) * itemsPerPage;
+  // Ensure scrollTopIndex keeps selectorIndex visible.
+  if (selectorIndex < scrollTopIndex) {
+    scrollTopIndex = selectorIndex;
+  }
 
+  // Forward pass: if selectorIndex is beyond visible area, advance scrollTopIndex.
+  // We do this by rendering from scrollTopIndex and checking if selectorIndex fits.
+  bool selectorVisible = false;
+  while (!selectorVisible && scrollTopIndex < totalItems) {
+    int y = listStartY;
+    for (int i = scrollTopIndex; i < totalItems && y < listEndY; i++) {
+      const auto text = buildQuoteText(quotes[i]);
+      const auto lines = ReaderLayoutSafety::wrapText(renderer, UI_10_FONT_ID, text, textMaxWidth);
+      const int entryHeight = static_cast<int>(lines.size()) * kLineHeight + kQuoteGap;
+      if (i == selectorIndex) {
+        // Check if the entire quote fits; if not, scroll further
+        if (y + entryHeight - kQuoteGap <= listEndY) {
+          selectorVisible = true;
+        }
+        break;
+      }
+      y += entryHeight;
+    }
+    if (!selectorVisible) scrollTopIndex++;
+  }
+
+  // Render visible quotes
   int currentY = listStartY;
-  for (int i = pageStart; i < totalItems && i < pageStart + itemsPerPage;
-       i++) {
+  for (int i = scrollTopIndex; i < totalItems && currentY < listEndY; i++) {
+    const auto text = buildQuoteText(quotes[i]);
+    const auto lines = ReaderLayoutSafety::wrapText(renderer, UI_10_FONT_ID, text, textMaxWidth);
+    const int textHeight = static_cast<int>(lines.size()) * kLineHeight;
     const bool isSelected = (i == selectorIndex);
 
+    // Don't start a quote if not even the first line fits
+    if (currentY + kLineHeight > listEndY) break;
+
     if (isSelected) {
-      renderer.fillRect(0, currentY - 2, pageWidth - 1, kLineHeight);
+      renderer.fillRect(0, currentY - 2, pageWidth - 1, std::min(textHeight + 4, listEndY - currentY + 2));
     }
 
-    const std::string label = formatQuoteRow(quotes[i], textMaxWidth);
-    renderer.drawText(UI_10_FONT_ID, 20, currentY, label.c_str(), !isSelected);
-
-    currentY += kLineHeight;
+    for (size_t ln = 0; ln < lines.size() && currentY < listEndY; ln++) {
+      renderer.drawText(UI_10_FONT_ID, 20, currentY, lines[ln].c_str(), !isSelected);
+      currentY += kLineHeight;
+    }
+    currentY += kQuoteGap;
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Hold:Del",
