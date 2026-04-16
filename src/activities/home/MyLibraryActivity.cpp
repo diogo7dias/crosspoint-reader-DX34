@@ -13,6 +13,8 @@
 #include <esp_task_wdt.h>
 #include <random>
 
+#include "util/TransitionFeedback.h"
+
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
@@ -782,7 +784,7 @@ void MyLibraryActivity::loopMessagePopup() {
 void MyLibraryActivity::loopBmpView() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     mode = Mode::BROWSE;
-    requestUpdate();
+    requestCleanRefresh();
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && !selectedFilePath.empty()) {
@@ -879,10 +881,12 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                exitActivity();
-                StatusPopup::showBlocking(renderer, "Deleting file");
+                // Do all work BEFORE exitActivity() — it destroys this
+                // lambda and all captures (including `this`).
+                TransitionFeedback::show(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
-                  StatusPopup::showBlocking(renderer, "Deleted");
+                  TransitionFeedback::show(renderer, "Deleted");
+                  delay(1000);
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
                     files.erase(files.begin() + static_cast<long>(*rawIndex));
@@ -891,14 +895,16 @@ void MyLibraryActivity::loopFileActions() {
                   }
                 } else {
                   LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  StatusPopup::showBlocking(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, "Delete failed");
+                  delay(1000);
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
+                exitActivity();  // MUST be last — destroys this lambda
               },
               [this]() {
-                exitActivity();
                 requestUpdate();
+                exitActivity();  // MUST be last
               }));
           return;
         }
@@ -917,7 +923,7 @@ void MyLibraryActivity::loopFileActions() {
         case 2:
           exitActivity();
           enterNewActivity(new QRShareActivity(renderer, mappedInput,
-              [this] { exitActivity(); requestCleanRefresh(); }, selectedFilePath));
+              [this] { requestCleanRefresh(); exitActivity(); }, selectedFilePath));
           return;
         case 3: {
           const std::string pathToDelete = selectedFilePath;
@@ -925,10 +931,10 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                exitActivity();
-                StatusPopup::showBlocking(renderer, "Deleting file");
+                TransitionFeedback::show(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
-                  StatusPopup::showBlocking(renderer, "Deleted");
+                  TransitionFeedback::show(renderer, "Deleted");
+                  delay(1000);
                   progressPrefixCache.erase(pathToDelete);
                   if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
                       rawIndex.has_value()) {
@@ -938,14 +944,16 @@ void MyLibraryActivity::loopFileActions() {
                   }
                 } else {
                   LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  StatusPopup::showBlocking(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, "Delete failed");
+                  delay(1000);
                 }
                 mode = Mode::BROWSE;
                 requestCleanRefresh();
+                exitActivity();  // MUST be last — destroys this lambda
               },
               [this]() {
-                exitActivity();
                 requestUpdate();
+                exitActivity();  // MUST be last
               }));
           return;
         }
@@ -1079,6 +1087,7 @@ void MyLibraryActivity::loopBrowse() {
         enterBmpView(selectedPath);
       } else {
         onSelectBook(selectedPath);
+        return;
       }
     } else {
       onSelectBook(selectedPath);
@@ -1306,6 +1315,8 @@ void MyLibraryActivity::renderBmpView() {
     y = (screenH - bitmap.getHeight()) / 2;
   }
 
+  const bool hasGreyscale = bitmap.hasGreyscale();
+
   renderer.drawBitmap(bitmap, x, y, screenW, screenH, 0.0f, 0.0f);
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Actions", "", "");
@@ -1313,7 +1324,29 @@ void MyLibraryActivity::renderBmpView() {
   if (messagePopupOpen) {
     GUI.drawPopup(renderer, messagePopupText.c_str());
   }
-  displayFrame();
+
+  if (hasGreyscale) {
+    // Full refresh gives the cleanest base for the grayscale overlay.
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+    nextRefreshMode = HalDisplay::FAST_REFRESH;
+
+    bitmap.rewindToData();
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+    renderer.drawBitmap(bitmap, x, y, screenW, screenH, 0.0f, 0.0f);
+    renderer.copyGrayscaleLsbBuffers();
+
+    bitmap.rewindToData();
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+    renderer.drawBitmap(bitmap, x, y, screenW, screenH, 0.0f, 0.0f);
+    renderer.copyGrayscaleMsbBuffers();
+
+    renderer.displayGrayBuffer();
+    renderer.setRenderMode(GfxRenderer::BW);
+  } else {
+    displayFrame();
+  }
 }
 
 void MyLibraryActivity::renderFileActions() {

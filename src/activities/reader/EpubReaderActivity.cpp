@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <new>
 #include <vector>
 
 #include "CrossPointSettings.h"
@@ -618,9 +619,11 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
     return;
   }
 
-  // No current section, attempt to rerender the book
+  // No current section — user interaction triggers a rebuild attempt.
   if (!section) {
-    requestUpdate();
+    if (mappedInput.wasAnyPressed()) {
+      requestUpdate();
+    }
     return;
   }
 
@@ -1263,7 +1266,7 @@ void EpubReaderActivity::reloadCurrentSectionForDisplaySettings() {
 }
 
 void EpubReaderActivity::render(Activity::RenderLock&& lock) {
-  if (!epub) {
+  if (!epub || pendingSectionReset) {
     return;
   }
 
@@ -1390,7 +1393,12 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
   if (!section) {
     const auto filepath = epub->getSpineItem(currentSpineIndex).href;
     LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
-    section = std::unique_ptr<Section>(new Section(epub, currentSpineIndex, renderer));
+    auto* sec = new (std::nothrow) Section(epub, currentSpineIndex, renderer);
+    if (!sec) {
+      LOG_ERR("ERS", "OOM: Section allocation");
+      return;
+    }
+    section = std::unique_ptr<Section>(sec);
     bool builtSection = false;
     clearPageCache();
 
@@ -1404,6 +1412,11 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       builtSection = true;
       TransitionFeedback::show(renderer, tr(STR_LOADING));
 
+      // Free font caches to reclaim contiguous heap for ZIP decompression
+      // (needs a 32 KB dictionary). They rebuild automatically on next render.
+      auto* fcm = renderer.getFontCacheManager();
+      if (fcm) fcm->clearCache();
+
       if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                       SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                       viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode,
@@ -1412,10 +1425,22 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
         LOG_ERR("ERS", "Failed to persist page data to SD");
         clearPageCache();
         section.reset();
+        renderer.clearScreen();
+        renderer.drawCenteredText(UI_12_FONT_ID, 350, "Out of memory", true, EpdFontFamily::REGULAR);
+        renderer.drawCenteredText(UI_12_FONT_ID, 400, "Press Back to exit", true, EpdFontFamily::REGULAR);
+        renderer.displayBuffer();
         return;
       }
     } else {
       LOG_DBG("ERS", "Cache found, skipping build...");
+    }
+
+    // CSS rules are only needed during section creation (layout).  Free them
+    // now to reclaim ~100 KB for page rendering and font decompression.
+    // They reload from cache automatically if a new section needs building.
+    {
+      auto* css = epub->getCssParser();
+      if (css) css->clear();
     }
 
     if (nextPageNumber == UINT16_MAX) {
@@ -1489,11 +1514,11 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       LOG_ERR("ERS", "Failed to load page from SD - clearing section cache (attempt %d)", pageLoadFailCount);
       section->clearCache();
       clearPageCache();
-      // Defer section.reset() to loop() to avoid race with main loop reading section.
+      // Defer section.reset() to loop() — it will rebuild and re-render.
+      // Do NOT requestUpdate() here: the render task would race with loop()
+      // resetting section, causing a null dereference in buildStatusBarLayout.
       pendingSectionReset = true;
-      if (pageLoadFailCount < 3) {
-        requestUpdate();  // Try again after clearing cache
-      } else {
+      if (pageLoadFailCount >= 3) {
         LOG_ERR("ERS", "Page load failed %d times, showing error", pageLoadFailCount);
         renderer.clearScreen();
         renderer.drawCenteredText(UI_12_FONT_ID, 300, "Page load failed", true, EpdFontFamily::REGULAR);

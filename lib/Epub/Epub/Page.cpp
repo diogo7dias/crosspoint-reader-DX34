@@ -2,6 +2,21 @@
 
 #include <Logging.h>
 #include <Serialization.h>
+#include <new>
+#ifdef ESP_PLATFORM
+#include <esp_heap_caps.h>
+#endif
+
+static constexpr size_t PAGE_HEAP_MIN = 16384;  // 16KB minimum free heap for page loading
+static constexpr uint16_t MAX_PAGE_ELEMENTS = 500;
+
+static bool heapOk() {
+#ifdef ESP_PLATFORM
+  return esp_get_free_heap_size() > PAGE_HEAP_MIN;
+#else
+  return true;
+#endif
+}
 
 void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
   block->render(renderer, fontId, xPos + xOffset, yPos + yOffset);
@@ -22,8 +37,10 @@ std::unique_ptr<PageLine> PageLine::deserialize(FsFile& file) {
   serialization::readPod(file, yPos);
 
   auto tb = TextBlock::deserialize(file);
-  if (!tb) return nullptr;  // TextBlock failed (e.g. corrupt word count), don't create a PageLine with null block
-  return std::unique_ptr<PageLine>(new PageLine(std::move(tb), xPos, yPos));
+  if (!tb) return nullptr;
+  auto* pl = new (std::nothrow) PageLine(std::move(tb), xPos, yPos);
+  if (!pl) { LOG_ERR("PGE", "OOM: PageLine"); return nullptr; }
+  return std::unique_ptr<PageLine>(pl);
 }
 
 void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
@@ -46,7 +63,10 @@ std::unique_ptr<PageImage> PageImage::deserialize(FsFile& file) {
   serialization::readPod(file, yPos);
 
   auto ib = ImageBlock::deserialize(file);
-  return std::unique_ptr<PageImage>(new PageImage(std::move(ib), xPos, yPos));
+  if (!ib) return nullptr;
+  auto* pi = new (std::nothrow) PageImage(std::move(ib), xPos, yPos);
+  if (!pi) { LOG_ERR("PGE", "OOM: PageImage"); return nullptr; }
+  return std::unique_ptr<PageImage>(pi);
 }
 
 void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) const {
@@ -174,12 +194,28 @@ bool Page::serialize(FsFile& file) const {
 }
 
 std::unique_ptr<Page> Page::deserialize(FsFile& file) {
-  auto page = std::unique_ptr<Page>(new Page());
+  if (!heapOk()) {
+    LOG_ERR("PGE", "Deserialization skipped: low heap");
+    return nullptr;
+  }
+
+  auto* rawPage = new (std::nothrow) Page();
+  if (!rawPage) { LOG_ERR("PGE", "OOM: Page"); return nullptr; }
+  auto page = std::unique_ptr<Page>(rawPage);
 
   uint16_t count;
   serialization::readPod(file, count);
+  if (count > MAX_PAGE_ELEMENTS) {
+    LOG_ERR("PGE", "Element count %u exceeds max %u", count, MAX_PAGE_ELEMENTS);
+    return nullptr;
+  }
 
   for (uint16_t i = 0; i < count; i++) {
+    if (!heapOk()) {
+      LOG_ERR("PGE", "OOM at element %u/%u", i, count);
+      return nullptr;
+    }
+
     uint8_t tag;
     serialization::readPod(file, tag);
 
@@ -192,6 +228,10 @@ std::unique_ptr<Page> Page::deserialize(FsFile& file) {
       page->elements.push_back(std::move(pl));
     } else if (tag == TAG_PageImage) {
       auto pi = PageImage::deserialize(file);
+      if (!pi) {
+        LOG_ERR("PGE", "Deserialization failed: PageImage at index %u returned null", i);
+        return nullptr;
+      }
       page->elements.push_back(std::move(pi));
     } else {
       LOG_ERR("PGE", "Deserialization failed: Unknown tag %u", tag);

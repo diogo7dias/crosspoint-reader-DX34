@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
+#include <new>
 
 #ifdef ESP_PLATFORM
 #include <esp_heap_caps.h>
@@ -234,6 +235,7 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   serialization::readPod(file, blockStyle.wordSpacingDefined);
   serialization::readPod(file, blockStyle.lineHeightDefined);
 
-  return std::unique_ptr<TextBlock>(
-      new TextBlock(std::move(words), std::move(wordXpos), std::move(wordStyles), blockStyle));
+  auto* tb = new (std::nothrow) TextBlock(std::move(words), std::move(wordXpos), std::move(wordStyles), blockStyle);
+  if (!tb) { LOG_ERR("TXB", "OOM: TextBlock"); return nullptr; }
+  return std::unique_ptr<TextBlock>(tb);
 }

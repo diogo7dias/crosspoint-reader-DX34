@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
+#include <new>
 
 #include "../converters/DirectPixelWriter.h"
 #include "../converters/ImageDecoderFactory.h"
@@ -178,5 +179,7 @@ std::unique_ptr<ImageBlock> ImageBlock::deserialize(FsFile& file) {
   int16_t w, h;
   serialization::readPod(file, w);
   serialization::readPod(file, h);
-  return std::unique_ptr<ImageBlock>(new ImageBlock(path, w, h));
+  auto* ib = new (std::nothrow) ImageBlock(path, w, h);
+  if (!ib) { LOG_ERR("IMG", "OOM: ImageBlock"); return nullptr; }
+  return std::unique_ptr<ImageBlock>(ib);
 }

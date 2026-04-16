@@ -295,6 +295,13 @@ bool Section::createSectionFile(const int fontId, const float lineCompression,
     Storage.mkdir(sectionsDir.c_str());
   }
 
+  // Free CSS rules to reclaim heap for ZIP decompression (needs ~44 KB
+  // contiguous).  Rules reload from cache at the layout step below.
+  {
+    CssParser* css = epub->getCssParser();
+    if (css) css->clear();
+  }
+
   // Retry logic for SD card timing issues
   bool success = false;
   uint32_t fileSize = 0;

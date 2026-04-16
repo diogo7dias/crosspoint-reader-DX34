@@ -5,6 +5,9 @@
 #include <miniz.h>
 
 #include <algorithm>
+#ifdef ESP_PLATFORM
+#include <esp_heap_caps.h>
+#endif
 
 bool inflateOneShot(const uint8_t* inputBuf, const size_t deflatedSize, uint8_t* outputBuf, const size_t inflatedSize) {
   // Setup inflator
@@ -549,10 +552,23 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   }
 
   if (fileStat.method == MZ_DEFLATED) {
-    // Setup inflator
+    // Allocate the largest buffer first (32 KB dictionary) to maximise the
+    // chance of finding a contiguous block before smaller allocations
+    // fragment the heap.
+    const auto outputBuffer = static_cast<uint8_t*>(malloc(TINFL_LZ_DICT_SIZE));
+    if (!outputBuffer) {
+      LOG_ERR("ZIP", "Failed to allocate %u bytes for dictionary", (unsigned)TINFL_LZ_DICT_SIZE);
+      if (!wasOpen) {
+        close();
+      }
+      return false;
+    }
+    memset(outputBuffer, 0, TINFL_LZ_DICT_SIZE);
+
     const auto inflator = static_cast<tinfl_decompressor*>(malloc(sizeof(tinfl_decompressor)));
     if (!inflator) {
       LOG_ERR("ZIP", "Failed to allocate memory for inflator");
+      free(outputBuffer);
       if (!wasOpen) {
         close();
       }
@@ -561,28 +577,16 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     memset(inflator, 0, sizeof(tinfl_decompressor));
     tinfl_init(inflator);
 
-    // Setup file read buffer
     const auto fileReadBuffer = static_cast<uint8_t*>(malloc(chunkSize));
     if (!fileReadBuffer) {
       LOG_ERR("ZIP", "Failed to allocate memory for zip file read buffer");
+      free(outputBuffer);
       free(inflator);
       if (!wasOpen) {
         close();
       }
       return false;
     }
-
-    const auto outputBuffer = static_cast<uint8_t*>(malloc(TINFL_LZ_DICT_SIZE));
-    if (!outputBuffer) {
-      LOG_ERR("ZIP", "Failed to allocate memory for dictionary");
-      free(inflator);
-      free(fileReadBuffer);
-      if (!wasOpen) {
-        close();
-      }
-      return false;
-    }
-    memset(outputBuffer, 0, TINFL_LZ_DICT_SIZE);
 
     size_t fileRemainingBytes = deflatedDataSize;
     size_t processedOutputBytes = 0;
