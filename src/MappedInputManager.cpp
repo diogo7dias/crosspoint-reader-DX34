@@ -1,5 +1,7 @@
 #include "MappedInputManager.h"
 
+#include <algorithm>
+
 #include "CrossPointSettings.h"
 
 namespace {
@@ -17,37 +19,42 @@ constexpr SideLayoutMap kSideLayouts[] = {
 };
 }  // namespace
 
+constexpr uint8_t MappedInputManager::kFrontButtons[4];
+
+bool MappedInputManager::checkWithZones(const uint8_t targetHw, bool (HalGPIO::*fn)(uint8_t) const) const {
+  // Check the primary hardware button.
+  if ((gpio.*fn)(targetHw)) return true;
+  // Check any other physical positions whose zone delegates to this action.
+  for (int i = 0; i < 4; i++) {
+    if (zoneOwner[i] == targetHw && kFrontButtons[i] != targetHw) {
+      if ((gpio.*fn)(kFrontButtons[i])) return true;
+    }
+  }
+  return false;
+}
+
 bool MappedInputManager::mapButton(const Button button, bool (HalGPIO::*fn)(uint8_t) const) const {
   const auto sideLayout = static_cast<CrossPointSettings::SIDE_BUTTON_LAYOUT>(SETTINGS.sideButtonLayout);
   const auto& side = kSideLayouts[sideLayout];
 
   switch (button) {
     case Button::Back:
-      // Logical Back maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonBack);
+      return checkWithZones(SETTINGS.frontButtonBack, fn);
     case Button::Confirm:
-      // Logical Confirm maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonConfirm);
+      return checkWithZones(SETTINGS.frontButtonConfirm, fn);
     case Button::Left:
-      // Logical Left maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonLeft);
+      return checkWithZones(SETTINGS.frontButtonLeft, fn);
     case Button::Right:
-      // Logical Right maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonRight);
+      return checkWithZones(SETTINGS.frontButtonRight, fn);
     case Button::Up:
-      // Side buttons remain fixed for Up/Down.
       return (gpio.*fn)(HalGPIO::BTN_UP);
     case Button::Down:
-      // Side buttons remain fixed for Up/Down.
       return (gpio.*fn)(HalGPIO::BTN_DOWN);
     case Button::Power:
-      // Power button bypasses remapping.
       return (gpio.*fn)(HalGPIO::BTN_POWER);
     case Button::PageBack:
-      // Reader page navigation uses side buttons and can be swapped via settings.
       return (gpio.*fn)(side.pageBack);
     case Button::PageForward:
-      // Reader page navigation uses side buttons and can be swapped via settings.
       return (gpio.*fn)(side.pageForward);
   }
 
@@ -86,8 +93,35 @@ MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const
     return "";
   };
 
-  return {labelForHardware(HalGPIO::BTN_BACK), labelForHardware(HalGPIO::BTN_CONFIRM),
-          labelForHardware(HalGPIO::BTN_LEFT), labelForHardware(HalGPIO::BTN_RIGHT)};
+  const Labels result = {labelForHardware(HalGPIO::BTN_BACK), labelForHardware(HalGPIO::BTN_CONFIRM),
+                         labelForHardware(HalGPIO::BTN_LEFT), labelForHardware(HalGPIO::BTN_RIGHT)};
+
+  // Compute zone owners for dynamic button mapping.
+  // When fewer than 4 buttons have labels, physical positions are divided into
+  // equal zones assigned to active buttons in display order so that pressing
+  // any physical button under an expanded visual button triggers that action.
+  const char* hwLabels[] = {result.btn1, result.btn2, result.btn3, result.btn4};
+  int activePositions[4];
+  int activeCount = 0;
+  for (int i = 0; i < 4; i++) {
+    if (hwLabels[i] != nullptr && hwLabels[i][0] != '\0') {
+      activePositions[activeCount++] = i;
+    }
+  }
+
+  if (activeCount == 0 || activeCount == 4) {
+    // No active or all active: 1:1 identity mapping.
+    for (int i = 0; i < 4; i++) zoneOwner[i] = kFrontButtons[i];
+  } else {
+    // Divide 4 physical positions into activeCount equal zones using the
+    // midpoint of each position to determine which zone it falls into.
+    for (int i = 0; i < 4; i++) {
+      const int zone = std::min((2 * i + 1) * activeCount / 8, activeCount - 1);
+      zoneOwner[i] = kFrontButtons[activePositions[zone]];
+    }
+  }
+
+  return result;
 }
 
 int MappedInputManager::getPressedFrontButton() const {
