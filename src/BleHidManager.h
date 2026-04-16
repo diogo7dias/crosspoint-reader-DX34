@@ -109,8 +109,10 @@ class BleHidManager {
 
   // Reconnect tracking
   unsigned long lastReconnectAttempt = 0;
+  uint8_t reconnectAttempts = 0;
   static constexpr unsigned long kReconnectIntervalMs = 5000;
   static constexpr uint8_t kConnectTimeoutSec = 5;
+  static constexpr uint8_t kMaxReconnectAttempts = 5;
 
   // Max scan results
   static constexpr size_t kMaxScanResults = 10;

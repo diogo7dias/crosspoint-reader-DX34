@@ -5,6 +5,10 @@
 
 #include "CrossPointSettings.h"
 
+// Forward declaration for cleanup in deinit()
+class BleHidScanCallbacks;
+static BleHidScanCallbacks* scanCallbacksInstance = nullptr;
+
 // HID Service and Characteristic UUIDs
 static const NimBLEUUID kHidServiceUuid((uint16_t)0x1812);
 static const NimBLEUUID kHidReportCharUuid((uint16_t)0x2A4D);
@@ -39,6 +43,11 @@ void BleHidManager::deinit() {
   state = State::Uninitialized;
   scanResults.clear();
   client = nullptr;  // deinit frees all clients
+
+  // Free scan callbacks singleton allocated in startScan()
+  delete scanCallbacksInstance;
+  scanCallbacksInstance = nullptr;
+
   LOG_INF("BLE", "BLE deinitialized, free heap: %u", (unsigned)esp_get_free_heap_size());
 }
 
@@ -76,8 +85,6 @@ class BleHidScanCallbacks : public NimBLEScanCallbacks {
  private:
   BleHidManager& mgr;
 };
-
-static BleHidScanCallbacks* scanCallbacksInstance = nullptr;
 
 void BleHidManager::startScan(uint32_t durationSec) {
   if (state == State::Uninitialized) return;
@@ -179,6 +186,7 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
   }
 
   state = State::Connected;
+  reconnectAttempts = 0;
   LOG_INF("BLE", "HID subscription active for %s", connectedName.c_str());
   return true;
 }
@@ -246,11 +254,22 @@ void BleHidManager::disconnect() {
 void BleHidManager::tryAutoReconnect() {
   if (SETTINGS.bleDeviceAddr[0] == '\0' || !SETTINGS.bleEnabled) return;
 
-  LOG_INF("BLE", "Auto-reconnecting to %s", SETTINGS.bleDeviceName);
-  // Blocking OK at boot — device hasn't entered main loop yet.
-  if (connectToDeviceBlocking(SETTINGS.bleDeviceAddr)) {
-    connectedName = SETTINGS.bleDeviceName;
+  // Try up to kMaxReconnectAttempts at boot (blocking OK here).
+  for (uint8_t attempt = 1; attempt <= kMaxReconnectAttempts; attempt++) {
+    LOG_INF("BLE", "Auto-reconnect attempt %u/%u to %s",
+            attempt, kMaxReconnectAttempts, SETTINGS.bleDeviceName);
+    if (connectToDeviceBlocking(SETTINGS.bleDeviceAddr)) {
+      connectedName = SETTINGS.bleDeviceName;
+      reconnectAttempts = 0;
+      return;
+    }
+    if (attempt < kMaxReconnectAttempts) delay(1000);
   }
+
+  // All attempts failed — shut down BLE to save power.
+  LOG_INF("BLE", "Boot reconnect failed after %u attempts, shutting down BLE",
+          kMaxReconnectAttempts);
+  deinit();
 }
 
 // --- HID Report Parsing ---
@@ -348,15 +367,24 @@ void BleHidManager::updateButtonState() {
   // Check for disconnection
   if (state == State::Connected && client && !client->isConnected()) {
     state = State::Disconnected;
+    reconnectAttempts = 0;
     LOG_INF("BLE", "Detected BLE disconnection");
   }
 
-  // Non-blocking auto-reconnect: launch background task
+  // Non-blocking auto-reconnect with retry limit
   if (state == State::Disconnected && SETTINGS.bleEnabled) {
+    if (reconnectAttempts >= kMaxReconnectAttempts) {
+      LOG_INF("BLE", "Reconnect failed after %u attempts, shutting down BLE",
+              kMaxReconnectAttempts);
+      deinit();
+      return;
+    }
     unsigned long now = millis();
     if (now - lastReconnectAttempt >= kReconnectIntervalMs) {
       lastReconnectAttempt = now;
-      LOG_DBG("BLE", "Attempting async auto-reconnect...");
+      reconnectAttempts++;
+      LOG_DBG("BLE", "Auto-reconnect attempt %u/%u",
+              reconnectAttempts, kMaxReconnectAttempts);
       connectToDeviceAsync(SETTINGS.bleDeviceAddr);
     }
   }
