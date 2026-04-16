@@ -11,7 +11,7 @@
 #include "ReaderSettingsActivity.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/TransitionFeedback.h"
 
@@ -303,7 +303,7 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
 
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
-  const auto metrics = UITheme::getInstance().getMetrics();
+  const auto metrics = BaseMetrics::values;
 
   renderer.drawCenteredText(UI_12_FONT_ID, metrics.topPadding + 5,
                             tr(STR_READING_THEMES), true,

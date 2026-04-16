@@ -10,7 +10,7 @@
 #include "KOReaderDocumentId.h"
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

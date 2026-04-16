@@ -10,7 +10,7 @@
 
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
 #include "util/StringUtils.h"
@@ -95,7 +95,7 @@ void RecentBooksActivity::onExit() {
 }
 
 void RecentBooksActivity::loop() {
-  const int pageItems = UITheme::getInstance().getNumberOfItemsPerPage(
+  const int pageItems = BaseTheme::getNumberOfItemsPerPage(
       renderer, true, false, true, true);
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -144,7 +144,7 @@ void RecentBooksActivity::render(Activity::RenderLock &&) {
 
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
 
   GUI.drawHeader(renderer,
                  Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},

@@ -47,7 +47,7 @@
 #include "activities/reader/ReaderActivity.h"
 #include "activities/settings/SettingsActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/TransitionFeedback.h"

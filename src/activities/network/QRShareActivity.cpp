@@ -7,7 +7,7 @@
 #include <qrcode.h>
 
 #include "WifiSelectionActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

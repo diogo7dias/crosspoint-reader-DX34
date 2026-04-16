@@ -10,7 +10,7 @@
 
 #include "MappedInputManager.h"
 #include "Paths.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/StatusPopup.h"
 

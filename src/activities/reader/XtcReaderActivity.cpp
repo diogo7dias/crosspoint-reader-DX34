@@ -21,7 +21,7 @@
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

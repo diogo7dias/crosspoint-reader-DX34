@@ -8,7 +8,7 @@
 #include "KOReaderSyncClient.h"
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {

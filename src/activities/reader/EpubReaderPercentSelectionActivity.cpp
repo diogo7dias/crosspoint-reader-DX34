@@ -4,7 +4,7 @@
 #include <I18n.h>
 
 #include "MappedInputManager.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

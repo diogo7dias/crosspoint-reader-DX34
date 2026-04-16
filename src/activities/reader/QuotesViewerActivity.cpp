@@ -10,7 +10,7 @@
 #include "MappedInputManager.h"
 #include "ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {
@@ -225,7 +225,7 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
 
   const int pageWidth = renderer.getScreenWidth();
   const int screenHeight = renderer.getScreenHeight();
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
 
   // Header — book title
   const int titleX =

@@ -24,9 +24,11 @@ extern HalGPIO gpio;
 #include "CrossPointSettings.h"
 #include "I18n.h"
 #include "RecentBooksStore.h"
-#include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
+
+// Global theme instance (used by GUI macro in BaseTheme.h)
+BaseTheme baseTheme;
 
 // Internal constants
 namespace {
@@ -42,7 +44,7 @@ bool tryOpenCoverBmp(const std::string& coverBmpPath, int desiredHeight, FsFile&
   if (coverBmpPath.empty()) return false;
 
   // 1. Try exact height thumb
-  const std::string exactPath = UITheme::getCoverThumbPath(coverBmpPath, desiredHeight);
+  const std::string exactPath = BaseTheme::getCoverThumbPath(coverBmpPath, desiredHeight);
   if (Storage.exists(exactPath.c_str()) && Storage.openFileForRead("HOME", exactPath, outFile)) {
     return true;
   }
@@ -51,7 +53,7 @@ bool tryOpenCoverBmp(const std::string& coverBmpPath, int desiredHeight, FsFile&
   static const int commonHeights[] = {400, 300, 200, 600, 800};
   for (int h : commonHeights) {
     if (h == desiredHeight) continue;
-    const std::string path = UITheme::getCoverThumbPath(coverBmpPath, h);
+    const std::string path = BaseTheme::getCoverThumbPath(coverBmpPath, h);
     if (Storage.exists(path.c_str()) && Storage.openFileForRead("HOME", path, outFile)) {
       return true;
     }
@@ -752,7 +754,7 @@ BookListVisibility BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect re
                                                    const std::vector<RecentBook>& recentBooks, int selectorIndex,
                                                    int scrollOffset) const {
 
-  const int maxRowsCap = std::max(1, UITheme::getInstance().getMetrics().homeRecentBooksCount);
+  const int maxRowsCap = std::max(1, BaseMetrics::values.homeRecentBooksCount);
   const int count = std::min(static_cast<int>(recentBooks.size()), maxRowsCap);
   constexpr int maxVisibleBooks = 8;
   // Clamp scrollOffset to valid range
@@ -1170,4 +1172,30 @@ void BaseTheme::drawReadingProgressBar(const GfxRenderer& renderer, const size_t
       ? (renderer.getScreenWidth() - vieweableMarginLeft)
       : static_cast<int>(progressBarMaxWidth * bookProgress / 100);
   renderer.fillRect(vieweableMarginLeft, progressBarY, barWidth, progressBarHeight, true);
+}
+
+int BaseTheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader, bool hasTabBar,
+                                       bool hasButtonHints, bool hasSubtitle) {
+  const auto& metrics = BaseMetrics::values;
+  int reservedHeight = metrics.topPadding;
+  if (hasHeader) {
+    reservedHeight += metrics.headerHeight + metrics.verticalSpacing;
+  }
+  if (hasTabBar) {
+    reservedHeight += metrics.tabBarHeight;
+  }
+  if (hasButtonHints) {
+    reservedHeight += metrics.verticalSpacing + metrics.buttonHintsHeight;
+  }
+  const int availableHeight = renderer.getScreenHeight() - reservedHeight;
+  int rowHeight = hasSubtitle ? metrics.listWithSubtitleRowHeight : metrics.listRowHeight;
+  return availableHeight / rowHeight;
+}
+
+std::string BaseTheme::getCoverThumbPath(std::string coverBmpPath, int coverHeight) {
+  size_t pos = coverBmpPath.find("[HEIGHT]", 0);
+  if (pos != std::string::npos) {
+    coverBmpPath.replace(pos, 8, std::to_string(coverHeight));
+  }
+  return coverBmpPath;
 }

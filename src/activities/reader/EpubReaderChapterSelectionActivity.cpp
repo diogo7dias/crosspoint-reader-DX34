@@ -6,7 +6,7 @@
 #include "MappedInputManager.h"
 #include "ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

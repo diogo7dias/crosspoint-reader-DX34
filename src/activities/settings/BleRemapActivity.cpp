@@ -7,7 +7,7 @@
 #include "BleHidManager.h"
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

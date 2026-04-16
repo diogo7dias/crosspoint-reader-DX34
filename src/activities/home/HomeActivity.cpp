@@ -21,7 +21,6 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
-#include "components/UITheme.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
@@ -171,7 +170,7 @@ void HomeActivity::onEnter() {
   selectorIndex = 1;  // Default focus on first recent book
   scrollOffset = 0;
 
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
   loadRecentBooks(metrics.homeRecentBooksCount);
   // Half refresh on first render to clear ghosting from previous activity
   renderer.requestHalfRefresh();
@@ -247,7 +246,7 @@ void HomeActivity::loop() {
             std::string(tr(STR_REMOVE_FROM_RECENTS)) + "?\n" + title,
             [this, path]() {
               RECENT_BOOKS.removeBook(path);
-              auto metrics = UITheme::getInstance().getMetrics();
+              auto metrics = BaseMetrics::values;
               loadRecentBooks(metrics.homeRecentBooksCount);
               // Reset selector if it's now out of bounds
               const int menuCount = getMenuItemCount();
@@ -314,7 +313,7 @@ void HomeActivity::loop() {
 }
 
 void HomeActivity::render(Activity::RenderLock &&) {
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
   const int recentSlots = getRecentSlotCount();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();

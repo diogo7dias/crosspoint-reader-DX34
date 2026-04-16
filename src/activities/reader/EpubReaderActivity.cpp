@@ -31,7 +31,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "activities/network/QRShareActivity.h"
 #include "util/FavoriteBmp.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/DrawUtils.h"
 #include "util/StatusPopup.h"

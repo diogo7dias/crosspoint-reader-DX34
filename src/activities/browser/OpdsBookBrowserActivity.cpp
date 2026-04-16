@@ -11,7 +11,7 @@
 #include "MappedInputManager.h"
 #include "Paths.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "network/HttpDownloader.h"
 #include "util/StringUtils.h"

@@ -19,7 +19,7 @@
 #include "ReadingThemesActivity.h"
 #include "ReaderLayoutSafety.h"
 #include "RecentBooksStore.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"

@@ -9,7 +9,7 @@
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "activities/util/KeyboardEntryActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

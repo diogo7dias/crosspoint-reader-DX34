@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {

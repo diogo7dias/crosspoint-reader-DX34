@@ -9,7 +9,7 @@
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "ReadingThemeStore.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 namespace {
@@ -555,7 +555,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
 
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
-  const auto metrics = UITheme::getInstance().getMetrics();
+  const auto metrics = BaseMetrics::values;
 
   renderer.drawCenteredText(UI_12_FONT_ID, metrics.topPadding + 5,
                             tr(STR_READER_SETTINGS), true,

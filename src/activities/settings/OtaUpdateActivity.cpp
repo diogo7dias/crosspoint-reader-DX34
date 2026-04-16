@@ -6,7 +6,7 @@
 
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "network/OtaUpdater.h"
 

@@ -7,7 +7,7 @@
 
 #include "LibrarySearchSupport.h"
 #include "MappedInputManager.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
 LibrarySearchActivity::LibrarySearchActivity(
@@ -115,7 +115,7 @@ void LibrarySearchActivity::render(Activity::RenderLock&&) {
   const int previewStartY = queryBoxY + queryBoxH + 8;
 
   // Keyboard anchored to bottom, above button hints
-  const int btnHintsHeight = UITheme::getInstance().getMetrics().buttonHintsHeight;
+  const int btnHintsHeight = BaseMetrics::values.buttonHintsHeight;
   const int keyboardStartY =
       pageHeight - btnHintsHeight - 8 - keyboard.getTotalHeight(renderer);
 

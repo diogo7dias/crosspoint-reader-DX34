@@ -8,7 +8,7 @@
 
 #include "CrossPointSettings.h"
 #include "ReaderLayoutSafety.h"
-#include "components/UITheme.h"
+#include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/DrawUtils.h"
 
@@ -94,7 +94,7 @@ int computeStatusBarReservedHeight(const GfxRenderer& renderer, const int fontId
 void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayout,
                      const int orientedMarginRight, const int orientedMarginBottom,
                      const int orientedMarginLeft, const bool debugBorders) {
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
   (void)orientedMarginRight;
   (void)orientedMarginBottom;
 

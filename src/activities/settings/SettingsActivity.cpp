@@ -19,7 +19,6 @@
 #include "SettingsList.h"
 #include "activities/boot_sleep/SleepActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "components/UITheme.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/TransitionFeedback.h"
@@ -611,7 +610,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
-  auto metrics = UITheme::getInstance().getMetrics();
+  auto metrics = BaseMetrics::values;
 
   // Top status line: version left, battery right
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
