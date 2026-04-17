@@ -11,9 +11,11 @@ class BookmarkStore {
   struct Bookmark {
     int spineIndex;
     int pageNumber;
+    std::string name;  // Empty = use auto-generated label
   };
 
   static constexpr int MAX_BOOKMARKS = 20;
+  static constexpr size_t MAX_NAME_LENGTH = 40;
 
   /// Load bookmarks from the cache directory's bookmarks.json.
   bool load(const std::string& cachePath);
@@ -30,6 +32,11 @@ class BookmarkStore {
 
   /// Remove bookmark at index.
   void remove(int index);
+
+  /// Rename bookmark at index. Trims to MAX_NAME_LENGTH. Empty string clears
+  /// the custom name so the auto-generated label is used again.
+  /// Returns true if index is valid.
+  bool rename(int index, const std::string& newName);
 
   const std::vector<Bookmark>& getAll() const { return bookmarks; }
 

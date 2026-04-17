@@ -28,7 +28,7 @@ bool BookmarkStore::load(const std::string& cachePath) {
   }
 
   const auto sz = static_cast<size_t>(f.size());
-  if (sz == 0 || sz > 4096) {
+  if (sz == 0 || sz > 8192) {
     f.close();
     return false;
   }
@@ -51,6 +51,9 @@ bool BookmarkStore::load(const std::string& cachePath) {
     Bookmark bm;
     bm.spineIndex = obj["s"] | 0;
     bm.pageNumber = obj["p"] | 0;
+    const char* n = obj["n"] | "";
+    bm.name = n;
+    if (bm.name.size() > MAX_NAME_LENGTH) bm.name.resize(MAX_NAME_LENGTH);
     bookmarks.push_back(bm);
   }
 
@@ -74,6 +77,7 @@ bool BookmarkStore::save(const std::string& cachePath) const {
     JsonObject obj = arr.add<JsonObject>();
     obj["s"] = bm.spineIndex;
     obj["p"] = bm.pageNumber;
+    if (!bm.name.empty()) obj["n"] = bm.name;
   }
 
   // Atomic write: write to .tmp, close, remove original, rename .tmp.
@@ -122,7 +126,7 @@ int BookmarkStore::toggle(int spineIndex, int pageNumber) {
     return -1;  // At capacity
   }
 
-  bookmarks.push_back({spineIndex, pageNumber});
+  bookmarks.push_back({spineIndex, pageNumber, ""});
 
   // Sort by spine index, then page number for consistent display order
   std::sort(bookmarks.begin(), bookmarks.end(),
@@ -132,6 +136,14 @@ int BookmarkStore::toggle(int spineIndex, int pageNumber) {
             });
 
   return 1;  // Added
+}
+
+bool BookmarkStore::rename(int index, const std::string& newName) {
+  if (index < 0 || index >= static_cast<int>(bookmarks.size())) return false;
+  std::string trimmed = newName;
+  if (trimmed.size() > MAX_NAME_LENGTH) trimmed.resize(MAX_NAME_LENGTH);
+  bookmarks[index].name = std::move(trimmed);
+  return true;
 }
 
 bool BookmarkStore::has(int spineIndex, int pageNumber) const {
