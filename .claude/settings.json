@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(riscv32-esp-elf-nm:*)",
+      "Bash(riscv32-esp-elf-addr2line:*)",
+      "Bash(pio run:*)"
+    ]
+  }
+}
