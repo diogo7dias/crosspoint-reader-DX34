@@ -18,6 +18,8 @@ constexpr unsigned long kHoldDeleteMs = 2000;
 constexpr int kLineHeight = 22;
 constexpr int kQuoteGap = 8;  // vertical gap between quotes
 constexpr int kButtonHintsReserve = 50;
+// If users hit this cap in practice, switch to indexing the file
+// (offset + length per quote) and lazy-loading visible entries on render.
 constexpr size_t kMaxFileRead = 65536;
 }  // namespace
 
