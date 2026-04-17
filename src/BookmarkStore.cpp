@@ -1,6 +1,9 @@
 #include "BookmarkStore.h"
 
 #include <ArduinoJson.h>
+#ifdef SIMULATOR
+#include <ArduinoJsonStringCompat.h>
+#endif
 #include <HalStorage.h>
 #include <Logging.h>
 

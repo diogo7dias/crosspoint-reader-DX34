@@ -5,8 +5,13 @@
 #include <memory>
 #include <string>
 
+#ifdef SIMULATOR
+#include <WiFi.h>
+#include <HTTPClient.h>
+#else
 class WiFiClient;
 class HTTPClient;
+#endif
 
 /**
  * HTTP client utility for fetching content and downloading files.

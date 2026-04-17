@@ -9,7 +9,7 @@
 #include "fontIds.h"
 
 class GfxRenderer;
-struct RecentBook;
+#include "../../RecentBooksStore.h"
 
 struct Rect {
   int x;

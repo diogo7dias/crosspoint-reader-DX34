@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <Logging.h>
 #include <Utf8.h>
+#include <esp_system.h>
 
 #include <cstdlib>
 
