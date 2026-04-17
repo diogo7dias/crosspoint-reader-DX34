@@ -1703,33 +1703,6 @@ std::vector<EpubReaderActivity::WordInfo> EpubReaderActivity::buildWordList(cons
   return result;
 }
 
-bool EpubReaderActivity::lookupWordInfo(const Page& page, const int wordIndex, const int xOffset, const int yOffset,
-                                        const int fontId, WordInfo& out) const {
-  int idx = 0;
-  for (const auto& el : page.elements) {
-    if (el->getTag() != TAG_PageLine) continue;
-    const auto& line = static_cast<const PageLine&>(*el);
-    const auto& tb = line.getTextBlock();
-    const auto& words = tb.getWords();
-    const auto& xpos = tb.getWordXpos();
-    const auto& styles = tb.getWordStyles();
-    const int16_t ls = tb.getLetterSpacing();
-    for (size_t i = 0; i < words.size(); i++) {
-      if (idx == wordIndex) {
-        out.x = static_cast<int>(xpos[i]) + line.xPos + xOffset;
-        out.y = line.yPos + yOffset;
-        out.width = renderer.getTextWidthSpaced(fontId, words[i].c_str(), ls, styles[i]);
-        out.text = words[i];
-        out.style = styles[i];
-        out.letterSpacing = ls;
-        return true;
-      }
-      idx++;
-    }
-  }
-  return false;
-}
-
 void EpubReaderActivity::rebuildHighlightWordCache(const int xOffset, const int yOffset) {
   highlightWordCache.clear();
   auto page = loadAndCachePage(section->currentPage);
@@ -1986,28 +1959,24 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
 
   const int wordCount = static_cast<int>(wordList.size());
   const int textHeight = renderer.getTextHeight(fontId);
-  constexpr int thickness = 2;
+  constexpr int thickness = 2;        // SHOW_UNDERLINE dashed underline thickness
+  constexpr int cursorThickness = 3;  // cursor dashed border thickness (thicker for visibility)
 
   // Clamp cursor indices to current word list size (guards against stale index after rebuild)
   if (highlightCursorIndex >= wordCount) {
     highlightCursorIndex = wordCount - 1;
   }
 
-  // Helper: draw inverse-video cursor (black background + white text) with underline
-  const auto drawCursor = [&](const WordPos& cw, const int cursorWordIdx) {
-    constexpr int pad = 2;  // padding around the word for the inverse rect
-    // Draw black background rect covering the word (clamp to non-negative origin)
-    const int rx = (cw.x > pad) ? cw.x - pad : 0;
-    const int ry = (cw.y > pad) ? cw.y - pad : 0;
-    renderer.fillRect(rx, ry, cw.width + (cw.x - rx) + pad, textHeight + (cw.y - ry) + pad, true);
-    // Re-draw the word text in white on top (use page ref already passed to renderHighlights)
-    WordInfo wi;
-    if (lookupWordInfo(page, cursorWordIdx, xOffset, yOffset, fontId, wi)) {
-      renderer.drawTextSpaced(fontId, wi.x, wi.y, wi.text.c_str(), wi.letterSpacing, false, wi.style);
-    }
-    // Draw thick underline beneath the word
-    const int underY = cw.y + textHeight + 1;
-    drawDashedHLine(renderer, cw.x, underY, cw.width, thickness);
+  // Helper: draw cursor as a dashed border (2px) around the word — same dashed
+  // pattern as the final-selection underline. Keeps word black-on-white; the
+  // continuous underline only appears during the SHOW_UNDERLINE confirmation.
+  const auto drawCursor = [&](const WordPos& cw, const int /*cursorWordIdx*/) {
+    constexpr int pad = 2;  // breathing room between word glyphs and border
+    const int bx = (cw.x > pad) ? cw.x - pad : 0;
+    const int by = (cw.y > pad) ? cw.y - pad : 0;
+    const int bw = cw.width + (cw.x - bx) + pad;
+    const int bh = textHeight + (cw.y - by) + pad;
+    drawDashedRect(renderer, bx, by, bw, bh, cursorThickness);
   };
 
   if (highlightState == HighlightState::SELECT_START) {
@@ -2187,13 +2156,15 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Render highlight overlay and border if in highlight/quote selection mode
   if (highlightState != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
-    // Draw solid border around text area to indicate highlight mode
-    const int border = 6;
-    const int bx = orientedMarginLeft - border;
-    const int by = contentY - border;
-    const int bw = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight + 2 * border;
-    const int bh = viewportHeight + 2 * border;
-    renderer.drawRect(bx, by, bw, bh, border, true);
+    // Draw dashed border around text area to indicate highlight mode —
+    // same dashed styling (2px, dash=8, gap=4) as the word cursor.
+    constexpr int frameOffset = 6;    // padding from text area to the frame
+    constexpr int frameThickness = 3; // match cursor border thickness
+    const int bx = orientedMarginLeft - frameOffset;
+    const int by = contentY - frameOffset;
+    const int bw = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight + 2 * frameOffset;
+    const int bh = viewportHeight + 2 * frameOffset;
+    drawDashedRect(renderer, bx, by, bw, bh, frameThickness);
   }
 
   if (SETTINGS.debugBorders) {

@@ -135,6 +135,8 @@ class BaseTheme {
 };
 
 void drawDashedHLine(const GfxRenderer& renderer, int x, int y, int w, int thickness);
+void drawDashedVLine(const GfxRenderer& renderer, int x, int y, int h, int thickness);
+void drawDashedRect(const GfxRenderer& renderer, int x, int y, int w, int h, int thickness);
 
 // Global theme instance — used by all UI drawing code via the GUI macro.
 extern BaseTheme baseTheme;

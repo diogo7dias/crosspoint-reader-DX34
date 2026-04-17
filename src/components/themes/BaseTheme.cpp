@@ -406,6 +406,31 @@ void drawDashedHLine(const GfxRenderer& renderer, int x, int y, int w, int thick
   }
 }
 
+void drawDashedVLine(const GfxRenderer& renderer, int x, int y, int h, int thickness) {
+  constexpr int dash = 8;
+  constexpr int gap = 4;
+  constexpr int step = dash + gap;
+  const int y2 = y + h - 1;
+  for (int py = y; py <= y2; py += step) {
+    const int segH = std::min(dash, y2 - py + 1);
+    renderer.fillRect(x, py, thickness, segH, true);
+  }
+}
+
+void drawDashedRect(const GfxRenderer& renderer, int x, int y, int w, int h, int thickness) {
+  if (w <= 0 || h <= 0) return;
+  // Top and bottom edges span full width; left/right edges inset by `thickness`
+  // so corners aren't double-drawn.
+  drawDashedHLine(renderer, x, y, w, thickness);
+  drawDashedHLine(renderer, x, y + h - thickness, w, thickness);
+  const int sideY = y + thickness;
+  const int sideH = h - 2 * thickness;
+  if (sideH > 0) {
+    drawDashedVLine(renderer, x, sideY, sideH, thickness);
+    drawDashedVLine(renderer, x + w - thickness, sideY, sideH, thickness);
+  }
+}
+
 void BaseTheme::invalidateHomeInfoStats() { gHomeInfoStats.valid = false; }
 
 void BaseTheme::refreshHomeInfoStats() {

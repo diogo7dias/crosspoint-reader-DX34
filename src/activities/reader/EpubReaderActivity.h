@@ -53,7 +53,6 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   int highlightWordCachePage = -1;              // page index the cache was built for
 
   std::vector<WordInfo> buildWordList(const Page& page, int xOffset, int yOffset, int fontId) const;
-  bool lookupWordInfo(const Page& page, int wordIndex, int xOffset, int yOffset, int fontId, WordInfo& out) const;
   void rebuildHighlightWordCache(int xOffset, int yOffset);  // rebuild cache with correct render offsets
   int highlightWordCount() const;                            // word count from cache (0 if empty)
   void enterHighlightMode();
