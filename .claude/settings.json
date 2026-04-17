@@ -3,7 +3,13 @@
     "allow": [
       "Bash(riscv32-esp-elf-nm:*)",
       "Bash(riscv32-esp-elf-addr2line:*)",
-      "Bash(pio run:*)"
+      "Bash(pio run:*)",
+      "Bash(pio device monitor:*)",
+      "Bash(pio check:*)",
+      "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-addr2line:*)",
+      "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-nm:*)",
+      "Bash(shasum:*)",
+      "Bash(xxd:*)"
     ]
   }
 }
