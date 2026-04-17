@@ -279,11 +279,23 @@ void onGoToSettings() {
 #endif
 }
 
-void onGoToMyLibrary() {
+static void openMyLibraryInline(const std::string& path) {
   TransitionFeedback::show(renderer, "Loading library...");
-  persistAppState("go to library");
+  persistAppState(path.empty() ? "go to library" : "go to library path");
   exitActivity();
-  enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
+  if (path.empty()) {
+    enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
+  } else {
+    enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader, path));
+  }
+}
+
+void onGoToMyLibrary() {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""});
+#else
+  openMyLibraryInline("");
+#endif
 }
 
 void onGoToRecentBooks() {
@@ -294,10 +306,11 @@ void onGoToRecentBooks() {
 }
 
 void onGoToMyLibraryWithPath(const std::string& path) {
-  TransitionFeedback::show(renderer, "Loading library...");
-  persistAppState("go to library path");
-  exitActivity();
-  enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader, path));
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibraryAt, path});
+#else
+  openMyLibraryInline(path);
+#endif
 }
 
 void onGoToBrowser() {
@@ -544,6 +557,12 @@ void setup() {
     });
     router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) {
       openReaderInline(payload);
+    });
+    router.setRouteFactory(lifecycle::RouteId::MyLibrary, [](const std::string& /*payload*/) {
+      openMyLibraryInline("");
+    });
+    router.setRouteFactory(lifecycle::RouteId::MyLibraryAt, [](const std::string& payload) {
+      openMyLibraryInline(payload);
     });
   }
 #endif
