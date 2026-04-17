@@ -14,6 +14,3 @@ build
 .venv
 firmware.bin
 CrossPoint-Mod-DX34-*.bin
-
-# Simulator local filesystem (maps to SD card on device)
-fs_/

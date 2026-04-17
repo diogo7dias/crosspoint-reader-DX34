@@ -17,7 +17,7 @@
 #include "ReaderStatusBar.h"
 #include "activities/ActivityWithSubactivity.h"
 
-#include "../../RecentBooksStore.h"
+struct RecentBook;
 
 class TxtReaderActivity final : public ActivityWithSubactivity {
   using StatusBarLayout = ReaderStatusBar::StatusBarLayout;

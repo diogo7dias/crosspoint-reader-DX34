@@ -13,7 +13,7 @@
 
 #include "activities/ActivityWithSubactivity.h"
 
-#include "../../RecentBooksStore.h"
+struct RecentBook;
 
 class XtcReaderActivity final : public ActivityWithSubactivity {
   std::shared_ptr<Xtc> xtc;

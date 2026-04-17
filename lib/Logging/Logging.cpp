@@ -2,31 +2,6 @@
 
 #include <string>
 
-#ifdef SIMULATOR
-// On device, the Arduino framework provides the concrete Serial object that
-// MySerialImpl wraps. In the simulator there is no hardware UART — route
-// everything to stdout so LOG_* calls are visible while running the SDL app.
-#include <cstdarg>
-#include <cstdio>
-MySerialImpl MySerialImpl::instance;
-size_t MySerialImpl::write(uint8_t b) {
-  fputc(b, stdout);
-  return 1;
-}
-size_t MySerialImpl::write(const uint8_t* buffer, size_t size) {
-  fwrite(buffer, 1, size, stdout);
-  return size;
-}
-void MySerialImpl::flush() { fflush(stdout); }
-size_t MySerialImpl::printf(const char* format, ...) {
-  va_list args;
-  va_start(args, format);
-  int n = vfprintf(stdout, format, args);
-  va_end(args);
-  return n < 0 ? 0 : (size_t)n;
-}
-#endif
-
 #define MAX_ENTRY_LEN 256
 #define MAX_LOG_LINES 16
 

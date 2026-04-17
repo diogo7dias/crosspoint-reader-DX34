@@ -1,31 +1,5 @@
 #include "BleHidManager.h"
 
-#ifdef SIMULATOR
-// BLE has no desktop equivalent — provide empty stubs so the rest of DX34
-// links. BLE-dependent features (HID remote control) are inert in the sim.
-BleHidManager& BleHidManager::getInstance() { static BleHidManager i; return i; }
-bool BleHidManager::init() { return false; }
-void BleHidManager::deinit() {}
-void BleHidManager::startScan(uint32_t) {}
-void BleHidManager::stopScan() {}
-void BleHidManager::connectToDeviceAsync(const std::string&) {}
-void BleHidManager::disconnect() {}
-void BleHidManager::tryAutoReconnect() {}
-bool BleHidManager::wasPressed(uint8_t) const { return false; }
-bool BleHidManager::wasReleased(uint8_t) const { return false; }
-bool BleHidManager::isPressed(uint8_t) const { return false; }
-bool BleHidManager::wasAnyPressed() const { return false; }
-void BleHidManager::updateButtonState() {}
-void BleHidManager::setCaptureMode(bool enabled) { captureMode = enabled; }
-uint16_t BleHidManager::captureRawKeycode() { return 0; }
-void BleHidManager::clearCapturedKeycode() { lastRawKeycode = 0; }
-void BleHidManager::onHidReport(const uint8_t*, size_t) {}
-void BleHidManager::connectTask(void*) {}
-bool BleHidManager::connectToDeviceBlocking(const std::string&) { return false; }
-bool BleHidManager::subscribeToHid() { return false; }
-void BleHidManager::translateKeycode(uint16_t, bool) {}
-#else
-
 #include <Logging.h>
 #include <NimBLEDevice.h>
 
@@ -470,5 +444,3 @@ uint16_t BleHidManager::captureRawKeycode() {
 void BleHidManager::clearCapturedKeycode() {
   lastRawKeycode = 0;
 }
-
-#endif // SIMULATOR
