@@ -15,11 +15,11 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
                                                const std::string& title, const int currentPage, const int totalPages,
                                                const int bookProgressPercent, const uint8_t currentOrientation,
                                                const bool hasFootnotes, const bool isPageBookmarked,
-                                               const int bookmarkCount,
+                                               const int bookmarkCount, const bool hasQuotes,
                                                const std::function<void(uint8_t)>& onBack,
                                                const std::function<void(MenuAction)>& onAction)
     : ActivityWithSubactivity("EpubReaderMenu", renderer, mappedInput),
-      menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount)),
+      menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount, hasQuotes)),
       title(title),
       pendingOrientation(currentOrientation),
       currentPage(currentPage),
@@ -30,13 +30,17 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
 
 std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes,
                                                                                      bool isPageBookmarked,
-                                                                                     int bookmarkCount) {
+                                                                                     int bookmarkCount,
+                                                                                     bool hasQuotes) {
   std::vector<MenuItem> items;
-  items.reserve(18);
+  items.reserve(19);
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   items.push_back({MenuAction::HIGHLIGHT_QUOTE, StrId::STR_HIGHLIGHT_MODE});
-  items.push_back({MenuAction::BOOKMARK_TOGGLE,
-                   isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
+  if (hasQuotes) {
+    items.push_back({MenuAction::VIEW_QUOTES, StrId::STR_VIEW_QUOTES});
+  }
+  items.push_back(
+      {MenuAction::BOOKMARK_TOGGLE, isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
   if (bookmarkCount > 0) {
     items.push_back({MenuAction::BOOKMARK_LIST, StrId::STR_BOOKMARKS});
   }
@@ -56,11 +60,9 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   if (!wallpaperPath.empty() && Storage.exists(wallpaperPath.c_str())) {
     items.push_back({MenuAction::NONE, StrId::STR_WALLPAPER_TRIAGE, nullptr, true});
     const bool isFav = FavoriteBmp::isFavoritePath(wallpaperPath);
-    items.push_back({MenuAction::TRIAGE_FAVORITE,
-                     isFav ? StrId::STR_UNFAVORITE : StrId::STR_FAVORITE});
+    items.push_back({MenuAction::TRIAGE_FAVORITE, isFav ? StrId::STR_UNFAVORITE : StrId::STR_FAVORITE});
     items.push_back({MenuAction::TRIAGE_PAUSE_ROTATION,
-                     APP_STATE.wallpaperRotationPaused ? StrId::STR_TRIAGE_UNPAUSE
-                                                      : StrId::STR_TRIAGE_PAUSE});
+                     APP_STATE.wallpaperRotationPaused ? StrId::STR_TRIAGE_UNPAUSE : StrId::STR_TRIAGE_PAUSE});
     items.push_back({MenuAction::TRIAGE_MOVE_PAUSE, StrId::STR_MOVE_TO_SLEEP_PAUSE});
     items.push_back({MenuAction::TRIAGE_DELETE, StrId::STR_TRIAGE_DELETE});
   }
@@ -91,8 +93,7 @@ void EpubReaderMenuActivity::loop() {
     const int count = static_cast<int>(menuItems.size());
     int next = selectedIndex;
     for (int i = 0; i < count; i++) {
-      next = (direction > 0) ? ButtonNavigator::nextIndex(next, count)
-                             : ButtonNavigator::previousIndex(next, count);
+      next = (direction > 0) ? ButtonNavigator::nextIndex(next, count) : ButtonNavigator::previousIndex(next, count);
       if (!menuItems[next].isSeparator) {
         selectedIndex = next;
         break;
@@ -183,8 +184,8 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
       renderer.fillRect(contentX, displayY, contentWidth, lineHeight, true);
       const char* label = I18N.get(item.labelId);
       const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, contentX + (contentWidth - textW) / 2,
-                        displayY, label, false, EpdFontFamily::REGULAR);
+      renderer.drawText(UI_10_FONT_ID, contentX + (contentWidth - textW) / 2, displayY, label, false,
+                        EpdFontFamily::REGULAR);
       continue;
     }
 
@@ -194,9 +195,7 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
       renderer.fillRect(contentX, displayY, contentWidth - 1, lineHeight, true);
     }
 
-    const char* label = item.literalLabel != nullptr
-                            ? item.literalLabel
-                            : I18N.get(item.labelId);
+    const char* label = item.literalLabel != nullptr ? item.literalLabel : I18N.get(item.labelId);
     renderer.drawText(UI_10_FONT_ID, contentX + 20, displayY, label, !isSelected);
 
     if (item.action == MenuAction::ROTATE_SCREEN) {

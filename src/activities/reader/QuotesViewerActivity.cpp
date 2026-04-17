@@ -18,7 +18,9 @@ constexpr unsigned long kHoldDeleteMs = 2000;
 constexpr int kLineHeight = 22;
 constexpr int kQuoteGap = 8;  // vertical gap between quotes
 constexpr int kButtonHintsReserve = 50;
-constexpr size_t kMaxFileRead = 8192;
+// If users hit this cap in practice, switch to indexing the file
+// (offset + length per quote) and lazy-loading visible entries on render.
+constexpr size_t kMaxFileRead = 65536;
 }  // namespace
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
@@ -30,6 +32,10 @@ void QuotesViewerActivity::loadQuotes() {
 
   const size_t fileSize = file.size();
   const size_t readSize = (fileSize < kMaxFileRead) ? fileSize : kMaxFileRead;
+  if (fileSize > kMaxFileRead) {
+    LOG_INF("QV", "Quotes file %s is %u bytes, truncating to %u", filePath.c_str(), (unsigned)fileSize,
+            (unsigned)kMaxFileRead);
+  }
   std::string buf(readSize, '\0');
   file.read(&buf[0], readSize);
   file.close();
@@ -37,9 +43,7 @@ void QuotesViewerActivity::loadQuotes() {
   // Format:  [Chapter Title]\nquote text\n---\n\n
   size_t pos = 0;
   while (pos < buf.size()) {
-    while (pos < buf.size() &&
-           (buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == ' '))
-      ++pos;
+    while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == ' ')) ++pos;
     if (pos >= buf.size()) break;
 
     QuoteEntry entry;
@@ -50,8 +54,7 @@ void QuotesViewerActivity::loadQuotes() {
       if (close != std::string::npos) {
         entry.chapter = buf.substr(pos + 1, close - pos - 1);
         pos = close + 1;
-        while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r'))
-          ++pos;
+        while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r')) ++pos;
       }
     }
 
@@ -65,9 +68,7 @@ void QuotesViewerActivity::loadQuotes() {
     }
 
     // Trim trailing whitespace
-    while (!entry.text.empty() &&
-           (entry.text.back() == '\n' || entry.text.back() == '\r' ||
-            entry.text.back() == ' '))
+    while (!entry.text.empty() && (entry.text.back() == '\n' || entry.text.back() == '\r' || entry.text.back() == ' '))
       entry.text.pop_back();
 
     if (!entry.text.empty()) quotes.push_back(std::move(entry));
@@ -85,8 +86,7 @@ bool QuotesViewerActivity::saveQuotes() const {
 
   FsFile file = Storage.open(filePath.c_str(), O_WRITE | O_CREAT | O_TRUNC);
   if (!file) {
-    LOG_ERR("QV", "Failed to open quotes file for writing: %s",
-            filePath.c_str());
+    LOG_ERR("QV", "Failed to open quotes file for writing: %s", filePath.c_str());
     return false;
   }
 
@@ -105,8 +105,7 @@ bool QuotesViewerActivity::saveQuotes() const {
   }
 
   file.close();
-  LOG_DBG("QV", "Saved %d quotes to %s", static_cast<int>(quotes.size()),
-          filePath.c_str());
+  LOG_DBG("QV", "Saved %d quotes to %s", static_cast<int>(quotes.size()), filePath.c_str());
   return true;
 }
 
@@ -114,20 +113,17 @@ void QuotesViewerActivity::deleteQuote(int index) {
   if (index < 0 || index >= static_cast<int>(quotes.size())) return;
   quotes.erase(quotes.begin() + index);
   saveQuotes();
-  if (selectorIndex >= static_cast<int>(quotes.size()) && selectorIndex > 0)
-    selectorIndex--;
+  if (selectorIndex >= static_cast<int>(quotes.size()) && selectorIndex > 0) selectorIndex--;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 std::string QuotesViewerActivity::deriveBookTitle(const std::string& path) {
   auto slash = path.rfind('/');
-  std::string filename =
-      (slash != std::string::npos) ? path.substr(slash + 1) : path;
+  std::string filename = (slash != std::string::npos) ? path.substr(slash + 1) : path;
   const std::string suffix = "_QUOTES.txt";
   if (filename.size() > suffix.size() &&
-      filename.compare(filename.size() - suffix.size(), suffix.size(),
-                       suffix) == 0) {
+      filename.compare(filename.size() - suffix.size(), suffix.size(), suffix) == 0) {
     filename = filename.substr(0, filename.size() - suffix.size());
   }
   return filename;
@@ -175,9 +171,8 @@ void QuotesViewerActivity::loop() {
   }
 
   // Long-press Select: delete quote
-  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= kHoldDeleteMs && selectorIndex >= 0 &&
-      selectorIndex < totalItems) {
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= kHoldDeleteMs &&
+      selectorIndex >= 0 && selectorIndex < totalItems) {
     mappedInput.suppressUntilAllReleased();
     const int deleteIdx = selectorIndex;
     // Show first ~40 chars of the quote in the confirmation
@@ -228,13 +223,8 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   auto metrics = BaseMetrics::values;
 
   // Header — book title
-  const int titleX =
-      (pageWidth -
-       renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(),
-                             EpdFontFamily::REGULAR)) /
-      2;
-  renderer.drawText(UI_12_FONT_ID, std::max(4, titleX),
-                    metrics.topPadding + 5, bookTitle.c_str(), true,
+  const int titleX = (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
+  renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), metrics.topPadding + 5, bookTitle.c_str(), true,
                     EpdFontFamily::REGULAR);
 
   // Count indicator
@@ -247,8 +237,7 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   if (totalItems == 0) {
     renderer.drawCenteredText(UI_10_FONT_ID, screenHeight / 2, "No quotes");
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                        labels.btn4);
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();
     return;
   }
@@ -305,10 +294,8 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
     currentY += kQuoteGap;
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Hold:Del",
-                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                      labels.btn4);
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Hold:Del", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
 }

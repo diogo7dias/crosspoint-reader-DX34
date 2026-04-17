@@ -464,6 +464,7 @@ STR_NO_BOOKMARKS: "No bookmarks"
 
 STR_QUOTES_WALLPAPER: "Quotes"
 STR_QUOTES_CUSTOM: "Quotes + Custom"
+STR_VIEW_QUOTES: "View Quotes"
 STR_FREEZE: "Freeze"
 
 STR_BLUETOOTH_HID: "Bluetooth Controller"

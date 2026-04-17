@@ -42,12 +42,12 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   };
 
   HighlightState highlightState = HighlightState::NONE;
-  int highlightCursorIndex = 0;      // current cursor position (flat word index on current page)
-  int highlightStartSpine = -1;      // spine index where selection started
-  int highlightStartPage = -1;       // page number where selection started
-  int highlightStartWordIndex = -1;  // flat word index of start on start page
-  int highlightEndPage = -1;         // page number of end cursor (may differ from start)
-  int highlightEndWordIndex = -1;    // flat word index of end on end page
+  int highlightCursorIndex = 0;                 // current cursor position (flat word index on current page)
+  int highlightStartSpine = -1;                 // spine index where selection started
+  int highlightStartPage = -1;                  // page number where selection started
+  int highlightStartWordIndex = -1;             // flat word index of start on start page
+  int highlightEndPage = -1;                    // page number of end cursor (may differ from start)
+  int highlightEndWordIndex = -1;               // flat word index of end on end page
   unsigned long highlightUnderlineStartMs = 0;  // millis() timestamp when underline display began
   std::vector<WordPos> highlightWordCache;      // cached word positions (6 bytes/word vs ~40 for WordInfo)
   int highlightWordCachePage = -1;              // page index the cache was built for
@@ -55,7 +55,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   std::vector<WordInfo> buildWordList(const Page& page, int xOffset, int yOffset, int fontId) const;
   bool lookupWordInfo(const Page& page, int wordIndex, int xOffset, int yOffset, int fontId, WordInfo& out) const;
   void rebuildHighlightWordCache(int xOffset, int yOffset);  // rebuild cache with correct render offsets
-  int highlightWordCount() const;  // word count from cache (0 if empty)
+  int highlightWordCount() const;                            // word count from cache (0 if empty)
   void enterHighlightMode();
   void exitHighlightMode();
   void highlightMoveCursor(int direction);
@@ -65,6 +65,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   void renderHighlights(const Page& page, int fontId, int xOffset, int yOffset);
   std::string extractQuoteText();
   void saveQuoteToFile(const std::string& quote);
+  std::string getQuotesFilePath() const;
   std::string getChapterTitle() const;
   using StatusBarLayout = ReaderStatusBar::StatusBarLayout;
 
@@ -90,7 +91,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool pendingGoHome = false;           // Defer go home to avoid race condition with display task
   bool pendingGoLibrary = false;        // Defer go library after destructive actions
   bool pendingMenuOpen = false;
-  bool pendingThemeReload = false;      // Defer settings reload after ReadingThemesActivity exits
+  bool pendingThemeReload = false;  // Defer settings reload after ReadingThemesActivity exits
   unsigned long lastConfirmReleaseMs = 0;
   bool confirmLongPressHandled = false;
   bool progressDirty = false;
@@ -101,7 +102,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   int lastSavedSpineIndex = -1;
   int lastSavedPage = -1;
   int lastSavedPageCount = -1;
-  int pageLoadFailCount = 0;  // Tracks consecutive page load failures to prevent infinite retry loops
+  int pageLoadFailCount = 0;         // Tracks consecutive page load failures to prevent infinite retry loops
   bool pendingSectionReset = false;  // Defer section.reset() from render task to loop (avoids race)
   int cachedReserveSpineIndex = -1;
   int cachedReserveUsableWidth = -1;
