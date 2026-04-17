@@ -18,7 +18,7 @@ constexpr unsigned long kHoldDeleteMs = 2000;
 constexpr int kLineHeight = 22;
 constexpr int kQuoteGap = 8;  // vertical gap between quotes
 constexpr int kButtonHintsReserve = 50;
-constexpr size_t kMaxFileRead = 8192;
+constexpr size_t kMaxFileRead = 65536;
 }  // namespace
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
@@ -30,6 +30,10 @@ void QuotesViewerActivity::loadQuotes() {
 
   const size_t fileSize = file.size();
   const size_t readSize = (fileSize < kMaxFileRead) ? fileSize : kMaxFileRead;
+  if (fileSize > kMaxFileRead) {
+    LOG_INF("QV", "Quotes file %s is %u bytes, truncating to %u",
+            filePath.c_str(), (unsigned)fileSize, (unsigned)kMaxFileRead);
+  }
   std::string buf(readSize, '\0');
   file.read(&buf[0], readSize);
   file.close();
