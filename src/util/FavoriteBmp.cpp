@@ -12,18 +12,12 @@ namespace FavoriteBmp {
 namespace {
 
 constexpr const char* kFavoriteSuffix = "_F";
-constexpr const char* kFavoriteLimitPopupMessage =
-    "Sleep favorites full (200/200)";
-constexpr const char* kFavoriteLimitHomeMessage =
-    "Sleep favorites full: 200/200";
+constexpr const char* kFavoriteLimitPopupMessage = "Sleep favorites full (200/200)";
+constexpr const char* kFavoriteLimitHomeMessage = "Sleep favorites full: 200/200";
 
-bool isBmpPathInternal(const std::string& path) {
-  return StringUtils::checkFileExtension(path, ".bmp");
-}
+bool isBmpPathInternal(const std::string& path) { return StringUtils::checkFileExtension(path, ".bmp"); }
 
-bool startsWith(const std::string& value, const char* prefix) {
-  return value.rfind(prefix, 0) == 0;
-}
+bool startsWith(const std::string& value, const char* prefix) { return value.rfind(prefix, 0) == 0; }
 
 std::string getBasename(const std::string& path) {
   const auto slashPos = path.find_last_of('/');
@@ -45,8 +39,7 @@ std::string joinPath(const std::string& parent, const std::string& name) {
   return parent + "/" + name;
 }
 
-bool vectorContains(const std::vector<std::string>& values,
-                    const std::string& value) {
+bool vectorContains(const std::vector<std::string>& values, const std::string& value) {
   return std::find(values.begin(), values.end(), value) != values.end();
 }
 
@@ -72,8 +65,7 @@ std::string addFavoriteSuffix(const std::string& filename) {
   if (!isBmpPathInternal(filename) || hasFavoriteSuffix(filename)) {
     return filename;
   }
-  return filename.substr(0, filename.size() - 4) + kFavoriteSuffix +
-         filename.substr(filename.size() - 4);
+  return filename.substr(0, filename.size() - 4) + kFavoriteSuffix + filename.substr(filename.size() - 4);
 }
 
 std::string stripFavoriteSuffix(const std::string& filename) {
@@ -84,12 +76,9 @@ std::string stripFavoriteSuffix(const std::string& filename) {
   return filename.substr(0, extPos - 2) + filename.substr(extPos);
 }
 
-bool isInSleepFolder(const std::string& path) {
-  return startsWith(path, "/sleep/");
-}
+bool isInSleepFolder(const std::string& path) { return startsWith(path, "/sleep/"); }
 
-void updateSleepReferencesOnPathChange(const std::string& oldPath,
-                                       const std::string& newPath) {
+void updateSleepReferencesOnPathChange(const std::string& oldPath, const std::string& newPath) {
   const bool oldInSleep = isInSleepFolder(oldPath);
   const bool newInSleep = isInSleepFolder(newPath);
   const std::string oldBase = getBasename(oldPath);
@@ -133,22 +122,17 @@ void removeSleepReferencesForPath(const std::string& path) {
 }  // namespace
 
 bool isFavoritePath(const std::string& path) {
-  return vectorContains(APP_STATE.favoriteBmpPaths, path) ||
-         hasFavoriteSuffix(getBasename(path));
+  return vectorContains(APP_STATE.favoriteBmpPaths, path) || hasFavoriteSuffix(getBasename(path));
 }
 
 bool canPlacePathInSleep(const std::string& path) {
   if (!isBmpPathInternal(path) || !isFavoritePath(path) || isInSleepFolder(path)) {
     return true;
   }
-  return countProtectedSleepFavorites() <
-         CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
+  return countProtectedSleepFavorites() < CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
 }
 
-bool isSleepFavoritesFull() {
-  return countProtectedSleepFavorites() >=
-         CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
-}
+bool isSleepFavoritesFull() { return countProtectedSleepFavorites() >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST; }
 
 size_t countProtectedSleepFavorites() {
   size_t count = 0;
@@ -169,8 +153,7 @@ size_t countProtectedSleepFavorites() {
 
     file.getName(name, sizeof(name));
     std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' &&
-        isBmpPathInternal(filename) &&
+    if (!filename.empty() && filename[0] != '.' && isBmpPathInternal(filename) &&
         isFavoritePath("/sleep/" + filename)) {
       ++count;
     }
@@ -192,8 +175,7 @@ const char* limitReachedPopupMessage() { return kFavoriteLimitPopupMessage; }
 
 const char* limitReachedHomeMessage() { return kFavoriteLimitHomeMessage; }
 
-SetFavoriteResult setFavorite(const std::string& path, const bool favorite,
-                              std::string* updatedPath) {
+SetFavoriteResult setFavorite(const std::string& path, const bool favorite, std::string* updatedPath) {
   if (!isBmpPathInternal(path)) {
     return SetFavoriteResult::NotBmp;
   }
@@ -203,14 +185,12 @@ SetFavoriteResult setFavorite(const std::string& path, const bool favorite,
 
   std::string currentPath = path;
   const bool alreadyFavorite = isFavoritePath(currentPath);
-  if (favorite && isInSleepFolder(currentPath) && !alreadyFavorite &&
-      isSleepFavoritesFull()) {
+  if (favorite && isInSleepFolder(currentPath) && !alreadyFavorite && isSleepFavoritesFull()) {
     return SetFavoriteResult::LimitReached;
   }
 
   const std::string currentName = getBasename(currentPath);
-  const std::string targetName =
-      favorite ? addFavoriteSuffix(currentName) : stripFavoriteSuffix(currentName);
+  const std::string targetName = favorite ? addFavoriteSuffix(currentName) : stripFavoriteSuffix(currentName);
 
   if (targetName != currentName) {
     const std::string targetPath = joinPath(getParentPath(currentPath), targetName);
@@ -239,8 +219,7 @@ SetFavoriteResult setFavorite(const std::string& path, const bool favorite,
   return SetFavoriteResult::Success;
 }
 
-void replacePathReferences(const std::string& oldPath,
-                           const std::string& newPath) {
+void replacePathReferences(const std::string& oldPath, const std::string& newPath) {
   if (oldPath == newPath) {
     return;
   }

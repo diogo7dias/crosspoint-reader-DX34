@@ -106,14 +106,10 @@ class BaseTheme {
 
   // Component drawing methods
   void drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current, size_t total) const;
-  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect,
-                       bool showPercentage = true) const;
-  void drawBatteryRight(const GfxRenderer& renderer, Rect rect,
-                        bool showPercentage = true,
-                        int textFont = SMALL_FONT_ID,
-                        int iconWidth = BaseMetrics::values.batteryWidth,
-                        int iconHeight = BaseMetrics::values.batteryHeight,
-                        bool showIcon = true) const;
+  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect, bool showPercentage = true) const;
+  void drawBatteryRight(const GfxRenderer& renderer, Rect rect, bool showPercentage = true,
+                        int textFont = SMALL_FONT_ID, int iconWidth = BaseMetrics::values.batteryWidth,
+                        int iconHeight = BaseMetrics::values.batteryHeight, bool showIcon = true) const;
   void drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
                        const char* btn4) const;
   void drawSideButtonHints(const GfxRenderer& renderer, const char* topBtn, const char* bottomBtn) const;
@@ -124,14 +120,11 @@ class BaseTheme {
                 const std::function<std::string(int index)>& rowValue) const;
 
   void drawHeader(const GfxRenderer& renderer, Rect rect, const char* title) const;
-  void drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs,
-                  bool selected) const;
-  BookListVisibility drawRecentBookCover(GfxRenderer& renderer, Rect rect,
-                                         const std::vector<RecentBook>& recentBooks, int selectorIndex,
-                                         int scrollOffset = 0) const;
-  void drawRecentBookSingleCover(GfxRenderer& renderer, Rect rect,
-                                  const std::vector<RecentBook>& recentBooks, int selectorIndex,
-                                  int scrollOffset) const;
+  void drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs, bool selected) const;
+  BookListVisibility drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
+                                         int selectorIndex, int scrollOffset = 0) const;
+  void drawRecentBookSingleCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
+                                 int selectorIndex, int scrollOffset) const;
   void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                       const std::function<std::string(int index)>& buttonLabel,
                       const std::function<std::string(int index)>& rowIcon) const;

@@ -181,13 +181,27 @@ void BleConnectActivity::render(Activity::RenderLock&&) {
   renderer.clearScreen();
 
   switch (uiState) {
-    case BleConnectState::Initializing:  renderInitializing();  break;
-    case BleConnectState::Scanning:      renderScanning();      break;
-    case BleConnectState::DeviceList:    renderDeviceList();    break;
-    case BleConnectState::Connecting:    renderConnecting();    break;
-    case BleConnectState::Connected:     renderConnected();     break;
-    case BleConnectState::Failed:        renderFailed();        break;
-    case BleConnectState::UnpairConfirm: renderUnpairConfirm(); break;
+    case BleConnectState::Initializing:
+      renderInitializing();
+      break;
+    case BleConnectState::Scanning:
+      renderScanning();
+      break;
+    case BleConnectState::DeviceList:
+      renderDeviceList();
+      break;
+    case BleConnectState::Connecting:
+      renderConnecting();
+      break;
+    case BleConnectState::Connected:
+      renderConnected();
+      break;
+    case BleConnectState::Failed:
+      renderFailed();
+      break;
+    case BleConnectState::UnpairConfirm:
+      renderUnpairConfirm();
+      break;
   }
 
   renderer.displayBuffer();

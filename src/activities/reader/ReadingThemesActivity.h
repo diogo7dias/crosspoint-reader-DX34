@@ -8,10 +8,8 @@
 
 class ReadingThemesActivity final : public ActivityWithSubactivity {
  public:
-  explicit ReadingThemesActivity(GfxRenderer& renderer,
-                                 MappedInputManager& mappedInput,
-                                 const std::string& bookCachePath,
-                                 const std::function<void(bool)>& onClose)
+  explicit ReadingThemesActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                 const std::string& bookCachePath, const std::function<void(bool)>& onClose)
       : ActivityWithSubactivity("ReadingThemes", renderer, mappedInput),
         bookCachePath(bookCachePath),
         onClose(onClose) {}

@@ -105,8 +105,8 @@ String obfuscateToBase64(const std::string& plaintext) {
   uint8_t ivCopy[AES_IV_LEN];
   memcpy(ivCopy, iv, AES_IV_LEN);  // CBC modifies IV in-place
   mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, padded.size(), ivCopy,
-                         reinterpret_cast<const unsigned char*>(padded.data()),
-                         reinterpret_cast<unsigned char*>(&ciphertext[0]));
+                        reinterpret_cast<const unsigned char*>(padded.data()),
+                        reinterpret_cast<unsigned char*>(&ciphertext[0]));
   mbedtls_aes_free(&aes);
 
   // Output: IV + ciphertext, then base64-encode
@@ -127,8 +127,7 @@ std::string deobfuscateFromBase64(const char* encoded, bool* ok) {
   // Base64-decode first
   const size_t encodedLen = strlen(encoded);
   size_t decodedLen = 0;
-  int ret = mbedtls_base64_decode(nullptr, 0, &decodedLen,
-                                  reinterpret_cast<const unsigned char*>(encoded), encodedLen);
+  int ret = mbedtls_base64_decode(nullptr, 0, &decodedLen, reinterpret_cast<const unsigned char*>(encoded), encodedLen);
   if (ret != 0 && ret != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
     LOG_ERR("OBF", "Base64 decode size query failed (ret=%d)", ret);
     if (ok) *ok = false;
@@ -161,8 +160,8 @@ std::string deobfuscateFromBase64(const char* encoded, bool* ok) {
     mbedtls_aes_init(&aes);
     mbedtls_aes_setkey_dec(&aes, aesKey, AES_KEY_LEN * 8);
     mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, cipherLen, iv,
-                           reinterpret_cast<const unsigned char*>(raw.data() + AES_IV_LEN),
-                           reinterpret_cast<unsigned char*>(&plaintext[0]));
+                          reinterpret_cast<const unsigned char*>(raw.data() + AES_IV_LEN),
+                          reinterpret_cast<unsigned char*>(&plaintext[0]));
     mbedtls_aes_free(&aes);
 
     if (pkcs7Unpad(plaintext)) {

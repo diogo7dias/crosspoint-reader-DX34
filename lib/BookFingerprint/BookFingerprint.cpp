@@ -42,11 +42,7 @@ uint64_t BookFingerprint::compute(const std::string& filepath) {
 
   // Sample at 5 offsets: 0, size/4, size/2, 3*size/4, size-SAMPLE_SIZE
   const uint64_t offsets[NUM_SAMPLES] = {
-      0,
-      fileSize / 4,
-      fileSize / 2,
-      (fileSize * 3) / 4,
-      fileSize > SAMPLE_SIZE ? fileSize - SAMPLE_SIZE : 0,
+      0, fileSize / 4, fileSize / 2, (fileSize * 3) / 4, fileSize > SAMPLE_SIZE ? fileSize - SAMPLE_SIZE : 0,
   };
 
   uint8_t buf[SAMPLE_SIZE];
@@ -56,8 +52,7 @@ uint64_t BookFingerprint::compute(const std::string& filepath) {
 
     if (!file.seekSet(offset)) continue;
 
-    const size_t toRead = std::min(static_cast<size_t>(SAMPLE_SIZE),
-                                   static_cast<size_t>(fileSize - offset));
+    const size_t toRead = std::min(static_cast<size_t>(SAMPLE_SIZE), static_cast<size_t>(fileSize - offset));
     const size_t bytesRead = file.read(buf, toRead);
     if (bytesRead > 0) {
       hash = fnv1a(buf, bytesRead, hash);

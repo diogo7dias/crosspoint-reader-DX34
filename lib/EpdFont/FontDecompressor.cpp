@@ -191,8 +191,8 @@ const uint8_t* FontDecompressor::getBitmap(const EpdFontData* fontData, const Ep
         check = malloc(group.uncompressedSize);
       }
       if (!check) {
-        LOG_ERR("FDC", "Failed to allocate %u bytes for hot group %u (free heap: %lu)",
-                group.uncompressedSize, groupIndex, (unsigned long)esp_get_free_heap_size());
+        LOG_ERR("FDC", "Failed to allocate %u bytes for hot group %u (free heap: %lu)", group.uncompressedSize,
+                groupIndex, (unsigned long)esp_get_free_heap_size());
         stats.getBitmapTimeUs += micros() - tStart;
         return nullptr;
       }

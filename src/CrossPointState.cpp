@@ -12,7 +12,7 @@ constexpr uint8_t STATE_FILE_VERSION = 5;
 constexpr char STATE_FILE_BIN[] = "/.crosspoint/state.bin";
 constexpr char STATE_FILE_JSON[] = "/.crosspoint/state.json";
 constexpr char STATE_FILE_BAK[] = "/.crosspoint/state.bin.bak";
-} // namespace
+}  // namespace
 
 CrossPointState CrossPointState::instance;
 
@@ -23,8 +23,7 @@ bool CrossPointState::saveToFile() const {
 
 bool CrossPointState::loadFromFile() {
   // Try JSON first
-  if (!Storage.exists(STATE_FILE_JSON))
-    return false;
+  if (!Storage.exists(STATE_FILE_JSON)) return false;
 
   String json = JsonSettingsIO::safeReadFile(STATE_FILE_JSON);
   if (!json.isEmpty()) {

@@ -91,10 +91,10 @@ typedef struct {
   const EpdKernClassEntry* kernLeftClasses = nullptr;   ///< Sorted left-side class map (nullptr if none)
   const EpdKernClassEntry* kernRightClasses = nullptr;  ///< Sorted right-side class map (nullptr if none)
   const int8_t* kernMatrix = nullptr;              ///< Flat leftClassCount x rightClassCount matrix, 4.4 fixed-point
-  uint16_t kernLeftEntryCount = 0;           ///< Entries in kernLeftClasses
-  uint16_t kernRightEntryCount = 0;          ///< Entries in kernRightClasses
-  uint8_t kernLeftClassCount = 0;            ///< Number of distinct left classes (matrix rows)
-  uint8_t kernRightClassCount = 0;           ///< Number of distinct right classes (matrix cols)
+  uint16_t kernLeftEntryCount = 0;                 ///< Entries in kernLeftClasses
+  uint16_t kernRightEntryCount = 0;                ///< Entries in kernRightClasses
+  uint8_t kernLeftClassCount = 0;                  ///< Number of distinct left classes (matrix rows)
+  uint8_t kernRightClassCount = 0;                 ///< Number of distinct right classes (matrix cols)
   const EpdLigaturePair* ligaturePairs = nullptr;  ///< Sorted ligature pair table (nullptr if none)
-  uint32_t ligaturePairCount = 0;            ///< Number of entries in ligaturePairs
+  uint32_t ligaturePairCount = 0;                  ///< Number of entries in ligaturePairs
 } EpdFontData;

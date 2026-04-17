@@ -82,17 +82,14 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   int getTxtParagraphIndentPx() const;
   int measureFlowLineWidth(const std::string& text) const;
   void drawFlowLine(const FlowLine& line, int x, int y, int contentWidth) const;
-  const std::vector<std::string>& getStatusBarTitleLines(int usableWidth,
-                                                         bool noTitleTruncation,
+  const std::vector<std::string>& getStatusBarTitleLines(int usableWidth, bool noTitleTruncation,
                                                          int maxTitleLineCount);
   int getStatusBarReserveTitleLineCount(int usableWidth, bool noTitleTruncation);
-  StatusBarLayout buildStatusBarLayout(int usableWidth, int topReservedHeight,
-                                       int bottomReservedHeight,
+  StatusBarLayout buildStatusBarLayout(int usableWidth, int topReservedHeight, int bottomReservedHeight,
                                        int maxTitleLineCount);
 
   void initializeReader();
-  bool loadPageAtOffset(size_t offset, std::vector<FlowLine>& outLines,
-                        size_t& nextOffset);
+  bool loadPageAtOffset(size_t offset, std::vector<FlowLine>& outLines, size_t& nextOffset);
   void buildPageIndex();
   bool loadPageIndexCache();
   void savePageIndexCache() const;

@@ -17,17 +17,17 @@
 #include <iosfwd>
 
 class CrossPointSettings {
-private:
+ private:
   // Private constructor for singleton
   CrossPointSettings() = default;
 
   // Static instance
   static CrossPointSettings instance;
 
-public:
+ public:
   // Delete copy constructor and assignment
-  CrossPointSettings(const CrossPointSettings &) = delete;
-  CrossPointSettings &operator=(const CrossPointSettings &) = delete;
+  CrossPointSettings(const CrossPointSettings&) = delete;
+  CrossPointSettings& operator=(const CrossPointSettings&) = delete;
 
   enum SLEEP_SCREEN_MODE {
     DARK = 0,
@@ -41,11 +41,7 @@ public:
     FREEZE = 8,
     SLEEP_SCREEN_MODE_COUNT
   };
-  enum SLEEP_SCREEN_COVER_MODE {
-    FIT = 0,
-    CROP = 1,
-    SLEEP_SCREEN_COVER_MODE_COUNT
-  };
+  enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
   enum SLEEP_SCREEN_COVER_FILTER {
     NO_FILTER = 0,
     BLACK_AND_WHITE = 1,
@@ -79,28 +75,16 @@ public:
     STATUS_PAGE_LEFT_TEXT = 1,
     STATUS_BAR_PAGE_COUNTER_MODE_COUNT
   };
-  enum STATUS_BAR_FONT_SIZE {
-    STATUS_FONT_SMALL = 0,
-    STATUS_FONT_MEDIUM = 1,
-    STATUS_BAR_FONT_SIZE_COUNT
-  };
+  enum STATUS_BAR_FONT_SIZE { STATUS_FONT_SMALL = 0, STATUS_FONT_MEDIUM = 1, STATUS_BAR_FONT_SIZE_COUNT };
   enum STATUS_BAR_BAR_THICKNESS {
     STATUS_BAR_THICKNESS_NORMAL = 0,
     STATUS_BAR_THICKNESS_DOUBLE = 1,
     STATUS_BAR_BAR_THICKNESS_COUNT
   };
   // Home screen layout modes
-  enum HOME_LAYOUT {
-    HOME_LAYOUT_CLASSIC = 0,
-    HOME_LAYOUT_SINGLE_COVER = 1,
-    HOME_LAYOUT_COUNT
-  };
+  enum HOME_LAYOUT { HOME_LAYOUT_CLASSIC = 0, HOME_LAYOUT_SINGLE_COVER = 1, HOME_LAYOUT_COUNT };
 
-  enum STATUS_BAR_ITEM_POSITION {
-    STATUS_AT_TOP = 0,
-    STATUS_AT_BOTTOM = 1,
-    STATUS_BAR_ITEM_POSITION_COUNT
-  };
+  enum STATUS_BAR_ITEM_POSITION { STATUS_AT_TOP = 0, STATUS_AT_BOTTOM = 1, STATUS_BAR_ITEM_POSITION_COUNT };
   enum STATUS_BAR_TEXT_POSITION {
     STATUS_TEXT_TOP_LEFT = 0,
     STATUS_TEXT_TOP_CENTER = 1,
@@ -112,11 +96,10 @@ public:
   };
 
   enum ORIENTATION {
-    PORTRAIT = 0, // 480x800 logical coordinates (current default)
-    LANDSCAPE_CW =
-        1,        // 800x480 logical coordinates, rotated 180° (swap top/bottom)
-    INVERTED = 2, // 480x800 logical coordinates, inverted
-    LANDSCAPE_CCW = 3, // 800x480 logical coordinates, native panel orientation
+    PORTRAIT = 0,       // 480x800 logical coordinates (current default)
+    LANDSCAPE_CW = 1,   // 800x480 logical coordinates, rotated 180° (swap top/bottom)
+    INVERTED = 2,       // 480x800 logical coordinates, inverted
+    LANDSCAPE_CCW = 3,  // 800x480 logical coordinates, native panel orientation
     ORIENTATION_COUNT
   };
 
@@ -143,21 +126,17 @@ public:
   // Side button layout options
   // Default: Previous, Next
   // Swapped: Next, Previous
-  enum SIDE_BUTTON_LAYOUT {
-    PREV_NEXT = 0,
-    NEXT_PREV = 1,
-    SIDE_BUTTON_LAYOUT_COUNT
-  };
+  enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
   // Font family options
   enum FONT_FAMILY {
     CHAREINK = 0,
     BOOKERLY = 1,
     VOLLKORN = 2,
-    LEGACY_GEORGIA = 3,     // removed, normalize to CHAREINK
-    LEGACY_IMFELL = 4,      // removed, normalize to CHAREINK
-    FREESERIF = 5,           // legacy, normalize to CHAREINK
-    LEGACY_REMOVED_FAMILY_2 = 6, // legacy, normalize to CHAREINK
+    LEGACY_GEORGIA = 3,           // removed, normalize to CHAREINK
+    LEGACY_IMFELL = 4,            // removed, normalize to CHAREINK
+    FREESERIF = 5,                // legacy, normalize to CHAREINK
+    LEGACY_REMOVED_FAMILY_2 = 6,  // legacy, normalize to CHAREINK
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
@@ -173,12 +152,7 @@ public:
     FONT_SIZE_COUNT
   };
   // Legacy line spacing enum (kept for settings migration compatibility)
-  enum LINE_COMPRESSION {
-    TIGHT = 0,
-    NORMAL = 1,
-    WIDE = 2,
-    LINE_COMPRESSION_COUNT
-  };
+  enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
     LEFT_ALIGN = 1,
@@ -195,17 +169,8 @@ public:
     INDENT_LARGE = 4,
     FIRST_LINE_INDENT_MODE_COUNT
   };
-  enum READER_STYLE_MODE {
-    READER_STYLE_USER = 0,
-    READER_STYLE_HYBRID = 1,
-    READER_STYLE_MODE_COUNT
-  };
-  enum TEXT_RENDER_MODE {
-    TEXT_RENDER_CRISP = 0,
-    TEXT_RENDER_DARK = 1,
-    TEXT_RENDER_BIONIC = 2,
-    TEXT_RENDER_MODE_COUNT
-  };
+  enum READER_STYLE_MODE { READER_STYLE_USER = 0, READER_STYLE_HYBRID = 1, READER_STYLE_MODE_COUNT };
+  enum TEXT_RENDER_MODE { TEXT_RENDER_CRISP = 0, TEXT_RENDER_DARK = 1, TEXT_RENDER_BIONIC = 2, TEXT_RENDER_MODE_COUNT };
   enum EXTRA_PARAGRAPH_SPACING_LEVEL {
     EXTRA_SPACING_OFF = 0,
     EXTRA_SPACING_S = 1,
@@ -223,11 +188,7 @@ public:
     WORD_SPACING_MODE_COUNT
   };
 
-  enum HIGHLIGHT_MODE {
-    HIGHLIGHT_WORD = 0,
-    HIGHLIGHT_PAGE = 1,
-    HIGHLIGHT_MODE_COUNT
-  };
+  enum HIGHLIGHT_MODE { HIGHLIGHT_WORD = 0, HIGHLIGHT_PAGE = 1, HIGHLIGHT_MODE_COUNT };
 
   // XTC comic contrast boost (for thin/light-colored text readability)
   enum XTC_CONTRAST {
@@ -265,21 +226,10 @@ public:
   };
 
   // Short power button press actions
-  enum SHORT_PWRBTN {
-    IGNORE = 0,
-    SLEEP = 1,
-    PAGE_TURN = 2,
-    FORCE_REFRESH = 3,
-    SHORT_PWRBTN_COUNT
-  };
+  enum SHORT_PWRBTN { IGNORE = 0, SLEEP = 1, PAGE_TURN = 2, FORCE_REFRESH = 3, SHORT_PWRBTN_COUNT };
 
   // Hide battery percentage
-  enum HIDE_BATTERY_PERCENTAGE {
-    HIDE_NEVER = 0,
-    HIDE_READER = 1,
-    HIDE_ALWAYS = 2,
-    HIDE_BATTERY_PERCENTAGE_COUNT
-  };
+  enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
   // Home screen layout
   uint8_t homeLayout = HOME_LAYOUT_CLASSIC;
@@ -368,8 +318,8 @@ public:
   // migration)
   uint8_t screenMargin = 20;
   // Reader screen margin settings
-  uint8_t uniformMargins = 0; // 0 = separate margins, 1 = uniform (all sides equal)
-  uint8_t dynamicMargins = 0; // 0 = off, 1 = auto-calculate (10px min), 2 = auto-calculate (20px min)
+  uint8_t uniformMargins = 0;  // 0 = separate margins, 1 = uniform (all sides equal)
+  uint8_t dynamicMargins = 0;  // 0 = off, 1 = auto-calculate (10px min), 2 = auto-calculate (20px min)
   uint8_t screenMarginHorizontal = 20;
   uint8_t screenMarginTop = 20;
   uint8_t screenMarginBottom = 20;
@@ -400,18 +350,18 @@ public:
   uint8_t imageDither = IMAGE_DITHER_FAST;
 
   // BLE HID controller settings
-  uint8_t bleEnabled = 0;             // Whether BLE auto-reconnect is active
-  char bleDeviceAddr[18] = "";        // Paired device address "AA:BB:CC:DD:EE:FF"
-  char bleDeviceName[32] = "";        // Human-readable name for display
+  uint8_t bleEnabled = 0;                      // Whether BLE auto-reconnect is active
+  char bleDeviceAddr[18] = "";                 // Paired device address "AA:BB:CC:DD:EE:FF"
+  char bleDeviceName[32] = "";                 // Human-readable name for display
   uint16_t bleKeyMap[6] = {0, 0, 0, 0, 0, 0};  // HID keycodes mapped to:
-                                      // [0]=Back, [1]=Confirm, [2]=Left,
-                                      // [3]=Right, [4]=Up, [5]=Down
+                                               // [0]=Back, [1]=Confirm, [2]=Left,
+                                               // [3]=Right, [4]=Up, [5]=Down
   static constexpr uint8_t BLE_KEY_MAP_SIZE = 6;
 
   ~CrossPointSettings() = default;
 
   // Get singleton instance
-  static CrossPointSettings &getInstance() { return instance; }
+  static CrossPointSettings& getInstance() { return instance; }
 
   uint16_t getPowerButtonDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
@@ -434,12 +384,12 @@ public:
   bool saveToFile() const;
   bool loadFromFile();
 
-  static void validateFrontButtonMapping(CrossPointSettings &settings);
+  static void validateFrontButtonMapping(CrossPointSettings& settings);
 
-private:
+ private:
   bool loadFromBinaryFile();
 
-public:
+ public:
   float getReaderLineCompression() const;
   unsigned long getSleepTimeoutMs() const;
   int getRefreshFrequency() const;
@@ -450,4 +400,4 @@ public:
 
 // Migration helper — converts legacy statusBar enum into individual flags.
 // Defined in CrossPointSettings.cpp, also used by JsonSettingsIO.cpp.
-void migrateLegacyStatusBarMode(CrossPointSettings &settings);
+void migrateLegacyStatusBarMode(CrossPointSettings& settings);

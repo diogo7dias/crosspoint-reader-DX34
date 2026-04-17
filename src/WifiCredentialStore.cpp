@@ -22,16 +22,15 @@ constexpr char WIFI_FILE_BAK[] = "/.crosspoint/wifi.bin.bak";
 
 // Legacy obfuscation key - "CrossPoint" in ASCII (only used for binary
 // migration)
-constexpr uint8_t LEGACY_OBFUSCATION_KEY[] = {0x43, 0x72, 0x6F, 0x73, 0x73,
-                                              0x50, 0x6F, 0x69, 0x6E, 0x74};
+constexpr uint8_t LEGACY_OBFUSCATION_KEY[] = {0x43, 0x72, 0x6F, 0x73, 0x73, 0x50, 0x6F, 0x69, 0x6E, 0x74};
 constexpr size_t LEGACY_KEY_LENGTH = sizeof(LEGACY_OBFUSCATION_KEY);
 
-void legacyDeobfuscate(std::string &data) {
+void legacyDeobfuscate(std::string& data) {
   for (size_t i = 0; i < data.size(); i++) {
     data[i] ^= LEGACY_OBFUSCATION_KEY[i % LEGACY_KEY_LENGTH];
   }
 }
-} // namespace
+}  // namespace
 
 bool WifiCredentialStore::saveToFile() const {
   Storage.mkdir(Paths::kDataDir);
@@ -110,12 +109,10 @@ bool WifiCredentialStore::loadFromBinaryFile() {
   return true;
 }
 
-bool WifiCredentialStore::addCredential(const std::string &ssid,
-                                        const std::string &password) {
+bool WifiCredentialStore::addCredential(const std::string& ssid, const std::string& password) {
   // Check if this SSID already exists and update it
-  const auto cred = find_if(
-      credentials.begin(), credentials.end(),
-      [&ssid](const WifiCredential &cred) { return cred.ssid == ssid; });
+  const auto cred = find_if(credentials.begin(), credentials.end(),
+                            [&ssid](const WifiCredential& cred) { return cred.ssid == ssid; });
   if (cred != credentials.end()) {
     cred->password = password;
     LOG_DBG("WCS", "Updated credentials for: %s", ssid.c_str());
@@ -124,8 +121,7 @@ bool WifiCredentialStore::addCredential(const std::string &ssid,
 
   // Check if we've reached the limit
   if (credentials.size() >= MAX_NETWORKS) {
-    LOG_DBG("WCS", "Cannot add more networks, limit of %zu reached",
-            MAX_NETWORKS);
+    LOG_DBG("WCS", "Cannot add more networks, limit of %zu reached", MAX_NETWORKS);
     return false;
   }
 
@@ -135,10 +131,9 @@ bool WifiCredentialStore::addCredential(const std::string &ssid,
   return saveToFile();
 }
 
-bool WifiCredentialStore::removeCredential(const std::string &ssid) {
-  const auto cred = find_if(
-      credentials.begin(), credentials.end(),
-      [&ssid](const WifiCredential &cred) { return cred.ssid == ssid; });
+bool WifiCredentialStore::removeCredential(const std::string& ssid) {
+  const auto cred = find_if(credentials.begin(), credentials.end(),
+                            [&ssid](const WifiCredential& cred) { return cred.ssid == ssid; });
   if (cred != credentials.end()) {
     credentials.erase(cred);
     LOG_DBG("WCS", "Removed credentials for: %s", ssid.c_str());
@@ -147,14 +142,12 @@ bool WifiCredentialStore::removeCredential(const std::string &ssid) {
     }
     return saveToFile();
   }
-  return false; // Not found
+  return false;  // Not found
 }
 
-const WifiCredential *
-WifiCredentialStore::findCredential(const std::string &ssid) const {
-  const auto cred = find_if(
-      credentials.begin(), credentials.end(),
-      [&ssid](const WifiCredential &cred) { return cred.ssid == ssid; });
+const WifiCredential* WifiCredentialStore::findCredential(const std::string& ssid) const {
+  const auto cred = find_if(credentials.begin(), credentials.end(),
+                            [&ssid](const WifiCredential& cred) { return cred.ssid == ssid; });
 
   if (cred != credentials.end()) {
     return &*cred;
@@ -163,20 +156,16 @@ WifiCredentialStore::findCredential(const std::string &ssid) const {
   return nullptr;
 }
 
-bool WifiCredentialStore::hasSavedCredential(const std::string &ssid) const {
-  return findCredential(ssid) != nullptr;
-}
+bool WifiCredentialStore::hasSavedCredential(const std::string& ssid) const { return findCredential(ssid) != nullptr; }
 
-void WifiCredentialStore::setLastConnectedSsid(const std::string &ssid) {
+void WifiCredentialStore::setLastConnectedSsid(const std::string& ssid) {
   if (lastConnectedSsid != ssid) {
     lastConnectedSsid = ssid;
     saveToFile();
   }
 }
 
-const std::string &WifiCredentialStore::getLastConnectedSsid() const {
-  return lastConnectedSsid;
-}
+const std::string& WifiCredentialStore::getLastConnectedSsid() const { return lastConnectedSsid; }
 
 void WifiCredentialStore::clearLastConnectedSsid() {
   if (!lastConnectedSsid.empty()) {

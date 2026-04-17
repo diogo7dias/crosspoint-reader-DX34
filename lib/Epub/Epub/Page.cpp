@@ -2,6 +2,7 @@
 
 #include <Logging.h>
 #include <Serialization.h>
+
 #include <new>
 #ifdef ESP_PLATFORM
 #include <esp_heap_caps.h>
@@ -39,7 +40,10 @@ std::unique_ptr<PageLine> PageLine::deserialize(FsFile& file) {
   auto tb = TextBlock::deserialize(file);
   if (!tb) return nullptr;
   auto* pl = new (std::nothrow) PageLine(std::move(tb), xPos, yPos);
-  if (!pl) { LOG_ERR("PGE", "OOM: PageLine"); return nullptr; }
+  if (!pl) {
+    LOG_ERR("PGE", "OOM: PageLine");
+    return nullptr;
+  }
   return std::unique_ptr<PageLine>(pl);
 }
 
@@ -65,7 +69,10 @@ std::unique_ptr<PageImage> PageImage::deserialize(FsFile& file) {
   auto ib = ImageBlock::deserialize(file);
   if (!ib) return nullptr;
   auto* pi = new (std::nothrow) PageImage(std::move(ib), xPos, yPos);
-  if (!pi) { LOG_ERR("PGE", "OOM: PageImage"); return nullptr; }
+  if (!pi) {
+    LOG_ERR("PGE", "OOM: PageImage");
+    return nullptr;
+  }
   return std::unique_ptr<PageImage>(pi);
 }
 
@@ -89,17 +96,13 @@ bool Page::isTextOnly() const {
   }
 
   return std::all_of(elements.begin(), elements.end(),
-                     [](const std::shared_ptr<PageElement>& element) {
-                       return element->getTag() == TAG_PageLine;
-                     });
+                     [](const std::shared_ptr<PageElement>& element) { return element->getTag() == TAG_PageLine; });
 }
 
 int Page::getTextLineCount() const {
-  return static_cast<int>(std::count_if(
-      elements.begin(), elements.end(),
-      [](const std::shared_ptr<PageElement>& element) {
-        return element->getTag() == TAG_PageLine;
-      }));
+  return static_cast<int>(
+      std::count_if(elements.begin(), elements.end(),
+                    [](const std::shared_ptr<PageElement>& element) { return element->getTag() == TAG_PageLine; }));
 }
 
 int Page::getFirstLineY() const {
@@ -120,16 +123,13 @@ int Page::getUsedHeight(const int lineHeight) const {
   int usedHeight = 0;
   for (const auto& element : elements) {
     if (element->getTag() == TAG_PageLine) {
-      usedHeight = std::max(usedHeight,
-                            static_cast<int>(element->yPos) + lineHeight);
+      usedHeight = std::max(usedHeight, static_cast<int>(element->yPos) + lineHeight);
     }
   }
   return usedHeight;
 }
 
-bool Page::applyDensePageVerticalFit(const int lineHeight,
-                                     const int viewportHeight,
-                                     const int minDenseLines,
+bool Page::applyDensePageVerticalFit(const int lineHeight, const int viewportHeight, const int minDenseLines,
                                      const int maxFirstLineY) {
   if (lineHeight <= 0 || viewportHeight <= 0 || !isTextOnly()) {
     return false;
@@ -200,7 +200,10 @@ std::unique_ptr<Page> Page::deserialize(FsFile& file) {
   }
 
   auto* rawPage = new (std::nothrow) Page();
-  if (!rawPage) { LOG_ERR("PGE", "OOM: Page"); return nullptr; }
+  if (!rawPage) {
+    LOG_ERR("PGE", "OOM: Page");
+    return nullptr;
+  }
   auto page = std::unique_ptr<Page>(rawPage);
 
   uint16_t count;

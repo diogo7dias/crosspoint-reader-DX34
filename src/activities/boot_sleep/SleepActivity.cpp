@@ -6,6 +6,7 @@
 #include <I18n.h>
 #include <Txt.h>
 #include <Xtc.h>
+
 #include <algorithm>
 #include <cstring>
 
@@ -15,9 +16,9 @@
 #include "activities/reader/ReaderLayoutSafety.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
-#include "util/FavoriteBmp.h"
 
 namespace {
 void clearLastSleepWallpaperPath() {
@@ -27,15 +28,13 @@ void clearLastSleepWallpaperPath() {
   }
 }
 
-void rememberLastRenderedSleepBitmap(const std::string& path,
-                                     const std::string& sequenceFilename = {}) {
+void rememberLastRenderedSleepBitmap(const std::string& path, const std::string& sequenceFilename = {}) {
   bool changed = false;
   if (APP_STATE.lastSleepWallpaperPath != path) {
     APP_STATE.lastSleepWallpaperPath = path;
     changed = true;
   }
-  if (!sequenceFilename.empty() &&
-      APP_STATE.lastShownSleepFilename != sequenceFilename) {
+  if (!sequenceFilename.empty() && APP_STATE.lastShownSleepFilename != sequenceFilename) {
     APP_STATE.lastShownSleepFilename = sequenceFilename;
     changed = true;
   }
@@ -50,8 +49,7 @@ std::vector<std::string> getValidSleepBitmaps() {
   std::vector<std::string> files;
   auto dir = Storage.open("/sleep");
   if (!dir || !dir.isDirectory()) {
-    if (dir)
-      dir.close();
+    if (dir) dir.close();
     return files;
   }
 
@@ -81,19 +79,17 @@ std::vector<std::string> getValidSleepBitmaps() {
   return files;
 }
 
-void shuffleSleepPlaylist(std::vector<std::string> &files) {
-  if (files.size() <= 1)
-    return;
+void shuffleSleepPlaylist(std::vector<std::string>& files) {
+  if (files.size() <= 1) return;
   for (size_t i = files.size() - 1; i > 0; --i) {
     const auto j = static_cast<size_t>(random(i + 1));
     std::swap(files[i], files[j]);
   }
 }
 
-void syncSleepPlaylistWithFiles(const std::vector<std::string> &files,
-                                bool forceReshuffle,
+void syncSleepPlaylistWithFiles(const std::vector<std::string>& files, bool forceReshuffle,
                                 size_t maxEntries = CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-  auto &playlist = APP_STATE.sleepImagePlaylist;
+  auto& playlist = APP_STATE.sleepImagePlaylist;
   bool changed = false;
 
   if (files.empty()) {
@@ -127,9 +123,7 @@ void syncSleepPlaylistWithFiles(const std::vector<std::string> &files,
   const auto oldSize = playlist.size();
   playlist.erase(
       std::remove_if(playlist.begin(), playlist.end(),
-                     [&files](const std::string &e) {
-                       return !std::binary_search(files.begin(), files.end(), e);
-                     }),
+                     [&files](const std::string& e) { return !std::binary_search(files.begin(), files.end(), e); }),
       playlist.end());
   if (playlist.size() != oldSize) {
     changed = true;
@@ -142,26 +136,21 @@ void syncSleepPlaylistWithFiles(const std::vector<std::string> &files,
   std::vector<const char*> sortedPtrs;
   sortedPtrs.reserve(playlist.size());
   for (const auto& e : playlist) sortedPtrs.push_back(e.c_str());
-  std::sort(sortedPtrs.begin(), sortedPtrs.end(),
-            [](const char* a, const char* b) { return strcmp(a, b) < 0; });
+  std::sort(sortedPtrs.begin(), sortedPtrs.end(), [](const char* a, const char* b) { return strcmp(a, b) < 0; });
 
   std::vector<std::string> newFiles;
-  std::copy_if(files.begin(), files.end(), std::back_inserter(newFiles),
-               [&sortedPtrs](const std::string& file) {
-                 return !std::binary_search(
-                     sortedPtrs.begin(), sortedPtrs.end(), file.c_str(),
-                     [](const char* a, const char* b) { return strcmp(a, b) < 0; });
-               });
+  std::copy_if(files.begin(), files.end(), std::back_inserter(newFiles), [&sortedPtrs](const std::string& file) {
+    return !std::binary_search(sortedPtrs.begin(), sortedPtrs.end(), file.c_str(),
+                               [](const char* a, const char* b) { return strcmp(a, b) < 0; });
+  });
 
   // Insert new files right after the current head so they show immediately.
   // When lastSleepImage == 0 nothing has been shown yet, so insert at 0.
   // When lastSleepImage == 1 the head (playlist[0]) is the last-shown image
   // and will be rotated to the back before the next render, so insert at 1.
   if (!newFiles.empty()) {
-    const size_t insertPos =
-        (APP_STATE.lastSleepImage == 0) ? 0 : std::min<size_t>(1, playlist.size());
-    playlist.insert(playlist.begin() + insertPos, newFiles.begin(),
-                    newFiles.end());
+    const size_t insertPos = (APP_STATE.lastSleepImage == 0) ? 0 : std::min<size_t>(1, playlist.size());
+    playlist.insert(playlist.begin() + insertPos, newFiles.begin(), newFiles.end());
     changed = true;
   }
 
@@ -185,12 +174,12 @@ void syncSleepPlaylistWithFiles(const std::vector<std::string> &files,
 // For large collections (> SLEEP_PLAYLIST_MAX_PERSIST) we do not maintain the
 // full playlist in memory. Instead we find the next file after the last-shown
 // one using a binary search on the already-sorted files list.
-std::string nextSleepImageLargeCollection(const std::vector<std::string> &files) {
+std::string nextSleepImageLargeCollection(const std::vector<std::string>& files) {
   if (files.empty()) {
     return "";
   }
 
-  const auto &last = APP_STATE.lastShownSleepFilename;
+  const auto& last = APP_STATE.lastShownSleepFilename;
   std::string next;
 
   if (last.empty()) {
@@ -215,24 +204,20 @@ std::string nextSleepImageLargeCollection(const std::vector<std::string> &files)
   return next;
 }
 
-void drawSleepFilenameLabel(const GfxRenderer &renderer, const char *filename) {
-  if (!filename || filename[0] == '\0')
-    return;
+void drawSleepFilenameLabel(const GfxRenderer& renderer, const char* filename) {
+  if (!filename || filename[0] == '\0') return;
 
   const int screenWidth = renderer.getScreenWidth();
   const int screenHeight = renderer.getScreenHeight();
-  const int safeInset =
-      18; // Keep label well inside visible area to avoid bezel clipping.
+  const int safeInset = 18;  // Keep label well inside visible area to avoid bezel clipping.
   const int paddingX = 4;
   const int paddingY = 2;
   const int textLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
   const int maxBoxWidth = std::max(1, screenWidth - safeInset * 2);
   const int maxTextWidth = std::max(1, maxBoxWidth - paddingX * 2 - 2);
 
-  std::string text =
-      renderer.truncatedText(UI_10_FONT_ID, filename, maxTextWidth);
-  const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, text.c_str(),
-                                              EpdFontFamily::REGULAR);
+  std::string text = renderer.truncatedText(UI_10_FONT_ID, filename, maxTextWidth);
+  const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, text.c_str(), EpdFontFamily::REGULAR);
   const int boxWidth = std::min(textWidth + paddingX * 2, maxBoxWidth);
   const int boxHeight = textLineHeight + paddingY * 2;
   const int boxX = safeInset;
@@ -242,10 +227,9 @@ void drawSleepFilenameLabel(const GfxRenderer &renderer, const char *filename) {
 
   renderer.fillRect(boxX, boxY, boxWidth, boxHeight, true);
   renderer.drawRect(boxX, boxY, boxWidth, boxHeight, false);
-  renderer.drawText(UI_10_FONT_ID, textX, textY, text.c_str(), false,
-                    EpdFontFamily::REGULAR);
+  renderer.drawText(UI_10_FONT_ID, textX, textY, text.c_str(), false, EpdFontFamily::REGULAR);
 }
-} // namespace
+}  // namespace
 
 void SleepActivity::onEnter() {
   Activity::onEnter();
@@ -291,8 +275,7 @@ void SleepActivity::onEnter() {
 
 void SleepActivity::renderCustomSleepScreen() const {
   // When rotation is paused, re-show the same wallpaper without advancing.
-  if (APP_STATE.wallpaperRotationPaused &&
-      !APP_STATE.lastSleepWallpaperPath.empty() &&
+  if (APP_STATE.wallpaperRotationPaused && !APP_STATE.lastSleepWallpaperPath.empty() &&
       Storage.exists(APP_STATE.lastSleepWallpaperPath.c_str())) {
     FsFile file;
     if (Storage.openFileForRead("SLP", APP_STATE.lastSleepWallpaperPath, file)) {
@@ -300,8 +283,7 @@ void SleepActivity::renderCustomSleepScreen() const {
       delay(100);
       Bitmap bitmap(file, true);
       if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-        const std::string displayName =
-            FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
+        const std::string displayName = FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
         file.close();
         return;
@@ -321,7 +303,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     } else {
       // Small collection: maintain the full shuffleable playlist.
       syncSleepPlaylistWithFiles(files, false);
-      auto &playlist = APP_STATE.sleepImagePlaylist;
+      auto& playlist = APP_STATE.sleepImagePlaylist;
       if (!playlist.empty()) {
         bool changed = false;
         // Advance to the next image only after the first custom sleep render.
@@ -368,8 +350,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (Storage.openFileForRead("SLP", fallbackPath, file)) {
       Bitmap bitmap(file, true);
       if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-        const std::string displayName =
-            FavoriteBmp::displayNameForPath(fallbackPath);
+        const std::string displayName = FavoriteBmp::displayNameForPath(fallbackPath);
         LOG_DBG("SLP", "Loading: %s", fallbackPath);
         rememberLastRenderedSleepBitmap(fallbackPath);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
@@ -410,13 +391,11 @@ bool SleepActivity::randomizeSleepImagePlaylist() {
 
 static size_t s_cachedSleepFavoriteCount = 0;
 
-size_t SleepActivity::cachedSleepFavoriteCount() {
-  return s_cachedSleepFavoriteCount;
-}
+size_t SleepActivity::cachedSleepFavoriteCount() { return s_cachedSleepFavoriteCount; }
 
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   const size_t kLimit = CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
-  const size_t kScanCap = kLimit + 500; // Hard cap on scanning to avoid OOM
+  const size_t kScanCap = kLimit + 500;  // Hard cap on scanning to avoid OOM
 
   // Count .bmp files in /sleep first to avoid allocating the vector if not needed.
   // Also count favorites so callers can use cachedSleepFavoriteCount() without
@@ -429,18 +408,21 @@ void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
     s_cachedSleepFavoriteCount = 0;
     return;
   }
-  char name[256]; // Reduced from 500 to save stack
+  char name[256];  // Reduced from 500 to save stack
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-    if (file.isDirectory()) { file.close(); continue; }
+    if (file.isDirectory()) {
+      file.close();
+      continue;
+    }
     file.getName(name, sizeof(name));
     std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' &&
-        filename.size() >= 4 && filename.substr(filename.size() - 4) == ".bmp") {
+    if (!filename.empty() && filename[0] != '.' && filename.size() >= 4 &&
+        filename.substr(filename.size() - 4) == ".bmp") {
       count++;
       if (FavoriteBmp::isFavoritePath("/sleep/" + filename)) {
         scannedFavorites++;
       }
-      if (count > kScanCap) break; // Optimization: we already know we're over limit
+      if (count > kScanCap) break;  // Optimization: we already know we're over limit
     }
     file.close();
   }
@@ -449,7 +431,7 @@ void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   if (count <= kLimit) {
     s_cachedSleepFavoriteCount = scannedFavorites;
     dir.close();
-    return; // Under limit — nothing to do.
+    return;  // Under limit — nothing to do.
   }
 
   LOG_INF("SLP", "Trim: /sleep has %zu images (limit %zu), starting prune...", count, kLimit);
@@ -458,13 +440,19 @@ void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   std::vector<std::string> allFiles;
   allFiles.reserve(std::min(count, kScanCap));
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-    if (file.isDirectory()) { file.close(); continue; }
+    if (file.isDirectory()) {
+      file.close();
+      continue;
+    }
     file.getName(name, sizeof(name));
     std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' &&
-        filename.size() >= 4 && filename.substr(filename.size() - 4) == ".bmp") {
+    if (!filename.empty() && filename[0] != '.' && filename.size() >= 4 &&
+        filename.substr(filename.size() - 4) == ".bmp") {
       allFiles.emplace_back(std::move(filename));
-      if (allFiles.size() >= kScanCap) { file.close(); break; }
+      if (allFiles.size() >= kScanCap) {
+        file.close();
+        break;
+      }
     }
     file.close();
   }
@@ -482,11 +470,9 @@ void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
     return;
   }
 
-  const size_t favoriteCount =
-      std::count_if(playlist.begin(), playlist.end(),
-                    [](const std::string& filename) {
-                      return FavoriteBmp::isFavoritePath("/sleep/" + filename);
-                    });
+  const size_t favoriteCount = std::count_if(playlist.begin(), playlist.end(), [](const std::string& filename) {
+    return FavoriteBmp::isFavoritePath("/sleep/" + filename);
+  });
   s_cachedSleepFavoriteCount = favoriteCount;
   if (favoriteCount > kLimit) {
     LOG_ERR("SLP", "Trim: %zu favorites in /sleep exceed limit %zu", favoriteCount, kLimit);
@@ -552,10 +538,8 @@ void SleepActivity::renderDefaultSleepScreen() const {
   renderer.setDarkMode(false);
 
   renderer.clearScreen();
-  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10,
-                            tr(STR_CROSSPOINT), true, EpdFontFamily::REGULAR);
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 15,
-                            tr(STR_SLEEPING));
+  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, tr(STR_CROSSPOINT), true, EpdFontFamily::REGULAR);
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 15, tr(STR_SLEEPING));
 
   // Make sleep screen dark unless light is selected in settings
   if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::LIGHT) {
@@ -566,8 +550,7 @@ void SleepActivity::renderDefaultSleepScreen() const {
   renderer.setDarkMode(wasDarkMode);
 }
 
-void SleepActivity::renderBitmapSleepScreen(const Bitmap &bitmap,
-                                            const char *sourceFilename) const {
+void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* sourceFilename) const {
   // Sleep screen has its own inversion logic; bypass dark mode to avoid
   // double-invert cancellation.
   const bool wasDarkMode = renderer.getDarkMode();
@@ -580,44 +563,33 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap &bitmap,
   const int drawHeight = pageHeight;
   float cropX = 0, cropY = 0;
 
-  LOG_DBG("SLP", "bitmap %d x %d, screen %d x %d", bitmap.getWidth(),
-          bitmap.getHeight(), pageWidth, pageHeight);
+  LOG_DBG("SLP", "bitmap %d x %d, screen %d x %d", bitmap.getWidth(), bitmap.getHeight(), pageWidth, pageHeight);
   if (bitmap.getWidth() > drawWidth || bitmap.getHeight() > drawHeight) {
     // image will scale, make sure placement is right
-    float ratio = static_cast<float>(bitmap.getWidth()) /
-                  static_cast<float>(bitmap.getHeight());
-    const float screenRatio =
-        static_cast<float>(drawWidth) / static_cast<float>(drawHeight);
+    float ratio = static_cast<float>(bitmap.getWidth()) / static_cast<float>(bitmap.getHeight());
+    const float screenRatio = static_cast<float>(drawWidth) / static_cast<float>(drawHeight);
 
     LOG_DBG("SLP", "bitmap ratio: %f, screen ratio: %f", ratio, screenRatio);
     if (ratio > screenRatio) {
       // image wider than viewport ratio, scaled down image needs to be centered
       // vertically
-      if (SETTINGS.sleepScreenCoverMode ==
-          CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP) {
+      if (SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP) {
         cropX = 1.0f - (screenRatio / ratio);
         LOG_DBG("SLP", "Cropping bitmap x: %f", cropX);
-        ratio = (1.0f - cropX) * static_cast<float>(bitmap.getWidth()) /
-                static_cast<float>(bitmap.getHeight());
+        ratio = (1.0f - cropX) * static_cast<float>(bitmap.getWidth()) / static_cast<float>(bitmap.getHeight());
       }
       x = 0;
-      y = std::round((static_cast<float>(drawHeight) -
-                      static_cast<float>(drawWidth) / ratio) /
-                     2);
+      y = std::round((static_cast<float>(drawHeight) - static_cast<float>(drawWidth) / ratio) / 2);
       LOG_DBG("SLP", "Centering with ratio %f to y=%d", ratio, y);
     } else {
       // image taller than viewport ratio, scaled down image needs to be
       // centered horizontally
-      if (SETTINGS.sleepScreenCoverMode ==
-          CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP) {
+      if (SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP) {
         cropY = 1.0f - (ratio / screenRatio);
         LOG_DBG("SLP", "Cropping bitmap y: %f", cropY);
-        ratio = static_cast<float>(bitmap.getWidth()) /
-                ((1.0f - cropY) * static_cast<float>(bitmap.getHeight()));
+        ratio = static_cast<float>(bitmap.getWidth()) / ((1.0f - cropY) * static_cast<float>(bitmap.getHeight()));
       }
-      x = std::round((static_cast<float>(drawWidth) -
-                      static_cast<float>(drawHeight) * ratio) /
-                     2);
+      x = std::round((static_cast<float>(drawWidth) - static_cast<float>(drawHeight) * ratio) / 2);
       y = 0;
       LOG_DBG("SLP", "Centering with ratio %f to x=%d", ratio, x);
     }
@@ -630,15 +602,12 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap &bitmap,
   LOG_DBG("SLP", "drawing to %d x %d", x, y);
   renderer.clearScreen();
 
-  const bool hasGreyscale =
-      bitmap.hasGreyscale() &&
-      SETTINGS.sleepScreenCoverFilter ==
-          CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+  const bool hasGreyscale = bitmap.hasGreyscale() &&
+                            SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
 
   renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
 
-  if (SETTINGS.sleepScreenCoverFilter ==
-      CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
+  if (SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
     renderer.invertScreen();
   }
 
@@ -674,12 +643,12 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap &bitmap,
 void SleepActivity::renderCoverSleepScreen() const {
   void (SleepActivity::*renderNoCoverSleepScreen)() const;
   switch (SETTINGS.sleepScreen) {
-  case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM):
-    renderNoCoverSleepScreen = &SleepActivity::renderCustomSleepScreen;
-    break;
-  default:
-    renderNoCoverSleepScreen = &SleepActivity::renderDefaultSleepScreen;
-    break;
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM):
+      renderNoCoverSleepScreen = &SleepActivity::renderCustomSleepScreen;
+      break;
+    default:
+      renderNoCoverSleepScreen = &SleepActivity::renderDefaultSleepScreen;
+      break;
   }
 
   if (APP_STATE.openEpubPath.empty()) {
@@ -687,8 +656,7 @@ void SleepActivity::renderCoverSleepScreen() const {
   }
 
   std::string coverBmpPath;
-  bool cropped = SETTINGS.sleepScreenCoverMode ==
-                 CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
+  bool cropped = SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
 
   // Check if the current book is XTC, TXT, or EPUB
   if (StringUtils::checkFileExtension(APP_STATE.openEpubPath, ".xtc") ||
@@ -788,8 +756,7 @@ std::vector<QuoteEntry> parseQuotesFile(const std::string& path) {
   size_t pos = 0;
   while (pos < buf.size()) {
     // Skip whitespace
-    while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == ' '))
-      ++pos;
+    while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r' || buf[pos] == ' ')) ++pos;
     if (pos >= buf.size()) break;
 
     QuoteEntry entry;
@@ -801,8 +768,7 @@ std::vector<QuoteEntry> parseQuotesFile(const std::string& path) {
         entry.chapter = buf.substr(pos + 1, close - pos - 1);
         pos = close + 1;
         // Skip newline after header
-        while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r'))
-          ++pos;
+        while (pos < buf.size() && (buf[pos] == '\n' || buf[pos] == '\r')) ++pos;
       }
     }
 
@@ -813,16 +779,14 @@ std::vector<QuoteEntry> parseQuotesFile(const std::string& path) {
       entry.text = buf.substr(pos);
     } else {
       entry.text = buf.substr(pos, sep - pos);
-      pos = sep + 4; // skip \n---
+      pos = sep + 4;  // skip \n---
     }
 
     // Trim trailing whitespace from quote
-    while (!entry.text.empty() &&
-           (entry.text.back() == '\n' || entry.text.back() == '\r' || entry.text.back() == ' '))
+    while (!entry.text.empty() && (entry.text.back() == '\n' || entry.text.back() == '\r' || entry.text.back() == ' '))
       entry.text.pop_back();
 
-    if (!entry.text.empty())
-      entries.push_back(std::move(entry));
+    if (!entry.text.empty()) entries.push_back(std::move(entry));
 
     if (sep == std::string::npos) break;
   }
@@ -844,8 +808,7 @@ std::vector<std::string> findAllQuotesFiles() {
     file.getName(name, sizeof(name));
     const std::string filename(name);
     // Match *_QUOTES.txt
-    if (filename.size() > 11 &&
-        filename.compare(filename.size() - 11, 11, "_QUOTES.txt") == 0) {
+    if (filename.size() > 11 && filename.compare(filename.size() - 11, 11, "_QUOTES.txt") == 0) {
       result.push_back("/recents/" + filename);
     }
     file.close();
@@ -858,9 +821,7 @@ std::vector<std::string> findAllQuotesFiles() {
 /// E.g. "/recents/My Great Book_QUOTES.txt" → "My Great Book"
 std::string bookTitleFromQuotesPath(const std::string& quotesPath) {
   auto slash = quotesPath.rfind('/');
-  std::string filename = (slash != std::string::npos)
-      ? quotesPath.substr(slash + 1)
-      : quotesPath;
+  std::string filename = (slash != std::string::npos) ? quotesPath.substr(slash + 1) : quotesPath;
   // Strip _QUOTES.txt suffix
   const std::string suffix = "_QUOTES.txt";
   if (filename.size() > suffix.size() &&
@@ -870,7 +831,7 @@ std::string bookTitleFromQuotesPath(const std::string& quotesPath) {
   return filename;
 }
 
-} // namespace
+}  // namespace
 
 void SleepActivity::renderQuotesSleepScreen() const {
   clearLastSleepWallpaperPath();
@@ -917,7 +878,7 @@ void SleepActivity::renderQuotesSleepScreen() const {
 
   // Wrap and draw book title
   auto titleLines = ReaderLayoutSafety::wrapText(renderer, titleFontId, bookTitle, contentWidth);
-  if (titleLines.size() > 2) titleLines.resize(2); // max 2 lines for title
+  if (titleLines.size() > 2) titleLines.resize(2);  // max 2 lines for title
 
   int y = headerTopY;
   for (const auto& line : titleLines) {
@@ -930,7 +891,7 @@ void SleepActivity::renderQuotesSleepScreen() const {
   if (!entry.chapter.empty()) {
     y += 4;
     auto chapterLines = ReaderLayoutSafety::wrapText(renderer, chapterFontId, entry.chapter, contentWidth);
-    if (chapterLines.size() > 2) chapterLines.resize(2); // max 2 lines
+    if (chapterLines.size() > 2) chapterLines.resize(2);  // max 2 lines
     for (const auto& chLine : chapterLines) {
       const int chW = renderer.getTextWidth(chapterFontId, chLine.c_str(), EpdFontFamily::ITALIC);
       renderer.drawText(chapterFontId, (W - chW) / 2, y, chLine.c_str(), true, EpdFontFamily::ITALIC);
@@ -942,11 +903,11 @@ void SleepActivity::renderQuotesSleepScreen() const {
   // ── Divider line — edge-to-edge, 3px thick ──
   y += 8;
   renderer.fillRect(0, y, W, 3, true);
-  y += 10; // margin below divider
+  y += 10;  // margin below divider
 
   // ── Quote text — vertically centered in remaining space ──
   const int quoteTopY = y;
-  const int quoteBottomY = H; // use full bottom
+  const int quoteBottomY = H;  // use full bottom
   const int quoteAreaH = quoteBottomY - quoteTopY;
   const int lineSpacing = 28;
 

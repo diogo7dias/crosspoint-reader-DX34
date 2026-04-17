@@ -135,8 +135,8 @@ struct BlockStyle {
         lineHeightPx = cssStyle.lineHeight.toPixels(emSize, vw);
       }
       if (lineHeightPx > 0.0f && emSize > 0.0f) {
-        blockStyle.lineHeightPercent = static_cast<uint16_t>(
-            std::max(40.0f, std::min(300.0f, (lineHeightPx * 100.0f) / emSize)));
+        blockStyle.lineHeightPercent =
+            static_cast<uint16_t>(std::max(40.0f, std::min(300.0f, (lineHeightPx * 100.0f) / emSize)));
         blockStyle.lineHeightDefined = true;
       }
     }

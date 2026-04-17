@@ -1,13 +1,13 @@
 #include "Epub.h"
 
-#include <algorithm>
-
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JpegToBmpConverter.h>
 #include <Logging.h>
 #include <PngToBmpConverter.h>
 #include <ZipFile.h>
+
+#include <algorithm>
 
 #include "Epub/parsers/ContainerParser.h"
 #include "Epub/parsers/ContentOpfParser.h"
@@ -20,8 +20,7 @@ constexpr int kProgressStepPercent = 5;
 
 class ProgressReporter {
  public:
-  explicit ProgressReporter(const std::function<void(int)>& callback)
-      : callback(callback) {}
+  explicit ProgressReporter(const std::function<void(int)>& callback) : callback(callback) {}
 
   void report(const int percent) {
     if (!callback) {
@@ -32,8 +31,7 @@ class ProgressReporter {
       return;
     }
 
-    const int throttled =
-        (clamped == 100) ? 100 : (clamped / kProgressStepPercent) * kProgressStepPercent;
+    const int throttled = (clamped == 100) ? 100 : (clamped / kProgressStepPercent) * kProgressStepPercent;
     if (throttled <= lastPercent) {
       return;
     }
@@ -51,16 +49,14 @@ class ProgressReporter {
 
 class ProgressSpan {
  public:
-  ProgressSpan(ProgressReporter& reporter, const int startPercent,
-               const int endPercent)
+  ProgressSpan(ProgressReporter& reporter, const int startPercent, const int endPercent)
       : reporter(reporter), startPercent(startPercent), endPercent(endPercent) {
     reporter.report(startPercent);
   }
 
   void reportPercent(const int percent) const {
     const int clamped = std::max(0, std::min(100, percent));
-    const int mapped =
-        startPercent + ((endPercent - startPercent) * clamped) / 100;
+    const int mapped = startPercent + ((endPercent - startPercent) * clamped) / 100;
     reporter.report(mapped);
   }
 
@@ -440,9 +436,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   {
     ProgressSpan cacheProbeSpan(reporter, 0, 10);
     cacheProbeSpan.reportPercent(30);
-    if (bookMetadataCache->load([&cacheProbeSpan](const int percent) {
-          cacheProbeSpan.reportPercent(percent);
-        })) {
+    if (bookMetadataCache->load([&cacheProbeSpan](const int percent) { cacheProbeSpan.reportPercent(percent); })) {
       cacheProbeSpan.finish();
       if (!skipLoadingCss) {
         ProgressSpan cachedCssSpan(reporter, 10, 90);
@@ -563,9 +557,8 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   const uint32_t buildStart = millis();
   {
     ProgressSpan buildSpan(reporter, 60, 80);
-    if (!bookMetadataCache->buildBookBin(
-            filepath, bookMetadata,
-            [&buildSpan](const int percent) { buildSpan.reportPercent(percent); })) {
+    if (!bookMetadataCache->buildBookBin(filepath, bookMetadata,
+                                         [&buildSpan](const int percent) { buildSpan.reportPercent(percent); })) {
       LOG_ERR("EBP", "Could not update mappings and sizes");
       return false;
     }
@@ -582,8 +575,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   bookMetadataCache.reset(new BookMetadataCache(cachePath));
   {
     ProgressSpan reloadSpan(reporter, 80, 85);
-    if (!bookMetadataCache->load(
-            [&reloadSpan](const int percent) { reloadSpan.reportPercent(percent); })) {
+    if (!bookMetadataCache->load([&reloadSpan](const int percent) { reloadSpan.reportPercent(percent); })) {
       LOG_ERR("EBP", "Failed to reload cache after writing");
       return false;
     }
@@ -603,8 +595,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   return true;
 }
 
-bool Epub::ensureCssCache(
-    const std::function<void(int)>& progressCallback) {
+bool Epub::ensureCssCache(const std::function<void(int)>& progressCallback) {
   if (!bookMetadataCache || !bookMetadataCache->isLoaded()) {
     LOG_ERR("EBP", "Cannot prepare CSS cache before EPUB metadata is loaded");
     return false;

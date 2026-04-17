@@ -1,10 +1,10 @@
 #include "ReaderSettingsActivity.h"
 
-#include <algorithm>
-
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+
+#include <algorithm>
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
@@ -16,49 +16,44 @@ namespace {
 const StrId kCategoryNames[] = {StrId::STR_CAT_READER, StrId::STR_STATUS_BAR};
 
 std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
-  return std::to_string(
-      CrossPointSettings::fontSizeToPointSize(family, fontSize));
+  return std::to_string(CrossPointSettings::fontSizeToPointSize(family, fontSize));
 }
 
-int getValueEditHoldStep(const MappedInputManager& mappedInput,
-                         const ReaderSettingInfo&) {
+int getValueEditHoldStep(const MappedInputManager& mappedInput, const ReaderSettingInfo&) {
   return mappedInput.getHeldTime() >= 3000 ? 10 : 1;
 }
 
 int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
-  const uint8_t normalizedFontSize =
-      CrossPointSettings::normalizeFontSizeForFamily(family, fontSize);
+  const uint8_t normalizedFontSize = CrossPointSettings::normalizeFontSizeForFamily(family, fontSize);
 
-  if (CrossPointSettings::normalizeFontFamily(family) ==
-      CrossPointSettings::BOOKERLY) {
+  if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::BOOKERLY) {
     switch (normalizedFontSize) {
-    case CrossPointSettings::SIZE_10:
-      return BOOKERLY_10_FONT_ID;
-    case CrossPointSettings::SIZE_14:
-      return BOOKERLY_14_FONT_ID;
-    case CrossPointSettings::MEDIUM:
-      return BOOKERLY_15_FONT_ID;
-    case CrossPointSettings::SIZE_16:
-      return BOOKERLY_16_FONT_ID;
-    case CrossPointSettings::LARGE:
-    default:
-      return BOOKERLY_17_FONT_ID;
+      case CrossPointSettings::SIZE_10:
+        return BOOKERLY_10_FONT_ID;
+      case CrossPointSettings::SIZE_14:
+        return BOOKERLY_14_FONT_ID;
+      case CrossPointSettings::MEDIUM:
+        return BOOKERLY_15_FONT_ID;
+      case CrossPointSettings::SIZE_16:
+        return BOOKERLY_16_FONT_ID;
+      case CrossPointSettings::LARGE:
+      default:
+        return BOOKERLY_17_FONT_ID;
     }
   }
-  if (CrossPointSettings::normalizeFontFamily(family) ==
-      CrossPointSettings::VOLLKORN) {
+  if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::VOLLKORN) {
     switch (normalizedFontSize) {
-    case CrossPointSettings::SIZE_10:
-      return VOLLKORN_10_FONT_ID;
-    case CrossPointSettings::SIZE_14:
-      return VOLLKORN_14_FONT_ID;
-    case CrossPointSettings::MEDIUM:
-      return VOLLKORN_15_FONT_ID;
-    case CrossPointSettings::SIZE_16:
-      return VOLLKORN_16_FONT_ID;
-    case CrossPointSettings::LARGE:
-    default:
-      return VOLLKORN_17_FONT_ID;
+      case CrossPointSettings::SIZE_10:
+        return VOLLKORN_10_FONT_ID;
+      case CrossPointSettings::SIZE_14:
+        return VOLLKORN_14_FONT_ID;
+      case CrossPointSettings::MEDIUM:
+        return VOLLKORN_15_FONT_ID;
+      case CrossPointSettings::SIZE_16:
+        return VOLLKORN_16_FONT_ID;
+      case CrossPointSettings::LARGE:
+      default:
+        return VOLLKORN_17_FONT_ID;
     }
   }
   switch (normalizedFontSize) {
@@ -73,13 +68,11 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
     case CrossPointSettings::LARGE:
     default:
       return CHAREINK_17_FONT_ID;
-    }
+  }
 }
 }  // namespace
 
-bool ReaderSettingsActivity::isTxtContext() const {
-  return bookCachePath.find("/txt_") != std::string::npos;
-}
+bool ReaderSettingsActivity::isTxtContext() const { return bookCachePath.find("/txt_") != std::string::npos; }
 
 void ReaderSettingsActivity::persistSettings(const char* context) {
   if (bookCachePath.empty()) {
@@ -99,8 +92,7 @@ void ReaderSettingsActivity::persistSettings(const char* context) {
   dirty = true;
 }
 
-const std::vector<ReaderSettingInfo>* ReaderSettingsActivity::settingsForCategory(
-    const int categoryIndex) const {
+const std::vector<ReaderSettingInfo>* ReaderSettingsActivity::settingsForCategory(const int categoryIndex) const {
   switch (categoryIndex) {
     case 0:
       return &readerSettings;
@@ -110,17 +102,14 @@ const std::vector<ReaderSettingInfo>* ReaderSettingsActivity::settingsForCategor
   }
 }
 
-int ReaderSettingsActivity::findNextEditableRow(const int startIndex,
-                                                const int direction) const {
+int ReaderSettingsActivity::findNextEditableRow(const int startIndex, const int direction) const {
   if (flatRows.empty()) {
     return 0;
   }
   int idx = startIndex;
   for (size_t i = 0; i < flatRows.size(); i++) {
-    idx = (direction > 0)
-              ? ButtonNavigator::nextIndex(idx, static_cast<int>(flatRows.size()))
-              : ButtonNavigator::previousIndex(
-                    idx, static_cast<int>(flatRows.size()));
+    idx = (direction > 0) ? ButtonNavigator::nextIndex(idx, static_cast<int>(flatRows.size()))
+                          : ButtonNavigator::previousIndex(idx, static_cast<int>(flatRows.size()));
     if (!flatRows[idx].isHeader) {
       return idx;
     }
@@ -128,8 +117,7 @@ int ReaderSettingsActivity::findNextEditableRow(const int startIndex,
   return startIndex;
 }
 
-bool ReaderSettingsActivity::isPopupValueSetting(
-    const ReaderSettingInfo& setting) const {
+bool ReaderSettingsActivity::isPopupValueSetting(const ReaderSettingInfo& setting) const {
   if (setting.type != SettingType::VALUE || setting.valuePtr == nullptr) {
     return false;
   }
@@ -141,40 +129,35 @@ bool ReaderSettingsActivity::isPopupValueSetting(
 
 void ReaderSettingsActivity::startFontSizeEdit() {
   fontSizeEditMode = true;
-  fontSizeEditDraftIndex = CrossPointSettings::fontSizeToDisplayIndex(
-      SETTINGS.fontFamily, SETTINGS.fontSize);
+  fontSizeEditDraftIndex = CrossPointSettings::fontSizeToDisplayIndex(SETTINGS.fontFamily, SETTINGS.fontSize);
 }
 
 void ReaderSettingsActivity::adjustFontSizeEdit(const int delta) {
   const int optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
   const int next = static_cast<int>(fontSizeEditDraftIndex) + delta;
-  fontSizeEditDraftIndex = static_cast<uint8_t>(
-      std::clamp(next, 0, std::max(0, optionCount - 1)));
+  fontSizeEditDraftIndex = static_cast<uint8_t>(std::clamp(next, 0, std::max(0, optionCount - 1)));
 }
 
 void ReaderSettingsActivity::applyFontSizeEdit() {
-  SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(
-      SETTINGS.fontFamily, fontSizeEditDraftIndex);
+  SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
   fontSizeEditMode = false;
   persistSettings("reader settings font size");
 }
 
-void ReaderSettingsActivity::startValueEdit(const ReaderSettingInfo& setting,
-                                            const int categoryIndex,
+void ReaderSettingsActivity::startValueEdit(const ReaderSettingInfo& setting, const int categoryIndex,
                                             const int settingIndex) {
   valueEditMode = true;
   valueEditCategoryIndex = categoryIndex;
   valueEditSettingIndex = settingIndex;
   valueEditMin = setting.valueRange.min;
   valueEditMax = setting.valueRange.max;
-  valueEditDraft =
-      std::clamp(SETTINGS.*(setting.valuePtr), valueEditMin, valueEditMax);
+  valueEditDraft = std::clamp(SETTINGS.*(setting.valuePtr), valueEditMin, valueEditMax);
 }
 
 void ReaderSettingsActivity::adjustValueEdit(const int delta) {
   const int next = static_cast<int>(valueEditDraft) + delta;
-  valueEditDraft = static_cast<uint8_t>(std::clamp(
-      next, static_cast<int>(valueEditMin), static_cast<int>(valueEditMax)));
+  valueEditDraft =
+      static_cast<uint8_t>(std::clamp(next, static_cast<int>(valueEditMin), static_cast<int>(valueEditMax)));
 }
 
 void ReaderSettingsActivity::applyValueEdit() {
@@ -182,8 +165,7 @@ void ReaderSettingsActivity::applyValueEdit() {
     return;
   }
   const auto* settings = settingsForCategory(valueEditCategoryIndex);
-  if (!settings || valueEditSettingIndex < 0 ||
-      valueEditSettingIndex >= static_cast<int>(settings->size())) {
+  if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
     valueEditMode = false;
     return;
   }
@@ -191,8 +173,7 @@ void ReaderSettingsActivity::applyValueEdit() {
   const auto& setting = (*settings)[valueEditSettingIndex];
   SETTINGS.*(setting.valuePtr) = valueEditDraft;
   // In uniform mode, sync all margin fields when any margin is changed
-  if (SETTINGS.uniformMargins &&
-      setting.valuePtr == &CrossPointSettings::screenMarginHorizontal) {
+  if (SETTINGS.uniformMargins && setting.valuePtr == &CrossPointSettings::screenMarginHorizontal) {
     SETTINGS.screenMarginTop = valueEditDraft;
     SETTINGS.screenMarginBottom = valueEditDraft;
   }
@@ -205,8 +186,7 @@ std::string ReaderSettingsActivity::currentValueEditText() const {
     return {};
   }
   const auto* settings = settingsForCategory(valueEditCategoryIndex);
-  if (!settings || valueEditSettingIndex < 0 ||
-      valueEditSettingIndex >= static_cast<int>(settings->size())) {
+  if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
     return {};
   }
 
@@ -220,9 +200,15 @@ std::string ReaderSettingsActivity::currentValueEditText() const {
 
 void ReaderSettingsActivity::buildSettingsList() {
   // Free old memory fully before allocating new entries.
-  { std::vector<ReaderSettingInfo>().swap(readerSettings); }
-  { std::vector<ReaderSettingInfo>().swap(statusBarSettings); }
-  { std::vector<FlatSettingRow>().swap(flatRows); }
+  {
+    std::vector<ReaderSettingInfo>().swap(readerSettings);
+  }
+  {
+    std::vector<ReaderSettingInfo>().swap(statusBarSettings);
+  }
+  {
+    std::vector<FlatSettingRow>().swap(flatRows);
+  }
 
   // Pre-allocate to avoid repeated reallocations (critical on low-heap devices)
   readerSettings.reserve(15);
@@ -233,8 +219,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   // --- Helper: conditionally push a reader setting, applying filters ---
   auto pushReader = [&](ReaderSettingInfo&& s) {
     // Skip entries never shown in the in-reader settings screen
-    if (s.valuePtr == &CrossPointSettings::orientation ||
-        s.valuePtr == &CrossPointSettings::debugBorders ||
+    if (s.valuePtr == &CrossPointSettings::orientation || s.valuePtr == &CrossPointSettings::debugBorders ||
         s.valuePtr == &CrossPointSettings::textAntiAliasing) {
       return;
     }
@@ -244,14 +229,12 @@ void ReaderSettingsActivity::buildSettingsList() {
     // Filter margin entries based on dynamic/uniform/separate mode
     if (SETTINGS.dynamicMargins) {
       // When dynamic margins is on, hide all manual horizontal margin controls
-      if (s.nameId == StrId::STR_UNIFORM_MARGINS ||
-          s.nameId == StrId::STR_SCREEN_MARGIN ||
+      if (s.nameId == StrId::STR_UNIFORM_MARGINS || s.nameId == StrId::STR_SCREEN_MARGIN ||
           s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL) {
         return;
       }
     } else if (SETTINGS.uniformMargins) {
-      if (s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL ||
-          s.nameId == StrId::STR_SCREEN_MARGIN_TOP ||
+      if (s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL || s.nameId == StrId::STR_SCREEN_MARGIN_TOP ||
           s.nameId == StrId::STR_SCREEN_MARGIN_BOTTOM) {
         return;
       }
@@ -272,86 +255,113 @@ void ReaderSettingsActivity::buildSettingsList() {
 
   // --- Build reader settings directly (no intermediate vector) ---
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN}));
+                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
-      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
+                                     {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));
-  pushReader(ReaderSettingInfo::Enum(StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins,
+  pushReader(ReaderSettingInfo::Enum(
+      StrId::STR_DYNAMIC_MARGINS, &CrossPointSettings::dynamicMargins,
       {StrId::STR_DYNAMIC_MARGINS_OFF, StrId::STR_DYNAMIC_MARGINS_10, StrId::STR_DYNAMIC_MARGINS_20}));
   pushReader(ReaderSettingInfo::Toggle(StrId::STR_UNIFORM_MARGINS, &CrossPointSettings::uniformMargins));
-  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
-  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_HORIZONTAL, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
+  pushReader(
+      ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMarginHorizontal, {0, 55, 5}));
+  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_HORIZONTAL, &CrossPointSettings::screenMarginHorizontal,
+                                      {0, 55, 5}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_TOP, &CrossPointSettings::screenMarginTop, {0, 55, 5}));
-  pushReader(ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_BOTTOM, &CrossPointSettings::screenMarginBottom, {0, 55, 5}));
-  pushReader(ReaderSettingInfo::Enum(StrId::STR_PARA_ALIGNMENT, &CrossPointSettings::paragraphAlignment,
+  pushReader(
+      ReaderSettingInfo::Value(StrId::STR_SCREEN_MARGIN_BOTTOM, &CrossPointSettings::screenMarginBottom, {0, 55, 5}));
+  pushReader(ReaderSettingInfo::Enum(
+      StrId::STR_PARA_ALIGNMENT, &CrossPointSettings::paragraphAlignment,
       {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::firstLineIndentMode,
-      {StrId::STR_BOOK_STYLE_OPT, StrId::STR_NONE_OPT, StrId::STR_INDENT_SMALL, StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE}));
+                                     {StrId::STR_BOOK_STYLE_OPT, StrId::STR_NONE_OPT, StrId::STR_INDENT_SMALL,
+                                      StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_READER_STYLE_MODE, &CrossPointSettings::readerStyleMode,
-      {StrId::STR_READER_STYLE_USER, StrId::STR_READER_STYLE_HYBRID}));
+                                     {StrId::STR_READER_STYLE_USER, StrId::STR_READER_STYLE_HYBRID}));
   // Highlight mode removed — word-based selection is the only mode
-  pushReader(ReaderSettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
+  pushReader(ReaderSettingInfo::Enum(
+      StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
       {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacingPercent,
-      {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80, StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240}));
-  pushReader(ReaderSettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
+                                     {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80,
+                                      StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240}));
+  pushReader(ReaderSettingInfo::Enum(
+      StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
       {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25, StrId::STR_PARA_SPACING_33}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-      {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
+                                     {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
   if (!txt) {
-    readerSettings.push_back(ReaderSettingInfo::Toggle(
-        StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled));
+    readerSettings.push_back(
+        ReaderSettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled));
   }
 
   // --- Build status bar settings directly ---
   statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BAR, &CrossPointSettings::statusBarEnabled));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_FONT_SIZE, &CrossPointSettings::statusBarFontSize,
-      {StrId::STR_STATUS_FONT_MIN, StrId::STR_STATUS_FONT_MAX}));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
-      {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BATTERY, &CrossPointSettings::statusBarShowBattery));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BATTERY_POSITION, &CrossPointSettings::statusBarBatteryPosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_FONT_SIZE,
+                                                      &CrossPointSettings::statusBarFontSize,
+                                                      {StrId::STR_STATUS_FONT_MIN, StrId::STR_STATUS_FONT_MAX}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
+                              {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_BATTERY, &CrossPointSettings::statusBarShowBattery));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_BATTERY_POSITION, &CrossPointSettings::statusBarBatteryPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_PAGE_COUNTER, &CrossPointSettings::statusBarShowPageCounter));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_MODE, &CrossPointSettings::statusBarPageCounterMode,
-      {StrId::STR_STATUS_PAGE_MODE_CURRENT_TOTAL, StrId::STR_STATUS_PAGE_MODE_LEFT_CHAPTER}));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarPageCounterPosition,
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_PAGE_COUNTER, &CrossPointSettings::statusBarShowPageCounter));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_PAGE_COUNTER_MODE, &CrossPointSettings::statusBarPageCounterMode,
+                              {StrId::STR_STATUS_PAGE_MODE_CURRENT_TOTAL, StrId::STR_STATUS_PAGE_MODE_LEFT_CHAPTER}));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarPageCounterPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PERCENT, &CrossPointSettings::statusBarShowBookPercentage));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_PERCENT_POSITION, &CrossPointSettings::statusBarBookPercentagePosition,
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PERCENT, &CrossPointSettings::statusBarShowBookPercentage));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_BOOK_PERCENT_POSITION, &CrossPointSettings::statusBarBookPercentagePosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PERCENT, &CrossPointSettings::statusBarShowChapterPercentage));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_PERCENT_POSITION, &CrossPointSettings::statusBarChapterPercentagePosition,
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PERCENT,
+                                                        &CrossPointSettings::statusBarShowChapterPercentage));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_CHAPTER_PERCENT_POSITION, &CrossPointSettings::statusBarChapterPercentagePosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_BAR, &CrossPointSettings::statusBarShowBookBar));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_BAR_POSITION, &CrossPointSettings::statusBarBookBarPosition,
-      {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_BAR, &CrossPointSettings::statusBarShowChapterBar));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_BAR_POSITION, &CrossPointSettings::statusBarChapterBarPosition,
-      {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_TITLE, &CrossPointSettings::statusBarShowChapterTitle));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
-      {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION, &CrossPointSettings::statusBarNoTitleTruncation));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER, &CrossPointSettings::statusBarShowBookPageCounter));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_BAR, &CrossPointSettings::statusBarShowBookBar));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_BAR_POSITION, &CrossPointSettings::statusBarBookBarPosition,
+                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_BAR, &CrossPointSettings::statusBarShowChapterBar));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_BAR_POSITION, &CrossPointSettings::statusBarChapterBarPosition,
+                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_TITLE, &CrossPointSettings::statusBarShowChapterTitle));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
+                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
+                                                        &CrossPointSettings::statusBarNoTitleTruncation));
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER,
+                                                        &CrossPointSettings::statusBarShowBookPageCounter));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
 
   // --- Build flat row index ---
   flatRows.reserve(2 + readerSettings.size() + statusBarSettings.size());
   for (int categoryIndex = 0; categoryIndex < 2; categoryIndex++) {
-    flatRows.push_back(
-        FlatSettingRow{.isHeader = true, .categoryIndex = categoryIndex});
+    flatRows.push_back(FlatSettingRow{.isHeader = true, .categoryIndex = categoryIndex});
     const auto* settings = settingsForCategory(categoryIndex);
     for (size_t i = 0; i < settings->size(); i++) {
-      flatRows.push_back(FlatSettingRow{.isHeader = false,
-                                        .categoryIndex = categoryIndex,
-                                        .settingIndex = static_cast<int>(i)});
+      flatRows.push_back(
+          FlatSettingRow{.isHeader = false, .categoryIndex = categoryIndex, .settingIndex = static_cast<int>(i)});
     }
   }
 }
@@ -379,8 +389,7 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
   }
 
   const auto* settings = settingsForCategory(row.categoryIndex);
-  if (!settings || row.settingIndex < 0 ||
-      row.settingIndex >= static_cast<int>(settings->size())) {
+  if (!settings || row.settingIndex < 0 || row.settingIndex >= static_cast<int>(settings->size())) {
     return;
   }
 
@@ -394,35 +403,28 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
         SETTINGS.screenMarginBottom = SETTINGS.screenMarginHorizontal;
       }
       buildSettingsList();
-      selectedRowIndex =
-          std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     }
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     if (setting.valuePtr == &CrossPointSettings::fontSize) {
       startFontSizeEdit();
       return;
     } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-      const uint8_t currentIndex =
-          CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
+      const uint8_t currentIndex = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
       SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(
           (currentIndex + 1) % static_cast<uint8_t>(setting.enumValues.size()));
-      SETTINGS.fontFamily =
-          CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
-      SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(
-          SETTINGS.fontFamily, SETTINGS.fontSize);
+      SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
+      SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
       SETTINGS.lineSpacingPercent = 90;  // Reset to default on font change
       buildSettingsList();
-      selectedRowIndex =
-          std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {
       const int currentValue = SETTINGS.*(setting.valuePtr);
-      SETTINGS.*(setting.valuePtr) =
-          (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+      SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
     }
     if (setting.valuePtr == &CrossPointSettings::dynamicMargins) {
       buildSettingsList();
-      selectedRowIndex =
-          std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     }
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
     if (isPopupValueSetting(setting)) {
@@ -496,22 +498,18 @@ void ReaderSettingsActivity::loop() {
     });
     buttonNavigator.onNextContinuous([this] {
       const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 ||
-          valueEditSettingIndex >= static_cast<int>(settings->size())) {
+      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
         return;
       }
-      adjustValueEdit(+getValueEditHoldStep(mappedInput,
-                                            (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(+getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
       requestUpdate();
     });
     buttonNavigator.onPreviousContinuous([this] {
       const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 ||
-          valueEditSettingIndex >= static_cast<int>(settings->size())) {
+      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
         return;
       }
-      adjustValueEdit(-getValueEditHoldStep(mappedInput,
-                                            (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(-getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
       requestUpdate();
     });
     return;
@@ -553,30 +551,24 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const auto metrics = BaseMetrics::values;
 
-  renderer.drawCenteredText(UI_12_FONT_ID, metrics.topPadding + 5,
-                            tr(STR_READER_SETTINGS), true,
+  renderer.drawCenteredText(UI_12_FONT_ID, metrics.topPadding + 5, tr(STR_READER_SETTINGS), true,
                             EpdFontFamily::REGULAR);
 
   const int contentY = metrics.topPadding + metrics.headerHeight;
-  const int contentHeight =
-      pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
+  const int contentHeight = pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
   const int rowHeight = metrics.listRowHeight;
   const int pageItems = std::max(1, contentHeight / rowHeight);
   const int pageStartIndex = (selectedRowIndex / pageItems) * pageItems;
 
-  for (int i = pageStartIndex;
-       i < static_cast<int>(flatRows.size()) && i < pageStartIndex + pageItems;
-       i++) {
+  for (int i = pageStartIndex; i < static_cast<int>(flatRows.size()) && i < pageStartIndex + pageItems; i++) {
     const int rowY = contentY + (i - pageStartIndex) * rowHeight;
     const auto& row = flatRows[i];
 
     if (row.isHeader) {
       renderer.fillRect(0, rowY, pageWidth, rowHeight, true);
       const char* label = I18N.get(kCategoryNames[row.categoryIndex]);
-      const int textW =
-          renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, (pageWidth - textW) / 2, rowY, label,
-                        false, EpdFontFamily::REGULAR);
+      const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
+      renderer.drawText(UI_10_FONT_ID, (pageWidth - textW) / 2, rowY, label, false, EpdFontFamily::REGULAR);
       continue;
     }
 
@@ -591,30 +583,24 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
 
     if (isSelected) {
       const int nameWidth = renderer.getTextWidth(UI_10_FONT_ID, settingName);
-      renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY,
-                        nameWidth + kChipPad * 2, chipH, true);
+      renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY, nameWidth + kChipPad * 2, chipH, true);
     }
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, rowY,
-                      settingName, !isSelected);
+    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, rowY, settingName, !isSelected);
 
     std::string valueText;
     if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
-      valueText =
-          (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
+      valueText = (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
     } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
       if (setting.valuePtr == &CrossPointSettings::fontSize) {
         valueText = fontSizeValueLabel(SETTINGS.fontFamily, SETTINGS.fontSize);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-        valueText = I18N.get(
-            setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(
-                SETTINGS.fontFamily)]);
+        valueText = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
       } else {
         valueText = I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
       }
     } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
       const uint8_t valueToShow =
-          (valueEditMode && row.categoryIndex == valueEditCategoryIndex &&
-           row.settingIndex == valueEditSettingIndex)
+          (valueEditMode && row.categoryIndex == valueEditCategoryIndex && row.settingIndex == valueEditSettingIndex)
               ? valueEditDraft
               : SETTINGS.*(setting.valuePtr);
       valueText = std::to_string(valueToShow);
@@ -629,17 +615,13 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
       if (isSelected) {
         renderer.fillRect(valueX - kChipPad, chipY, valueW + kChipPad * 2, chipH, true);
       }
-      renderer.drawText(UI_10_FONT_ID, valueX, rowY,
-                        valueText.c_str(), !isSelected);
+      renderer.drawText(UI_10_FONT_ID, valueX, rowY, valueText.c_str(), !isSelected);
     }
   }
 
-  const char* confirmLabel =
-      (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM) : tr(STR_TOGGLE);
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel,
-                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                      labels.btn4);
+  const char* confirmLabel = (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM) : tr(STR_TOGGLE);
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (fontSizeEditMode) {
     // Show all available font sizes in a row: e.g. "14  15  [16]  17  18"
@@ -671,8 +653,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
 
     renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);
     renderer.fillRect(popupX, popupY, popupW, popupH, false);
-    renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2,
-                      popupY + 6, title, true);
+    renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2, popupY + 6, title, true);
 
     // Draw size options in a row, selected one highlighted
     int curX = popupX + (popupW - totalItemsW) / 2;
@@ -685,19 +666,16 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
       const bool isSelected = (i == static_cast<int>(fontSizeEditDraftIndex));
 
       if (isSelected) {
-        renderer.fillRect(curX, itemY - kItemPadV, chipW,
-                          textH + kItemPadV * 2, true);
+        renderer.fillRect(curX, itemY - kItemPadV, chipW, textH + kItemPadV * 2, true);
       }
-      renderer.drawText(UI_12_FONT_ID, curX + kItemPadH, itemY,
-                        label.c_str(), !isSelected);
+      renderer.drawText(UI_12_FONT_ID, curX + kItemPadH, itemY, label.c_str(), !isSelected);
       curX += chipW + kItemGap;
     }
   }
 
   if (valueEditMode) {
     const auto* settings = settingsForCategory(valueEditCategoryIndex);
-    if (settings && valueEditSettingIndex >= 0 &&
-        valueEditSettingIndex < static_cast<int>(settings->size())) {
+    if (settings && valueEditSettingIndex >= 0 && valueEditSettingIndex < static_cast<int>(settings->size())) {
       const auto& setting = (*settings)[valueEditSettingIndex];
       const char* settingLabel = I18N.get(setting.nameId);
       const std::string valueText = currentValueEditText();
@@ -716,26 +694,19 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
       renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);
       renderer.fillRect(popupX, popupY, popupW, popupH, false);
 
-      renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2,
-                        popupY + 8, settingLabel, true);
+      renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2, popupY + 8, settingLabel, true);
 
-      renderer.drawText(UI_12_FONT_ID, popupX + (popupW - valueW) / 2,
-                        popupY + 30, valueText.c_str(), true);
+      renderer.drawText(UI_12_FONT_ID, popupX + (popupW - valueW) / 2, popupY + 30, valueText.c_str(), true);
 
       const int barX = popupX + kPopupPad;
       const int barY = popupY + popupH - 22;
       const int barW = popupW - kPopupPad * 2;
       const int barH = 8;
       renderer.drawRect(barX, barY, barW, barH, true);
-      const int range =
-          std::max(1, static_cast<int>(valueEditMax) - static_cast<int>(valueEditMin));
+      const int range = std::max(1, static_cast<int>(valueEditMax) - static_cast<int>(valueEditMin));
       const int filledW =
-          2 + ((static_cast<int>(valueEditDraft) -
-                static_cast<int>(valueEditMin)) *
-               std::max(1, barW - 4)) /
-                  range;
-      renderer.fillRect(barX + 2, barY + 2, filledW, std::max(1, barH - 4),
-                        true);
+          2 + ((static_cast<int>(valueEditDraft) - static_cast<int>(valueEditMin)) * std::max(1, barW - 4)) / range;
+      renderer.fillRect(barX + 2, barY + 2, filledW, std::max(1, barH - 4), true);
     }
   }
 

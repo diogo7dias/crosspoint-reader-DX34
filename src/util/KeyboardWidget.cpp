@@ -11,18 +11,24 @@ const char* const KeyboardWidget::keyboard[NUM_ROWS] = {
     "^  _____<OK"  // ^ = shift, _ = space, < = backspace, OK = done
 };
 
-const char* const KeyboardWidget::keyboardShift[NUM_ROWS] = {
-    "~!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?", "SPECIAL ROW"};
+const char* const KeyboardWidget::keyboardShift[NUM_ROWS] = {"~!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"",
+                                                             "ZXCVBNM<>?", "SPECIAL ROW"};
 
 // ─── Helpers ────────────────────────────────────────────────────
 int KeyboardWidget::getRowLength(const int row) const {
   switch (row) {
-    case 0: return 13;
-    case 1: return 13;
-    case 2: return 11;
-    case 3: return 10;
-    case 4: return 10;
-    default: return 0;
+    case 0:
+      return 13;
+    case 1:
+      return 13;
+    case 2:
+      return 11;
+    case 3:
+      return 10;
+    case 4:
+      return 10;
+    default:
+      return 0;
   }
 }
 

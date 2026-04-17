@@ -27,8 +27,7 @@ void ActivityWithSubactivity::exitActivity() {
     // subactivity).  Must happen after subActivity is destroyed so only one
     // render task is live at a time.
     if (!renderTaskHandle) {
-      xTaskCreate(&renderTaskTrampoline, name.c_str(), 8192, this, 1,
-                  &renderTaskHandle);
+      xTaskCreate(&renderTaskTrampoline, name.c_str(), 8192, this, 1, &renderTaskHandle);
     }
     // Suppress stale button events so that the press/release that closed the
     // subactivity (e.g. Confirm on a dialog) doesn't leak into the parent's

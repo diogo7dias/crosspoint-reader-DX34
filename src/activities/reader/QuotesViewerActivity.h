@@ -16,13 +16,9 @@ class QuotesViewerActivity final : public ActivityWithSubactivity {
     std::string text;
   };
 
-  explicit QuotesViewerActivity(GfxRenderer& renderer,
-                                MappedInputManager& mappedInput,
-                                const std::string& quotesFilePath,
-                                const std::function<void()>& onGoBack)
-      : ActivityWithSubactivity("QuotesViewer", renderer, mappedInput),
-        filePath(quotesFilePath),
-        onGoBack(onGoBack) {}
+  explicit QuotesViewerActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                const std::string& quotesFilePath, const std::function<void()>& onGoBack)
+      : ActivityWithSubactivity("QuotesViewer", renderer, mappedInput), filePath(quotesFilePath), onGoBack(onGoBack) {}
 
   void onEnter() override;
   void onExit() override;

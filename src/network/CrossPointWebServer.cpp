@@ -68,12 +68,10 @@ std::string bookCachePath(const std::string& filePath) {
   if (StringUtils::checkFileExtension(filePath, ".epub")) {
     return BookFingerprint::cacheDirName("epub", filePath, Paths::kDataDir);
   }
-  if (StringUtils::checkFileExtension(filePath, ".xtc") ||
-      StringUtils::checkFileExtension(filePath, ".xtch")) {
+  if (StringUtils::checkFileExtension(filePath, ".xtc") || StringUtils::checkFileExtension(filePath, ".xtch")) {
     return BookFingerprint::cacheDirName("xtc", filePath, Paths::kDataDir);
   }
-  if (StringUtils::checkFileExtension(filePath, ".txt") ||
-      StringUtils::checkFileExtension(filePath, ".md")) {
+  if (StringUtils::checkFileExtension(filePath, ".txt") || StringUtils::checkFileExtension(filePath, ".md")) {
     return BookFingerprint::cacheDirName("txt", filePath, Paths::kDataDir);
   }
   return {};
@@ -437,11 +435,9 @@ void CrossPointWebServer::handleClient() {
           const char* hostname = WiFi.getHostname();
           if (!hostname || hostname[0] == '\0') hostname = "crosspoint";
           char msg[128];
-          const int msgLen = snprintf(msg, sizeof(msg),
-                                      "crosspoint (on %s);%d", hostname, wsPort);
+          const int msgLen = snprintf(msg, sizeof(msg), "crosspoint (on %s);%d", hostname, wsPort);
           udp.beginPacket(udp.remoteIP(), udp.remotePort());
-          udp.write(reinterpret_cast<const uint8_t*>(msg),
-                    static_cast<size_t>(msgLen > 0 ? msgLen : 0));
+          udp.write(reinterpret_cast<const uint8_t*>(msg), static_cast<size_t>(msgLen > 0 ? msgLen : 0));
           udp.endPacket();
         }
       }
@@ -1336,9 +1332,7 @@ void CrossPointWebServer::handleGetSettings() const {
         doc["type"] = "enum";
         if (s.valuePtr) {
           if (s.valuePtr == &CrossPointSettings::fontFamily) {
-            doc["value"] = static_cast<int>(
-                CrossPointSettings::fontFamilyToDisplayIndex(
-                    SETTINGS.fontFamily));
+            doc["value"] = static_cast<int>(CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily));
           } else {
             doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
           }
@@ -1347,18 +1341,13 @@ void CrossPointWebServer::handleGetSettings() const {
         }
         JsonArray options = doc["options"].to<JsonArray>();
         if (s.valuePtr == &CrossPointSettings::fontSize) {
-          const uint8_t optionCount =
-              CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
+          const uint8_t optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
           for (uint8_t i = 0; i < optionCount; ++i) {
-            const uint8_t sizeValue =
-                CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily,
-                                                           i);
-            options.add(String(CrossPointSettings::fontSizeToPointSize(
-                SETTINGS.fontFamily, sizeValue)));
+            const uint8_t sizeValue = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, i);
+            options.add(String(CrossPointSettings::fontSizeToPointSize(SETTINGS.fontFamily, sizeValue)));
           }
-          doc["value"] = static_cast<int>(
-              CrossPointSettings::fontSizeToDisplayIndex(SETTINGS.fontFamily,
-                                                         SETTINGS.fontSize));
+          doc["value"] =
+              static_cast<int>(CrossPointSettings::fontSizeToDisplayIndex(SETTINGS.fontFamily, SETTINGS.fontSize));
         } else {
           for (const auto& opt : s.enumValues) {
             options.add(I18N.get(opt));
@@ -1440,24 +1429,18 @@ void CrossPointWebServer::handlePostSettings() {
       }
       case SettingType::ENUM: {
         const int val = doc[s.key].as<int>();
-        const int maxEnumValue =
-            (s.valuePtr == &CrossPointSettings::fontSize)
-                ? static_cast<int>(CrossPointSettings::fontSizeOptionCount(
-                      SETTINGS.fontFamily))
-                : static_cast<int>(s.enumValues.size());
+        const int maxEnumValue = (s.valuePtr == &CrossPointSettings::fontSize)
+                                     ? static_cast<int>(CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily))
+                                     : static_cast<int>(s.enumValues.size());
         if (val >= 0 && val < maxEnumValue) {
           if (s.valuePtr) {
             if (s.valuePtr == &CrossPointSettings::fontSize) {
               SETTINGS.fontSize =
-                  CrossPointSettings::displayIndexToFontSize(
-                      SETTINGS.fontFamily, static_cast<uint8_t>(val));
+                  CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, static_cast<uint8_t>(val));
             } else if (s.valuePtr == &CrossPointSettings::fontFamily) {
-              SETTINGS.fontFamily =
-                  CrossPointSettings::displayIndexToFontFamily(
-                      static_cast<uint8_t>(val));
+              SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(val));
               SETTINGS.fontSize =
-                  CrossPointSettings::normalizeFontSizeForFamily(
-                      SETTINGS.fontFamily, SETTINGS.fontSize);
+                  CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
               SETTINGS.lineSpacingPercent = 90;  // Reset to default on font change
             } else {
               SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
@@ -1640,8 +1623,7 @@ void CrossPointWebServer::handleWsUploadStart(uint8_t num, const String& msg) {
   if (!filePath.endsWith("/")) filePath += "/";
   filePath += wsUploadFileName;
 
-  LOG_DBG("WS", "Starting upload: %s (%d bytes) to %s", wsUploadFileName.c_str(), wsUploadSize,
-          filePath.c_str());
+  LOG_DBG("WS", "Starting upload: %s (%d bytes) to %s", wsUploadFileName.c_str(), wsUploadSize, filePath.c_str());
 
   // Check if file exists and remove it
   esp_task_wdt_reset();

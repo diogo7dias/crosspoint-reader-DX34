@@ -44,8 +44,7 @@ bool isEpubFile(const std::string& name) {
 }  // namespace
 
 QRShareActivity::QRShareActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                 const std::function<void()>& onGoBack,
-                                 std::string filePath)
+                                 const std::function<void()>& onGoBack, std::string filePath)
     : ActivityWithSubactivity("QRShare", renderer, mappedInput),
       onGoBack(onGoBack),
       filePath(std::move(filePath)),

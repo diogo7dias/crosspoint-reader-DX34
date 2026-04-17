@@ -4,9 +4,9 @@
 #include <memory>
 #include <string>
 
+#include "HalDisplay.h"
 #include "NetworkModeSelectionActivity.h"
 #include "activities/ActivityWithSubactivity.h"
-#include "HalDisplay.h"
 #include "network/CrossPointWebServer.h"
 
 // Web server activity states

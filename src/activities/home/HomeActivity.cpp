@@ -1,6 +1,4 @@
 #include "HomeActivity.h"
-#include "activities/boot_sleep/SleepActivity.h"
-#include "activities/util/ConfirmDialogActivity.h"
 
 #include <Bitmap.h>
 #include <Epub.h>
@@ -21,6 +19,8 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
+#include "activities/boot_sleep/SleepActivity.h"
+#include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
@@ -29,7 +29,7 @@
 #include "util/StringUtils.h"
 
 namespace {
-constexpr const char *seeMoreLabel = "See all...";
+constexpr const char* seeMoreLabel = "See all...";
 
 enum class HomeMenuAction : uint8_t {
   BrowseFiles,
@@ -39,7 +39,7 @@ enum class HomeMenuAction : uint8_t {
 };
 
 struct HomeMenuItem {
-  const char *label;
+  const char* label;
   HomeMenuAction action;
   bool emphasized;
 };
@@ -48,46 +48,37 @@ std::string getHomeHeaderVersionLabel() {
   const std::string rawVersion = CROSSPOINT_VERSION;
   const size_t dashPos = rawVersion.find_last_of('-');
   const std::string semver =
-      (dashPos != std::string::npos && dashPos + 1 < rawVersion.size())
-          ? rawVersion.substr(dashPos + 1)
-          : rawVersion;
+      (dashPos != std::string::npos && dashPos + 1 < rawVersion.size()) ? rawVersion.substr(dashPos + 1) : rawVersion;
   return "DX34 [" + semver + "]";
 }
 
 std::vector<HomeMenuItem> buildHomeMenuItems(bool hasOpdsUrl) {
   std::vector<HomeMenuItem> items;
   items.reserve(hasOpdsUrl ? 4 : 3);
-  items.push_back(
-      {tr(STR_BROWSE_FILES), HomeMenuAction::BrowseFiles, false});
+  items.push_back({tr(STR_BROWSE_FILES), HomeMenuAction::BrowseFiles, false});
   if (hasOpdsUrl) {
-    items.push_back(
-        {tr(STR_OPDS_BROWSER), HomeMenuAction::OpdsBrowser, false});
+    items.push_back({tr(STR_OPDS_BROWSER), HomeMenuAction::OpdsBrowser, false});
   }
-  items.push_back(
-      {tr(STR_FILE_TRANSFER), HomeMenuAction::FileTransfer, false});
+  items.push_back({tr(STR_FILE_TRANSFER), HomeMenuAction::FileTransfer, false});
   items.push_back({tr(STR_SETTINGS_TITLE), HomeMenuAction::Settings, false});
   return items;
 }
 
 // Use shared DrawUtils::drawDottedRect instead of local copy
 
-} // namespace
+}  // namespace
 
 int HomeActivity::getMenuItemCount() const {
-  return getRecentSlotCount() + 1 +
-         static_cast<int>(buildHomeMenuItems(hasOpdsUrl).size());
+  return getRecentSlotCount() + 1 + static_cast<int>(buildHomeMenuItems(hasOpdsUrl).size());
 }
 
-int HomeActivity::getRecentSlotCount() const {
-  return std::max(1, static_cast<int>(recentBooks.size()));
-}
+int HomeActivity::getRecentSlotCount() const { return std::max(1, static_cast<int>(recentBooks.size())); }
 
 void HomeActivity::refreshSleepFavoriteWarning() {
   // Use the count cached by trimSleepFolderToLimit() (called in onGoHome)
   // instead of re-scanning the /sleep directory.
   protectedSleepFavoriteCount = SleepActivity::cachedSleepFavoriteCount();
-  sleepFavoritesFull =
-      protectedSleepFavoriteCount >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
+  sleepFavoritesFull = protectedSleepFavoriteCount >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
 }
 
 void HomeActivity::loadRecentBooks(int maxBooks) {
@@ -96,7 +87,7 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
     return;
   }
 
-  const auto &books = RECENT_BOOKS.getBooks();
+  const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(maxBooks);
   size_t eligibleCount = 0;
   const size_t maxVisibleBooks = static_cast<size_t>(maxBooks);
@@ -104,14 +95,13 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
   std::unordered_set<std::string> seenPaths;
   seenPaths.reserve(books.size());
 
-  for (const RecentBook &book : books) {
+  for (const RecentBook& book : books) {
     if (!seenPaths.insert(book.path).second) {
       continue;
     }
 
     // Hide QUOTES sidecar files from the recents list
-    if (book.path.size() >= 11 &&
-        book.path.compare(book.path.size() - 11, 11, "_QUOTES.txt") == 0) {
+    if (book.path.size() >= 11 && book.path.compare(book.path.size() - 11, 11, "_QUOTES.txt") == 0) {
       continue;
     }
 
@@ -134,9 +124,7 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
     RecentBook entry = book;
     if (isClassic) {
       const auto percent = BookProgress::getPercent(book.path);
-      entry.title =
-          "[" + (percent.has_value() ? std::to_string(percent.value()) : "0") +
-          "%]  " + book.title;
+      entry.title = "[" + (percent.has_value() ? std::to_string(percent.value()) : "0") + "%]  " + book.title;
       // Classic mode should never attempt to load/render cover images.
       entry.coverBmpPath.clear();
     }
@@ -178,9 +166,7 @@ void HomeActivity::onEnter() {
   requestUpdate();
 }
 
-void HomeActivity::onExit() {
-  Activity::onExit();
-}
+void HomeActivity::onExit() { Activity::onExit(); }
 
 void HomeActivity::loop() {
   // Let sub-activity (e.g. confirm dialog) handle input when active
@@ -236,14 +222,13 @@ void HomeActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     if (selectorIndex >= 1 && selectorIndex <= static_cast<int>(recentBooks.size())) {
       const int bookIndex = selectorIndex - 1;
-      const std::string &selectedPath = recentBooks[bookIndex].path;
+      const std::string& selectedPath = recentBooks[bookIndex].path;
       // Only for actual books, not "See all..."
       if (!selectedPath.empty()) {
         const std::string title = recentBooks[bookIndex].title;
         const std::string path = selectedPath;
         enterNewActivity(new ConfirmDialogActivity(
-            renderer, mappedInput,
-            std::string(tr(STR_REMOVE_FROM_RECENTS)) + "?\n" + title,
+            renderer, mappedInput, std::string(tr(STR_REMOVE_FROM_RECENTS)) + "?\n" + title,
             [this, path]() {
               RECENT_BOOKS.removeBook(path);
               auto metrics = BaseMetrics::values;
@@ -280,7 +265,7 @@ void HomeActivity::loop() {
       requestUpdate();
     } else if (selectorIndex <= static_cast<int>(recentBooks.size())) {
       const int bookIndex = selectorIndex - 1;
-      const std::string &selectedPath = recentBooks[bookIndex].path;
+      const std::string& selectedPath = recentBooks[bookIndex].path;
       if (selectedPath.empty()) {
         onRecentsOpen();
       } else {
@@ -295,24 +280,24 @@ void HomeActivity::loop() {
       }
 
       switch (menuItems[menuSelectedIndex].action) {
-      case HomeMenuAction::BrowseFiles:
-        onMyLibraryOpen();
-        break;
-      case HomeMenuAction::OpdsBrowser:
-        onOpdsBrowserOpen();
-        break;
-      case HomeMenuAction::FileTransfer:
-        onFileTransferOpen();
-        break;
-      case HomeMenuAction::Settings:
-        onSettingsOpen();
-        break;
+        case HomeMenuAction::BrowseFiles:
+          onMyLibraryOpen();
+          break;
+        case HomeMenuAction::OpdsBrowser:
+          onOpdsBrowserOpen();
+          break;
+        case HomeMenuAction::FileTransfer:
+          onFileTransferOpen();
+          break;
+        case HomeMenuAction::Settings:
+          onSettingsOpen();
+          break;
       }
     }
   }
 }
 
-void HomeActivity::render(Activity::RenderLock &&) {
+void HomeActivity::render(Activity::RenderLock&&) {
   auto metrics = BaseMetrics::values;
   const int recentSlots = getRecentSlotCount();
   const auto pageWidth = renderer.getScreenWidth();
@@ -320,23 +305,18 @@ void HomeActivity::render(Activity::RenderLock &&) {
 
   renderer.clearScreen();
 
-  GUI.drawHeader(renderer,
-                 Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding},
-                 nullptr);
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding}, nullptr);
   const std::string homeVersionLabel = getHomeHeaderVersionLabel();
   const int versionY = metrics.topPadding + 5;
-  renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, versionY,
-                    homeVersionLabel.c_str());
+  renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, versionY, homeVersionLabel.c_str());
 
-  int warningBottomY =
-      versionY + renderer.getLineHeight(UI_10_FONT_ID) + 12;
+  int warningBottomY = versionY + renderer.getLineHeight(UI_10_FONT_ID) + 12;
   if (sleepFavoritesFull) {
     const int warningY = warningBottomY;
     const int warningWidth = pageWidth - metrics.contentSidePadding * 2;
-    const std::string warningText = renderer.truncatedText(
-        SMALL_FONT_ID, FavoriteBmp::limitReachedHomeMessage(), warningWidth);
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, warningY,
-                      warningText.c_str());
+    const std::string warningText =
+        renderer.truncatedText(SMALL_FONT_ID, FavoriteBmp::limitReachedHomeMessage(), warningWidth);
+    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, warningY, warningText.c_str());
     warningBottomY = warningY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
   }
 
@@ -360,43 +340,35 @@ void HomeActivity::render(Activity::RenderLock &&) {
   } else {
     renderer.drawRect(labelTileX, labelTileY, labelTileW, tileH, 2, true);
   }
-  renderer.drawText(sessionStatFont, labelTileX + tilePad,
-                    labelTileY + 3, labelText.c_str(), !pagesSelected);
+  renderer.drawText(sessionStatFont, labelTileX + tilePad, labelTileY + 3, labelText.c_str(), !pagesSelected);
 
   // Count tile: black background with white text (like "N more below" indicator)
   const int countTileX = labelTileX + labelTileW + tileGap;
   const int countTileW = countTextW + tilePad * 2 + 8;
   renderer.fillRect(countTileX, labelTileY, countTileW, tileH);
   const int countTextX = countTileX + (countTileW - countTextW) / 2;
-  renderer.drawText(sessionStatFont, countTextX,
-                    labelTileY + 3, countText.c_str(), false);
-  warningBottomY =
-      labelTileY + tileH + 9;
+  renderer.drawText(sessionStatFont, countTextX, labelTileY + 3, countText.c_str(), false);
+  warningBottomY = labelTileY + tileH + 9;
 
   const auto menuItems = buildHomeMenuItems(hasOpdsUrl);
   const int menuCount = static_cast<int>(menuItems.size());
-  const int menuBlockHeight =
-      metrics.verticalSpacing + menuCount * metrics.menuRowHeight +
-      (menuCount > 0 ? (menuCount - 1) * metrics.menuSpacing : 0);
-  const int menuBottomGap = 8; // Keep a small gap above bottom button hints.
-  const int menuY =
-      pageHeight - metrics.buttonHintsHeight - menuBottomGap - menuBlockHeight;
+  const int menuBlockHeight = metrics.verticalSpacing + menuCount * metrics.menuRowHeight +
+                              (menuCount > 0 ? (menuCount - 1) * metrics.menuSpacing : 0);
+  const int menuBottomGap = 8;  // Keep a small gap above bottom button hints.
+  const int menuY = pageHeight - metrics.buttonHintsHeight - menuBottomGap - menuBlockHeight;
 
   const int recentAreaBottomGap = 8;
   const int recentAreaY = warningBottomY;
-  const int recentAreaHeight =
-      std::max(0, menuY - recentAreaBottomGap - recentAreaY);
+  const int recentAreaHeight = std::max(0, menuY - recentAreaBottomGap - recentAreaY);
   switch (SETTINGS.homeLayout) {
     case CrossPointSettings::HOME_LAYOUT_SINGLE_COVER: {
-      GUI.drawRecentBookSingleCover(
-          renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
-          selectorIndex - 1, scrollOffset);
+      GUI.drawRecentBookSingleCover(renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
+                                    selectorIndex - 1, scrollOffset);
       break;
     }
     default: {
-      auto vis = GUI.drawRecentBookCover(
-          renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
-          selectorIndex - 1, scrollOffset);
+      auto vis = GUI.drawRecentBookCover(renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
+                                         selectorIndex - 1, scrollOffset);
       firstVisibleBookIdx = vis.firstVisible;
       lastVisibleBookIdx = vis.lastVisible;
       // Sync scrollOffset with renderer's adjusted position
@@ -407,21 +379,16 @@ void HomeActivity::render(Activity::RenderLock &&) {
   }
 
   for (int i = 0; i < menuCount; ++i) {
-    const int tileY =
-        metrics.verticalSpacing + menuY +
-        i * (metrics.menuRowHeight + metrics.menuSpacing);
+    const int tileY = metrics.verticalSpacing + menuY + i * (metrics.menuRowHeight + metrics.menuSpacing);
     const int tileX = metrics.contentSidePadding;
     const int tileWidth = pageWidth - metrics.contentSidePadding * 2;
     const bool selected = selectorIndex - recentSlots - 1 == i;
     const bool emphasized = menuItems[i].emphasized;
-    const auto textStyle =
-        (emphasized && selected) ? EpdFontFamily::BOLD
-                                 : EpdFontFamily::REGULAR;
+    const auto textStyle = (emphasized && selected) ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
 
     if (emphasized) {
       if (selected) {
-        renderer.drawRect(tileX, tileY, tileWidth, metrics.menuRowHeight, 2,
-                          true);
+        renderer.drawRect(tileX, tileY, tileWidth, metrics.menuRowHeight, 2, true);
       } else {
         renderer.fillRect(tileX, tileY, tileWidth, metrics.menuRowHeight);
       }
@@ -431,26 +398,19 @@ void HomeActivity::render(Activity::RenderLock &&) {
       renderer.drawRect(tileX, tileY, tileWidth, metrics.menuRowHeight);
     }
 
-    const int textWidth =
-        renderer.getTextWidth(UI_10_FONT_ID, menuItems[i].label, textStyle);
+    const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, menuItems[i].label, textStyle);
     const int textX = (pageWidth - textWidth) / 2;
-    const int textY =
-        tileY +
-        (metrics.menuRowHeight - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+    const int textY = tileY + (metrics.menuRowHeight - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
     const bool blackText = emphasized ? selected : !selected;
-    renderer.drawText(UI_10_FONT_ID, textX, textY, menuItems[i].label,
-                      blackText, textStyle);
+    renderer.drawText(UI_10_FONT_ID, textX, textY, menuItems[i].label, blackText, textStyle);
   }
 
   // Show "Remove" hint on Back button when a recent book is selected
-  const bool isRecentBookSelected =
-      selectorIndex >= 1 && selectorIndex <= static_cast<int>(recentBooks.size()) &&
-      !recentBooks[selectorIndex - 1].path.empty();
-  const char *backLabel = isRecentBookSelected ? "Remove" : "";
-  const auto labels = mappedInput.mapLabels(backLabel, tr(STR_SELECT), tr(STR_DIR_UP),
-                                            tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                      labels.btn4);
+  const bool isRecentBookSelected = selectorIndex >= 1 && selectorIndex <= static_cast<int>(recentBooks.size()) &&
+                                    !recentBooks[selectorIndex - 1].path.empty();
+  const char* backLabel = isRecentBookSelected ? "Remove" : "";
+  const auto labels = mappedInput.mapLabels(backLabel, tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
 

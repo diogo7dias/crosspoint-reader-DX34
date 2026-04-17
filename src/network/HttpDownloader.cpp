@@ -13,12 +13,12 @@
 #include "CrossPointSettings.h"
 #include "util/UrlUtils.h"
 
-std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string &url, HTTPClient &http) {
+std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string& url, HTTPClient& http) {
   // Use WiFiClientSecure for HTTPS, regular WiFiClient for HTTP.
   // With -fno-exceptions, operator new returns nullptr on OOM instead of throwing.
   std::unique_ptr<WiFiClient> client;
   if (UrlUtils::isHttpsUrl(url)) {
-    auto *secureClient = new WiFiClientSecure();
+    auto* secureClient = new WiFiClientSecure();
     if (!secureClient) {
       LOG_ERR("HTTP", "OOM: failed to allocate WiFiClientSecure");
       return nullptr;
@@ -26,7 +26,7 @@ std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string &url,
     secureClient->setInsecure();
     client.reset(secureClient);
   } else {
-    auto *plainClient = new WiFiClient();
+    auto* plainClient = new WiFiClient();
     if (!plainClient) {
       LOG_ERR("HTTP", "OOM: failed to allocate WiFiClient");
       return nullptr;
@@ -41,8 +41,7 @@ std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string &url,
 
   // Add Basic HTTP auth if credentials are configured
   if (strlen(SETTINGS.opdsUsername) > 0 && strlen(SETTINGS.opdsPassword) > 0) {
-    std::string credentials =
-        std::string(SETTINGS.opdsUsername) + ":" + SETTINGS.opdsPassword;
+    std::string credentials = std::string(SETTINGS.opdsUsername) + ":" + SETTINGS.opdsPassword;
     String encoded = base64::encode(credentials.c_str());
     http.addHeader("Authorization", "Basic " + encoded);
   }
@@ -50,7 +49,7 @@ std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string &url,
   return client;
 }
 
-bool HttpDownloader::fetchUrl(const std::string &url, Stream &outContent) {
+bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent) {
   HTTPClient http;
   LOG_DBG("HTTP", "Fetching: %s", url.c_str());
 
@@ -72,7 +71,7 @@ bool HttpDownloader::fetchUrl(const std::string &url, Stream &outContent) {
   return true;
 }
 
-bool HttpDownloader::fetchUrl(const std::string &url, std::string &outContent) {
+bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent) {
   StreamString stream;
   if (!fetchUrl(url, stream)) {
     return false;
@@ -81,10 +80,8 @@ bool HttpDownloader::fetchUrl(const std::string &url, std::string &outContent) {
   return true;
 }
 
-HttpDownloader::DownloadError
-HttpDownloader::downloadToFile(const std::string &url,
-                               const std::string &destPath,
-                               ProgressCallback progress) {
+HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,
+                                                             ProgressCallback progress) {
   HTTPClient http;
   LOG_DBG("HTTP", "Downloading: %s", url.c_str());
   LOG_DBG("HTTP", "Destination: %s", destPath.c_str());
@@ -125,7 +122,7 @@ HttpDownloader::downloadToFile(const std::string &url,
   }
 
   // Get the stream for chunked reading
-  WiFiClient *stream = http.getStreamPtr();
+  WiFiClient* stream = http.getStreamPtr();
   if (!stream) {
     LOG_ERR("HTTP", "Failed to get stream");
     file.close();
@@ -141,8 +138,7 @@ HttpDownloader::downloadToFile(const std::string &url,
   constexpr unsigned long STREAM_TIMEOUT_MS = 30000;
   unsigned long lastDataTime = millis();
 
-  while (http.connected() &&
-         (contentLength == 0 || downloaded < contentLength)) {
+  while (http.connected() && (contentLength == 0 || downloaded < contentLength)) {
     const size_t available = stream->available();
     if (available == 0) {
       if (millis() - lastDataTime > STREAM_TIMEOUT_MS) {
@@ -154,8 +150,7 @@ HttpDownloader::downloadToFile(const std::string &url,
     }
     lastDataTime = millis();
 
-    const size_t toRead =
-        available < DOWNLOAD_CHUNK_SIZE ? available : DOWNLOAD_CHUNK_SIZE;
+    const size_t toRead = available < DOWNLOAD_CHUNK_SIZE ? available : DOWNLOAD_CHUNK_SIZE;
     const size_t bytesRead = stream->readBytes(buffer, toRead);
 
     if (bytesRead == 0) {
@@ -164,8 +159,7 @@ HttpDownloader::downloadToFile(const std::string &url,
 
     const size_t written = file.write(buffer, bytesRead);
     if (written != bytesRead) {
-      LOG_ERR("HTTP", "Write failed: wrote %zu of %zu bytes", written,
-              bytesRead);
+      LOG_ERR("HTTP", "Write failed: wrote %zu of %zu bytes", written, bytesRead);
       file.close();
       Storage.remove(destPath.c_str());
       http.end();
@@ -186,8 +180,7 @@ HttpDownloader::downloadToFile(const std::string &url,
 
   // Verify download size if known, or reject empty downloads
   if (contentLength > 0 && downloaded != contentLength) {
-    LOG_ERR("HTTP", "Size mismatch: got %zu, expected %zu", downloaded,
-            contentLength);
+    LOG_ERR("HTTP", "Size mismatch: got %zu, expected %zu", downloaded, contentLength);
     Storage.remove(destPath.c_str());
     return HTTP_ERROR;
   }

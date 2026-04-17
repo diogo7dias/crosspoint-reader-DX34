@@ -34,8 +34,7 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
       delay(2000 * attempt);
     }
     res = updater.checkForUpdate();
-    if (res == OtaUpdater::OK || res == OtaUpdater::NO_UPDATE)
-      break;
+    if (res == OtaUpdater::OK || res == OtaUpdater::NO_UPDATE) break;
     if (res == OtaUpdater::RATE_LIMITED && attempt < OTA_CHECK_MAX_RETRIES) {
       LOG_INF("OTA", "Rate limited, waiting before retry...");
       delay(5000);

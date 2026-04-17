@@ -21,9 +21,8 @@ void drawStyledProgressBar(const GfxRenderer& renderer, const size_t progressPer
   const int maxWidth = renderer.getScreenWidth() - vieweableMarginLeft - vieweableMarginRight;
   const int startX = vieweableMarginLeft;
   // At 100%, extend past the right viewable margin to the screen edge
-  const int barWidth = (progressPercent >= 100)
-      ? (renderer.getScreenWidth() - startX)
-      : (maxWidth * static_cast<int>(progressPercent) / 100);
+  const int barWidth = (progressPercent >= 100) ? (renderer.getScreenWidth() - startX)
+                                                : (maxWidth * static_cast<int>(progressPercent) / 100);
   renderer.fillRect(startX, y, barWidth, height, true);
 }
 
@@ -67,7 +66,8 @@ int statusTextPositionHorizontalSlot(const uint8_t position) {
   }
 }
 
-int computeStatusTextBlockHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow, const int titleLineCount) {
+int computeStatusTextBlockHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow,
+                                 const int titleLineCount) {
   return ReaderLayoutSafety::computeStatusTextBlockHeight(renderer, fontId, showStatusTextRow, titleLineCount);
 }
 
@@ -82,8 +82,7 @@ std::vector<std::string> wrapStatusText(const GfxRenderer& renderer, const int f
   return ReaderLayoutSafety::wrapText(renderer, fontId, text, maxWidth);
 }
 
-int computeStatusBarReservedHeight(const GfxRenderer& renderer, const int fontId,
-                                   const bool showStatusTextRow,
+int computeStatusBarReservedHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow,
                                    const bool showBookProgressBar, const bool showChapterProgressBar,
                                    const int titleLineCount) {
   return ReaderLayoutSafety::computeReservedHeight(renderer, fontId, showStatusTextRow, showBookProgressBar,
@@ -91,9 +90,8 @@ int computeStatusBarReservedHeight(const GfxRenderer& renderer, const int fontId
                                                    SETTINGS.getStatusBarProgressBarHeight());
 }
 
-void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayout,
-                     const int orientedMarginRight, const int orientedMarginBottom,
-                     const int orientedMarginLeft, const bool debugBorders) {
+void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayout, const int orientedMarginRight,
+                     const int orientedMarginBottom, const int orientedMarginLeft, const bool debugBorders) {
   auto metrics = BaseMetrics::values;
   (void)orientedMarginRight;
   (void)orientedMarginBottom;
@@ -130,8 +128,8 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
     const bool showBandBookPageCounter =
         !statusBarLayout.bookPageCounterText.empty() &&
         (statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition) == renderTopBand);
-    const bool showBandProgressText = showBandPageCounter || showBandBookPercentage || showBandChapterPercentage ||
-                                      showBandBookPageCounter;
+    const bool showBandProgressText =
+        showBandPageCounter || showBandBookPercentage || showBandChapterPercentage || showBandBookPageCounter;
     const bool showBandTitle = SETTINGS.statusBarShowChapterTitle && !statusBarLayout.titleLines.empty() &&
                                (statusBarItemIsTop(SETTINGS.statusBarTitlePosition) == renderTopBand);
     const bool showBandBookBar =
@@ -195,8 +193,7 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
           titleWidth = renderer.getTextWidth(statusFontId, lineText.c_str());
           titleX = (screenWidth - titleWidth) / 2;
         }
-        renderer.drawText(statusFontId, titleX, titleY + static_cast<int>(i) * titleLineStep,
-                          lineText.c_str());
+        renderer.drawText(statusFontId, titleX, titleY + static_cast<int>(i) * titleLineStep, lineText.c_str());
       }
     };
 
@@ -232,16 +229,15 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
             break;
         }
       };
-      addItem(showBandBattery, nullptr, batteryWidth,
-              SETTINGS.statusBarBatteryPosition);
+      addItem(showBandBattery, nullptr, batteryWidth, SETTINGS.statusBarBatteryPosition);
       addItem(showBandPageCounter, &statusBarLayout.pageCounterText, statusBarLayout.pageCounterTextWidth,
               SETTINGS.statusBarPageCounterPosition);
       addItem(showBandBookPercentage, &statusBarLayout.bookPercentageText, statusBarLayout.bookPercentageTextWidth,
               SETTINGS.statusBarBookPercentagePosition);
       addItem(showBandChapterPercentage, &statusBarLayout.chapterPercentageText,
               statusBarLayout.chapterPercentageTextWidth, SETTINGS.statusBarChapterPercentagePosition);
-      addItem(showBandBookPageCounter, &statusBarLayout.bookPageCounterText,
-              statusBarLayout.bookPageCounterTextWidth, SETTINGS.statusBarBookPageCounterPosition);
+      addItem(showBandBookPageCounter, &statusBarLayout.bookPageCounterText, statusBarLayout.bookPageCounterTextWidth,
+              SETTINGS.statusBarBookPageCounterPosition);
 
       const auto drawGroup = [&](const std::vector<TextEntry>& items, const int startX) {
         int x = startX;

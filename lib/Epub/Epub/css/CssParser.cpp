@@ -257,8 +257,7 @@ void CssParser::parseDeclarationIntoStyle(const std::string& decl, CssStyle& sty
       style.lineHeight = CssLength(1.2f, CssUnit::Em);
     } else {
       CssLength interpreted = interpretLength(propValueBuf);
-      if (interpreted.unit == CssUnit::Pixels &&
-          propValueBuf.find_first_not_of("+-0123456789.") == std::string::npos) {
+      if (interpreted.unit == CssUnit::Pixels && propValueBuf.find_first_not_of("+-0123456789.") == std::string::npos) {
         interpreted.unit = CssUnit::Em;
       }
       style.lineHeight = interpreted;

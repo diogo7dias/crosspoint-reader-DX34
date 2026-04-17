@@ -20,12 +20,10 @@ class Section {
   std::vector<std::pair<std::string, uint16_t>> anchorLut;
   std::vector<int16_t> pageTocLut;
 
-  void writeSectionFileHeader(int fontId, float lineCompression,
-                              uint8_t extraParagraphSpacingLevel, uint8_t paragraphAlignment,
-                              uint16_t viewportWidth, uint16_t viewportHeight, bool hyphenationEnabled,
-                              uint8_t wordSpacingPercent,
-                              uint8_t firstLineIndentMode, uint8_t readerStyleMode,
-                              uint8_t textRenderMode, bool readerBoldSwap);
+  void writeSectionFileHeader(int fontId, float lineCompression, uint8_t extraParagraphSpacingLevel,
+                              uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
+                              bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
+                              uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap);
   uint32_t onPageComplete(std::unique_ptr<Page> page);
 
  public:
@@ -38,19 +36,16 @@ class Section {
         renderer(renderer),
         filePath(epub->getCachePath() + "/sections/" + std::to_string(spineIndex) + ".bin") {}
   ~Section() = default;
-  bool loadSectionFile(int fontId, float lineCompression,
-                       uint8_t extraParagraphSpacingLevel, uint8_t paragraphAlignment,
-                       uint16_t viewportWidth, uint16_t viewportHeight, bool hyphenationEnabled,
-                       uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
-                       uint8_t readerStyleMode, uint8_t textRenderMode,
-                       bool readerBoldSwap);
+  bool loadSectionFile(int fontId, float lineCompression, uint8_t extraParagraphSpacingLevel,
+                       uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
+                       bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
+                       uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap);
   bool clearCache() const;
-  bool createSectionFile(int fontId, float lineCompression,
-                         uint8_t extraParagraphSpacingLevel, uint8_t paragraphAlignment,
-                         uint16_t viewportWidth, uint16_t viewportHeight, bool hyphenationEnabled,
-                         uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
-                         uint8_t readerStyleMode, uint8_t textRenderMode,
-                         bool readerBoldSwap, const std::function<void(int)>& progressFn = nullptr);
+  bool createSectionFile(int fontId, float lineCompression, uint8_t extraParagraphSpacingLevel,
+                         uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
+                         bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
+                         uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap,
+                         const std::function<void(int)>& progressFn = nullptr);
   std::unique_ptr<Page> loadPageFromSectionFile();
   std::unique_ptr<Page> loadPageFromSectionFile(int pageIndex);
   int getPageForAnchor(const std::string& anchor) const;

@@ -347,7 +347,8 @@ void CrossPointWebServerActivity::render(Activity::RenderLock&&) {
   } else if (state == WebServerActivityState::AP_STARTING) {
     renderer.clearScreen();
     const auto pageHeight = renderer.getScreenHeight();
-    renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 20, tr(STR_STARTING_HOTSPOT), true, EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 20, tr(STR_STARTING_HOTSPOT), true,
+                              EpdFontFamily::REGULAR);
     renderer.displayBuffer(nextRefreshMode);
     nextRefreshMode = HalDisplay::FAST_REFRESH;
   }
@@ -396,7 +397,8 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += 6 * 29 + 3 * LINE_SPACING;
     // Show primary URL (hostname)
     std::string hostnameUrl = std::string("http://") + AP_HOSTNAME + ".local/";
-    renderer.drawCenteredText(UI_10_FONT_ID, startY + LINE_SPACING * 3, hostnameUrl.c_str(), true, EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_10_FONT_ID, startY + LINE_SPACING * 3, hostnameUrl.c_str(), true,
+                              EpdFontFamily::REGULAR);
 
     // Show IP address as fallback
     std::string ipUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + connectedIP + "/";

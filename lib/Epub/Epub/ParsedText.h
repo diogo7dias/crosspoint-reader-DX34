@@ -24,10 +24,8 @@ class ParsedText {
   bool usePublisherStyles;
 
   void applyParagraphIndent(const GfxRenderer& renderer, int fontId);
-  void expandHyphenationBreaks(const GfxRenderer& renderer, int fontId,
-                               std::vector<uint16_t>& wordWidths,
-                               std::vector<bool>& canBreakBefore,
-                               std::vector<bool>& wordNeedsHyphenAtBreak);
+  void expandHyphenationBreaks(const GfxRenderer& renderer, int fontId, std::vector<uint16_t>& wordWidths,
+                               std::vector<bool>& canBreakBefore, std::vector<bool>& wordNeedsHyphenAtBreak);
   std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth, int spaceWidth,
                                         std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
                                         const std::vector<bool>& canBreakBefore,

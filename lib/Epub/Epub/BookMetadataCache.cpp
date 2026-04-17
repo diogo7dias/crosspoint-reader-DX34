@@ -102,8 +102,7 @@ bool BookMetadataCache::endWrite() {
   return true;
 }
 
-bool BookMetadataCache::buildBookBin(const std::string& epubPath,
-                                     const BookMetadata& metadata,
+bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMetadata& metadata,
                                      const std::function<void(int)>& progressCallback) {
   // Open all three files, writing to meta, reading from spine and toc
   if (!Storage.openFileForWrite("BMC", cachePath + bookBinFile, bookFile)) {

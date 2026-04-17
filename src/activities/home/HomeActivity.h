@@ -13,9 +13,9 @@ struct Rect;
 class HomeActivity final : public ActivityWithSubactivity {
   ButtonNavigator buttonNavigator;
   int selectorIndex = 0;
-  int scrollOffset = 0;       // First visible book index in recents list
-  int firstVisibleBookIdx = 0; // Updated by renderer each frame
-  int lastVisibleBookIdx = 0;  // Updated by renderer each frame
+  int scrollOffset = 0;         // First visible book index in recents list
+  int firstVisibleBookIdx = 0;  // Updated by renderer each frame
+  int lastVisibleBookIdx = 0;   // Updated by renderer each frame
   bool recentsLoading = false;
   bool recentsLoaded = false;
   bool firstRenderDone = false;

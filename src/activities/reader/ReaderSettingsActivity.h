@@ -1,10 +1,10 @@
 #pragma once
 
+#include <I18n.h>
+
 #include <functional>
 #include <string>
 #include <vector>
-
-#include <I18n.h>
 
 #include "activities/Activity.h"
 #include "activities/settings/SettingsActivity.h"
@@ -34,8 +34,7 @@ struct ReaderSettingInfo {
     return s;
   }
 
-  static ReaderSettingInfo Enum(StrId nameId, uint8_t CrossPointSettings::* ptr,
-                                std::vector<StrId> values) {
+  static ReaderSettingInfo Enum(StrId nameId, uint8_t CrossPointSettings::* ptr, std::vector<StrId> values) {
     ReaderSettingInfo s;
     s.nameId = nameId;
     s.type = SettingType::ENUM;
@@ -44,8 +43,7 @@ struct ReaderSettingInfo {
     return s;
   }
 
-  static ReaderSettingInfo Value(StrId nameId, uint8_t CrossPointSettings::* ptr,
-                                 const ValueRange valueRange) {
+  static ReaderSettingInfo Value(StrId nameId, uint8_t CrossPointSettings::* ptr, const ValueRange valueRange) {
     ReaderSettingInfo s;
     s.nameId = nameId;
     s.type = SettingType::VALUE;
@@ -57,13 +55,9 @@ struct ReaderSettingInfo {
 
 class ReaderSettingsActivity final : public Activity {
  public:
-  explicit ReaderSettingsActivity(GfxRenderer& renderer,
-                                  MappedInputManager& mappedInput,
-                                  const std::string& bookCachePath,
-                                  const std::function<void(bool)>& onClose)
-      : Activity("ReaderSettings", renderer, mappedInput),
-        bookCachePath(bookCachePath),
-        onClose(onClose) {}
+  explicit ReaderSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                  const std::string& bookCachePath, const std::function<void(bool)>& onClose)
+      : Activity("ReaderSettings", renderer, mappedInput), bookCachePath(bookCachePath), onClose(onClose) {}
 
   void onEnter() override;
   void onExit() override;
@@ -103,8 +97,7 @@ class ReaderSettingsActivity final : public Activity {
   void startFontSizeEdit();
   void adjustFontSizeEdit(int delta);
   void applyFontSizeEdit();
-  void startValueEdit(const ReaderSettingInfo& setting, int categoryIndex,
-                      int settingIndex);
+  void startValueEdit(const ReaderSettingInfo& setting, int categoryIndex, int settingIndex);
   void adjustValueEdit(int delta);
   void applyValueEdit();
   void toggleCurrentSetting();

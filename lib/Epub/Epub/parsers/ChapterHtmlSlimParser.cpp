@@ -128,15 +128,11 @@ void ChapterHtmlSlimParser::completeCurrentPage() {
     return;
   }
 
-  const int lineHeight =
-      static_cast<int>(renderer.getLineHeight(fontId) * lineCompression);
+  const int lineHeight = static_cast<int>(renderer.getLineHeight(fontId) * lineCompression);
   if (lineHeight > 0 && viewportHeight > 0) {
     const int maxPossibleLines = viewportHeight / lineHeight;
-    const int minDenseLines =
-        std::max(MIN_DENSE_PAGE_LINES,
-                 (maxPossibleLines * DENSE_PAGE_THRESHOLD_PERCENT) / 100);
-    currentPage->applyDensePageVerticalFit(lineHeight, viewportHeight,
-                                           minDenseLines, lineHeight / 2);
+    const int minDenseLines = std::max(MIN_DENSE_PAGE_LINES, (maxPossibleLines * DENSE_PAGE_THRESHOLD_PERCENT) / 100);
+    currentPage->applyDensePageVerticalFit(lineHeight, viewportHeight, minDenseLines, lineHeight / 2);
   }
 
   completePageFn(std::move(currentPage));
@@ -176,10 +172,8 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
 
     makePages();
   }
-  currentTextBlock.reset(
-      new ParsedText(extraParagraphSpacingLevel != 0, hyphenationEnabled,
-                     blockStyle, wordSpacingPercent, firstLineIndentMode,
-                     usePublisherStyles));
+  currentTextBlock.reset(new ParsedText(extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle,
+                                        wordSpacingPercent, firstLineIndentMode, usePublisherStyles));
   wordsExtractedInBlock = 0;
 }
 
@@ -811,8 +805,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   }
 
   const size_t fileSize = file.size();
-  const bool shouldReportProgress =
-      progressFn && fileSize >= MIN_SIZE_FOR_PROGRESS;
+  const bool shouldReportProgress = progressFn && fileSize >= MIN_SIZE_FOR_PROGRESS;
   int lastReportedProgress = -1;
   if (shouldReportProgress) {
     progressFn(0);
@@ -985,16 +978,16 @@ void ChapterHtmlSlimParser::makePages() {
   // Additional spacing between paragraphs based on user-selected level.
   int extraParagraphGap = 0;
   switch (extraParagraphSpacingLevel) {
-    case 1: // S
+    case 1:  // S
       extraParagraphGap = blockLineHeight / 6;
       break;
-    case 2: // M
+    case 2:  // M
       extraParagraphGap = blockLineHeight / 4;
       break;
-    case 3: // L
+    case 3:  // L
       extraParagraphGap = blockLineHeight / 3;
       break;
-    case 0: // Off
+    case 0:  // Off
     default:
       break;
   }

@@ -7,8 +7,7 @@
 
 class BleRemapActivity final : public Activity {
  public:
-  explicit BleRemapActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                            const std::function<void()>& onBack)
+  explicit BleRemapActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::function<void()>& onBack)
       : Activity("BleRemap", renderer, mappedInput), onBack(onBack) {}
 
   void onEnter() override;

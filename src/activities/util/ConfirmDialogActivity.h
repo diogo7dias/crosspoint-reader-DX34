@@ -9,15 +9,9 @@
 // A simple two-option confirmation dialog (Confirm / Cancel).
 class ConfirmDialogActivity final : public Activity {
  public:
-  explicit ConfirmDialogActivity(GfxRenderer& renderer,
-                                 MappedInputManager& mappedInput,
-                                 const std::string& message,
-                                 const std::function<void()>& onConfirm,
-                                 const std::function<void()>& onCancel)
-      : Activity("ConfirmDialog", renderer, mappedInput),
-        message(message),
-        onConfirm(onConfirm),
-        onCancel(onCancel) {}
+  explicit ConfirmDialogActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& message,
+                                 const std::function<void()>& onConfirm, const std::function<void()>& onCancel)
+      : Activity("ConfirmDialog", renderer, mappedInput), message(message), onConfirm(onConfirm), onCancel(onCancel) {}
 
   void onEnter() override;
   void loop() override;

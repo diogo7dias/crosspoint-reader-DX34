@@ -27,8 +27,7 @@ struct ReadingTheme {
   uint8_t statusBarEnabled = 1;
   uint8_t statusBarShowBattery = 1;
   uint8_t statusBarShowPageCounter = 0;
-  uint8_t statusBarPageCounterMode =
-      CrossPointSettings::STATUS_PAGE_CURRENT_OVER_TOTAL;
+  uint8_t statusBarPageCounterMode = CrossPointSettings::STATUS_PAGE_CURRENT_OVER_TOTAL;
   uint8_t statusBarShowBookPercentage = 0;
   uint8_t statusBarShowChapterPercentage = 0;
   uint8_t statusBarShowBookBar = 0;
@@ -37,12 +36,9 @@ struct ReadingTheme {
   uint8_t statusBarNoTitleTruncation = 0;
   uint8_t statusBarBatteryPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
   uint8_t statusBarProgressTextPosition = CrossPointSettings::STATUS_AT_BOTTOM;
-  uint8_t statusBarPageCounterPosition =
-      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
-  uint8_t statusBarBookPercentagePosition =
-      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
-  uint8_t statusBarChapterPercentagePosition =
-      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+  uint8_t statusBarPageCounterPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+  uint8_t statusBarBookPercentagePosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+  uint8_t statusBarChapterPercentagePosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
   uint8_t statusBarBookBarPosition = CrossPointSettings::STATUS_AT_BOTTOM;
   uint8_t statusBarChapterBarPosition = CrossPointSettings::STATUS_AT_BOTTOM;
   uint8_t statusBarTitlePosition = CrossPointSettings::STATUS_AT_BOTTOM;
@@ -51,8 +47,7 @@ struct ReadingTheme {
   uint8_t statusBarFontSize = CrossPointSettings::STATUS_FONT_SMALL;
   uint8_t statusBarBarThickness = CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
   uint8_t statusBarShowBookPageCounter = 0;
-  uint8_t statusBarBookPageCounterPosition =
-      CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+  uint8_t statusBarBookPageCounterPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
 };
 
 class ReadingThemeStore;
@@ -72,8 +67,7 @@ class ReadingThemeStore {
   std::string revertThemeCachePath;
   std::string lastAppliedThemeName;
 
-  friend bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store,
-                                                const char* json);
+  friend bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store, const char* json);
 
  public:
   static constexpr size_t MAX_THEMES = 16;
@@ -96,8 +90,7 @@ class ReadingThemeStore {
   bool matchesCurrent(const ReadingTheme& theme) const;
   int findMatchingTheme() const;
 
-  std::string makeUniqueName(const std::string& desiredName,
-                             int ignoreIndex = -1) const;
+  std::string makeUniqueName(const std::string& desiredName, int ignoreIndex = -1) const;
   bool addTheme(const std::string& name);
   bool updateTheme(size_t index);
   bool renameTheme(size_t index, const std::string& desiredName);
@@ -106,16 +99,13 @@ class ReadingThemeStore {
   bool applyTheme(size_t index, const std::string& cachePath = {});
   bool canRevertTheme(const std::string& cachePath) const;
   bool revertThemeChange(const std::string& cachePath);
-  static bool loadBookSettings(const std::string& cachePath,
-                               ReadingTheme& theme);
+  static bool loadBookSettings(const std::string& cachePath, ReadingTheme& theme);
   static bool saveCurrentBookSettings(const std::string& cachePath);
   static bool loadBookSettingsIntoCurrent(const std::string& cachePath);
 
-  static ReadingTheme fromSettings(const std::string& name,
-                                   const CrossPointSettings& settings);
+  static ReadingTheme fromSettings(const std::string& name, const CrossPointSettings& settings);
   static ReadingTheme normalizeTheme(const ReadingTheme& theme);
-  static void applyThemeToSettings(const ReadingTheme& theme,
-                                   CrossPointSettings& settings);
+  static void applyThemeToSettings(const ReadingTheme& theme, CrossPointSettings& settings);
   static std::string sanitizeName(const std::string& name);
 };
 

@@ -90,8 +90,8 @@ class KeyboardWidget {
   int getRowLength(int row) const;
   char getSelectedChar() const;
 
-  void renderKey(const GfxRenderer& renderer, int x, int y, int w, int h, const char* mainLabel,
-                 const char* shiftLabel, bool isSelected) const;
+  void renderKey(const GfxRenderer& renderer, int x, int y, int w, int h, const char* mainLabel, const char* shiftLabel,
+                 bool isSelected) const;
   void renderSpecialKey(const GfxRenderer& renderer, int x, int y, int w, int h, const char* label,
                         bool isSelected) const;
 };
