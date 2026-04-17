@@ -35,8 +35,7 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["readerStyleMode"] = theme.readerStyleMode;
   obj["textRenderMode"] = theme.textRenderMode;
   obj["textRenderModeV2"] = true;
-  obj["embeddedStyle"] =
-      theme.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
+  obj["embeddedStyle"] = theme.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   obj["hyphenationEnabled"] = theme.hyphenationEnabled;
   obj["statusBarEnabled"] = theme.statusBarEnabled;
   obj["statusBarShowBattery"] = theme.statusBarShowBattery;
@@ -52,10 +51,8 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["batteryPositionV2"] = true;
   obj["statusBarProgressTextPosition"] = theme.statusBarProgressTextPosition;
   obj["statusBarPageCounterPosition"] = theme.statusBarPageCounterPosition;
-  obj["statusBarBookPercentagePosition"] =
-      theme.statusBarBookPercentagePosition;
-  obj["statusBarChapterPercentagePosition"] =
-      theme.statusBarChapterPercentagePosition;
+  obj["statusBarBookPercentagePosition"] = theme.statusBarBookPercentagePosition;
+  obj["statusBarChapterPercentagePosition"] = theme.statusBarChapterPercentagePosition;
   obj["statusBarBookBarPosition"] = theme.statusBarBookBarPosition;
   obj["statusBarChapterBarPosition"] = theme.statusBarChapterBarPosition;
   obj["statusBarTitlePosition"] = theme.statusBarTitlePosition;
@@ -64,21 +61,18 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["statusBarFontSize"] = theme.statusBarFontSize;
   obj["statusBarBarThickness"] = theme.statusBarBarThickness;
   obj["statusBarShowBookPageCounter"] = theme.statusBarShowBookPageCounter;
-  obj["statusBarBookPageCounterPosition"] =
-      theme.statusBarBookPageCounterPosition;
+  obj["statusBarBookPageCounterPosition"] = theme.statusBarBookPageCounterPosition;
 }
 
 void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.name = ReadingThemeStore::sanitizeName(obj["name"] | "Theme");
   {
     const uint8_t raw = obj["fontFamily"] | (uint8_t)CrossPointSettings::CHAREINK;
-    theme.fontFamily = (raw < CrossPointSettings::FONT_FAMILY_COUNT)
-                           ? raw : (uint8_t)CrossPointSettings::CHAREINK;
+    theme.fontFamily = (raw < CrossPointSettings::FONT_FAMILY_COUNT) ? raw : (uint8_t)CrossPointSettings::CHAREINK;
   }
   {
     const uint8_t raw = obj["fontSize"] | (uint8_t)CrossPointSettings::SIZE_16;
-    theme.fontSize = (raw < CrossPointSettings::FONT_SIZE_COUNT)
-                         ? raw : (uint8_t)CrossPointSettings::SIZE_16;
+    theme.fontSize = (raw < CrossPointSettings::FONT_SIZE_COUNT) ? raw : (uint8_t)CrossPointSettings::SIZE_16;
   }
   theme.lineSpacingPercent = obj["lineSpacingPercent"] | (uint8_t)110;
   theme.uniformMargins = obj["uniformMargins"] | (uint8_t)0;
@@ -90,40 +84,35 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.screenMarginBottom = obj["screenMarginBottom"] | (uint8_t)20;
   {
     const uint8_t raw = obj["paragraphAlignment"] | (uint8_t)CrossPointSettings::JUSTIFIED;
-    theme.paragraphAlignment = (raw < CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT)
-                                   ? raw : (uint8_t)CrossPointSettings::JUSTIFIED;
+    theme.paragraphAlignment =
+        (raw < CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT) ? raw : (uint8_t)CrossPointSettings::JUSTIFIED;
   }
   {
-    const uint8_t raw = obj["extraParagraphSpacingLevel"] |
-        (uint8_t)CrossPointSettings::EXTRA_SPACING_M;
-    theme.extraParagraphSpacingLevel = (raw < CrossPointSettings::EXTRA_PARAGRAPH_SPACING_COUNT)
-                                           ? raw : (uint8_t)CrossPointSettings::EXTRA_SPACING_M;
+    const uint8_t raw = obj["extraParagraphSpacingLevel"] | (uint8_t)CrossPointSettings::EXTRA_SPACING_M;
+    theme.extraParagraphSpacingLevel =
+        (raw < CrossPointSettings::EXTRA_PARAGRAPH_SPACING_COUNT) ? raw : (uint8_t)CrossPointSettings::EXTRA_SPACING_M;
   }
   {
-    const uint8_t raw =
-        obj["wordSpacingPercent"] | (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
-    theme.wordSpacingPercent = (raw < CrossPointSettings::WORD_SPACING_MODE_COUNT)
-                                   ? raw
-                                   : (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
+    const uint8_t raw = obj["wordSpacingPercent"] | (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
+    theme.wordSpacingPercent =
+        (raw < CrossPointSettings::WORD_SPACING_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
   }
   {
     const uint8_t raw = obj["firstLineIndentMode"] | (uint8_t)CrossPointSettings::INDENT_BOOK;
-    theme.firstLineIndentMode = (raw < CrossPointSettings::FIRST_LINE_INDENT_MODE_COUNT)
-                                    ? raw : (uint8_t)CrossPointSettings::INDENT_BOOK;
+    theme.firstLineIndentMode =
+        (raw < CrossPointSettings::FIRST_LINE_INDENT_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::INDENT_BOOK;
   }
   {
     const uint8_t raw = obj["readerStyleMode"] |
-        (obj["embeddedStyle"].isNull()
-             ? (uint8_t)CrossPointSettings::READER_STYLE_USER
-             : ((obj["embeddedStyle"] | (uint8_t)0)
-                    ? (uint8_t)CrossPointSettings::READER_STYLE_HYBRID
-                    : (uint8_t)CrossPointSettings::READER_STYLE_USER));
-    theme.readerStyleMode = (raw < CrossPointSettings::READER_STYLE_MODE_COUNT)
-                                ? raw : (uint8_t)CrossPointSettings::READER_STYLE_USER;
+                        (obj["embeddedStyle"].isNull()
+                             ? (uint8_t)CrossPointSettings::READER_STYLE_USER
+                             : ((obj["embeddedStyle"] | (uint8_t)0) ? (uint8_t)CrossPointSettings::READER_STYLE_HYBRID
+                                                                    : (uint8_t)CrossPointSettings::READER_STYLE_USER));
+    theme.readerStyleMode =
+        (raw < CrossPointSettings::READER_STYLE_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::READER_STYLE_USER;
   }
   {
-    const uint8_t raw =
-        obj["textRenderMode"] | (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+    const uint8_t raw = obj["textRenderMode"] | (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
     if (obj["textRenderModeV2"].isNull()) {
       // Old v2 format: 0=Crisp, 1=Dark, 2=Dark(old), 3=ExtraDark(old) → map to new enum
       if (raw >= 1) {
@@ -140,78 +129,47 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.hyphenationEnabled = obj["hyphenationEnabled"] | (uint8_t)0;
   theme.statusBarEnabled = obj["statusBarEnabled"] | (uint8_t)1;
   theme.statusBarShowBattery = obj["statusBarShowBattery"] | (uint8_t)1;
-  theme.statusBarShowPageCounter =
-      obj["statusBarShowPageCounter"] | (uint8_t)0;
-  theme.statusBarPageCounterMode =
-      CrossPointSettings::normalizeStatusBarPageCounterMode(
-          obj["statusBarPageCounterMode"] |
-          (uint8_t)CrossPointSettings::STATUS_PAGE_CURRENT_OVER_TOTAL);
-  theme.statusBarShowBookPercentage =
-      obj["statusBarShowBookPercentage"] | (uint8_t)0;
-  theme.statusBarShowChapterPercentage =
-      obj["statusBarShowChapterPercentage"] | (uint8_t)0;
+  theme.statusBarShowPageCounter = obj["statusBarShowPageCounter"] | (uint8_t)0;
+  theme.statusBarPageCounterMode = CrossPointSettings::normalizeStatusBarPageCounterMode(
+      obj["statusBarPageCounterMode"] | (uint8_t)CrossPointSettings::STATUS_PAGE_CURRENT_OVER_TOTAL);
+  theme.statusBarShowBookPercentage = obj["statusBarShowBookPercentage"] | (uint8_t)0;
+  theme.statusBarShowChapterPercentage = obj["statusBarShowChapterPercentage"] | (uint8_t)0;
   theme.statusBarShowBookBar = obj["statusBarShowBookBar"] | (uint8_t)0;
   theme.statusBarShowChapterBar = obj["statusBarShowChapterBar"] | (uint8_t)0;
-  theme.statusBarShowChapterTitle =
-      obj["statusBarShowChapterTitle"] | (uint8_t)1;
-  theme.statusBarNoTitleTruncation =
-      obj["statusBarNoTitleTruncation"] | (uint8_t)0;
+  theme.statusBarShowChapterTitle = obj["statusBarShowChapterTitle"] | (uint8_t)1;
+  theme.statusBarNoTitleTruncation = obj["statusBarNoTitleTruncation"] | (uint8_t)0;
   if (obj["batteryPositionV2"].isNull()) {
     // Migrate old 2-value position (Top/Bottom) to 6-value text position
-    const uint8_t old =
-        obj["statusBarBatteryPosition"] |
-        (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
-    theme.statusBarBatteryPosition =
-        (old == CrossPointSettings::STATUS_AT_TOP)
-            ? (uint8_t)CrossPointSettings::STATUS_TEXT_TOP_LEFT
-            : (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
+    const uint8_t old = obj["statusBarBatteryPosition"] | (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
+    theme.statusBarBatteryPosition = (old == CrossPointSettings::STATUS_AT_TOP)
+                                         ? (uint8_t)CrossPointSettings::STATUS_TEXT_TOP_LEFT
+                                         : (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
   } else {
     theme.statusBarBatteryPosition =
-        obj["statusBarBatteryPosition"] |
-        (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
+        obj["statusBarBatteryPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
   }
   theme.statusBarProgressTextPosition =
-      obj["statusBarProgressTextPosition"] |
-      (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
-  const uint8_t fallbackProgressTextPosition =
-      theme.statusBarProgressTextPosition == CrossPointSettings::STATUS_AT_TOP
-          ? (uint8_t)CrossPointSettings::STATUS_TEXT_TOP_CENTER
-          : (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
-  theme.statusBarPageCounterPosition =
-      obj["statusBarPageCounterPosition"] | fallbackProgressTextPosition;
-  theme.statusBarBookPercentagePosition =
-      obj["statusBarBookPercentagePosition"] | fallbackProgressTextPosition;
-  theme.statusBarChapterPercentagePosition =
-      obj["statusBarChapterPercentagePosition"] | fallbackProgressTextPosition;
-  theme.statusBarBookBarPosition =
-      obj["statusBarBookBarPosition"] |
-      (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
+      obj["statusBarProgressTextPosition"] | (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
+  const uint8_t fallbackProgressTextPosition = theme.statusBarProgressTextPosition == CrossPointSettings::STATUS_AT_TOP
+                                                   ? (uint8_t)CrossPointSettings::STATUS_TEXT_TOP_CENTER
+                                                   : (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+  theme.statusBarPageCounterPosition = obj["statusBarPageCounterPosition"] | fallbackProgressTextPosition;
+  theme.statusBarBookPercentagePosition = obj["statusBarBookPercentagePosition"] | fallbackProgressTextPosition;
+  theme.statusBarChapterPercentagePosition = obj["statusBarChapterPercentagePosition"] | fallbackProgressTextPosition;
+  theme.statusBarBookBarPosition = obj["statusBarBookBarPosition"] | (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
   theme.statusBarChapterBarPosition =
-      obj["statusBarChapterBarPosition"] |
-      (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
-  theme.statusBarTitlePosition =
-      obj["statusBarTitlePosition"] |
-      (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
-  theme.statusBarTextAlignment =
-      obj["statusBarTextAlignment"] |
-      (uint8_t)CrossPointSettings::STATUS_TEXT_RIGHT;
-  theme.statusBarProgressStyle =
-      obj["statusBarProgressStyle"] |
-      (uint8_t)CrossPointSettings::STATUS_BAR_THICK;
-  theme.statusBarFontSize =
-      obj["statusBarFontSize"] |
-      (uint8_t)CrossPointSettings::STATUS_FONT_SMALL;
-  theme.statusBarBarThickness =
-      obj["statusBarBarThickness"] |
-      (uint8_t)CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
-  theme.statusBarShowBookPageCounter =
-      obj["statusBarShowBookPageCounter"] | (uint8_t)0;
+      obj["statusBarChapterBarPosition"] | (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
+  theme.statusBarTitlePosition = obj["statusBarTitlePosition"] | (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
+  theme.statusBarTextAlignment = obj["statusBarTextAlignment"] | (uint8_t)CrossPointSettings::STATUS_TEXT_RIGHT;
+  theme.statusBarProgressStyle = obj["statusBarProgressStyle"] | (uint8_t)CrossPointSettings::STATUS_BAR_THICK;
+  theme.statusBarFontSize = obj["statusBarFontSize"] | (uint8_t)CrossPointSettings::STATUS_FONT_SMALL;
+  theme.statusBarBarThickness = obj["statusBarBarThickness"] | (uint8_t)CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
+  theme.statusBarShowBookPageCounter = obj["statusBarShowBookPageCounter"] | (uint8_t)0;
   theme.statusBarBookPageCounterPosition =
-      obj["statusBarBookPageCounterPosition"] |
-      (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+      obj["statusBarBookPageCounterPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
   theme = ReadingThemeStore::normalizeTheme(theme);
 }
-} // namespace
+}  // namespace
 
 // ---- Atomic write & read helpers ----
 // FAT32 does not support atomic rename over existing files.
@@ -220,15 +178,15 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
 // 2. Erase old .bak
 // 3. Rename current to .bak
 // 4. Rename .tmp to current
-static bool safeWriteFile(const char *path, const String &json) {
+static bool safeWriteFile(const char* path, const String& json) {
   // Path + ".corrupt" (longest suffix) must fit in 128-char buffers used below.
   if (!path || strlen(path) > 119) {
     LOG_ERR("JSN", "safeWriteFile: path null or too long");
     return false;
   }
 
-  auto ensureParentDirectory = [](const char *targetPath) -> bool {
-    const char *slash = strrchr(targetPath, '/');
+  auto ensureParentDirectory = [](const char* targetPath) -> bool {
+    const char* slash = strrchr(targetPath, '/');
     if (!slash || slash == targetPath) {
       return true;
     }
@@ -263,14 +221,11 @@ static bool safeWriteFile(const char *path, const String &json) {
 
       if (!Storage.rename(parentPath, quarantinePath)) {
         if (!Storage.remove(parentPath)) {
-          LOG_ERR("JSN",
-                  "safeWriteFile: failed to quarantine invalid parent %s",
-                  parentPath);
+          LOG_ERR("JSN", "safeWriteFile: failed to quarantine invalid parent %s", parentPath);
           return false;
         }
       } else {
-        LOG_ERR("JSN", "safeWriteFile: quarantined invalid parent %s",
-                parentPath);
+        LOG_ERR("JSN", "safeWriteFile: quarantined invalid parent %s", parentPath);
       }
     }
 
@@ -302,7 +257,7 @@ static bool safeWriteFile(const char *path, const String &json) {
   // Explicitly remove any stale .tmp from a previous interrupted write.
   // If the entry is so corrupted it can't even be deleted, fall back to an
   // alternate temp name so saves keep working.
-  const char *activeTmp = tmpPath;
+  const char* activeTmp = tmpPath;
   char altTmpPath[128];
   if (Storage.exists(tmpPath)) {
     if (!Storage.remove(tmpPath)) {
@@ -345,8 +300,7 @@ static bool safeWriteFile(const char *path, const String &json) {
       if (Storage.rename(bakPath, path)) {
         LOG_ERR("JSN", "safeWriteFile: restored %s from backup", path);
       } else {
-        LOG_ERR("JSN", "safeWriteFile: failed to restore %s from backup %s",
-                path, bakPath);
+        LOG_ERR("JSN", "safeWriteFile: failed to restore %s from backup %s", path, bakPath);
       }
     }
     return false;
@@ -357,11 +311,10 @@ static bool safeWriteFile(const char *path, const String &json) {
 
 // Read the JSON file, automatically trying fallbacks if a crash occurred
 // mid-save
-String JsonSettingsIO::safeReadFile(const char *path) {
+String JsonSettingsIO::safeReadFile(const char* path) {
   if (Storage.exists(path)) {
     String json = Storage.readFile(path);
-    if (!json.isEmpty())
-      return json;
+    if (!json.isEmpty()) return json;
   }
 
   // Primary failed/empty. Try backup (which means crash happened during step 4
@@ -393,7 +346,7 @@ String JsonSettingsIO::safeReadFile(const char *path) {
 
 // ---- CrossPointState ----
 
-bool JsonSettingsIO::saveState(const CrossPointState &s, const char *path) {
+bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   JsonDocument doc;
   doc["openEpubPath"] = s.openEpubPath;
   doc["lastSleepImage"] = s.lastSleepImage;
@@ -408,12 +361,12 @@ bool JsonSettingsIO::saveState(const CrossPointState &s, const char *path) {
   // position by filename alone to avoid heap exhaustion and huge state files.
   if (s.sleepImagePlaylist.size() <= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
     JsonArray sleepImagePlaylist = doc["sleepImagePlaylist"].to<JsonArray>();
-    for (const auto &entry : s.sleepImagePlaylist) {
+    for (const auto& entry : s.sleepImagePlaylist) {
       sleepImagePlaylist.add(entry);
     }
   }
   JsonArray favoriteBmpPaths = doc["favoriteBmpPaths"].to<JsonArray>();
-  for (const auto &entry : s.favoriteBmpPaths) {
+  for (const auto& entry : s.favoriteBmpPaths) {
     favoriteBmpPaths.add(entry);
   }
 
@@ -422,7 +375,7 @@ bool JsonSettingsIO::saveState(const CrossPointState &s, const char *path) {
   return safeWriteFile(path, json);
 }
 
-bool JsonSettingsIO::loadState(CrossPointState &s, const char *json) {
+bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
@@ -442,7 +395,7 @@ bool JsonSettingsIO::loadState(CrossPointState &s, const char *json) {
   s.sleepImagePlaylist.clear();
   if (doc["sleepImagePlaylist"].is<JsonArray>()) {
     for (const JsonVariant value : doc["sleepImagePlaylist"].as<JsonArray>()) {
-      const char *entry = value.as<const char *>();
+      const char* entry = value.as<const char*>();
       if (entry != nullptr && entry[0] != '\0') {
         s.sleepImagePlaylist.emplace_back(entry);
         // Cap on load to protect against legacy large playlists causing OOM.
@@ -455,7 +408,7 @@ bool JsonSettingsIO::loadState(CrossPointState &s, const char *json) {
   s.favoriteBmpPaths.clear();
   if (doc["favoriteBmpPaths"].is<JsonArray>()) {
     for (const JsonVariant value : doc["favoriteBmpPaths"].as<JsonArray>()) {
-      const char *entry = value.as<const char *>();
+      const char* entry = value.as<const char*>();
       if (entry != nullptr && entry[0] != '\0') {
         s.favoriteBmpPaths.emplace_back(entry);
       }
@@ -466,8 +419,7 @@ bool JsonSettingsIO::loadState(CrossPointState &s, const char *json) {
 
 // ---- CrossPointSettings ----
 
-bool JsonSettingsIO::saveSettings(const CrossPointSettings &s,
-                                  const char *path) {
+bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
   JsonDocument doc;
 
   doc["homeLayout"] = s.homeLayout;
@@ -492,8 +444,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings &s,
   doc["statusBarProgressTextPosition"] = s.statusBarProgressTextPosition;
   doc["statusBarPageCounterPosition"] = s.statusBarPageCounterPosition;
   doc["statusBarBookPercentagePosition"] = s.statusBarBookPercentagePosition;
-  doc["statusBarChapterPercentagePosition"] =
-      s.statusBarChapterPercentagePosition;
+  doc["statusBarChapterPercentagePosition"] = s.statusBarChapterPercentagePosition;
   doc["statusBarBookBarPosition"] = s.statusBarBookBarPosition;
   doc["statusBarChapterBarPosition"] = s.statusBarChapterBarPosition;
   doc["statusBarTitlePosition"] = s.statusBarTitlePosition;
@@ -503,8 +454,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings &s,
   doc["statusBarBarThickness"] = s.statusBarBarThickness;
   doc["extraParagraphSpacingLevel"] = s.extraParagraphSpacingLevel;
   // Legacy compatibility key for older builds that still expect a toggle.
-  doc["extraParagraphSpacing"] =
-      s.extraParagraphSpacingLevel != CrossPointSettings::EXTRA_SPACING_OFF;
+  doc["extraParagraphSpacing"] = s.extraParagraphSpacingLevel != CrossPointSettings::EXTRA_SPACING_OFF;
   doc["wordSpacingPercent"] = s.wordSpacingPercent;
   doc["firstLineIndentMode"] = s.firstLineIndentMode;
   doc["readerStyleMode"] = s.readerStyleMode;
@@ -539,8 +489,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings &s,
   doc["hyphenationEnabled"] = s.hyphenationEnabled;
   doc["readerBoldSwap"] = s.readerBoldSwap;
   doc["fadingFix"] = s.fadingFix;
-  doc["embeddedStyle"] =
-      s.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
+  doc["embeddedStyle"] = s.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   doc["debugBorders"] = s.debugBorders;
   doc["highlightMode"] = s.highlightMode;
   doc["darkMode"] = s.darkMode;
@@ -564,10 +513,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings &s,
   return safeWriteFile(path, json);
 }
 
-bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
-                                  bool *needsResave) {
-  if (needsResave)
-    *needsResave = false;
+bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool* needsResave) {
+  if (needsResave) *needsResave = false;
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
@@ -576,33 +523,24 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
   }
 
   using S = CrossPointSettings;
-  auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t {
-    return val < maxVal ? val : def;
-  };
+  auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
 
-  s.homeLayout = clamp(doc["homeLayout"] | (uint8_t)S::HOME_LAYOUT_CLASSIC,
-                       S::HOME_LAYOUT_COUNT, S::HOME_LAYOUT_CLASSIC);
-  s.sleepScreen = clamp(doc["sleepScreen"] | (uint8_t)S::DARK,
-                        S::SLEEP_SCREEN_MODE_COUNT, S::DARK);
-  s.sleepScreenCoverMode = clamp(doc["sleepScreenCoverMode"] | (uint8_t)S::FIT,
-                                 S::SLEEP_SCREEN_COVER_MODE_COUNT, S::FIT);
+  s.homeLayout =
+      clamp(doc["homeLayout"] | (uint8_t)S::HOME_LAYOUT_CLASSIC, S::HOME_LAYOUT_COUNT, S::HOME_LAYOUT_CLASSIC);
+  s.sleepScreen = clamp(doc["sleepScreen"] | (uint8_t)S::DARK, S::SLEEP_SCREEN_MODE_COUNT, S::DARK);
+  s.sleepScreenCoverMode =
+      clamp(doc["sleepScreenCoverMode"] | (uint8_t)S::FIT, S::SLEEP_SCREEN_COVER_MODE_COUNT, S::FIT);
   s.sleepScreenCoverFilter =
-      clamp(doc["sleepScreenCoverFilter"] | (uint8_t)S::NO_FILTER,
-            S::SLEEP_SCREEN_COVER_FILTER_COUNT, S::NO_FILTER);
+      clamp(doc["sleepScreenCoverFilter"] | (uint8_t)S::NO_FILTER, S::SLEEP_SCREEN_COVER_FILTER_COUNT, S::NO_FILTER);
   s.showSleepImageFilename = doc["showSleepImageFilename"] | (uint8_t)0;
-  s.statusBar = clamp(doc["statusBar"] | (uint8_t)S::FULL,
-                      S::STATUS_BAR_MODE_COUNT, S::FULL);
-  const bool hasGranularStatusBar = !doc["statusBarEnabled"].isNull() &&
-                                    !doc["statusBarShowBattery"].isNull() &&
+  s.statusBar = clamp(doc["statusBar"] | (uint8_t)S::FULL, S::STATUS_BAR_MODE_COUNT, S::FULL);
+  const bool hasGranularStatusBar = !doc["statusBarEnabled"].isNull() && !doc["statusBarShowBattery"].isNull() &&
                                     !doc["statusBarShowPageCounter"].isNull() &&
                                     !doc["statusBarShowBookPercentage"].isNull() &&
                                     !doc["statusBarShowChapterPercentage"].isNull() &&
-                                    !doc["statusBarShowBookBar"].isNull() &&
-                                    !doc["statusBarShowChapterBar"].isNull() &&
-                                    !doc["statusBarShowChapterTitle"].isNull() &&
-                                    !doc["statusBarTopLine"].isNull() &&
-                                    !doc["statusBarTextAlignment"].isNull() &&
-                                    !doc["statusBarProgressStyle"].isNull();
+                                    !doc["statusBarShowBookBar"].isNull() && !doc["statusBarShowChapterBar"].isNull() &&
+                                    !doc["statusBarShowChapterTitle"].isNull() && !doc["statusBarTopLine"].isNull() &&
+                                    !doc["statusBarTextAlignment"].isNull() && !doc["statusBarProgressStyle"].isNull();
   if (hasGranularStatusBar) {
     s.statusBarEnabled = doc["statusBarEnabled"] | (uint8_t)1;
     s.statusBarShowBattery = doc["statusBarShowBattery"] | (uint8_t)1;
@@ -613,35 +551,27 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarPageCounterMode = S::normalizeStatusBarPageCounterMode(
-          doc["statusBarPageCounterMode"] |
-          (uint8_t)S::STATUS_PAGE_CURRENT_OVER_TOTAL);
+      s.statusBarPageCounterMode = S::normalizeStatusBarPageCounterMode(doc["statusBarPageCounterMode"] |
+                                                                        (uint8_t)S::STATUS_PAGE_CURRENT_OVER_TOTAL);
     }
-    s.statusBarShowBookPercentage =
-        doc["statusBarShowBookPercentage"] | (uint8_t)0;
-    s.statusBarShowChapterPercentage =
-        doc["statusBarShowChapterPercentage"] | (uint8_t)0;
+    s.statusBarShowBookPercentage = doc["statusBarShowBookPercentage"] | (uint8_t)0;
+    s.statusBarShowChapterPercentage = doc["statusBarShowChapterPercentage"] | (uint8_t)0;
     s.statusBarShowBookBar = doc["statusBarShowBookBar"] | (uint8_t)0;
     s.statusBarShowChapterBar = doc["statusBarShowChapterBar"] | (uint8_t)0;
     s.statusBarShowChapterTitle = doc["statusBarShowChapterTitle"] | (uint8_t)1;
-    s.statusBarNoTitleTruncation =
-        doc["statusBarNoTitleTruncation"] | (uint8_t)0;
+    s.statusBarNoTitleTruncation = doc["statusBarNoTitleTruncation"] | (uint8_t)0;
     s.statusBarTopLine = doc["statusBarTopLine"] | (uint8_t)0;
     if (doc["batteryPositionV2"].isNull()) {
       // Migrate old 2-value position (Top/Bottom) to 6-value text position
-      const uint8_t old =
-          doc["statusBarBatteryPosition"] | (uint8_t)S::STATUS_AT_BOTTOM;
+      const uint8_t old = doc["statusBarBatteryPosition"] | (uint8_t)S::STATUS_AT_BOTTOM;
       s.statusBarBatteryPosition =
-          (old == S::STATUS_AT_TOP)
-              ? (uint8_t)S::STATUS_TEXT_TOP_LEFT
-              : (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT;
+          (old == S::STATUS_AT_TOP) ? (uint8_t)S::STATUS_TEXT_TOP_LEFT : (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT;
       if (needsResave) {
         *needsResave = true;
       }
     } else {
-      s.statusBarBatteryPosition = clamp(
-          doc["statusBarBatteryPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT,
-          S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_LEFT);
+      s.statusBarBatteryPosition = clamp(doc["statusBarBatteryPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT,
+                                         S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_LEFT);
     }
     if (doc["statusBarProgressTextPosition"].isNull()) {
       s.statusBarProgressTextPosition = (uint8_t)S::STATUS_AT_BOTTOM;
@@ -649,24 +579,21 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarProgressTextPosition = clamp(
-          doc["statusBarProgressTextPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
-          S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
+      s.statusBarProgressTextPosition = clamp(doc["statusBarProgressTextPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+                                              S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
-    const uint8_t fallbackProgressTextPosition =
-        s.statusBarProgressTextPosition == S::STATUS_AT_TOP
-            ? (uint8_t)S::STATUS_TEXT_TOP_CENTER
-            : (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER;
+    const uint8_t fallbackProgressTextPosition = s.statusBarProgressTextPosition == S::STATUS_AT_TOP
+                                                     ? (uint8_t)S::STATUS_TEXT_TOP_CENTER
+                                                     : (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER;
     if (doc["statusBarPageCounterPosition"].isNull()) {
       s.statusBarPageCounterPosition = fallbackProgressTextPosition;
       if (needsResave) {
         *needsResave = true;
       }
     } else {
-      s.statusBarPageCounterPosition = clamp(
-          doc["statusBarPageCounterPosition"] |
-              (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
-          S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
+      s.statusBarPageCounterPosition =
+          clamp(doc["statusBarPageCounterPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+                S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     }
     if (doc["statusBarBookPercentagePosition"].isNull()) {
       s.statusBarBookPercentagePosition = fallbackProgressTextPosition;
@@ -674,10 +601,9 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarBookPercentagePosition = clamp(
-          doc["statusBarBookPercentagePosition"] |
-              (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
-          S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
+      s.statusBarBookPercentagePosition =
+          clamp(doc["statusBarBookPercentagePosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+                S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     }
     if (doc["statusBarChapterPercentagePosition"].isNull()) {
       s.statusBarChapterPercentagePosition = fallbackProgressTextPosition;
@@ -685,10 +611,9 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarChapterPercentagePosition = clamp(
-          doc["statusBarChapterPercentagePosition"] |
-              (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
-          S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
+      s.statusBarChapterPercentagePosition =
+          clamp(doc["statusBarChapterPercentagePosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+                S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     }
     if (doc["statusBarBookBarPosition"].isNull()) {
       s.statusBarBookBarPosition = (uint8_t)S::STATUS_AT_BOTTOM;
@@ -696,9 +621,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarBookBarPosition = clamp(
-          doc["statusBarBookBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
-          S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
+      s.statusBarBookBarPosition = clamp(doc["statusBarBookBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+                                         S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
     if (doc["statusBarChapterBarPosition"].isNull()) {
       s.statusBarChapterBarPosition = (uint8_t)S::STATUS_AT_BOTTOM;
@@ -706,9 +630,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarChapterBarPosition = clamp(
-          doc["statusBarChapterBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
-          S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
+      s.statusBarChapterBarPosition = clamp(doc["statusBarChapterBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+                                            S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
     if (doc["statusBarTitlePosition"].isNull()) {
       s.statusBarTitlePosition = (uint8_t)S::STATUS_AT_BOTTOM;
@@ -716,38 +639,28 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
         *needsResave = true;
       }
     } else {
-      s.statusBarTitlePosition = clamp(
-          doc["statusBarTitlePosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
-          S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
+      s.statusBarTitlePosition = clamp(doc["statusBarTitlePosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+                                       S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
-    s.statusBarTextAlignment =
-        clamp(doc["statusBarTextAlignment"] | (uint8_t)S::STATUS_TEXT_RIGHT,
-              S::STATUS_TEXT_ALIGNMENT_COUNT, S::STATUS_TEXT_RIGHT);
-    s.statusBarProgressStyle =
-        clamp(doc["statusBarProgressStyle"] | (uint8_t)S::STATUS_BAR_THICK,
-              S::STATUS_BAR_PROGRESS_STYLE_COUNT, S::STATUS_BAR_THICK);
-    s.statusBarFontSize =
-        clamp(doc["statusBarFontSize"] | (uint8_t)S::STATUS_FONT_SMALL,
-              S::STATUS_BAR_FONT_SIZE_COUNT, S::STATUS_FONT_SMALL);
-    s.statusBarBarThickness =
-        clamp(doc["statusBarBarThickness"] | (uint8_t)S::STATUS_BAR_THICKNESS_NORMAL,
-              S::STATUS_BAR_BAR_THICKNESS_COUNT, S::STATUS_BAR_THICKNESS_NORMAL);
+    s.statusBarTextAlignment = clamp(doc["statusBarTextAlignment"] | (uint8_t)S::STATUS_TEXT_RIGHT,
+                                     S::STATUS_TEXT_ALIGNMENT_COUNT, S::STATUS_TEXT_RIGHT);
+    s.statusBarProgressStyle = clamp(doc["statusBarProgressStyle"] | (uint8_t)S::STATUS_BAR_THICK,
+                                     S::STATUS_BAR_PROGRESS_STYLE_COUNT, S::STATUS_BAR_THICK);
+    s.statusBarFontSize = clamp(doc["statusBarFontSize"] | (uint8_t)S::STATUS_FONT_SMALL, S::STATUS_BAR_FONT_SIZE_COUNT,
+                                S::STATUS_FONT_SMALL);
+    s.statusBarBarThickness = clamp(doc["statusBarBarThickness"] | (uint8_t)S::STATUS_BAR_THICKNESS_NORMAL,
+                                    S::STATUS_BAR_BAR_THICKNESS_COUNT, S::STATUS_BAR_THICKNESS_NORMAL);
   } else {
     migrateLegacyStatusBarMode(s);
-    if (needsResave)
-      *needsResave = true;
+    if (needsResave) *needsResave = true;
   }
   if (!doc["extraParagraphSpacingLevel"].isNull()) {
-    s.extraParagraphSpacingLevel = clamp(
-        doc["extraParagraphSpacingLevel"] | (uint8_t)S::EXTRA_SPACING_M,
-        S::EXTRA_PARAGRAPH_SPACING_COUNT, S::EXTRA_SPACING_M);
+    s.extraParagraphSpacingLevel = clamp(doc["extraParagraphSpacingLevel"] | (uint8_t)S::EXTRA_SPACING_M,
+                                         S::EXTRA_PARAGRAPH_SPACING_COUNT, S::EXTRA_SPACING_M);
   } else {
     const uint8_t legacyExtraSpacing = doc["extraParagraphSpacing"] | (uint8_t)1;
-    s.extraParagraphSpacingLevel = legacyExtraSpacing
-                                       ? (uint8_t)S::EXTRA_SPACING_M
-                                       : (uint8_t)S::EXTRA_SPACING_OFF;
-    if (needsResave)
-      *needsResave = true;
+    s.extraParagraphSpacingLevel = legacyExtraSpacing ? (uint8_t)S::EXTRA_SPACING_M : (uint8_t)S::EXTRA_SPACING_OFF;
+    if (needsResave) *needsResave = true;
   }
   {
     const uint8_t raw = doc["wordSpacingPercent"] | (uint8_t)S::WORD_SPACING_NORMAL;
@@ -758,22 +671,19 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
       if (needsResave) *needsResave = true;
     }
   }
-  s.firstLineIndentMode = clamp(
-      doc["firstLineIndentMode"] | (uint8_t)S::INDENT_BOOK,
-      S::FIRST_LINE_INDENT_MODE_COUNT, S::INDENT_BOOK);
+  s.firstLineIndentMode =
+      clamp(doc["firstLineIndentMode"] | (uint8_t)S::INDENT_BOOK, S::FIRST_LINE_INDENT_MODE_COUNT, S::INDENT_BOOK);
   if (doc["readerStyleMode"].isNull()) {
-    s.readerStyleMode = doc["embeddedStyle"].isNull()
-                            ? (uint8_t)S::READER_STYLE_USER
-                            : ((doc["embeddedStyle"] | (uint8_t)0)
-                                   ? (uint8_t)S::READER_STYLE_HYBRID
-                                   : (uint8_t)S::READER_STYLE_USER);
+    s.readerStyleMode =
+        doc["embeddedStyle"].isNull()
+            ? (uint8_t)S::READER_STYLE_USER
+            : ((doc["embeddedStyle"] | (uint8_t)0) ? (uint8_t)S::READER_STYLE_HYBRID : (uint8_t)S::READER_STYLE_USER);
     if (needsResave) {
       *needsResave = true;
     }
   } else {
-    s.readerStyleMode = clamp(
-        doc["readerStyleMode"] | (uint8_t)S::READER_STYLE_USER,
-        S::READER_STYLE_MODE_COUNT, S::READER_STYLE_USER);
+    s.readerStyleMode =
+        clamp(doc["readerStyleMode"] | (uint8_t)S::READER_STYLE_USER, S::READER_STYLE_MODE_COUNT, S::READER_STYLE_USER);
   }
   if (doc["textRenderMode"].isNull()) {
     s.textRenderMode = (uint8_t)S::TEXT_RENDER_CRISP;
@@ -782,12 +692,10 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
     }
   } else {
     // Migrate from v2 enum (Crisp=0, Light=1, Dark=2, ExtraDark=3) to v3 (Crisp=0, Dark=1, Bionic=2).
-    const uint8_t raw =
-        doc["textRenderMode"] | (uint8_t)S::TEXT_RENDER_CRISP;
+    const uint8_t raw = doc["textRenderMode"] | (uint8_t)S::TEXT_RENDER_CRISP;
     if (doc["textRenderModeV2"].isNull()) {
       // Old v2 format: any non-zero value → Dark
-      s.textRenderMode = raw >= 1 ? (uint8_t)S::TEXT_RENDER_DARK
-                                  : (uint8_t)S::TEXT_RENDER_CRISP;
+      s.textRenderMode = raw >= 1 ? (uint8_t)S::TEXT_RENDER_DARK : (uint8_t)S::TEXT_RENDER_CRISP;
     } else if (raw >= S::TEXT_RENDER_MODE_COUNT) {
       s.textRenderMode = (uint8_t)S::TEXT_RENDER_CRISP;
     } else {
@@ -798,31 +706,24 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
     }
   }
   s.textAntiAliasing = 0;
-  s.shortPwrBtn = clamp(doc["shortPwrBtn"] | (uint8_t)S::IGNORE,
-                        S::SHORT_PWRBTN_COUNT, S::IGNORE);
-  s.orientation = clamp(doc["orientation"] | (uint8_t)S::PORTRAIT,
-                        S::ORIENTATION_COUNT, S::PORTRAIT);
-  s.sideButtonLayout = clamp(doc["sideButtonLayout"] | (uint8_t)S::PREV_NEXT,
-                             S::SIDE_BUTTON_LAYOUT_COUNT, S::PREV_NEXT);
-  s.frontButtonBack = clamp(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK,
-                            S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
-  s.frontButtonConfirm =
-      clamp(doc["frontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM,
-            S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_CONFIRM);
-  s.frontButtonLeft = clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT,
-                            S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
+  s.shortPwrBtn = clamp(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
+  s.orientation = clamp(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
+  s.sideButtonLayout =
+      clamp(doc["sideButtonLayout"] | (uint8_t)S::PREV_NEXT, S::SIDE_BUTTON_LAYOUT_COUNT, S::PREV_NEXT);
+  s.frontButtonBack =
+      clamp(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
+  s.frontButtonConfirm = clamp(doc["frontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM, S::FRONT_BUTTON_HARDWARE_COUNT,
+                               S::FRONT_HW_CONFIRM);
+  s.frontButtonLeft =
+      clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
   s.frontButtonRight =
-      clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT,
-            S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
+      clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
-  s.fontFamily = clamp(doc["fontFamily"] | (uint8_t)S::CHAREINK,
-                       S::FONT_FAMILY_COUNT, S::CHAREINK);
+  s.fontFamily = clamp(doc["fontFamily"] | (uint8_t)S::CHAREINK, S::FONT_FAMILY_COUNT, S::CHAREINK);
   s.fontFamily = S::normalizeFontFamily(s.fontFamily);
-  s.fontSize = clamp(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT,
-                     S::SIZE_16);
+  s.fontSize = clamp(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT, S::SIZE_16);
   s.fontSize = S::normalizeFontSizeForFamily(s.fontFamily, s.fontSize);
-  s.lineSpacing = clamp(doc["lineSpacing"] | (uint8_t)S::NORMAL,
-                        S::LINE_COMPRESSION_COUNT, S::NORMAL);
+  s.lineSpacing = clamp(doc["lineSpacing"] | (uint8_t)S::NORMAL, S::LINE_COMPRESSION_COUNT, S::NORMAL);
   if (!doc["lineSpacingPercent"].isNull()) {
     const uint8_t parsed = doc["lineSpacingPercent"] | (uint8_t)110;
     if (parsed < 35) {
@@ -834,35 +735,32 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
     }
   } else {
     switch (s.lineSpacing) {
-    case S::TIGHT:
-      s.lineSpacingPercent = 95;
-      break;
-    case S::WIDE:
-      s.lineSpacingPercent = 125;
-      break;
-    case S::NORMAL:
-    default:
-      s.lineSpacingPercent = 110;
-      break;
+      case S::TIGHT:
+        s.lineSpacingPercent = 95;
+        break;
+      case S::WIDE:
+        s.lineSpacingPercent = 125;
+        break;
+      case S::NORMAL:
+      default:
+        s.lineSpacingPercent = 110;
+        break;
     }
     if (needsResave) {
       *needsResave = true;
     }
   }
   s.paragraphAlignment =
-      clamp(doc["paragraphAlignment"] | (uint8_t)S::JUSTIFIED,
-            S::PARAGRAPH_ALIGNMENT_COUNT, S::JUSTIFIED);
-  s.sleepTimeout = clamp(doc["sleepTimeout"] | (uint8_t)S::SLEEP_10_MIN,
-                         S::SLEEP_TIMEOUT_COUNT, S::SLEEP_10_MIN);
+      clamp(doc["paragraphAlignment"] | (uint8_t)S::JUSTIFIED, S::PARAGRAPH_ALIGNMENT_COUNT, S::JUSTIFIED);
+  s.sleepTimeout = clamp(doc["sleepTimeout"] | (uint8_t)S::SLEEP_10_MIN, S::SLEEP_TIMEOUT_COUNT, S::SLEEP_10_MIN);
   s.showHiddenFiles = doc["showHiddenFiles"] | (uint8_t)0;
   s.randomBookOnBoot = doc["randomBookOnBoot"] | (uint8_t)0;
-  s.refreshFrequency = clamp(doc["refreshFrequency"] | (uint8_t)S::REFRESH_15,
-                             S::REFRESH_FREQUENCY_COUNT, S::REFRESH_15);
+  s.refreshFrequency =
+      clamp(doc["refreshFrequency"] | (uint8_t)S::REFRESH_15, S::REFRESH_FREQUENCY_COUNT, S::REFRESH_15);
   s.screenMargin = doc["screenMargin"] | (uint8_t)5;
   s.uniformMargins = doc["uniformMargins"] | (uint8_t)0;
   if (s.uniformMargins > 1) s.uniformMargins = 0;
-  const bool hasSplitMargins = !doc["screenMarginHorizontal"].isNull() &&
-                               !doc["screenMarginTop"].isNull() &&
+  const bool hasSplitMargins = !doc["screenMarginHorizontal"].isNull() && !doc["screenMarginTop"].isNull() &&
                                !doc["screenMarginBottom"].isNull();
   if (hasSplitMargins) {
     s.screenMarginHorizontal = doc["screenMarginHorizontal"] | s.screenMargin;
@@ -872,18 +770,15 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
     s.screenMarginHorizontal = s.screenMargin;
     s.screenMarginTop = s.screenMargin;
     s.screenMarginBottom = s.screenMargin;
-    if (needsResave)
-      *needsResave = true;
+    if (needsResave) *needsResave = true;
   }
   s.hideBatteryPercentage =
-      clamp(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER,
-            S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
+      clamp(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER, S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
   s.longPressChapterSkip = doc["longPressChapterSkip"] | (uint8_t)1;
   s.hyphenationEnabled = doc["hyphenationEnabled"] | (uint8_t)0;
   s.readerBoldSwap = doc["readerBoldSwap"] | (uint8_t)0;
   s.fadingFix = doc["fadingFix"] | (uint8_t)0;
-  s.embeddedStyle =
-      s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
+  s.embeddedStyle = s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
   s.debugBorders = doc["debugBorders"] | (uint8_t)0;
   s.highlightMode = clamp(doc["highlightMode"] | (uint8_t)0, S::HIGHLIGHT_MODE_COUNT, 0);
   s.darkMode = doc["darkMode"] | (uint8_t)0;
@@ -897,12 +792,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
   s.bleEnabled = doc["bleEnabled"] | (uint8_t)0;
   if (s.bleEnabled > 1) s.bleEnabled = 0;
   {
-    const char *addr = doc["bleDeviceAddr"] | "";
+    const char* addr = doc["bleDeviceAddr"] | "";
     strncpy(s.bleDeviceAddr, addr, sizeof(s.bleDeviceAddr) - 1);
     s.bleDeviceAddr[sizeof(s.bleDeviceAddr) - 1] = '\0';
   }
   {
-    const char *name = doc["bleDeviceName"] | "";
+    const char* name = doc["bleDeviceName"] | "";
     strncpy(s.bleDeviceName, name, sizeof(s.bleDeviceName) - 1);
     s.bleDeviceName[sizeof(s.bleDeviceName) - 1] = '\0';
   }
@@ -918,21 +813,19 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
     }
   }
 
-  const char *url = doc["opdsServerUrl"] | "";
+  const char* url = doc["opdsServerUrl"] | "";
   strncpy(s.opdsServerUrl, url, sizeof(s.opdsServerUrl) - 1);
   s.opdsServerUrl[sizeof(s.opdsServerUrl) - 1] = '\0';
 
-  const char *user = doc["opdsUsername"] | "";
+  const char* user = doc["opdsUsername"] | "";
   strncpy(s.opdsUsername, user, sizeof(s.opdsUsername) - 1);
   s.opdsUsername[sizeof(s.opdsUsername) - 1] = '\0';
 
   bool passOk = false;
-  std::string pass =
-      obfuscation::deobfuscateFromBase64(doc["opdsPassword_obf"] | "", &passOk);
+  std::string pass = obfuscation::deobfuscateFromBase64(doc["opdsPassword_obf"] | "", &passOk);
   if (!passOk || pass.empty()) {
     pass = doc["opdsPassword"] | "";
-    if (!pass.empty() && needsResave)
-      *needsResave = true;
+    if (!pass.empty() && needsResave) *needsResave = true;
   }
   strncpy(s.opdsPassword, pass.c_str(), sizeof(s.opdsPassword) - 1);
   s.opdsPassword[sizeof(s.opdsPassword) - 1] = '\0';
@@ -942,8 +835,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings &s, const char *json,
 
 // ---- KOReaderCredentialStore ----
 
-bool JsonSettingsIO::saveKOReader(const KOReaderCredentialStore &store,
-                                  const char *path) {
+bool JsonSettingsIO::saveKOReader(const KOReaderCredentialStore& store, const char* path) {
   JsonDocument doc;
   doc["username"] = store.getUsername();
   doc["password_obf"] = obfuscation::obfuscateToBase64(store.getPassword());
@@ -955,10 +847,8 @@ bool JsonSettingsIO::saveKOReader(const KOReaderCredentialStore &store,
   return safeWriteFile(path, json);
 }
 
-bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore &store,
-                                  const char *json, bool *needsResave) {
-  if (needsResave)
-    *needsResave = false;
+bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore& store, const char* json, bool* needsResave) {
+  if (needsResave) *needsResave = false;
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
@@ -968,31 +858,27 @@ bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore &store,
 
   store.username = doc["username"] | std::string("");
   bool ok = false;
-  store.password =
-      obfuscation::deobfuscateFromBase64(doc["password_obf"] | "", &ok);
+  store.password = obfuscation::deobfuscateFromBase64(doc["password_obf"] | "", &ok);
   if (!ok || store.password.empty()) {
     store.password = doc["password"] | std::string("");
-    if (!store.password.empty() && needsResave)
-      *needsResave = true;
+    if (!store.password.empty() && needsResave) *needsResave = true;
   }
   store.serverUrl = doc["serverUrl"] | std::string("");
   uint8_t method = doc["matchMethod"] | (uint8_t)0;
   store.matchMethod = static_cast<DocumentMatchMethod>(method);
 
-  LOG_DBG("KRS", "Loaded KOReader credentials for user: %s",
-          store.username.c_str());
+  LOG_DBG("KRS", "Loaded KOReader credentials for user: %s", store.username.c_str());
   return true;
 }
 
 // ---- WifiCredentialStore ----
 
-bool JsonSettingsIO::saveWifi(const WifiCredentialStore &store,
-                              const char *path) {
+bool JsonSettingsIO::saveWifi(const WifiCredentialStore& store, const char* path) {
   JsonDocument doc;
   doc["lastConnectedSsid"] = store.getLastConnectedSsid();
 
   JsonArray arr = doc["credentials"].to<JsonArray>();
-  for (const auto &cred : store.getCredentials()) {
+  for (const auto& cred : store.getCredentials()) {
     JsonObject obj = arr.add<JsonObject>();
     obj["ssid"] = cred.ssid;
     obj["password_obf"] = obfuscation::obfuscateToBase64(cred.password);
@@ -1003,10 +889,8 @@ bool JsonSettingsIO::saveWifi(const WifiCredentialStore &store,
   return safeWriteFile(path, json);
 }
 
-bool JsonSettingsIO::loadWifi(WifiCredentialStore &store, const char *json,
-                              bool *needsResave) {
-  if (needsResave)
-    *needsResave = false;
+bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool* needsResave) {
+  if (needsResave) *needsResave = false;
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
@@ -1019,33 +903,28 @@ bool JsonSettingsIO::loadWifi(WifiCredentialStore &store, const char *json,
   store.credentials.clear();
   JsonArray arr = doc["credentials"].as<JsonArray>();
   for (JsonObject obj : arr) {
-    if (store.credentials.size() >= store.MAX_NETWORKS)
-      break;
+    if (store.credentials.size() >= store.MAX_NETWORKS) break;
     WifiCredential cred;
     cred.ssid = obj["ssid"] | std::string("");
     bool ok = false;
-    cred.password =
-        obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &ok);
+    cred.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &ok);
     if (!ok || cred.password.empty()) {
       cred.password = obj["password"] | std::string("");
-      if (!cred.password.empty() && needsResave)
-        *needsResave = true;
+      if (!cred.password.empty() && needsResave) *needsResave = true;
     }
     store.credentials.push_back(cred);
   }
 
-  LOG_DBG("WCS", "Loaded %zu WiFi credentials from file",
-          store.credentials.size());
+  LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", store.credentials.size());
   return true;
 }
 
 // ---- RecentBooksStore ----
 
-bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore &store,
-                                     const char *path) {
+bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* path) {
   JsonDocument doc;
   JsonArray arr = doc["books"].to<JsonArray>();
-  for (const auto &book : store.getBooks()) {
+  for (const auto& book : store.getBooks()) {
     JsonObject obj = arr.add<JsonObject>();
     obj["path"] = book.path;
     obj["title"] = book.title;
@@ -1058,8 +937,7 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore &store,
   return safeWriteFile(path, json);
 }
 
-bool JsonSettingsIO::loadRecentBooks(RecentBooksStore &store,
-                                     const char *json) {
+bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
@@ -1070,8 +948,7 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore &store,
   store.recentBooks.clear();
   JsonArray arr = doc["books"].as<JsonArray>();
   for (JsonObject obj : arr) {
-    if (store.getCount() >= RecentBooksStore::MAX_RECENT_BOOKS)
-      break;
+    if (store.getCount() >= RecentBooksStore::MAX_RECENT_BOOKS) break;
     RecentBook book;
     book.path = obj["path"] | std::string("");
     book.title = obj["title"] | std::string("");
@@ -1080,15 +957,13 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore &store,
     store.recentBooks.push_back(book);
   }
 
-  LOG_DBG("RBS", "Recent books loaded from file (%d entries)",
-          store.getCount());
+  LOG_DBG("RBS", "Recent books loaded from file (%d entries)", store.getCount());
   return true;
 }
 
 // ---- ReadingThemeStore ----
 
-bool JsonSettingsIO::saveReadingTheme(const ReadingTheme& theme,
-                                      const char* path) {
+bool JsonSettingsIO::saveReadingTheme(const ReadingTheme& theme, const char* path) {
   JsonDocument doc;
   JsonObject obj = doc.to<JsonObject>();
   writeReadingThemeObject(obj, theme);
@@ -1116,8 +991,7 @@ bool JsonSettingsIO::loadReadingTheme(ReadingTheme& theme, const char* json) {
   return true;
 }
 
-bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store,
-                                       const char* path) {
+bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store, const char* path) {
   JsonDocument doc;
   doc["lastEditedThemeIndex"] = store.getLastEditedThemeIndex();
   JsonArray arr = doc["themes"].to<JsonArray>();
@@ -1131,8 +1005,7 @@ bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store,
   return safeWriteFile(path, json);
 }
 
-bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store,
-                                       const char* json) {
+bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store, const char* json) {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
@@ -1155,7 +1028,8 @@ bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store,
   }
 
   if (parsed.empty() && !store.themes.empty()) {
-    LOG_ERR("RTH", "Parsed 0 themes from JSON but %u in memory — rejecting load "
+    LOG_ERR("RTH",
+            "Parsed 0 themes from JSON but %u in memory — rejecting load "
             "(possible file corruption)",
             (unsigned)store.themes.size());
     return false;
@@ -1163,8 +1037,7 @@ bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store,
 
   store.themes = std::move(parsed);
   store.lastEditedThemeIndex = doc["lastEditedThemeIndex"] | -1;
-  if (store.lastEditedThemeIndex < 0 ||
-      store.lastEditedThemeIndex >= static_cast<int>(store.themes.size())) {
+  if (store.lastEditedThemeIndex < 0 || store.lastEditedThemeIndex >= static_cast<int>(store.themes.size())) {
     store.lastEditedThemeIndex = -1;
   }
 

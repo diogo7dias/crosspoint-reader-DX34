@@ -21,8 +21,7 @@ void show(GfxRenderer& renderer, const char* message) {
   const std::string upper = StringUtils::toUpperAscii(message);
 
   const int screenW = renderer.getScreenWidth();
-  const int textWidth =
-      renderer.getTextWidth(UI_12_FONT_ID, upper.c_str(), EpdFontFamily::REGULAR);
+  const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, upper.c_str(), EpdFontFamily::REGULAR);
   const int textHeight = renderer.getLineHeight(UI_12_FONT_ID);
 
   constexpr int paddingX = 20;
@@ -33,14 +32,12 @@ void show(GfxRenderer& renderer, const char* message) {
   const int boxX = (screenW - boxW) / 2;
   const int boxY = sActive ? (sBottomY + kGap) : kStartY;
 
-  renderer.fillRect(boxX - border, boxY - border,
-                    boxW + border * 2, boxH + border * 2, true);
+  renderer.fillRect(boxX - border, boxY - border, boxW + border * 2, boxH + border * 2, true);
   renderer.fillRect(boxX, boxY, boxW, boxH, false);
 
   const int textX = boxX + (boxW - textWidth) / 2;
   const int textY = boxY + paddingY - 2;
-  renderer.drawText(UI_12_FONT_ID, textX, textY, upper.c_str(), true,
-                    EpdFontFamily::REGULAR);
+  renderer.drawText(UI_12_FONT_ID, textX, textY, upper.c_str(), true, EpdFontFamily::REGULAR);
 
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   sBottomY = boxY + boxH + border;
@@ -57,13 +54,9 @@ void dismiss(GfxRenderer& renderer) {
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }
 
-bool isActive() {
-  return sActive;
-}
+bool isActive() { return sActive; }
 
-int bottomY() {
-  return sActive ? sBottomY : 0;
-}
+int bottomY() { return sActive ? sBottomY : 0; }
 
 void resetStacking() {
   sActive = false;

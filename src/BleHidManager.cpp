@@ -220,9 +220,8 @@ bool BleHidManager::subscribeToHid() {
       protoMode->writeValue(&bootMode, 1);
     }
 
-    bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-      onHidReport(data, len);
-    });
+    bootKbChar->subscribe(
+        true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) { onHidReport(data, len); });
     LOG_INF("BLE", "Subscribed to Boot Keyboard Input");
     return true;
   }
@@ -234,9 +233,8 @@ bool BleHidManager::subscribeToHid() {
   if (chars) {
     for (auto* chr : *chars) {
       if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
-        chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-          onHidReport(data, len);
-        });
+        chr->subscribe(
+            true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) { onHidReport(data, len); });
         subscribed = true;
         LOG_INF("BLE", "Subscribed to HID Report characteristic");
       }
@@ -270,8 +268,7 @@ void BleHidManager::tryAutoReconnect() {
 
   // Try up to kMaxReconnectAttempts at boot (blocking OK here).
   for (uint8_t attempt = 1; attempt <= kMaxReconnectAttempts; attempt++) {
-    LOG_INF("BLE", "Auto-reconnect attempt %u/%u to %s",
-            attempt, kMaxReconnectAttempts, SETTINGS.bleDeviceName);
+    LOG_INF("BLE", "Auto-reconnect attempt %u/%u to %s", attempt, kMaxReconnectAttempts, SETTINGS.bleDeviceName);
     if (connectToDeviceBlocking(SETTINGS.bleDeviceAddr)) {
       connectedName = SETTINGS.bleDeviceName;
       reconnectAttempts = 0;
@@ -281,8 +278,7 @@ void BleHidManager::tryAutoReconnect() {
   }
 
   // All attempts failed — shut down BLE to save power.
-  LOG_INF("BLE", "Boot reconnect failed after %u attempts, shutting down BLE",
-          kMaxReconnectAttempts);
+  LOG_INF("BLE", "Boot reconnect failed after %u attempts, shutting down BLE", kMaxReconnectAttempts);
   deinit();
 }
 
@@ -388,8 +384,7 @@ void BleHidManager::updateButtonState() {
   // Non-blocking auto-reconnect with retry limit
   if (state == State::Disconnected && SETTINGS.bleEnabled) {
     if (reconnectAttempts >= kMaxReconnectAttempts) {
-      LOG_INF("BLE", "Reconnect failed after %u attempts, shutting down BLE",
-              kMaxReconnectAttempts);
+      LOG_INF("BLE", "Reconnect failed after %u attempts, shutting down BLE", kMaxReconnectAttempts);
       deinit();
       return;
     }
@@ -397,8 +392,7 @@ void BleHidManager::updateButtonState() {
     if (now - lastReconnectAttempt >= kReconnectIntervalMs) {
       lastReconnectAttempt = now;
       reconnectAttempts++;
-      LOG_DBG("BLE", "Auto-reconnect attempt %u/%u",
-              reconnectAttempts, kMaxReconnectAttempts);
+      LOG_DBG("BLE", "Auto-reconnect attempt %u/%u", reconnectAttempts, kMaxReconnectAttempts);
       connectToDeviceAsync(SETTINGS.bleDeviceAddr);
     }
   }
@@ -415,17 +409,11 @@ void BleHidManager::updateButtonState() {
   portEXIT_CRITICAL(&stateLock);
 }
 
-bool BleHidManager::wasPressed(uint8_t idx) const {
-  return idx < kButtonCount && edgePressed[idx];
-}
+bool BleHidManager::wasPressed(uint8_t idx) const { return idx < kButtonCount && edgePressed[idx]; }
 
-bool BleHidManager::wasReleased(uint8_t idx) const {
-  return idx < kButtonCount && edgeReleased[idx];
-}
+bool BleHidManager::wasReleased(uint8_t idx) const { return idx < kButtonCount && edgeReleased[idx]; }
 
-bool BleHidManager::isPressed(uint8_t idx) const {
-  return idx < kButtonCount && currentPressed[idx];
-}
+bool BleHidManager::isPressed(uint8_t idx) const { return idx < kButtonCount && currentPressed[idx]; }
 
 bool BleHidManager::wasAnyPressed() const {
   for (int i = 0; i < kButtonCount; i++) {
@@ -455,6 +443,4 @@ uint16_t BleHidManager::captureRawKeycode() {
   return code;
 }
 
-void BleHidManager::clearCapturedKeycode() {
-  lastRawKeycode = 0;
-}
+void BleHidManager::clearCapturedKeycode() { lastRawKeycode = 0; }

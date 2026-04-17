@@ -1,9 +1,9 @@
 #include "BookmarkListActivity.h"
 
-#include <algorithm>
-
 #include <GfxRenderer.h>
 #include <I18n.h>
+
+#include <algorithm>
 
 #include "MappedInputManager.h"
 #include "activities/util/ConfirmDialogActivity.h"
@@ -37,8 +37,7 @@ void BookmarkListActivity::onEnter() {
 
 void BookmarkListActivity::onExit() { ActivityWithSubactivity::onExit(); }
 
-std::string BookmarkListActivity::formatBookmark(
-    const BookmarkStore::Bookmark& bm) const {
+std::string BookmarkListActivity::formatBookmark(const BookmarkStore::Bookmark& bm) const {
   // User-provided name takes precedence over auto-generated labels.
   if (!bm.name.empty()) {
     std::string label = bm.name;
@@ -66,8 +65,7 @@ std::string BookmarkListActivity::formatBookmark(
   }
 
   if (label.empty()) {
-    label =
-        "Ch " + std::to_string(bm.spineIndex) + " p" + std::to_string(bm.pageNumber + 1);
+    label = "Ch " + std::to_string(bm.spineIndex) + " p" + std::to_string(bm.pageNumber + 1);
   }
 
   return label;
@@ -86,8 +84,7 @@ void BookmarkListActivity::openKeyboardForRename(int bookmarkIndex) {
   const std::string initial = bm.name.empty() ? formatBookmark(bm) : bm.name;
   actionPopupOpen = false;
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, tr(STR_BOOKMARK_NAME), initial, 10,
-      BookmarkStore::MAX_NAME_LENGTH, false,
+      renderer, mappedInput, tr(STR_BOOKMARK_NAME), initial, 10, BookmarkStore::MAX_NAME_LENGTH, false,
       [this, bookmarkIndex](const std::string& name) {
         store.rename(bookmarkIndex, name);
         store.save(cachePath);
@@ -110,8 +107,7 @@ void BookmarkListActivity::openDeleteConfirm(int bookmarkIndex) {
       [this, bookmarkIndex] {
         store.remove(bookmarkIndex);
         store.save(cachePath);
-        if (selectorIndex >= store.count() && selectorIndex > 0)
-          selectorIndex--;
+        if (selectorIndex >= store.count() && selectorIndex > 0) selectorIndex--;
         exitActivity();
         requestUpdate();
       },
@@ -166,21 +162,18 @@ void BookmarkListActivity::loop() {
       return;
     }
     buttonNavigator.onNext([this] {
-      actionPopupSelectedIndex = ButtonNavigator::nextIndex(
-          actionPopupSelectedIndex, kBookmarkActionCount);
+      actionPopupSelectedIndex = ButtonNavigator::nextIndex(actionPopupSelectedIndex, kBookmarkActionCount);
       requestUpdate();
     });
     buttonNavigator.onPrevious([this] {
-      actionPopupSelectedIndex = ButtonNavigator::previousIndex(
-          actionPopupSelectedIndex, kBookmarkActionCount);
+      actionPopupSelectedIndex = ButtonNavigator::previousIndex(actionPopupSelectedIndex, kBookmarkActionCount);
       requestUpdate();
     });
     return;
   }
 
   // Hold Select: open action popup as soon as threshold is reached (while held)
-  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= kHoldActionMs &&
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= kHoldActionMs &&
       selectorIndex >= 0 && selectorIndex < totalItems) {
     mappedInput.suppressUntilAllReleased();
     openActionPopup(selectorIndex);
@@ -191,8 +184,7 @@ void BookmarkListActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (selectorIndex >= 0 && selectorIndex < totalItems) {
       const auto& bm = store.getAll()[selectorIndex];
-      const bool isCurrent =
-          (bm.spineIndex == currentSpineIndex && bm.pageNumber == currentPage);
+      const bool isCurrent = (bm.spineIndex == currentSpineIndex && bm.pageNumber == currentPage);
       if (isCurrent) {
         onGoBack();
       } else {
@@ -226,12 +218,9 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
   const auto pageWidth = renderer.getScreenWidth();
   const auto screenHeight = renderer.getScreenHeight();
   const auto orientation = renderer.getOrientation();
-  const bool isLandscapeCw =
-      orientation == GfxRenderer::Orientation::LandscapeClockwise;
-  const bool isLandscapeCcw =
-      orientation == GfxRenderer::Orientation::LandscapeCounterClockwise;
-  const bool isPortraitInverted =
-      orientation == GfxRenderer::Orientation::PortraitInverted;
+  const bool isLandscapeCw = orientation == GfxRenderer::Orientation::LandscapeClockwise;
+  const bool isLandscapeCcw = orientation == GfxRenderer::Orientation::LandscapeCounterClockwise;
+  const bool isPortraitInverted = orientation == GfxRenderer::Orientation::PortraitInverted;
   const int hintGutterWidth = (isLandscapeCw || isLandscapeCcw) ? 30 : 0;
   const int contentX = isLandscapeCw ? hintGutterWidth : 0;
   const int contentWidth = pageWidth - hintGutterWidth;
@@ -241,46 +230,35 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
   // Title
   const char* title = I18N.get(StrId::STR_BOOKMARKS);
   const int titleX =
-      contentX +
-      (contentWidth -
-       renderer.getTextWidth(UI_12_FONT_ID, title, EpdFontFamily::REGULAR)) /
-          2;
-  renderer.drawText(UI_12_FONT_ID, titleX, 15 + contentY, title, true,
-                    EpdFontFamily::REGULAR);
+      contentX + (contentWidth - renderer.getTextWidth(UI_12_FONT_ID, title, EpdFontFamily::REGULAR)) / 2;
+  renderer.drawText(UI_12_FONT_ID, titleX, 15 + contentY, title, true, EpdFontFamily::REGULAR);
 
   const int totalItems = store.count();
 
   // Count indicator (e.g. "3 / 20")
-  const std::string countStr = std::to_string(totalItems) + " / " +
-                                std::to_string(BookmarkStore::MAX_BOOKMARKS);
+  const std::string countStr = std::to_string(totalItems) + " / " + std::to_string(BookmarkStore::MAX_BOOKMARKS);
   renderer.drawCenteredText(UI_10_FONT_ID, 42 + contentY, countStr.c_str());
 
   if (totalItems == 0) {
-    renderer.drawCenteredText(UI_10_FONT_ID, screenHeight / 2,
-                              I18N.get(StrId::STR_NO_BOOKMARKS));
-    const auto labels =
-        mappedInput.mapLabels(tr(STR_BACK), "", "", "");
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                        labels.btn4);
+    renderer.drawCenteredText(UI_10_FONT_ID, screenHeight / 2, I18N.get(StrId::STR_NO_BOOKMARKS));
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();
     return;
   }
 
   const int listStartY = 72 + contentY;
   const int availableHeight = screenHeight - listStartY - kButtonHintsReserve;
-  const int itemsPerPage =
-      std::max(1, availableHeight / kLineHeight);
+  const int itemsPerPage = std::max(1, availableHeight / kLineHeight);
 
   // Pagination
   const int pageStart = (selectorIndex / itemsPerPage) * itemsPerPage;
 
   int currentY = listStartY;
-  for (int i = pageStart;
-       i < totalItems && i < pageStart + itemsPerPage; i++) {
+  for (int i = pageStart; i < totalItems && i < pageStart + itemsPerPage; i++) {
     const auto& bm = store.getAll()[i];
     const bool isSelected = (i == selectorIndex);
-    const bool isCurrent =
-        (bm.spineIndex == currentSpineIndex && bm.pageNumber == currentPage);
+    const bool isCurrent = (bm.spineIndex == currentSpineIndex && bm.pageNumber == currentPage);
 
     if (isSelected) {
       renderer.fillRect(contentX, currentY - 2, contentWidth - 1, kLineHeight);
@@ -290,15 +268,13 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
 
     if (isCurrent && !isSelected) {
       // Current position: bold (double-draw) + dotted border
-      renderer.drawText(UI_10_FONT_ID, contentX + 20, currentY,
-                        label.c_str(), true);
-      renderer.drawText(UI_10_FONT_ID, contentX + 21, currentY,
-                        label.c_str(), true);
+      renderer.drawText(UI_10_FONT_ID, contentX + 20, currentY, label.c_str(), true);
+      renderer.drawText(UI_10_FONT_ID, contentX + 21, currentY, label.c_str(), true);
       const int rectX = contentX + 2;
       const int rectY = currentY - 2;
       const int rectW = contentWidth - 5;
       const int rectH = kLineHeight;
-      for (int px = rectX; px < rectX + rectW; px += 3)  {
+      for (int px = rectX; px < rectX + rectW; px += 3) {
         renderer.drawPixel(px, rectY);
         renderer.drawPixel(px, rectY + rectH - 1);
       }
@@ -307,8 +283,7 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
         renderer.drawPixel(rectX + rectW - 1, py);
       }
     } else {
-      renderer.drawText(UI_10_FONT_ID, contentX + 20, currentY,
-                        label.c_str(), !isSelected);
+      renderer.drawText(UI_10_FONT_ID, contentX + 20, currentY, label.c_str(), !isSelected);
     }
 
     currentY += kLineHeight;
@@ -317,10 +292,8 @@ void BookmarkListActivity::render(Activity::RenderLock&&) {
   if (actionPopupOpen) {
     renderActionPopup();
   } else {
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Select\n/hold",
-                                              tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                        labels.btn4);
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Select\n/hold", tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   }
 
   renderer.displayBuffer();
@@ -344,8 +317,7 @@ void BookmarkListActivity::renderActionPopup() {
 
   const char* title = tr(STR_BOOKMARK_ACTIONS);
   const int titleW = renderer.getTextWidth(UI_10_FONT_ID, title);
-  renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2,
-                    popupY + 10, title, true);
+  renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2, popupY + 10, title, true);
 
   for (int i = 0; i < kBookmarkActionCount; ++i) {
     const int rowY = popupY + titleH + i * rowH;
@@ -354,12 +326,9 @@ void BookmarkListActivity::renderActionPopup() {
       renderer.fillRect(popupX + 6, rowY, popupW - 12, rowH, true);
     }
     const char* label = bookmarkActionLabel(i);
-    renderer.drawText(UI_10_FONT_ID, popupX + 20, rowY + 6, label,
-                      !isSelected);
+    renderer.drawText(UI_10_FONT_ID, popupX + 20, rowY + 6, label, !isSelected);
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_SELECT),
-                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                      labels.btn4);
+  const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }

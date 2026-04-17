@@ -1,9 +1,9 @@
 #include "PngToFramebufferConverter.h"
 
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <Logging.h>
 #include <PNGdec.h>
-#include <HalStorage.h>
 
 #include <cstdlib>
 #include <new>
@@ -235,8 +235,7 @@ int pngDrawCallback(PNGDRAW* pDraw) {
 
       uint8_t ditheredGray;
       if (useDithering) {
-        ditheredGray = useFS ? ctx->fsDitherer.dither4Level(gray, dstX)
-                             : applyBayerDither4Level(gray, outX, outY);
+        ditheredGray = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
       } else {
         ditheredGray = gray / 85;
         if (ditheredGray > 3) ditheredGray = 3;

@@ -21,10 +21,8 @@ size_t countProtectedSleepFavorites();
 std::string displayNameForPath(const std::string& path);
 const char* limitReachedPopupMessage();
 const char* limitReachedHomeMessage();
-SetFavoriteResult setFavorite(const std::string& path, bool favorite,
-                              std::string* updatedPath = nullptr);
-void replacePathReferences(const std::string& oldPath,
-                           const std::string& newPath);
+SetFavoriteResult setFavorite(const std::string& path, bool favorite, std::string* updatedPath = nullptr);
+void replacePathReferences(const std::string& oldPath, const std::string& newPath);
 void removePathReferences(const std::string& path);
 
 }  // namespace FavoriteBmp

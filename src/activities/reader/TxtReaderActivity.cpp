@@ -8,16 +8,17 @@
 #include <Logging.h>
 #include <Serialization.h>
 #include <Utf8.h>
-#include <algorithm>
 #include <esp_task_wdt.h>
+
+#include <algorithm>
 #include <memory>
 #include <vector>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
-#include "ReadingThemesActivity.h"
 #include "ReaderLayoutSafety.h"
+#include "ReadingThemesActivity.h"
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -31,23 +32,21 @@ constexpr unsigned long confirmDoubleTapMs = 350;
 constexpr unsigned long progressSaveDebounceMs = 800;
 constexpr int progressBarMarginTop = 1;
 constexpr int recentSwitcherRows = 8;
-constexpr size_t CHUNK_SIZE = 8 * 1024; // 8KB chunk for reading
+constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
-constexpr uint32_t CACHE_MAGIC = 0x54585449; // "TXTI"
-constexpr uint8_t CACHE_VERSION = 4; // Increment when cache format changes
+constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
+constexpr uint8_t CACHE_VERSION = 4;          // Increment when cache format changes
 
 uint8_t normalizeTxtParagraphAlignment(const uint8_t alignment) {
-  return alignment == CrossPointSettings::BOOK_STYLE
-             ? (uint8_t)CrossPointSettings::JUSTIFIED
-             : alignment;
+  return alignment == CrossPointSettings::BOOK_STYLE ? (uint8_t)CrossPointSettings::JUSTIFIED : alignment;
 }
 
 int countBreakableSpaces(const std::string& text) {
   return static_cast<int>(std::count(text.begin(), text.end(), ' '));
 }
 
-using ReaderStatusBar::computeStatusBarsHeight;
 using ReaderStatusBar::computeStatusBarReservedHeight;
+using ReaderStatusBar::computeStatusBarsHeight;
 using ReaderStatusBar::computeStatusTextBlockHeight;
 using ReaderStatusBar::getStatusBottomInset;
 using ReaderStatusBar::getStatusTopInset;
@@ -55,8 +54,7 @@ using ReaderStatusBar::normalizeReaderMargins;
 using ReaderStatusBar::statusBarItemIsTop;
 using ReaderStatusBar::statusTextPositionIsTop;
 
-std::string formatPageCounterText(const uint8_t mode, const int currentPage,
-                                  const int totalPages) {
+std::string formatPageCounterText(const uint8_t mode, const int currentPage, const int totalPages) {
   const int safeTotalPages = std::max(totalPages, 0);
   const int safeCurrentPage = std::max(currentPage, 0);
   int pagesLeft = safeTotalPages - (currentPage + 1);
@@ -68,12 +66,11 @@ std::string formatPageCounterText(const uint8_t mode, const int currentPage,
     case CrossPointSettings::STATUS_PAGE_LEFT_TEXT:
       return std::to_string(pagesLeft) + " left";
     default:
-      return std::to_string(safeCurrentPage + 1) + "/" +
-             std::to_string(safeTotalPages);
+      return std::to_string(safeCurrentPage + 1) + "/" + std::to_string(safeTotalPages);
   }
 }
 
-} // namespace
+}  // namespace
 
 void TxtReaderActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
@@ -84,21 +81,20 @@ void TxtReaderActivity::onEnter() {
 
   // Configure screen orientation based on settings
   switch (SETTINGS.orientation) {
-  case CrossPointSettings::ORIENTATION::PORTRAIT:
-    renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-    break;
-  case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
-    renderer.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
-    break;
-  case CrossPointSettings::ORIENTATION::INVERTED:
-    renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
-    break;
-  case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
-    renderer.setOrientation(
-        GfxRenderer::Orientation::LandscapeCounterClockwise);
-    break;
-  default:
-    break;
+    case CrossPointSettings::ORIENTATION::PORTRAIT:
+      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
+      renderer.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
+      break;
+    case CrossPointSettings::ORIENTATION::INVERTED:
+      renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
+      renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+      break;
+    default:
+      break;
   }
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
 
@@ -151,11 +147,10 @@ void TxtReaderActivity::onExit() {
   txt.reset();
 }
 
-const std::vector<std::string>& TxtReaderActivity::getStatusBarTitleLines(
-    const int usableWidth, const bool noTitleTruncation,
-    const int maxTitleLineCount) {
-  if (cachedTitleUsableWidth == usableWidth &&
-      cachedTitleNoTitleTruncation == noTitleTruncation &&
+const std::vector<std::string>& TxtReaderActivity::getStatusBarTitleLines(const int usableWidth,
+                                                                          const bool noTitleTruncation,
+                                                                          const int maxTitleLineCount) {
+  if (cachedTitleUsableWidth == usableWidth && cachedTitleNoTitleTruncation == noTitleTruncation &&
       cachedTitleMaxLines == maxTitleLineCount) {
     return cachedTitleLines;
   }
@@ -165,9 +160,8 @@ const std::vector<std::string>& TxtReaderActivity::getStatusBarTitleLines(
     titleText = tr(STR_UNNAMED);
   }
 
-  cachedTitleLines = ReaderLayoutSafety::buildTitleLines(
-      renderer, SETTINGS.getStatusBarFontId(), titleText, usableWidth, noTitleTruncation,
-      maxTitleLineCount);
+  cachedTitleLines = ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(), titleText,
+                                                         usableWidth, noTitleTruncation, maxTitleLineCount);
 
   cachedTitleUsableWidth = usableWidth;
   cachedTitleNoTitleTruncation = noTitleTruncation;
@@ -175,67 +169,57 @@ const std::vector<std::string>& TxtReaderActivity::getStatusBarTitleLines(
   return cachedTitleLines;
 }
 
-int TxtReaderActivity::getStatusBarReserveTitleLineCount(
-    const int usableWidth, const bool noTitleTruncation) {
-  return static_cast<int>(
-      getStatusBarTitleLines(usableWidth, noTitleTruncation, 1024).size());
+int TxtReaderActivity::getStatusBarReserveTitleLineCount(const int usableWidth, const bool noTitleTruncation) {
+  return static_cast<int>(getStatusBarTitleLines(usableWidth, noTitleTruncation, 1024).size());
 }
 
-TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(
-    const int usableWidth, const int topReservedHeight,
-    const int bottomReservedHeight, const int maxTitleLineCount) {
+TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(const int usableWidth,
+                                                                           const int topReservedHeight,
+                                                                           const int bottomReservedHeight,
+                                                                           const int maxTitleLineCount) {
   StatusBarLayout layout;
-  layout.usableWidth = ReaderLayoutSafety::clampViewportDimension(
-      usableWidth, ReaderLayoutSafety::kMinViewportWidth, "TRS",
-      "status width");
+  layout.usableWidth = ReaderLayoutSafety::clampViewportDimension(usableWidth, ReaderLayoutSafety::kMinViewportWidth,
+                                                                  "TRS", "status width");
   layout.topReservedHeight = topReservedHeight;
   layout.bottomReservedHeight = bottomReservedHeight;
   if (!SETTINGS.statusBarEnabled) {
     return layout;
   }
 
-  const float progress =
-      totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0.0f;
+  const float progress = totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0.0f;
   layout.bookProgress = progress;
   layout.chapterProgress = progress;
 
   if (SETTINGS.statusBarShowPageCounter) {
-    layout.pageCounterText = formatPageCounterText(
-        SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
-    layout.pageCounterTextWidth =
-        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
+    layout.pageCounterText = formatPageCounterText(SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
+    layout.pageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
   }
   if (SETTINGS.statusBarShowBookPercentage) {
     char bookPercentageStr[16] = {0};
-    snprintf(bookPercentageStr, sizeof(bookPercentageStr), "B:%.0f%%",
-             layout.bookProgress);
+    snprintf(bookPercentageStr, sizeof(bookPercentageStr), "B:%.0f%%", layout.bookProgress);
     layout.bookPercentageText = bookPercentageStr;
-    layout.bookPercentageTextWidth = renderer.getTextWidth(
-        SETTINGS.getStatusBarFontId(), layout.bookPercentageText.c_str());
+    layout.bookPercentageTextWidth =
+        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.bookPercentageText.c_str());
   }
   if (SETTINGS.statusBarShowChapterPercentage) {
     char chapterPercentageStr[16] = {0};
-    snprintf(chapterPercentageStr, sizeof(chapterPercentageStr), "C:%.0f%%",
-             layout.chapterProgress);
+    snprintf(chapterPercentageStr, sizeof(chapterPercentageStr), "C:%.0f%%", layout.chapterProgress);
     layout.chapterPercentageText = chapterPercentageStr;
-    layout.chapterPercentageTextWidth = renderer.getTextWidth(
-        SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
+    layout.chapterPercentageTextWidth =
+        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
   }
 
   if (SETTINGS.statusBarShowBookPageCounter && totalPages > 0) {
     char buf[32];
     snprintf(buf, sizeof(buf), "%d/%d", currentPage + 1, totalPages);
     layout.bookPageCounterText = buf;
-    layout.bookPageCounterTextWidth =
-        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+    layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
   }
 
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
-    layout.titleLines = getStatusBarTitleLines(
-        titleWrapWidth, SETTINGS.statusBarNoTitleTruncation,
-        maxTitleLineCount);
+    layout.titleLines = getStatusBarTitleLines(titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
   }
 
   return layout;
@@ -243,15 +227,12 @@ TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(
 
 int TxtReaderActivity::getReaderLineHeightPx() const {
   const int baseLineHeight = renderer.getLineHeight(cachedFontId);
-  return std::max(1, (baseLineHeight * static_cast<int>(cachedLineSpacingPercent)) /
-                         100);
+  return std::max(1, (baseLineHeight * static_cast<int>(cachedLineSpacingPercent)) / 100);
 }
 
 int TxtReaderActivity::getTxtWordSpaceWidth() const {
   const int base = renderer.getSpaceWidth(cachedFontId);
-  return std::max(
-      1, base + CrossPointSettings::wordSpacingSettingToPixelDelta(
-                    cachedWordSpacingPercent, base));
+  return std::max(1, base + CrossPointSettings::wordSpacingSettingToPixelDelta(cachedWordSpacingPercent, base));
 }
 
 int TxtReaderActivity::getTxtParagraphIndentPx() const {
@@ -272,21 +253,17 @@ int TxtReaderActivity::getTxtParagraphIndentPx() const {
 int TxtReaderActivity::measureFlowLineWidth(const std::string& text) const {
   const int baseWidth = renderer.getTextWidth(cachedFontId, text.c_str());
   const int baseSpaceWidth = renderer.getSpaceWidth(cachedFontId);
-  return baseWidth + countBreakableSpaces(text) *
-                         (getTxtWordSpaceWidth() - baseSpaceWidth);
+  return baseWidth + countBreakableSpaces(text) * (getTxtWordSpaceWidth() - baseSpaceWidth);
 }
 
-void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x,
-                                     const int y, const int contentWidth) const {
+void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x, const int y, const int contentWidth) const {
   if (line.text.empty()) {
     return;
   }
 
-  const bool allowIndent =
-      cachedParagraphAlignment == CrossPointSettings::LEFT_ALIGN ||
-      cachedParagraphAlignment == CrossPointSettings::JUSTIFIED;
-  const int indent =
-      line.firstInParagraph && allowIndent ? getTxtParagraphIndentPx() : 0;
+  const bool allowIndent = cachedParagraphAlignment == CrossPointSettings::LEFT_ALIGN ||
+                           cachedParagraphAlignment == CrossPointSettings::JUSTIFIED;
+  const int indent = line.firstInParagraph && allowIndent ? getTxtParagraphIndentPx() : 0;
   const int baseSpaceWidth = getTxtWordSpaceWidth();
   const int lineWidth = measureFlowLineWidth(line.text);
   int drawX = x + indent;
@@ -297,8 +274,7 @@ void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x,
     drawX = x + (contentWidth - lineWidth) / 2;
   } else if (cachedParagraphAlignment == CrossPointSettings::RIGHT_ALIGN) {
     drawX = x + contentWidth - lineWidth;
-  } else if (cachedParagraphAlignment == CrossPointSettings::JUSTIFIED &&
-             !line.lastInParagraph && actualGapCount > 0) {
+  } else if (cachedParagraphAlignment == CrossPointSettings::JUSTIFIED && !line.lastInParagraph && actualGapCount > 0) {
     const int nonSpaceWidth = lineWidth - actualGapCount * baseSpaceWidth;
     const int effectiveWidth = contentWidth - indent;
     const int spare = effectiveWidth - nonSpaceWidth;
@@ -308,9 +284,7 @@ void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x,
   size_t pos = 0;
   while (pos < line.text.size()) {
     const size_t spacePos = line.text.find(' ', pos);
-    const size_t tokenLen = (spacePos == std::string::npos)
-                                ? (line.text.size() - pos)
-                                : (spacePos - pos);
+    const size_t tokenLen = (spacePos == std::string::npos) ? (line.text.size() - pos) : (spacePos - pos);
     if (tokenLen > 0) {
       const std::string token = line.text.substr(pos, tokenLen);
       renderer.drawText(cachedFontId, drawX, y, token.c_str());
@@ -332,16 +306,15 @@ void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x,
 
 void TxtReaderActivity::openReadingThemes() {
   exitActivity();
-  enterNewActivity(new ReadingThemesActivity(
-      renderer, mappedInput, txt ? txt->getCachePath() : std::string(),
-      [this](const bool changed) {
-        pendingSubactivityExit = true;
-        if (changed) {
-          reloadCurrentLayoutForDisplaySettings();
-        } else {
-          requestUpdate();
-        }
-      }));
+  enterNewActivity(new ReadingThemesActivity(renderer, mappedInput, txt ? txt->getCachePath() : std::string(),
+                                             [this](const bool changed) {
+                                               pendingSubactivityExit = true;
+                                               if (changed) {
+                                                 reloadCurrentLayoutForDisplaySettings();
+                                               } else {
+                                                 requestUpdate();
+                                               }
+                                             }));
 }
 
 void TxtReaderActivity::reloadCurrentLayoutForDisplaySettings() {
@@ -374,8 +347,7 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  if (pendingThemesOpen &&
-      !mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+  if (pendingThemesOpen && !mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
       millis() - lastConfirmReleaseMs > confirmDoubleTapMs) {
     pendingThemesOpen = false;
     openReadingThemes();
@@ -387,38 +359,30 @@ void TxtReaderActivity::loop() {
   }
 
   if (recentSwitcherOpen) {
-    const bool prevTriggered =
-        mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
-        mappedInput.wasReleased(MappedInputManager::Button::Left);
-    const bool nextTriggered =
-        mappedInput.wasReleased(MappedInputManager::Button::PageForward) ||
-        mappedInput.wasReleased(MappedInputManager::Button::Right);
+    const bool prevTriggered = mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
+                               mappedInput.wasReleased(MappedInputManager::Button::Left);
+    const bool nextTriggered = mappedInput.wasReleased(MappedInputManager::Button::PageForward) ||
+                               mappedInput.wasReleased(MappedInputManager::Button::Right);
     if (prevTriggered && !recentSwitcherBooks.empty()) {
       recentSwitcherSelection =
-          (recentSwitcherSelection +
-           static_cast<int>(recentSwitcherBooks.size()) - 1) %
-          recentSwitcherBooks.size();
+          (recentSwitcherSelection + static_cast<int>(recentSwitcherBooks.size()) - 1) % recentSwitcherBooks.size();
       requestUpdate();
       return;
     }
     if (nextTriggered && !recentSwitcherBooks.empty()) {
-      recentSwitcherSelection =
-          (recentSwitcherSelection + 1) % recentSwitcherBooks.size();
+      recentSwitcherSelection = (recentSwitcherSelection + 1) % recentSwitcherBooks.size();
       requestUpdate();
       return;
     }
-    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) &&
-        !recentSwitcherBooks.empty()) {
-      const std::string selectedPath =
-          recentSwitcherBooks[recentSwitcherSelection].path;
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && !recentSwitcherBooks.empty()) {
+      const std::string selectedPath = recentSwitcherBooks[recentSwitcherSelection].path;
       recentSwitcherOpen = false;
       if (!selectedPath.empty()) {
         onOpenBook(selectedPath);
       }
       return;
     }
-    if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
-        mappedInput.getHeldTime() < goHomeMs) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
       recentSwitcherOpen = false;
       requestUpdate();
       return;
@@ -431,8 +395,7 @@ void TxtReaderActivity::loop() {
       return;
     }
     const unsigned long now = millis();
-    if (pendingThemesOpen &&
-        now - lastConfirmReleaseMs <= confirmDoubleTapMs) {
+    if (pendingThemesOpen && now - lastConfirmReleaseMs <= confirmDoubleTapMs) {
       pendingThemesOpen = false;
       toggleTextRenderMode();
       return;
@@ -443,23 +406,20 @@ void TxtReaderActivity::loop() {
   }
 
   // Long press CONFIRM (1s+) toggles orientation: Portrait <-> Landscape CCW.
-  if (!confirmLongPressHandled &&
-      mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+  if (!confirmLongPressHandled && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
       mappedInput.getHeldTime() >= goHomeMs) {
     confirmLongPressHandled = true;
     mappedInput.suppressUntilAllReleased();
     pendingThemesOpen = false;
-    SETTINGS.orientation =
-        (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
-            ? CrossPointSettings::ORIENTATION::PORTRAIT
-            : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
+    SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
+                               ? CrossPointSettings::ORIENTATION::PORTRAIT
+                               : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
     if (!SETTINGS.saveToFile()) {
       LOG_ERR("TRS", "Failed to save settings after orientation change");
     }
-    renderer.setOrientation(
-        SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
-            ? GfxRenderer::Orientation::LandscapeCounterClockwise
-            : GfxRenderer::Orientation::Portrait);
+    renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
+                                ? GfxRenderer::Orientation::LandscapeCounterClockwise
+                                : GfxRenderer::Orientation::Portrait);
     reloadCurrentLayoutForDisplaySettings();
     requestUpdate();
     return;
@@ -474,23 +434,17 @@ void TxtReaderActivity::loop() {
   // When long-press chapter skip is disabled, turn pages on press instead of
   // release.
   const bool usePressForPageTurn = !SETTINGS.longPressChapterSkip;
-  const bool prevTriggered =
-      usePressForPageTurn
-          ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
-             mappedInput.wasPressed(MappedInputManager::Button::Left))
-          : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
-             mappedInput.wasReleased(MappedInputManager::Button::Left));
-  const bool powerPageTurn =
-      SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
-      mappedInput.wasReleased(MappedInputManager::Button::Power);
-  const bool nextTriggered =
-      usePressForPageTurn
-          ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) ||
-             powerPageTurn ||
-             mappedInput.wasPressed(MappedInputManager::Button::Right))
-          : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) ||
-             powerPageTurn ||
-             mappedInput.wasReleased(MappedInputManager::Button::Right));
+  const bool prevTriggered = usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
+                                                    mappedInput.wasPressed(MappedInputManager::Button::Left))
+                                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
+                                                    mappedInput.wasReleased(MappedInputManager::Button::Left));
+  const bool powerPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
+                             mappedInput.wasReleased(MappedInputManager::Button::Power);
+  const bool nextTriggered = usePressForPageTurn
+                                 ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) || powerPageTurn ||
+                                    mappedInput.wasPressed(MappedInputManager::Button::Right))
+                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) || powerPageTurn ||
+                                    mappedInput.wasReleased(MappedInputManager::Button::Right));
 
   if (!prevTriggered && !nextTriggered) {
     return;
@@ -518,8 +472,7 @@ void TxtReaderActivity::loop() {
 
 void TxtReaderActivity::toggleTextRenderMode() {
   flushProgressIfNeeded(true);
-  SETTINGS.textRenderMode =
-      (SETTINGS.textRenderMode + 1) % CrossPointSettings::TEXT_RENDER_MODE_COUNT;
+  SETTINGS.textRenderMode = (SETTINGS.textRenderMode + 1) % CrossPointSettings::TEXT_RENDER_MODE_COUNT;
   if (!SETTINGS.saveToFile()) {
     LOG_ERR("TRS", "Failed to save settings after text render mode toggle");
   }
@@ -557,22 +510,18 @@ void TxtReaderActivity::initializeReader() {
   }
   cachedScreenMarginTop = SETTINGS.screenMarginTop;
   cachedScreenMarginBottom = SETTINGS.screenMarginBottom;
-  cachedParagraphAlignment =
-      normalizeTxtParagraphAlignment(SETTINGS.paragraphAlignment);
+  cachedParagraphAlignment = normalizeTxtParagraphAlignment(SETTINGS.paragraphAlignment);
   cachedLineSpacingPercent = SETTINGS.lineSpacingPercent;
   cachedWordSpacingPercent = SETTINGS.wordSpacingPercent;
   cachedFirstLineIndentMode = SETTINGS.firstLineIndentMode;
   const int lineHeight = getReaderLineHeightPx();
-  const int minContentHeight = std::max(ReaderLayoutSafety::kMinViewportHeight,
-                                        lineHeight * 2);
+  const int minContentHeight = std::max(ReaderLayoutSafety::kMinViewportHeight, lineHeight * 2);
 
   // Calculate viewport dimensions
-  int orientedMarginTop, orientedMarginRight, orientedMarginBottom,
-      orientedMarginLeft;
-  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight,
-                                   &orientedMarginBottom, &orientedMarginLeft);
-  normalizeReaderMargins(&orientedMarginTop, &orientedMarginRight,
-                         &orientedMarginBottom, &orientedMarginLeft);
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  normalizeReaderMargins(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom, &orientedMarginLeft);
   orientedMarginTop += cachedScreenMarginTop;
   orientedMarginLeft += cachedScreenMarginHorizontal;
   orientedMarginRight += cachedScreenMarginHorizontal;
@@ -580,104 +529,75 @@ void TxtReaderActivity::initializeReader() {
 
   if (SETTINGS.statusBarEnabled) {
     const int usableWidth =
-        ReaderLayoutSafety::clampViewportDimension(
-            renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
-            ReaderLayoutSafety::kMinViewportWidth, "TRS", "usable width");
+        ReaderLayoutSafety::clampViewportDimension(renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
+                                                   ReaderLayoutSafety::kMinViewportWidth, "TRS", "usable width");
     const bool showTopStatusTextRow =
-        (SETTINGS.statusBarShowBattery &&
-         statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter &&
-         statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage &&
-         statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
+        (SETTINGS.statusBarShowBattery && statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
+        (SETTINGS.statusBarShowPageCounter && statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
-         statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const bool showBottomStatusTextRow =
-        (SETTINGS.statusBarShowBattery &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
+        (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
+        (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
-         !statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
             ? (SETTINGS.statusBarNoTitleTruncation
-                   ? getStatusBarReserveTitleLineCount(
-                         usableWidth, SETTINGS.statusBarNoTitleTruncation)
+                   ? getStatusBarReserveTitleLineCount(usableWidth, SETTINGS.statusBarNoTitleTruncation)
                    : 1)
             : 0;
     const int topTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle &&
-         statusBarItemIsTop(SETTINGS.statusBarTitlePosition))
-            ? titleLineCount
-            : 0;
+        (SETTINGS.statusBarShowChapterTitle && statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
+                                                                                                    : 0;
     const int bottomTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle &&
-         !statusBarItemIsTop(SETTINGS.statusBarTitlePosition))
-            ? titleLineCount
-            : 0;
+        (SETTINGS.statusBarShowChapterTitle && !statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
+                                                                                                     : 0;
     const auto budget = ReaderLayoutSafety::resolveStatusBarBudget(
         renderer, SETTINGS.getStatusBarFontId(), "TRS", renderer.getScreenHeight(), getStatusTopInset(renderer),
-        getStatusBottomInset(renderer), cachedScreenMarginTop,
-        cachedScreenMarginBottom, minContentHeight,
+        getStatusBottomInset(renderer), cachedScreenMarginTop, cachedScreenMarginBottom, minContentHeight,
         SETTINGS.getStatusBarProgressBarHeight(),
         ReaderLayoutSafety::StatusBarBandConfig{
             .showStatusTextRow = showTopStatusTextRow,
             .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar &&
-                statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
+                SETTINGS.statusBarShowBookBar && statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
             .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar &&
-                statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
+                SETTINGS.statusBarShowChapterBar && statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
             .desiredTitleLineCount = topTitleLineCount,
         },
         ReaderLayoutSafety::StatusBarBandConfig{
             .showStatusTextRow = showBottomStatusTextRow,
             .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar &&
-                !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
+                SETTINGS.statusBarShowBookBar && !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
             .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar &&
-                !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
+                SETTINGS.statusBarShowChapterBar && !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
             .desiredTitleLineCount = bottomTitleLineCount,
         });
     const int statusBarTopReserved = budget.top.reservedHeight;
     const int statusBarBottomReserved = budget.bottom.reservedHeight;
     if (statusBarTopReserved > 0) {
-      orientedMarginTop =
-          getStatusTopInset(renderer) + cachedScreenMarginTop +
-          statusBarTopReserved;
+      orientedMarginTop = getStatusTopInset(renderer) + cachedScreenMarginTop + statusBarTopReserved;
     }
     if (statusBarBottomReserved > 0) {
-      orientedMarginBottom =
-          getStatusBottomInset(renderer) + cachedScreenMarginBottom +
-          statusBarBottomReserved;
+      orientedMarginBottom = getStatusBottomInset(renderer) + cachedScreenMarginBottom + statusBarBottomReserved;
     }
   }
 
   viewportWidth =
-      ReaderLayoutSafety::clampViewportDimension(
-          renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
-          ReaderLayoutSafety::kMinViewportWidth, "TRS", "viewport width");
+      ReaderLayoutSafety::clampViewportDimension(renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
+                                                 ReaderLayoutSafety::kMinViewportWidth, "TRS", "viewport width");
   const int viewportHeight =
-      ReaderLayoutSafety::clampViewportDimension(
-          renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom,
-          minContentHeight, "TRS", "viewport height");
+      ReaderLayoutSafety::clampViewportDimension(renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom,
+                                                 minContentHeight, "TRS", "viewport height");
 
   linesPerPage = viewportHeight / lineHeight;
-  if (linesPerPage < 1)
-    linesPerPage = 1;
+  if (linesPerPage < 1) linesPerPage = 1;
 
-  LOG_DBG("TRS", "Viewport: %dx%d, lines per page: %d", viewportWidth,
-          viewportHeight, linesPerPage);
+  LOG_DBG("TRS", "Viewport: %dx%d, lines per page: %d", viewportWidth, viewportHeight, linesPerPage);
 
   // Try to load cached page index first
   if (!loadPageIndexCache()) {
@@ -691,13 +611,10 @@ void TxtReaderActivity::initializeReader() {
   loadProgress();
   if (pendingRelayoutPageCount > 0 && totalPages > 0) {
     if (pendingRelayoutPageCount != totalPages) {
-      const float progress =
-          pendingRelayoutPageCount > 1
-              ? static_cast<float>(pendingRelayoutPage) /
-                    static_cast<float>(pendingRelayoutPageCount - 1)
-              : 0.0f;
-      currentPage = static_cast<int>(
-          progress * static_cast<float>(std::max(totalPages - 1, 0)));
+      const float progress = pendingRelayoutPageCount > 1 ? static_cast<float>(pendingRelayoutPage) /
+                                                                static_cast<float>(pendingRelayoutPageCount - 1)
+                                                          : 0.0f;
+      currentPage = static_cast<int>(progress * static_cast<float>(std::max(totalPages - 1, 0)));
     } else {
       currentPage = std::min(pendingRelayoutPage, totalPages - 1);
     }
@@ -714,7 +631,7 @@ void TxtReaderActivity::initializeReader() {
 
 void TxtReaderActivity::buildPageIndex() {
   pageOffsets.clear();
-  pageOffsets.push_back(0); // First page starts at offset 0
+  pageOffsets.push_back(0);  // First page starts at offset 0
 
   size_t offset = 0;
   const size_t fileSize = txt->getFileSize();
@@ -743,8 +660,7 @@ void TxtReaderActivity::buildPageIndex() {
     }
 
     if (pageOffsets.size() >= MAX_PAGE_OFFSETS) {
-      LOG_INF("TRS", "Page index capped at %zu pages to conserve memory",
-              MAX_PAGE_OFFSETS);
+      LOG_INF("TRS", "Page index capped at %zu pages to conserve memory", MAX_PAGE_OFFSETS);
       break;
     }
 
@@ -759,9 +675,7 @@ void TxtReaderActivity::buildPageIndex() {
   LOG_DBG("TRS", "Built page index: %d pages", totalPages);
 }
 
-bool TxtReaderActivity::loadPageAtOffset(size_t offset,
-                                         std::vector<FlowLine> &outLines,
-                                         size_t &nextOffset) {
+bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<FlowLine>& outLines, size_t& nextOffset) {
   outLines.clear();
   const size_t fileSize = txt->getFileSize();
 
@@ -777,7 +691,7 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset,
     chunkSize = std::min(chunkSize, std::max(static_cast<size_t>(1024), freeHeap / 4));
     LOG_DBG("TRS", "Reduced chunk to %zu bytes (free heap: %zu)", chunkSize, freeHeap);
   }
-  auto buffer = std::unique_ptr<uint8_t[]>(new(std::nothrow) uint8_t[chunkSize + 1]);
+  auto buffer = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[chunkSize + 1]);
   if (!buffer) {
     LOG_ERR("TRS", "Failed to allocate %zu bytes (free heap: %zu)", chunkSize, freeHeap);
     return false;
@@ -811,12 +725,11 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset,
     size_t lineContentLen = lineEnd - pos;
 
     // Check for carriage return
-    bool hasCR =
-        (lineContentLen > 0 && buffer[pos + lineContentLen - 1] == '\r');
+    bool hasCR = (lineContentLen > 0 && buffer[pos + lineContentLen - 1] == '\r');
     size_t displayLen = hasCR ? lineContentLen - 1 : lineContentLen;
 
     // Extract line content for display (without CR/LF)
-    std::string line(reinterpret_cast<char *>(buffer.get() + pos), displayLen);
+    std::string line(reinterpret_cast<char*>(buffer.get() + pos), displayLen);
 
     // Track position within this source line (in bytes from pos)
     size_t lineBytePos = 0;
@@ -824,21 +737,16 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset,
     // Word wrap if needed
     bool firstSegmentInParagraph = true;
     while (!line.empty() && static_cast<int>(outLines.size()) < linesPerPage) {
-      const bool allowIndent =
-          cachedParagraphAlignment == CrossPointSettings::LEFT_ALIGN ||
-          cachedParagraphAlignment == CrossPointSettings::JUSTIFIED;
-      const int indentWidth =
-          (firstSegmentInParagraph && allowIndent) ? getTxtParagraphIndentPx()
-                                                   : 0;
-      const int availableWidth =
-          std::max(1, viewportWidth - indentWidth);
+      const bool allowIndent = cachedParagraphAlignment == CrossPointSettings::LEFT_ALIGN ||
+                               cachedParagraphAlignment == CrossPointSettings::JUSTIFIED;
+      const int indentWidth = (firstSegmentInParagraph && allowIndent) ? getTxtParagraphIndentPx() : 0;
+      const int availableWidth = std::max(1, viewportWidth - indentWidth);
       int lineWidth = measureFlowLineWidth(line);
 
       if (lineWidth <= availableWidth) {
-        outLines.push_back(FlowLine{.text = line,
-                                    .firstInParagraph = firstSegmentInParagraph,
-                                    .lastInParagraph = true});
-        lineBytePos = displayLen; // Consumed entire display content
+        outLines.push_back(
+            FlowLine{.text = line, .firstInParagraph = firstSegmentInParagraph, .lastInParagraph = true});
+        lineBytePos = displayLen;  // Consumed entire display content
         line.clear();
         break;
       }
@@ -863,9 +771,7 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset,
           breakPos = lastGoodSpace;
         } else {
           // No space fits — fall back to character-by-character search
-          while (breakPos > 0 &&
-                 measureFlowLineWidth(line.substr(0, breakPos)) >
-                     availableWidth) {
+          while (breakPos > 0 && measureFlowLineWidth(line.substr(0, breakPos)) > availableWidth) {
             breakPos--;
             // Make sure we don't break in the middle of a UTF-8 sequence
             while (breakPos > 0 && (line[breakPos] & 0xC0) == 0x80) {
@@ -879,9 +785,8 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset,
         breakPos = 1;
       }
 
-      outLines.push_back(FlowLine{.text = line.substr(0, breakPos),
-                                  .firstInParagraph = firstSegmentInParagraph,
-                                  .lastInParagraph = false});
+      outLines.push_back(FlowLine{
+          .text = line.substr(0, breakPos), .firstInParagraph = firstSegmentInParagraph, .lastInParagraph = false});
       firstSegmentInParagraph = false;
 
       // Skip space at break point
@@ -921,7 +826,7 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset,
   return !outLines.empty();
 }
 
-void TxtReaderActivity::render(Activity::RenderLock &&) {
+void TxtReaderActivity::render(Activity::RenderLock&&) {
   if (!txt) {
     return;
   }
@@ -939,17 +844,14 @@ void TxtReaderActivity::render(Activity::RenderLock &&) {
 
   if (pageOffsets.empty()) {
     renderer.clearScreen();
-    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_FILE), true,
-                              EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_FILE), true, EpdFontFamily::REGULAR);
     renderer.displayBuffer();
     return;
   }
 
   // Bounds check
-  if (currentPage < 0)
-    currentPage = 0;
-  if (currentPage >= totalPages)
-    currentPage = totalPages - 1;
+  if (currentPage < 0) currentPage = 0;
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
 
   // Load current page content
   size_t offset = pageOffsets[currentPage];
@@ -957,8 +859,7 @@ void TxtReaderActivity::render(Activity::RenderLock &&) {
   currentPageLines.clear();
   if (!loadPageAtOffset(offset, currentPageLines, nextOffset) || currentPageLines.empty()) {
     renderer.clearScreen();
-    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_FILE), true,
-                              EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_FILE), true, EpdFontFamily::REGULAR);
     renderer.displayBuffer();
     return;
   }
@@ -991,8 +892,7 @@ void TxtReaderActivity::renderRecentSwitcher() {
 
   renderer.clearScreen();
   renderer.drawRect(popupX, popupY, popupW, popupH, true);
-  renderer.drawCenteredText(UI_12_FONT_ID, titleY, tr(STR_MENU_RECENT_BOOKS),
-                            true, EpdFontFamily::REGULAR);
+  renderer.drawCenteredText(UI_12_FONT_ID, titleY, tr(STR_MENU_RECENT_BOOKS), true, EpdFontFamily::REGULAR);
 
   for (int i = 0; i < recentSwitcherRows; i++) {
     const int rowY = rowsY + i * rowH;
@@ -1011,129 +911,96 @@ void TxtReaderActivity::renderRecentSwitcher() {
       title = recentSwitcherBooks[i].title;
       if (title.empty()) {
         const size_t lastSlash = recentSwitcherBooks[i].path.find_last_of('/');
-        title = (lastSlash == std::string::npos)
-                    ? recentSwitcherBooks[i].path
-                    : recentSwitcherBooks[i].path.substr(lastSlash + 1);
+        title = (lastSlash == std::string::npos) ? recentSwitcherBooks[i].path
+                                                 : recentSwitcherBooks[i].path.substr(lastSlash + 1);
       }
       title = renderer.truncatedText(UI_10_FONT_ID, title.c_str(), popupW - 28);
     }
-    renderer.drawText(UI_10_FONT_ID, popupX + 14, rowY + 3, title.c_str(),
-                      !selected);
+    renderer.drawText(UI_10_FONT_ID, popupX + 14, rowY + 3, title.c_str(), !selected);
   }
 
   renderer.displayBuffer();
 }
 
 void TxtReaderActivity::renderPage() {
-  int orientedMarginTop, orientedMarginRight, orientedMarginBottom,
-      orientedMarginLeft;
-  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight,
-                                   &orientedMarginBottom, &orientedMarginLeft);
-  normalizeReaderMargins(&orientedMarginTop, &orientedMarginRight,
-                         &orientedMarginBottom, &orientedMarginLeft);
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  normalizeReaderMargins(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom, &orientedMarginLeft);
   orientedMarginTop += cachedScreenMarginTop;
   orientedMarginLeft += cachedScreenMarginHorizontal;
   orientedMarginRight += cachedScreenMarginHorizontal;
   orientedMarginBottom += cachedScreenMarginBottom;
 
   const int lineHeight = getReaderLineHeightPx();
-  const int minContentHeight = std::max(ReaderLayoutSafety::kMinViewportHeight,
-                                        lineHeight * 2);
+  const int minContentHeight = std::max(ReaderLayoutSafety::kMinViewportHeight, lineHeight * 2);
   const int contentWidth = viewportWidth;
   const int usableWidth =
-      ReaderLayoutSafety::clampViewportDimension(
-          renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
-          ReaderLayoutSafety::kMinViewportWidth, "TRS", "usable width");
+      ReaderLayoutSafety::clampViewportDimension(renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
+                                                 ReaderLayoutSafety::kMinViewportWidth, "TRS", "usable width");
   int statusBarTopReserved = 0;
   int statusBarBottomReserved = 0;
   int resolvedTitleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
   if (SETTINGS.statusBarEnabled) {
     const bool showTopStatusTextRow =
-        (SETTINGS.statusBarShowBattery &&
-         statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter &&
-         statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage &&
-         statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
+        (SETTINGS.statusBarShowBattery && statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
+        (SETTINGS.statusBarShowPageCounter && statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
-         statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const bool showBottomStatusTextRow =
-        (SETTINGS.statusBarShowBattery &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
+        (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
+        (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
-         !statusTextPositionIsTop(
-             SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
             ? (SETTINGS.statusBarNoTitleTruncation
-                   ? getStatusBarReserveTitleLineCount(
-                         usableWidth, SETTINGS.statusBarNoTitleTruncation)
+                   ? getStatusBarReserveTitleLineCount(usableWidth, SETTINGS.statusBarNoTitleTruncation)
                    : 1)
             : 0;
     const int topTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle &&
-         statusBarItemIsTop(SETTINGS.statusBarTitlePosition))
-            ? titleLineCount
-            : 0;
+        (SETTINGS.statusBarShowChapterTitle && statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
+                                                                                                    : 0;
     const int bottomTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle &&
-         !statusBarItemIsTop(SETTINGS.statusBarTitlePosition))
-            ? titleLineCount
-            : 0;
+        (SETTINGS.statusBarShowChapterTitle && !statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
+                                                                                                     : 0;
     const auto budget = ReaderLayoutSafety::resolveStatusBarBudget(
         renderer, SETTINGS.getStatusBarFontId(), "TRS", renderer.getScreenHeight(), getStatusTopInset(renderer),
-        getStatusBottomInset(renderer), cachedScreenMarginTop,
-        cachedScreenMarginBottom, minContentHeight,
+        getStatusBottomInset(renderer), cachedScreenMarginTop, cachedScreenMarginBottom, minContentHeight,
         SETTINGS.getStatusBarProgressBarHeight(),
         ReaderLayoutSafety::StatusBarBandConfig{
             .showStatusTextRow = showTopStatusTextRow,
             .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar &&
-                statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
+                SETTINGS.statusBarShowBookBar && statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
             .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar &&
-                statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
+                SETTINGS.statusBarShowChapterBar && statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
             .desiredTitleLineCount = topTitleLineCount,
         },
         ReaderLayoutSafety::StatusBarBandConfig{
             .showStatusTextRow = showBottomStatusTextRow,
             .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar &&
-                !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
+                SETTINGS.statusBarShowBookBar && !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
             .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar &&
-                !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
+                SETTINGS.statusBarShowChapterBar && !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
             .desiredTitleLineCount = bottomTitleLineCount,
         });
     statusBarTopReserved = budget.top.reservedHeight;
     statusBarBottomReserved = budget.bottom.reservedHeight;
     resolvedTitleLineCount =
-        statusBarItemIsTop(SETTINGS.statusBarTitlePosition)
-            ? budget.top.titleLineCount
-            : budget.bottom.titleLineCount;
+        statusBarItemIsTop(SETTINGS.statusBarTitlePosition) ? budget.top.titleLineCount : budget.bottom.titleLineCount;
     if (statusBarTopReserved > 0) {
-      orientedMarginTop =
-          getStatusTopInset(renderer) + cachedScreenMarginTop +
-          statusBarTopReserved;
+      orientedMarginTop = getStatusTopInset(renderer) + cachedScreenMarginTop + statusBarTopReserved;
     }
     if (statusBarBottomReserved > 0) {
-      orientedMarginBottom =
-          getStatusBottomInset(renderer) + cachedScreenMarginBottom +
-          statusBarBottomReserved;
+      orientedMarginBottom = getStatusBottomInset(renderer) + cachedScreenMarginBottom + statusBarBottomReserved;
     }
   }
   const StatusBarLayout statusBarLayout =
-      buildStatusBarLayout(usableWidth, statusBarTopReserved,
-                           statusBarBottomReserved, resolvedTitleLineCount);
+      buildStatusBarLayout(usableWidth, statusBarTopReserved, statusBarBottomReserved, resolvedTitleLineCount);
   renderer.setRenderMode(GfxRenderer::BW);
   renderer.setTextRenderStyle(SETTINGS.textRenderMode);
 
@@ -1153,7 +1020,7 @@ void TxtReaderActivity::renderPage() {
   // Render text lines with alignment
   auto renderLines = [&]() {
     int y = orientedMarginTop + verticalCenterOffset;
-    for (const auto &line : currentPageLines) {
+    for (const auto& line : currentPageLines) {
       if (!line.text.empty()) {
         drawFlowLine(line, orientedMarginLeft, y, contentWidth);
       }
@@ -1172,8 +1039,7 @@ void TxtReaderActivity::renderPage() {
   } else {
     renderLines();
   }
-  renderStatusBar(statusBarLayout, orientedMarginRight, orientedMarginBottom,
-                  orientedMarginLeft);
+  renderStatusBar(statusBarLayout, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
 
   if (pagesUntilFullRefresh <= 1) {
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
@@ -1186,12 +1052,10 @@ void TxtReaderActivity::renderPage() {
   renderer.setTextRenderStyle(0);
 }
 
-void TxtReaderActivity::renderStatusBar(const StatusBarLayout& statusBarLayout,
-                                        const int orientedMarginRight,
-                                        const int orientedMarginBottom,
-                                        const int orientedMarginLeft) {
-  ReaderStatusBar::renderStatusBar(renderer, statusBarLayout, orientedMarginRight,
-                                   orientedMarginBottom, orientedMarginLeft, false);
+void TxtReaderActivity::renderStatusBar(const StatusBarLayout& statusBarLayout, const int orientedMarginRight,
+                                        const int orientedMarginBottom, const int orientedMarginLeft) {
+  ReaderStatusBar::renderStatusBar(renderer, statusBarLayout, orientedMarginRight, orientedMarginBottom,
+                                   orientedMarginLeft, false);
 }
 
 void TxtReaderActivity::saveProgress() const {
@@ -1205,8 +1069,7 @@ void TxtReaderActivity::saveProgress() const {
   FsFile f;
   if (Storage.openFileForWrite("TRS", tmpPath.c_str(), f)) {
     uint8_t data[4];
-    const uint32_t page =
-        currentPage < 0 ? 0u : static_cast<uint32_t>(currentPage);
+    const uint32_t page = currentPage < 0 ? 0u : static_cast<uint32_t>(currentPage);
     data[0] = page & 0xFF;
     data[1] = (page >> 8) & 0xFF;
     data[2] = (page >> 16) & 0xFF;
@@ -1238,16 +1101,13 @@ void TxtReaderActivity::flushProgressIfNeeded(const bool force) {
 
 void TxtReaderActivity::loadProgress() {
   FsFile f;
-  if (Storage.openFileForRead("TRS", txt->getCachePath() + "/progress.bin",
-                              f)) {
+  if (Storage.openFileForRead("TRS", txt->getCachePath() + "/progress.bin", f)) {
     uint8_t data[4];
     const int bytesRead = f.read(data, sizeof(data));
     if (bytesRead >= 2) {
       if (bytesRead >= 4) {
-        currentPage = static_cast<int>(static_cast<uint32_t>(data[0]) |
-                                       (static_cast<uint32_t>(data[1]) << 8) |
-                                       (static_cast<uint32_t>(data[2]) << 16) |
-                                       (static_cast<uint32_t>(data[3]) << 24));
+        currentPage = static_cast<int>(static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
+                                       (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24));
       } else {
         // Backward compatibility with older 2-byte progress files.
         currentPage = data[0] + (data[1] << 8);
@@ -1303,8 +1163,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   uint8_t version;
   serialization::readPod(f, version);
   if (version != CACHE_VERSION) {
-    LOG_DBG("TRS", "Cache version mismatch (%d != %d), rebuilding", version,
-            CACHE_VERSION);
+    LOG_DBG("TRS", "Cache version mismatch (%d != %d), rebuilding", version, CACHE_VERSION);
     f.close();
     return false;
   }
@@ -1336,8 +1195,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   int32_t fontId;
   serialization::readPod(f, fontId);
   if (fontId != cachedFontId) {
-    LOG_DBG("TRS", "Cache font ID mismatch (%d != %d), rebuilding", fontId,
-            cachedFontId);
+    LOG_DBG("TRS", "Cache font ID mismatch (%d != %d), rebuilding", fontId, cachedFontId);
     f.close();
     return false;
   }
@@ -1348,8 +1206,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, marginTop);
   int32_t marginBottom;
   serialization::readPod(f, marginBottom);
-  if (marginHorizontal != cachedScreenMarginHorizontal ||
-      marginTop != cachedScreenMarginTop ||
+  if (marginHorizontal != cachedScreenMarginHorizontal || marginTop != cachedScreenMarginTop ||
       marginBottom != cachedScreenMarginBottom) {
     LOG_DBG("TRS", "Cache screen margins mismatch, rebuilding");
     f.close();
@@ -1370,8 +1227,7 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, wordSpacingPercent);
   uint8_t firstLineIndentMode;
   serialization::readPod(f, firstLineIndentMode);
-  if (lineSpacingPercent != cachedLineSpacingPercent ||
-      wordSpacingPercent != cachedWordSpacingPercent ||
+  if (lineSpacingPercent != cachedLineSpacingPercent || wordSpacingPercent != cachedWordSpacingPercent ||
       firstLineIndentMode != cachedFirstLineIndentMode) {
     LOG_DBG("TRS", "Cache spacing settings mismatch, rebuilding");
     f.close();
@@ -1412,8 +1268,7 @@ void TxtReaderActivity::savePageIndexCache() const {
   serialization::writePod(f, static_cast<int32_t>(viewportWidth));
   serialization::writePod(f, static_cast<int32_t>(linesPerPage));
   serialization::writePod(f, static_cast<int32_t>(cachedFontId));
-  serialization::writePod(f,
-                          static_cast<int32_t>(cachedScreenMarginHorizontal));
+  serialization::writePod(f, static_cast<int32_t>(cachedScreenMarginHorizontal));
   serialization::writePod(f, static_cast<int32_t>(cachedScreenMarginTop));
   serialization::writePod(f, static_cast<int32_t>(cachedScreenMarginBottom));
   serialization::writePod(f, cachedParagraphAlignment);

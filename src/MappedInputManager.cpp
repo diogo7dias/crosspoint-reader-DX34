@@ -32,17 +32,26 @@ namespace {
 // Returns -1 for buttons that don't map (Power, PageBack, PageForward).
 int bleIndexForButton(MappedInputManager::Button button) {
   switch (button) {
-    case MappedInputManager::Button::Back:        return 0;
-    case MappedInputManager::Button::Confirm:     return 1;
-    case MappedInputManager::Button::Left:        return 2;
-    case MappedInputManager::Button::Right:       return 3;
-    case MappedInputManager::Button::Up:          return 4;
-    case MappedInputManager::Button::Down:        return 5;
+    case MappedInputManager::Button::Back:
+      return 0;
+    case MappedInputManager::Button::Confirm:
+      return 1;
+    case MappedInputManager::Button::Left:
+      return 2;
+    case MappedInputManager::Button::Right:
+      return 3;
+    case MappedInputManager::Button::Up:
+      return 4;
+    case MappedInputManager::Button::Down:
+      return 5;
     // PageBack/PageForward map to the same BLE buttons as Up/Down
     // so BLE users can turn pages in the reader.
-    case MappedInputManager::Button::PageBack:    return 4;
-    case MappedInputManager::Button::PageForward: return 5;
-    default: return -1;
+    case MappedInputManager::Button::PageBack:
+      return 4;
+    case MappedInputManager::Button::PageForward:
+      return 5;
+    default:
+      return -1;
   }
 }
 }  // namespace

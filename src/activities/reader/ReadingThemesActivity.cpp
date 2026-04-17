@@ -1,14 +1,14 @@
 #include "ReadingThemesActivity.h"
 
-#include <algorithm>
-
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
 
+#include <algorithm>
+
 #include "MappedInputManager.h"
-#include "ReadingThemeStore.h"
 #include "ReaderSettingsActivity.h"
+#include "ReadingThemeStore.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -45,13 +45,10 @@ void ReadingThemesActivity::onEnter() {
 
 void ReadingThemesActivity::onExit() { ActivityWithSubactivity::onExit(); }
 
-int ReadingThemesActivity::rowCount() const {
-  return kBaseRowCount + READING_THEMES.getCount();
-}
+int ReadingThemesActivity::rowCount() const { return kBaseRowCount + READING_THEMES.getCount(); }
 
 bool ReadingThemesActivity::isThemeRow(const int rowIndex) const {
-  return rowIndex >= kBaseRowCount &&
-         rowIndex < kBaseRowCount + READING_THEMES.getCount();
+  return rowIndex >= kBaseRowCount && rowIndex < kBaseRowCount + READING_THEMES.getCount();
 }
 
 int ReadingThemesActivity::themeIndexForRow(const int rowIndex) const {
@@ -69,34 +66,25 @@ void ReadingThemesActivity::showMessage(const std::string& message) {
 }
 
 void ReadingThemesActivity::openKeyboardForNewTheme() {
-  if (READING_THEMES.getCount() >=
-      static_cast<int>(ReadingThemeStore::MAX_THEMES)) {
+  if (READING_THEMES.getCount() >= static_cast<int>(ReadingThemeStore::MAX_THEMES)) {
     showMessage(tr(STR_THEME_LIST_FULL));
     return;
   }
 
-  const std::string suggestedName =
-      READING_THEMES.makeUniqueName(tr(STR_THEME));
+  const std::string suggestedName = READING_THEMES.makeUniqueName(tr(STR_THEME));
   exitActivity();
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, tr(STR_THEME_NAME), suggestedName, 10,
-      ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
+      renderer, mappedInput, tr(STR_THEME_NAME), suggestedName, 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
       [this](const std::string& name) {
         const bool ok = READING_THEMES.addTheme(name);
         pendingSubactivityExit = true;
         if (!ok) {
-          pendingPostExitAction = [this]() {
-            showMessage(tr(STR_SAVE_THEME_FAILED));
-          };
+          pendingPostExitAction = [this]() { showMessage(tr(STR_SAVE_THEME_FAILED)); };
           return;
         }
-        pendingPostExitAction = [this]() {
-          selectedRowIndex = rowCount() - 1;
-        };
+        pendingPostExitAction = [this]() { selectedRowIndex = rowCount() - 1; };
       },
-      [this]() {
-        pendingSubactivityExit = true;
-      }));
+      [this]() { pendingSubactivityExit = true; }));
 }
 
 void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
@@ -108,8 +96,7 @@ void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
 
   exitActivity();
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, tr(STR_RENAME_THEME), theme->name, 10,
-      ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
+      renderer, mappedInput, tr(STR_RENAME_THEME), theme->name, 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
       [this, themeIndex](const std::string& name) {
         const bool ok = READING_THEMES.renameTheme(themeIndex, name);
         pendingSubactivityExit = true;
@@ -124,9 +111,7 @@ void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
       },
       [this]() {
         pendingSubactivityExit = true;
-        pendingPostExitAction = [this]() {
-          actionPopupOpen = false;
-        };
+        pendingPostExitAction = [this]() { actionPopupOpen = false; };
       }));
 }
 
@@ -211,13 +196,12 @@ void ReadingThemesActivity::loop() {
   }
 
   if (messagePopupOpen) {
-    const bool anyPress =
-        mappedInput.wasPressed(MappedInputManager::Button::Confirm) ||
-        mappedInput.wasPressed(MappedInputManager::Button::Back) ||
-        mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
-        mappedInput.wasPressed(MappedInputManager::Button::PageForward) ||
-        mappedInput.wasPressed(MappedInputManager::Button::Left) ||
-        mappedInput.wasPressed(MappedInputManager::Button::Right);
+    const bool anyPress = mappedInput.wasPressed(MappedInputManager::Button::Confirm) ||
+                          mappedInput.wasPressed(MappedInputManager::Button::Back) ||
+                          mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
+                          mappedInput.wasPressed(MappedInputManager::Button::PageForward) ||
+                          mappedInput.wasPressed(MappedInputManager::Button::Left) ||
+                          mappedInput.wasPressed(MappedInputManager::Button::Right);
     if (anyPress) {
       messagePopupOpen = false;
       messagePopupText.clear();
@@ -237,13 +221,11 @@ void ReadingThemesActivity::loop() {
       return;
     }
     buttonNavigator.onNextRelease([this] {
-      actionPopupSelectedIndex = ButtonNavigator::nextIndex(
-          actionPopupSelectedIndex, kThemeActionCount);
+      actionPopupSelectedIndex = ButtonNavigator::nextIndex(actionPopupSelectedIndex, kThemeActionCount);
       requestUpdate();
     });
     buttonNavigator.onPreviousRelease([this] {
-      actionPopupSelectedIndex = ButtonNavigator::previousIndex(
-          actionPopupSelectedIndex, kThemeActionCount);
+      actionPopupSelectedIndex = ButtonNavigator::previousIndex(actionPopupSelectedIndex, kThemeActionCount);
       requestUpdate();
     });
     return;
@@ -257,11 +239,10 @@ void ReadingThemesActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     if (selectedRowIndex == 0) {
       exitActivity();
-      enterNewActivity(new ReaderSettingsActivity(
-          renderer, mappedInput, bookCachePath, [this](const bool changed) {
-            pendingSubactivityExit = true;
-            pendingSettingsChanged = changed;
-          }));
+      enterNewActivity(new ReaderSettingsActivity(renderer, mappedInput, bookCachePath, [this](const bool changed) {
+        pendingSubactivityExit = true;
+        pendingSettingsChanged = changed;
+      }));
       return;
     }
     if (selectedRowIndex == 1) {
@@ -282,8 +263,7 @@ void ReadingThemesActivity::loop() {
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this] {
-    selectedRowIndex =
-        ButtonNavigator::previousIndex(selectedRowIndex, rowCount());
+    selectedRowIndex = ButtonNavigator::previousIndex(selectedRowIndex, rowCount());
     requestUpdate();
   });
   buttonNavigator.onNextContinuous([this] {
@@ -291,8 +271,7 @@ void ReadingThemesActivity::loop() {
     requestUpdate();
   });
   buttonNavigator.onPreviousContinuous([this] {
-    selectedRowIndex =
-        ButtonNavigator::previousIndex(selectedRowIndex, rowCount());
+    selectedRowIndex = ButtonNavigator::previousIndex(selectedRowIndex, rowCount());
     requestUpdate();
   });
 }
@@ -305,22 +284,18 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const auto metrics = BaseMetrics::values;
 
-  renderer.drawCenteredText(UI_12_FONT_ID, metrics.topPadding + 5,
-                            tr(STR_READING_THEMES), true,
+  renderer.drawCenteredText(UI_12_FONT_ID, metrics.topPadding + 5, tr(STR_READING_THEMES), true,
                             EpdFontFamily::REGULAR);
 
   const int currentThemeIndex = READING_THEMES.findMatchingTheme();
-  const int lastAppliedThemeIndex =
-      currentThemeIndex < 0 ? READING_THEMES.findLastAppliedTheme() : -1;
+  const int lastAppliedThemeIndex = currentThemeIndex < 0 ? READING_THEMES.findLastAppliedTheme() : -1;
   const int contentY = metrics.topPadding + metrics.headerHeight;
-  const int contentHeight =
-      pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
+  const int contentHeight = pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
   const int rowHeight = metrics.listRowHeight;
   const int pageItems = std::max(1, contentHeight / rowHeight);
   const int pageStartIndex = (selectedRowIndex / pageItems) * pageItems;
 
-  for (int i = pageStartIndex; i < rowCount() && i < pageStartIndex + pageItems;
-       i++) {
+  for (int i = pageStartIndex; i < rowCount() && i < pageStartIndex + pageItems; i++) {
     const int rowY = contentY + (i - pageStartIndex) * rowHeight;
     const bool isSelected = (i == selectedRowIndex);
 
@@ -343,8 +318,7 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
     if (isSelected) {
       renderer.fillRect(0, rowY, pageWidth, rowHeight, true);
     }
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, rowY,
-                      label.c_str(), !isSelected);
+    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, rowY, label.c_str(), !isSelected);
 
     if (i >= 2) {
       const int themeIndex = themeIndexForRow(i);
@@ -356,35 +330,27 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
       }
       if (stateLabel != nullptr) {
         const int currentW = renderer.getTextWidth(UI_10_FONT_ID, stateLabel);
-        renderer.drawText(UI_10_FONT_ID,
-                          pageWidth - metrics.contentSidePadding - currentW,
-                          rowY, stateLabel, !isSelected);
+        renderer.drawText(UI_10_FONT_ID, pageWidth - metrics.contentSidePadding - currentW, rowY, stateLabel,
+                          !isSelected);
       }
     }
   }
 
   if (READING_THEMES.isEmpty()) {
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight - 70,
-                              tr(STR_NO_SAVED_THEMES));
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight - 70, tr(STR_NO_SAVED_THEMES));
   }
 
   {
     const std::string counter =
-        std::to_string(READING_THEMES.getCount()) + " / " +
-        std::to_string(ReadingThemeStore::MAX_THEMES);
+        std::to_string(READING_THEMES.getCount()) + " / " + std::to_string(ReadingThemeStore::MAX_THEMES);
     const int counterW = renderer.getTextWidth(UI_10_FONT_ID, counter.c_str());
     const int counterH = renderer.getLineHeight(UI_10_FONT_ID);
-    const int counterY =
-        pageHeight - metrics.buttonHintsHeight - 4 - counterH;
-    renderer.drawText(UI_10_FONT_ID,
-                      pageWidth - metrics.contentSidePadding - counterW,
-                      counterY, counter.c_str());
+    const int counterY = pageHeight - metrics.buttonHintsHeight - 4 - counterH;
+    renderer.drawText(UI_10_FONT_ID, pageWidth - metrics.contentSidePadding - counterW, counterY, counter.c_str());
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT),
-                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3,
-                      labels.btn4);
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (actionPopupOpen) {
     const int popupW = pageWidth - 60;
@@ -396,8 +362,7 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
     renderer.drawCenteredText(UI_10_FONT_ID, popupY + 8, tr(STR_THEME_ACTIONS));
     const ReadingTheme* theme = READING_THEMES.getTheme(actionPopupThemeIndex);
     if (theme != nullptr) {
-      const std::string themeName =
-          renderer.truncatedText(UI_10_FONT_ID, theme->name.c_str(), popupW - 24);
+      const std::string themeName = renderer.truncatedText(UI_10_FONT_ID, theme->name.c_str(), popupW - 24);
       renderer.drawCenteredText(UI_10_FONT_ID, popupY + 24, themeName.c_str());
     }
     for (int i = 0; i < kThemeActionCount; i++) {
@@ -406,8 +371,7 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
       if (isSelected) {
         renderer.fillRect(popupX + 6, rowY - 1, popupW - 12, 24, true);
       }
-      renderer.drawText(UI_10_FONT_ID, popupX + 12, rowY, themeActionLabel(i),
-                        !isSelected);
+      renderer.drawText(UI_10_FONT_ID, popupX + 12, rowY, themeActionLabel(i), !isSelected);
     }
   }
 

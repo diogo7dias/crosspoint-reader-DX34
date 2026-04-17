@@ -13,13 +13,9 @@ class LibrarySearchActivity final : public Activity {
   using OnCompleteCallback = std::function<void(const std::string&)>;
   using OnCancelCallback = std::function<void()>;
 
-  explicit LibrarySearchActivity(GfxRenderer& renderer,
-                                 MappedInputManager& mappedInput,
-                                 std::string folderPath,
-                                 const std::vector<std::string>& entries,
-                                 std::string initialQuery,
-                                 OnCompleteCallback onComplete,
-                                 OnCancelCallback onCancel);
+  explicit LibrarySearchActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string folderPath,
+                                 const std::vector<std::string>& entries, std::string initialQuery,
+                                 OnCompleteCallback onComplete, OnCancelCallback onCancel);
 
   void onEnter() override;
   void onExit() override;

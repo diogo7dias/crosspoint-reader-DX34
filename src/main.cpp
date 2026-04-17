@@ -24,17 +24,17 @@
 #include <Logging.h>
 #include <SPI.h>
 #include <builtinFonts/all.h>
+#include <esp_task_wdt.h>
 
 #include <cstring>
-#include <esp_task_wdt.h>
 
 #include "Battery.h"
 #include "BleHidManager.h"
 #include "CrossPointSettings.h"
-#include "Paths.h"
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
+#include "Paths.h"
 #include "ReadingThemeStore.h"
 #include "RecentBooksStore.h"
 #include "activities/boot_sleep/BootActivity.h"
@@ -132,7 +132,6 @@ EpdFontFamily ui10FontFamily(&ui10RegularFont, nullptr, nullptr, nullptr, 0, 0, 
 EpdFont ui12RegularFont(&ui_12_regular);
 EpdFontFamily ui12FontFamily(&ui12RegularFont, nullptr, nullptr, nullptr, 0, 0, false);
 
-
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
 unsigned long t2 = 0;
@@ -176,8 +175,7 @@ void verifyPowerButtonDuration() {
   // assuming the button was held until now from millis()==0 (i.e. device start time).
   const unsigned long calibration = start;
   const unsigned long targetDuration = SETTINGS.getPowerButtonDuration();
-  const unsigned long calibratedPressDuration =
-      (calibration < targetDuration) ? targetDuration - calibration : 1;
+  const unsigned long calibratedPressDuration = (calibration < targetDuration) ? targetDuration - calibration : 1;
 
   gpio.update();
   // Needed because inputManager.isPressed() may take up to ~500ms to return the correct state
@@ -361,8 +359,7 @@ bool ensureCrosspointDataDir() {
           return false;
         }
       } else {
-        LOG_ERR("MAIN", "Quarantined invalid %s to %s", dataDir,
-                quarantinePath);
+        LOG_ERR("MAIN", "Quarantined invalid %s to %s", dataDir, quarantinePath);
       }
     }
   }
@@ -405,7 +402,8 @@ void setup() {
     LOG_ERR("MAIN", "SD card initialization failed");
     setupDisplayAndFonts();
     exitActivity();
-    enterNewActivity(new FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", EpdFontFamily::REGULAR));
+    enterNewActivity(
+        new FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", EpdFontFamily::REGULAR));
     return;
   }
 
@@ -475,8 +473,8 @@ void setup() {
   RECENT_BOOKS.loadFromFile();
 
   // Safety: skip straight to reader if Back held or crash-loop detected.
-  const bool forcedHome = mappedInputManager.isPressed(MappedInputManager::Button::Back) ||
-                          APP_STATE.readerActivityLoadCount > 0;
+  const bool forcedHome =
+      mappedInputManager.isPressed(MappedInputManager::Button::Back) || APP_STATE.readerActivityLoadCount > 0;
 
   // Build list of .epub books from recents for boot-into-book logic.
   std::vector<const RecentBook*> recentEpubs;

@@ -1,10 +1,10 @@
 #include "SettingsActivity.h"
 
-#include <algorithm>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <Logging.h>
 
-#include <HalStorage.h>
+#include <algorithm>
 
 #include "BleConnectActivity.h"
 #include "BleRemapActivity.h"
@@ -37,11 +37,10 @@ void persistSettingsWithLog(const char* context) {
 }
 
 std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
-  return std::to_string(
-      CrossPointSettings::fontSizeToPointSize(family, fontSize));
+  return std::to_string(CrossPointSettings::fontSizeToPointSize(family, fontSize));
 }
 
-}
+}  // namespace
 
 const std::vector<SettingInfo>* SettingsActivity::settingsForCategory(const int categoryIndex) const {
   switch (categoryIndex) {
@@ -104,20 +103,17 @@ bool SettingsActivity::isPopupValueSetting(const SettingInfo& setting) const {
 
 void SettingsActivity::startFontSizeEdit() {
   fontSizeEditMode = true;
-  fontSizeEditDraftIndex = CrossPointSettings::fontSizeToDisplayIndex(
-      SETTINGS.fontFamily, SETTINGS.fontSize);
+  fontSizeEditDraftIndex = CrossPointSettings::fontSizeToDisplayIndex(SETTINGS.fontFamily, SETTINGS.fontSize);
 }
 
 void SettingsActivity::adjustFontSizeEdit(const int delta) {
   const int optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
   const int next = static_cast<int>(fontSizeEditDraftIndex) + delta;
-  fontSizeEditDraftIndex = static_cast<uint8_t>(
-      std::clamp(next, 0, std::max(0, optionCount - 1)));
+  fontSizeEditDraftIndex = static_cast<uint8_t>(std::clamp(next, 0, std::max(0, optionCount - 1)));
 }
 
 void SettingsActivity::applyFontSizeEdit() {
-  SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(
-      SETTINGS.fontFamily, fontSizeEditDraftIndex);
+  SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
   fontSizeEditMode = false;
   persistSettingsWithLog("settings font size");
 }
@@ -134,15 +130,15 @@ void SettingsActivity::startValueEdit(const SettingInfo& setting, const int cate
 
 void SettingsActivity::adjustValueEdit(const int delta) {
   const int next = static_cast<int>(valueEditDraft) + delta;
-  valueEditDraft = static_cast<uint8_t>(std::clamp(next, static_cast<int>(valueEditMin), static_cast<int>(valueEditMax)));
+  valueEditDraft =
+      static_cast<uint8_t>(std::clamp(next, static_cast<int>(valueEditMin), static_cast<int>(valueEditMax)));
 }
 
 namespace {
-int getValueEditHoldStep(const MappedInputManager& mappedInput,
-                         const SettingInfo&) {
+int getValueEditHoldStep(const MappedInputManager& mappedInput, const SettingInfo&) {
   return mappedInput.getHeldTime() >= 3000 ? 10 : 1;
 }
-}
+}  // namespace
 
 void SettingsActivity::applyValueEdit() {
   if (!valueEditMode) {
@@ -156,8 +152,7 @@ void SettingsActivity::applyValueEdit() {
 
   const auto& setting = (*settings)[valueEditSettingIndex];
   SETTINGS.*(setting.valuePtr) = valueEditDraft;
-  if (SETTINGS.uniformMargins &&
-      setting.valuePtr == &CrossPointSettings::screenMarginHorizontal) {
+  if (SETTINGS.uniformMargins && setting.valuePtr == &CrossPointSettings::screenMarginHorizontal) {
     SETTINGS.screenMarginTop = valueEditDraft;
     SETTINGS.screenMarginBottom = valueEditDraft;
   }
@@ -219,28 +214,28 @@ void SettingsActivity::buildSettingsList() {
   {
     const bool dynamic = SETTINGS.dynamicMargins;
     const bool uniform = SETTINGS.uniformMargins;
-    readerSettings.erase(
-        std::remove_if(readerSettings.begin(), readerSettings.end(),
-                       [dynamic, uniform](const SettingInfo& s) {
-                         if (dynamic) {
-                           // Dynamic: hide all manual horizontal margin controls
-                           return s.nameId == StrId::STR_UNIFORM_MARGINS ||
-                                  s.nameId == StrId::STR_SCREEN_MARGIN ||
-                                  s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL;
-                         } else if (uniform) {
-                           // Uniform: hide separate margin entries
-                           return s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL ||
-                                  s.nameId == StrId::STR_SCREEN_MARGIN_TOP ||
-                                  s.nameId == StrId::STR_SCREEN_MARGIN_BOTTOM;
-                         } else {
-                           // Separate: hide uniform margin entry
-                           return s.nameId == StrId::STR_SCREEN_MARGIN;
-                         }
-                       }),
-        readerSettings.end());
+    readerSettings.erase(std::remove_if(readerSettings.begin(), readerSettings.end(),
+                                        [dynamic, uniform](const SettingInfo& s) {
+                                          if (dynamic) {
+                                            // Dynamic: hide all manual horizontal margin controls
+                                            return s.nameId == StrId::STR_UNIFORM_MARGINS ||
+                                                   s.nameId == StrId::STR_SCREEN_MARGIN ||
+                                                   s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL;
+                                          } else if (uniform) {
+                                            // Uniform: hide separate margin entries
+                                            return s.nameId == StrId::STR_SCREEN_MARGIN_HORIZONTAL ||
+                                                   s.nameId == StrId::STR_SCREEN_MARGIN_TOP ||
+                                                   s.nameId == StrId::STR_SCREEN_MARGIN_BOTTOM;
+                                          } else {
+                                            // Separate: hide uniform margin entry
+                                            return s.nameId == StrId::STR_SCREEN_MARGIN;
+                                          }
+                                        }),
+                         readerSettings.end());
   }
 
-  displaySettings.push_back(SettingInfo::Action(StrId::STR_RANDOMIZE_SLEEP_IMAGES, SettingAction::RandomizeSleepImages));
+  displaySettings.push_back(
+      SettingInfo::Action(StrId::STR_RANDOMIZE_SLEEP_IMAGES, SettingAction::RandomizeSleepImages));
 
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
@@ -389,23 +384,19 @@ void SettingsActivity::loop() {
 
     buttonNavigator.onNextContinuous([this] {
       const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 ||
-          valueEditSettingIndex >= static_cast<int>(settings->size())) {
+      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
         return;
       }
-      adjustValueEdit(+getValueEditHoldStep(mappedInput,
-                                            (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(+getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
       requestUpdate();
     });
 
     buttonNavigator.onPreviousContinuous([this] {
       const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 ||
-          valueEditSettingIndex >= static_cast<int>(settings->size())) {
+      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
         return;
       }
-      adjustValueEdit(-getValueEditHoldStep(mappedInput,
-                                            (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(-getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
       requestUpdate();
     });
     return;
@@ -498,18 +489,15 @@ void SettingsActivity::toggleCurrentSetting() {
       startFontSizeEdit();
       return;
     } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-      const uint8_t currentIndex =
-          CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
+      const uint8_t currentIndex = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
       SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(
           (currentIndex + 1) % static_cast<uint8_t>(setting.enumValues.size()));
     } else {
       SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
     }
     if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-      SETTINGS.fontFamily =
-          CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
-      SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(
-          SETTINGS.fontFamily, SETTINGS.fontSize);
+      SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
+      SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
       SETTINGS.lineSpacingPercent = 90;  // Reset to default on font change
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
@@ -524,8 +512,7 @@ void SettingsActivity::toggleCurrentSetting() {
       return;
     }
     const int currentValue = SETTINGS.*(setting.valuePtr);
-    if (currentValue < setting.valueRange.min ||
-        currentValue > setting.valueRange.max) {
+    if (currentValue < setting.valueRange.min || currentValue > setting.valueRange.max) {
       SETTINGS.*(setting.valuePtr) = setting.valueRange.min;
     } else if (currentValue + setting.valueRange.step > setting.valueRange.max) {
       SETTINGS.*(setting.valuePtr) = setting.valueRange.min;
@@ -613,16 +600,12 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   auto metrics = BaseMetrics::values;
 
   // Top status line: version left, battery right
-  renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
-                    metrics.topPadding + 5, CROSSPOINT_VERSION);
+  renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, metrics.topPadding + 5, CROSSPOINT_VERSION);
   const bool showBatteryPercentage =
       SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
   const int batteryX = pageWidth - 12;
-  GUI.drawBatteryRight(renderer,
-                       Rect{batteryX, metrics.topPadding + 5,
-                            metrics.batteryWidth, metrics.batteryHeight},
-                       showBatteryPercentage, UI_10_FONT_ID,
-                       metrics.batteryWidth, metrics.batteryHeight, false);
+  GUI.drawBatteryRight(renderer, Rect{batteryX, metrics.topPadding + 5, metrics.batteryWidth, metrics.batteryHeight},
+                       showBatteryPercentage, UI_10_FONT_ID, metrics.batteryWidth, metrics.batteryHeight, false);
 
   const int contentY = metrics.topPadding + metrics.headerHeight;
   const int contentHeight = pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
@@ -655,8 +638,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
 
     if (isSelected) {
       const int nameWidth = renderer.getTextWidth(rowFont, settingName);
-      renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY,
-                        nameWidth + kChipPad * 2, chipH, true);
+      renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY, nameWidth + kChipPad * 2, chipH, true);
     }
     renderer.drawText(rowFont, metrics.contentSidePadding, rowY, settingName, !isSelected);
 
@@ -667,8 +649,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       if (setting.valuePtr == &CrossPointSettings::fontSize) {
         valueText = fontSizeValueLabel(SETTINGS.fontFamily, SETTINGS.fontSize);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-        valueText = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(
-            SETTINGS.fontFamily)]);
+        valueText = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
       } else {
         valueText = I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
       }
@@ -741,8 +722,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
 
     renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);
     renderer.fillRect(popupX, popupY, popupW, popupH, false);
-    renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2,
-                      popupY + 6, title, true);
+    renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2, popupY + 6, title, true);
 
     int curX = popupX + (popupW - totalItemsW) / 2;
     const int itemY = popupY + 28;
@@ -754,11 +734,9 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       const bool isSelected = (i == static_cast<int>(fontSizeEditDraftIndex));
 
       if (isSelected) {
-        renderer.fillRect(curX, itemY - kItemPadV, chipW,
-                          textH + kItemPadV * 2, true);
+        renderer.fillRect(curX, itemY - kItemPadV, chipW, textH + kItemPadV * 2, true);
       }
-      renderer.drawText(UI_12_FONT_ID, curX + kItemPadH, itemY,
-                        label.c_str(), !isSelected);
+      renderer.drawText(UI_12_FONT_ID, curX + kItemPadH, itemY, label.c_str(), !isSelected);
       curX += chipW + kItemGap;
     }
   }

@@ -7,29 +7,28 @@
 #include <I18n.h>
 #include <Txt.h>
 #include <Xtc.h>
+#include <esp_task_wdt.h>
 
 #include <algorithm>
 #include <cmath>
-#include <esp_task_wdt.h>
 #include <random>
-
-#include "util/TransitionFeedback.h"
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "Paths.h"
 #include "LibrarySearchActivity.h"
 #include "LibrarySearchSupport.h"
 #include "MappedInputManager.h"
+#include "Paths.h"
 #include "activities/boot_sleep/SleepActivity.h"
+#include "activities/network/QRShareActivity.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/BookProgress.h"
 #include "util/FavoriteBmp.h"
-#include "activities/network/QRShareActivity.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
+#include "util/TransitionFeedback.h"
 
 void sortFileList(std::vector<std::string>& strs);
 
@@ -67,8 +66,7 @@ bool equalsIgnoreCaseAscii(const std::string& value, const char* target) {
 }
 
 bool shouldCollapseMoveFolder(const std::string& folderName) {
-  return equalsIgnoreCaseAscii(folderName, "book") ||
-         equalsIgnoreCaseAscii(folderName, "books");
+  return equalsIgnoreCaseAscii(folderName, "book") || equalsIgnoreCaseAscii(folderName, "books");
 }
 
 std::string joinPath(const std::string& parent, const std::string& child) {
@@ -83,9 +81,7 @@ std::string joinPath(const std::string& parent, const std::string& child) {
 // 5 levels ≈ 2.5 KB which is safe on the ESP32-C3's ~15 KB stack.
 constexpr int kMaxMoveDestDepth = 5;
 
-void collectMoveDestinationPaths(const std::string& basePath,
-                                 std::vector<std::string>& outPaths,
-                                 int depth = 0) {
+void collectMoveDestinationPaths(const std::string& basePath, std::vector<std::string>& outPaths, int depth = 0) {
   if (depth >= kMaxMoveDestDepth) return;
 
   auto dir = Storage.open(basePath.c_str());
@@ -223,7 +219,6 @@ void sortFileList(std::vector<std::string>& strs) {
   });
 }
 
-
 void MyLibraryActivity::loadFiles() {
   fileLoadLimit = kDefaultFileLimit;
   loadFilesWithLimit();
@@ -281,8 +276,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
         next.getName(name, sizeof(name));
         const bool skip =
             (!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0;
-        const bool relevant =
-            !skip && (next.isDirectory() || isManagedFile(std::string(name)));
+        const bool relevant = !skip && (next.isDirectory() || isManagedFile(std::string(name)));
         next.close();
         esp_task_wdt_reset();
         if (relevant) {
@@ -306,7 +300,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
   if (shouldShuffle) {
     // Directories stay sorted at top; shuffle only files
     auto firstFile = std::partition_point(files.begin(), files.end(),
-        [](const std::string& s) { return !s.empty() && s.back() == '/'; });
+                                          [](const std::string& s) { return !s.empty() && s.back() == '/'; });
     std::shuffle(firstFile, files.end(), std::mt19937{esp_random()});
   }
 
@@ -320,9 +314,7 @@ void MyLibraryActivity::openSearchActivity() {
         pendingSearchQuery = query;
         pendingSearchSubmit = true;
       },
-      [this]() {
-        pendingSearchCancel = true;
-      }));
+      [this]() { pendingSearchCancel = true; }));
 }
 
 void MyLibraryActivity::clearSearch() {
@@ -350,13 +342,10 @@ void MyLibraryActivity::rebuildFilteredFileIndexes() {
     return;
   }
 
-  filteredFileIndexes =
-      LibrarySearchSupport::rankMatches(files, activeSearchQuery);
+  filteredFileIndexes = LibrarySearchSupport::rankMatches(files, activeSearchQuery);
 }
 
-bool MyLibraryActivity::hasActiveSearch() const {
-  return !activeSearchQuery.empty();
-}
+bool MyLibraryActivity::hasActiveSearch() const { return !activeSearchQuery.empty(); }
 
 size_t MyLibraryActivity::entryListOffset() const {
   if (!folderHasBooks) return 0;
@@ -375,21 +364,15 @@ size_t MyLibraryActivity::totalListCount() const {
   return count;
 }
 
-bool MyLibraryActivity::isSearchActionRow(const size_t listIndex) const {
-  return folderHasBooks && listIndex == 0;
-}
+bool MyLibraryActivity::isSearchActionRow(const size_t listIndex) const { return folderHasBooks && listIndex == 0; }
 
-bool MyLibraryActivity::isClearSearchRow(const size_t listIndex) const {
-  return hasActiveSearch() && listIndex == 1;
-}
+bool MyLibraryActivity::isClearSearchRow(const size_t listIndex) const { return hasActiveSearch() && listIndex == 1; }
 
 bool MyLibraryActivity::isLoadMoreRow(const size_t listIndex) const {
-  return hasMoreFiles && !hasActiveSearch() &&
-         listIndex == entryListOffset() + visibleEntryCount();
+  return hasMoreFiles && !hasActiveSearch() && listIndex == entryListOffset() + visibleEntryCount();
 }
 
-std::optional<size_t> MyLibraryActivity::rawFileIndexForListIndex(
-    const size_t listIndex) const {
+std::optional<size_t> MyLibraryActivity::rawFileIndexForListIndex(const size_t listIndex) const {
   if (listIndex < entryListOffset()) {
     return std::nullopt;
   }
@@ -408,8 +391,7 @@ std::optional<size_t> MyLibraryActivity::rawFileIndexForListIndex(
   return visibleIndex;
 }
 
-std::optional<size_t> MyLibraryActivity::rawFileIndexForPath(
-    const std::string& path) const {
+std::optional<size_t> MyLibraryActivity::rawFileIndexForPath(const std::string& path) const {
   // Compare by basename to avoid N string allocations (OOM on large folders)
   const std::string name = getBasename(path);
   for (size_t i = 0; i < files.size(); ++i) {
@@ -470,7 +452,9 @@ bool MyLibraryActivity::isBmpFile(const std::string& filename) {
   return StringUtils::checkFileExtension(filename, ".bmp");
 }
 
-bool MyLibraryActivity::isManagedFile(const std::string& filename) { return isBookFile(filename) || isBmpFile(filename); }
+bool MyLibraryActivity::isManagedFile(const std::string& filename) {
+  return isBookFile(filename) || isBmpFile(filename);
+}
 
 std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {
   if (rawIndex >= files.size()) {
@@ -519,10 +503,8 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
     const std::string fullPath = makeAbsolutePath(name);
     auto cached = progressPrefixCache.find(fullPath);
     if (cached == progressPrefixCache.end()) {
-      cached = progressPrefixCache
-                   .emplace(fullPath, formatLibraryProgressPrefix(
-                                          BookProgress::getPercent(fullPath)))
-                   .first;
+      cached =
+          progressPrefixCache.emplace(fullPath, formatLibraryProgressPrefix(BookProgress::getPercent(fullPath))).first;
     }
     rowText = cached->second + "  " + rowText;
   }
@@ -552,9 +534,7 @@ void MyLibraryActivity::enterFileMoveBrowser() {
   mode = Mode::FILE_MOVE_BROWSER;
 }
 
-int MyLibraryActivity::getFileActionCount() const {
-  return isBmpFile(selectedFilePath) ? 7 : 5;
-}
+int MyLibraryActivity::getFileActionCount() const { return isBmpFile(selectedFilePath) ? 7 : 5; }
 
 std::string MyLibraryActivity::getFileActionLabel(const int index) const {
   if (isBmpFile(selectedFilePath)) {
@@ -605,11 +585,8 @@ void MyLibraryActivity::loadMoveBrowseEntries() {
 
   std::vector<std::string> destinationPaths;
   collectMoveDestinationPaths("/", destinationPaths);
-  std::transform(destinationPaths.begin(), destinationPaths.end(),
-                 std::back_inserter(moveBrowseEntries),
-                 [](const std::string& path) {
-                   return MoveBrowseEntry{path, path, false, false};
-                 });
+  std::transform(destinationPaths.begin(), destinationPaths.end(), std::back_inserter(moveBrowseEntries),
+                 [](const std::string& path) { return MoveBrowseEntry{path, path, false, false}; });
 
   if (fileMoveIndex >= static_cast<int>(moveBrowseEntries.size())) {
     fileMoveIndex = std::max(0, static_cast<int>(moveBrowseEntries.size()) - 1);
@@ -645,15 +622,13 @@ bool MyLibraryActivity::copyFile(const std::string& srcPath, const std::string& 
   return true;
 }
 
-bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir,
-                                           std::string* destinationPath) const {
+bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::string* destinationPath) const {
   if (selectedFilePath.empty()) return false;
 
   std::string normalizedTarget = targetDir;
   if (normalizedTarget.empty()) normalizedTarget = "/";
   if (normalizedTarget.back() != '/') normalizedTarget += "/";
-  if (normalizedTarget == "/sleep/" &&
-      !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
+  if (normalizedTarget == "/sleep/" && !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
     return false;
   }
 
@@ -696,11 +671,9 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
     RECENT_BOOKS.removeBook(path);
     if (StringUtils::checkFileExtension(path, ".epub")) {
       Epub(path, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(path, ".xtc") ||
-               StringUtils::checkFileExtension(path, ".xtch")) {
+    } else if (StringUtils::checkFileExtension(path, ".xtc") || StringUtils::checkFileExtension(path, ".xtch")) {
       Xtc(path, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(path, ".txt") ||
-               StringUtils::checkFileExtension(path, ".md")) {
+    } else if (StringUtils::checkFileExtension(path, ".txt") || StringUtils::checkFileExtension(path, ".md")) {
       Txt txt(path, Paths::kDataDir);
       Storage.removeDir(txt.getCachePath().c_str());
     }
@@ -719,13 +692,9 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
   return deleted;
 }
 
-bool MyLibraryActivity::deleteSelectedFile() {
-  return deleteFile(selectedFilePath);
-}
+bool MyLibraryActivity::deleteSelectedFile() { return deleteFile(selectedFilePath); }
 
-void MyLibraryActivity::requestCleanRefresh() {
-  nextRefreshMode = HalDisplay::HALF_REFRESH;
-}
+void MyLibraryActivity::requestCleanRefresh() { nextRefreshMode = HalDisplay::HALF_REFRESH; }
 
 void MyLibraryActivity::displayFrame() {
   renderer.displayBuffer(nextRefreshMode);
@@ -756,11 +725,26 @@ void MyLibraryActivity::onExit() {
 }
 
 void MyLibraryActivity::loop() {
-  if (subActivity) { loopSubActivity(); return; }
-  if (messagePopupOpen) { loopMessagePopup(); return; }
-  if (mode == Mode::BMP_VIEW) { loopBmpView(); return; }
-  if (mode == Mode::FILE_ACTIONS) { loopFileActions(); return; }
-  if (mode == Mode::FILE_MOVE_BROWSER) { loopFileMoveBrowser(); return; }
+  if (subActivity) {
+    loopSubActivity();
+    return;
+  }
+  if (messagePopupOpen) {
+    loopMessagePopup();
+    return;
+  }
+  if (mode == Mode::BMP_VIEW) {
+    loopBmpView();
+    return;
+  }
+  if (mode == Mode::FILE_ACTIONS) {
+    loopFileActions();
+    return;
+  }
+  if (mode == Mode::FILE_MOVE_BROWSER) {
+    loopFileMoveBrowser();
+    return;
+  }
   loopBrowse();
 }
 
@@ -844,8 +828,7 @@ void MyLibraryActivity::loopFileActions() {
             SleepActivity::trimSleepFolderToLimit();
             StatusPopup::showConfirmation(renderer, "Moved");
             mode = Mode::BROWSE;
-            if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
-                rawIndex.has_value()) {
+            if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
               files.erase(files.begin() + static_cast<long>(*rawIndex));
               rebuildFilteredFileIndexes();
               clampSelectorIndex();
@@ -861,8 +844,7 @@ void MyLibraryActivity::loopFileActions() {
           const auto result = FavoriteBmp::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
           if (result == FavoriteBmp::SetFavoriteResult::Success) {
             const std::string newName = getBasename(updatedPath);
-            if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
-                rawIndex.has_value()) {
+            if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
               files[*rawIndex] = newName;
               sortFileList(files);
               rebuildFilteredFileIndexes();
@@ -888,8 +870,13 @@ void MyLibraryActivity::loopFileActions() {
         }
         case 4:
           exitActivity();
-          enterNewActivity(new QRShareActivity(renderer, mappedInput,
-              [this] { exitActivity(); requestCleanRefresh(); }, selectedFilePath));
+          enterNewActivity(new QRShareActivity(
+              renderer, mappedInput,
+              [this] {
+                exitActivity();
+                requestCleanRefresh();
+              },
+              selectedFilePath));
           return;
         case 5: {
           const std::string pathToDelete = selectedFilePath;
@@ -900,8 +887,7 @@ void MyLibraryActivity::loopFileActions() {
                 StatusPopup::showBlocking(renderer, "Deleting file");
                 if (deleteFile(pathToDelete)) {
                   StatusPopup::showConfirmation(renderer, "Deleted");
-                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
-                      rawIndex.has_value()) {
+                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete); rawIndex.has_value()) {
                     files.erase(files.begin() + static_cast<long>(*rawIndex));
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
@@ -940,8 +926,13 @@ void MyLibraryActivity::loopFileActions() {
           break;
         case 2:
           exitActivity();
-          enterNewActivity(new QRShareActivity(renderer, mappedInput,
-              [this] { requestCleanRefresh(); exitActivity(); }, selectedFilePath));
+          enterNewActivity(new QRShareActivity(
+              renderer, mappedInput,
+              [this] {
+                requestCleanRefresh();
+                exitActivity();
+              },
+              selectedFilePath));
           return;
         case 3: {
           const std::string pathToDelete = selectedFilePath;
@@ -953,8 +944,7 @@ void MyLibraryActivity::loopFileActions() {
                 if (deleteFile(pathToDelete)) {
                   StatusPopup::showConfirmation(renderer, "Deleted");
                   progressPrefixCache.erase(pathToDelete);
-                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete);
-                      rawIndex.has_value()) {
+                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete); rawIndex.has_value()) {
                     files.erase(files.begin() + static_cast<long>(*rawIndex));
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
@@ -1010,8 +1000,7 @@ void MyLibraryActivity::loopFileMoveBrowser() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& entry = moveBrowseEntries[fileMoveIndex];
-    if (entry.path == "/sleep" &&
-        !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
+    if (entry.path == "/sleep" && !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
       showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
       return;
     }
@@ -1024,8 +1013,7 @@ void MyLibraryActivity::loopFileMoveBrowser() {
       StatusPopup::showConfirmation(renderer, "Moved");
       mode = Mode::BROWSE;
       progressPrefixCache.erase(selectedFilePath);
-      if (const auto rawIndex = rawFileIndexForPath(selectedFilePath);
-          rawIndex.has_value()) {
+      if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
         files.erase(files.begin() + static_cast<long>(*rawIndex));
         rebuildFilteredFileIndexes();
         clampSelectorIndex();
@@ -1056,10 +1044,8 @@ void MyLibraryActivity::loopBrowse() {
   // Long press CONFIRM (1s+) on a file — opens file actions while held
   {
     const auto rawIndex = rawFileIndexForListIndex(selectorIndex);
-    if (rawIndex.has_value() &&
-        mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-        mappedInput.getHeldTime() >= GO_HOME_MS &&
-        isManagedFile(files[*rawIndex])) {
+    if (rawIndex.has_value() && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+        mappedInput.getHeldTime() >= GO_HOME_MS && isManagedFile(files[*rawIndex])) {
       const std::string selectedPath = makeAbsolutePath(files[*rawIndex]);
       mappedInput.suppressUntilAllReleased();
       enterFileActions(selectedPath);
@@ -1193,14 +1179,11 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int pathY = contentTop;
   const int pathWidth = pageWidth - metrics.contentSidePadding * 2;
-  const std::string pathLabel =
-      renderer.truncatedText(SMALL_FONT_ID, basepath.c_str(), pathWidth);
-  renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, pathY,
-                    pathLabel.c_str());
+  const std::string pathLabel = renderer.truncatedText(SMALL_FONT_ID, basepath.c_str(), pathWidth);
+  renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, pathY, pathLabel.c_str());
 
   const int listTop = pathY + renderer.getLineHeight(SMALL_FONT_ID) + 2;
-  const int listHeight =
-      pageHeight - listTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const int listHeight = pageHeight - listTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const int rowGap = 1;
   const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
   const int rowPadY = 2;
@@ -1216,10 +1199,8 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   int startIndex = selected;
   int usedHeight = 0;
   for (int i = selected; i >= 0; --i) {
-    const auto bwLines = wrapTextToWidth(renderer, UI_10_FONT_ID,
-                                         getRowTextForListIndex(i), textW);
-    const int bwHeight =
-        static_cast<int>(bwLines.size()) * lineHeight + rowPadY * 2;
+    const auto bwLines = wrapTextToWidth(renderer, UI_10_FONT_ID, getRowTextForListIndex(i), textW);
+    const int bwHeight = static_cast<int>(bwLines.size()) * lineHeight + rowPadY * 2;
     const int blockHeight = bwHeight + (usedHeight > 0 ? rowGap : 0);
     if (usedHeight + blockHeight > listHeight) {
       break;
@@ -1231,10 +1212,8 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   int y = listTop;
   int lastVisibleIndex = startIndex - 1;
   for (int i = startIndex; i < totalRows; ++i) {
-    const auto wrappedLines = wrapTextToWidth(
-        renderer, UI_10_FONT_ID, getRowTextForListIndex(i), textW);
-    const int rowHeight =
-        static_cast<int>(wrappedLines.size()) * lineHeight + rowPadY * 2;
+    const auto wrappedLines = wrapTextToWidth(renderer, UI_10_FONT_ID, getRowTextForListIndex(i), textW);
+    const int rowHeight = static_cast<int>(wrappedLines.size()) * lineHeight + rowPadY * 2;
 
     if (y + rowHeight > listTop + listHeight) {
       break;
@@ -1270,18 +1249,14 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
     const char* bottomMarker = ">";
     const int markerW = renderer.getTextWidth(markerFont, bottomMarker);
     const int markerX = pageWidth - markerRightMargin - markerW;
-    const int markerY = std::max(
-        listTop, std::min(listTop + listHeight - markerLineHeight,
-                          y - markerLineHeight));
+    const int markerY = std::max(listTop, std::min(listTop + listHeight - markerLineHeight, y - markerLineHeight));
     renderer.drawText(markerFont, markerX, markerY, bottomMarker);
   }
 
   // Help text
   const auto selectedRawIndex = rawFileIndexForListIndex(selectorIndex);
-  const bool hasSelectedFile =
-      selectedRawIndex.has_value() && isManagedFile(files[*selectedRawIndex]);
-  const bool hasSelectedBmp =
-      selectedRawIndex.has_value() && isBmpFile(files[*selectedRawIndex]);
+  const bool hasSelectedFile = selectedRawIndex.has_value() && isManagedFile(files[*selectedRawIndex]);
+  const bool hasSelectedBmp = selectedRawIndex.has_value() && isBmpFile(files[*selectedRawIndex]);
   const char* confirmLabel = tr(STR_OPEN);
   if (isSearchActionRow(selectorIndex)) {
     confirmLabel = "Search";
@@ -1291,9 +1266,7 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
     confirmLabel = hasSelectedBmp ? "View\n/hold" : "Open\n/hold";
   }
   const char* backLabel = basepath == "/" ? tr(STR_HOME) : "Back\n/hold";
-  const auto labels = mappedInput.mapLabels(backLabel,
-                                            confirmLabel, tr(STR_DIR_UP),
-                                            tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels(backLabel, confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (messagePopupOpen) {

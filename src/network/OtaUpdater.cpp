@@ -14,14 +14,12 @@ constexpr char latestReleaseUrl[] =
 /* Find the start of a semver-like "N.N.N" substring, skipping noise like "DX34".
  * Scans for a digit whose run is immediately followed by '.digit', which
  * distinguishes "34-" (no dot) from "0.0.11" (real version). */
-const char *findSemverStart(const char *str) {
-  for (const char *p = str; *p; ++p) {
+const char* findSemverStart(const char* str) {
+  for (const char* p = str; *p; ++p) {
     if (isdigit(static_cast<unsigned char>(*p))) {
-      const char *q = p;
-      while (isdigit(static_cast<unsigned char>(*q)))
-        q++;
-      if (*q == '.' && isdigit(static_cast<unsigned char>(*(q + 1))))
-        return p;
+      const char* q = p;
+      while (isdigit(static_cast<unsigned char>(*q))) q++;
+      if (*q == '.' && isdigit(static_cast<unsigned char>(*(q + 1)))) return p;
       p = q;  // skip past this digit group
     }
   }
@@ -31,7 +29,7 @@ const char *findSemverStart(const char *str) {
 /* Buffer and length tracker for incremental HTTP response from latestReleaseUrl.
  * Static storage is zero-initialized by C++, but explicit init makes intent clear
  * and guards against future refactors that might move these to non-static scope. */
-char *local_buf = nullptr;
+char* local_buf = nullptr;
 int output_len = 0;
 
 /*
@@ -41,19 +39,16 @@ int output_len = 0;
  * and it will point correct one.
  */
 extern "C" {
-extern esp_err_t esp_crt_bundle_attach(void *conf);
+extern esp_err_t esp_crt_bundle_attach(void* conf);
 }
 
 esp_err_t http_client_set_header_cb(esp_http_client_handle_t http_client) {
-  return esp_http_client_set_header(
-      http_client, "User-Agent",
-      "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
+  return esp_http_client_set_header(http_client, "User-Agent", "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
 }
 
-esp_err_t event_handler(esp_http_client_event_t *event) {
+esp_err_t event_handler(esp_http_client_event_t* event) {
   /* We do interested in only HTTP_EVENT_ON_DATA event only */
-  if (event->event_id != HTTP_EVENT_ON_DATA)
-    return ESP_OK;
+  if (event->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
 
   if (!esp_http_client_is_chunked_response(event->client)) {
     int content_len = esp_http_client_get_content_length(event->client);
@@ -68,11 +63,10 @@ esp_err_t event_handler(esp_http_client_event_t *event) {
         return ESP_ERR_NO_MEM;
       }
       /* local_buf life span is tracked by caller checkForUpdate */
-      local_buf = static_cast<char *>(calloc(content_len + 1, sizeof(char)));
+      local_buf = static_cast<char*>(calloc(content_len + 1, sizeof(char)));
       output_len = 0;
       if (local_buf == NULL) {
-        LOG_ERR("OTA", "HTTP Client Out of Memory Failed, Allocation %d",
-                content_len);
+        LOG_ERR("OTA", "HTTP Client Out of Memory Failed, Allocation %d", content_len);
         return ESP_ERR_NO_MEM;
       }
     }
@@ -86,9 +80,7 @@ esp_err_t event_handler(esp_http_client_event_t *event) {
      * need more logs to handle that */
     int chunked_len;
     esp_http_client_get_chunk_length(event->client, &chunked_len);
-    LOG_DBG("OTA",
-            "esp_http_client_is_chunked_response failed, chunked_len: %d",
-            chunked_len);
+    LOG_DBG("OTA", "esp_http_client_is_chunked_response failed, chunked_len: %d", chunked_len);
   }
 
   return ESP_OK;
@@ -114,7 +106,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   /* To track life time of local_buf, dtor will be called on exit from that
    * function */
   struct localBufCleaner {
-    char **bufPtr;
+    char** bufPtr;
     ~localBufCleaner() {
       if (*bufPtr) {
         free(*bufPtr);
@@ -129,20 +121,16 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
     return INTERNAL_UPDATE_ERROR;
   }
 
-  esp_err = esp_http_client_set_header(
-      client_handle, "User-Agent",
-      "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
+  esp_err = esp_http_client_set_header(client_handle, "User-Agent", "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_set_header Failed : %s",
-            esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_http_client_set_header Failed : %s", esp_err_to_name(esp_err));
     esp_http_client_cleanup(client_handle);
     return INTERNAL_UPDATE_ERROR;
   }
 
   esp_err = esp_http_client_perform(client_handle);
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_perform Failed : %s",
-            esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_http_client_perform Failed : %s", esp_err_to_name(esp_err));
     esp_http_client_cleanup(client_handle);
     return HTTP_ERROR;
   }
@@ -152,8 +140,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   /* esp_http_client_close will be called inside cleanup as well*/
   esp_err = esp_http_client_cleanup(client_handle);
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s",
-            esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s", esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
   }
 
@@ -170,8 +157,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   filter["assets"][0]["name"] = true;
   filter["assets"][0]["browser_download_url"] = true;
   filter["assets"][0]["size"] = true;
-  const DeserializationError error =
-      deserializeJson(doc, local_buf, DeserializationOption::Filter(filter));
+  const DeserializationError error = deserializeJson(doc, local_buf, DeserializationOption::Filter(filter));
   if (error) {
     LOG_ERR("OTA", "JSON parse failed: %s", error.c_str());
     return JSON_PARSE_ERROR;
@@ -191,8 +177,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
 
   for (int i = 0; i < doc["assets"].size(); i++) {
     if (doc["assets"][i]["name"] == "firmware.bin") {
-      if (!doc["assets"][i]["browser_download_url"].is<std::string>() ||
-          !doc["assets"][i]["size"].is<size_t>()) {
+      if (!doc["assets"][i]["browser_download_url"].is<std::string>() || !doc["assets"][i]["size"].is<size_t>()) {
         LOG_ERR("OTA", "firmware.bin asset missing url or size fields");
         return JSON_PARSE_ERROR;
       }
@@ -214,8 +199,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
 }
 
 bool OtaUpdater::isUpdateNewer() const {
-  if (!updateAvailable || latestVersion.empty() ||
-      latestVersion == CROSSPOINT_VERSION) {
+  if (!updateAvailable || latestVersion.empty() || latestVersion == CROSSPOINT_VERSION) {
     return false;
   }
 
@@ -224,34 +208,30 @@ bool OtaUpdater::isUpdateNewer() const {
 
   const auto currentVersion = CROSSPOINT_VERSION;
 
-  const char *latestDigits = findSemverStart(latestVersion.c_str());
-  const char *currentDigits = findSemverStart(currentVersion);
+  const char* latestDigits = findSemverStart(latestVersion.c_str());
+  const char* currentDigits = findSemverStart(currentVersion);
 
   sscanf(latestDigits, "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
-  sscanf(currentDigits, "%d.%d.%d", &currentMajor, &currentMinor,
-         &currentPatch);
+  sscanf(currentDigits, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
 
   /*
    * Compare major versions.
    * If they differ, return true if latest major version greater than current
    * major version otherwise return false.
    */
-  if (latestMajor != currentMajor)
-    return latestMajor > currentMajor;
+  if (latestMajor != currentMajor) return latestMajor > currentMajor;
 
   /*
    * Compare minor versions.
    * If they differ, return true if latest minor version greater than current
    * minor version otherwise return false.
    */
-  if (latestMinor != currentMinor)
-    return latestMinor > currentMinor;
+  if (latestMinor != currentMinor) return latestMinor > currentMinor;
 
   /*
    * Check patch versions.
    */
-  if (latestPatch != currentPatch)
-    return latestPatch > currentPatch;
+  if (latestPatch != currentPatch) return latestPatch > currentPatch;
 
   // If we reach here, it means all segments are equal.
   // One final check, if we're on an RC build (contains "-rc"), we should
@@ -264,9 +244,7 @@ bool OtaUpdater::isUpdateNewer() const {
   return false;
 }
 
-const std::string &OtaUpdater::getLatestVersion() const {
-  return latestVersion;
-}
+const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }
 
 OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
   if (!isUpdateNewer()) {
@@ -318,15 +296,13 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s",
-            esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s", esp_err_to_name(esp_err));
     esp_https_ota_finish(ota_handle);
     return HTTP_ERROR;
   }
 
   if (!esp_https_ota_is_complete_data_received(ota_handle)) {
-    LOG_ERR("OTA", "esp_https_ota_is_complete_data_received Failed: %s",
-            esp_err_to_name(esp_err));
+    LOG_ERR("OTA", "esp_https_ota_is_complete_data_received Failed: %s", esp_err_to_name(esp_err));
     esp_https_ota_finish(ota_handle);
     return INTERNAL_UPDATE_ERROR;
   }

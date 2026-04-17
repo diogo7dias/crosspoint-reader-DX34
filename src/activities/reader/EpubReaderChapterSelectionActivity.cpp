@@ -92,8 +92,7 @@ void EpubReaderChapterSelectionActivity::loop() {
       const std::string msg = std::string(tr(STR_JUMP_TO_CHAPTER)) + "?\n" + tocItem.title;
       const int selectedIdx = selectorIndex;
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, msg,
-          [this, selectedIdx] { onSelectTocIndex(selectedIdx); },
+          renderer, mappedInput, msg, [this, selectedIdx] { onSelectTocIndex(selectedIdx); },
           [this] {
             exitActivity();
             requestUpdate();
@@ -168,7 +167,8 @@ void EpubReaderChapterSelectionActivity::render(Activity::RenderLock&&) {
 
   // Title
   const int titleX =
-      contentX + (contentWidth - renderer.getTextWidth(UI_12_FONT_ID, tr(STR_SELECT_CHAPTER), EpdFontFamily::REGULAR)) / 2;
+      contentX +
+      (contentWidth - renderer.getTextWidth(UI_12_FONT_ID, tr(STR_SELECT_CHAPTER), EpdFontFamily::REGULAR)) / 2;
   renderer.drawText(UI_12_FONT_ID, titleX, 15 + contentY, tr(STR_SELECT_CHAPTER), true, EpdFontFamily::REGULAR);
 
   const int listStartY = 60 + contentY;

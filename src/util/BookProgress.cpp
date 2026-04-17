@@ -6,8 +6,8 @@
 #include <Txt.h>
 #include <Xtc.h>
 
-#include "StringUtils.h"
 #include "Paths.h"
+#include "StringUtils.h"
 
 namespace {
 constexpr const char* kUnreadPrefix = "[ ]";
@@ -102,10 +102,9 @@ std::optional<int> getTxtPercent(const std::string& path) {
   }
   progressFile.close();
 
-  const int currentPage = static_cast<int>(static_cast<uint32_t>(progressData[0]) |
-                                           (static_cast<uint32_t>(progressData[1]) << 8) |
-                                           (static_cast<uint32_t>(progressData[2]) << 16) |
-                                           (static_cast<uint32_t>(progressData[3]) << 24));
+  const int currentPage =
+      static_cast<int>(static_cast<uint32_t>(progressData[0]) | (static_cast<uint32_t>(progressData[1]) << 8) |
+                       (static_cast<uint32_t>(progressData[2]) << 16) | (static_cast<uint32_t>(progressData[3]) << 24));
 
   FsFile indexFile;
   if (!Storage.openFileForRead("BPR", cachePath + "/index.bin", indexFile)) {
@@ -142,7 +141,8 @@ std::optional<int> getTxtPercent(const std::string& path) {
   }
 
   const int clampedPage = clampValue(currentPage, 0, static_cast<int>(totalPages - 1));
-  const int percent = static_cast<int>((static_cast<float>(clampedPage + 1) * 100.0f) / static_cast<float>(totalPages) + 0.5f);
+  const int percent =
+      static_cast<int>((static_cast<float>(clampedPage + 1) * 100.0f) / static_cast<float>(totalPages) + 0.5f);
   return clampValue(percent, 0, 100);
 }
 }  // namespace
@@ -170,8 +170,6 @@ std::string getPrefix(const std::string& path) {
   return "[" + std::to_string(percent.value()) + " %]";
 }
 
-std::string withPrefix(const std::string& path, const std::string& title) {
-  return getPrefix(path) + " " + title;
-}
+std::string withPrefix(const std::string& path, const std::string& title) { return getPrefix(path) + " " + title; }
 
 }  // namespace BookProgress

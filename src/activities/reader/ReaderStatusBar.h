@@ -44,16 +44,14 @@ bool statusBarItemIsTop(uint8_t position);
 bool statusTextPositionIsTop(uint8_t position);
 int statusTextPositionHorizontalSlot(uint8_t position);
 int computeStatusTextBlockHeight(const GfxRenderer& renderer, int fontId, bool showStatusTextRow, int titleLineCount);
-int computeStatusBarsHeight(bool showBookProgressBar, bool showChapterProgressBar,
-                            int statusBarProgressHeight, bool includeTopMargin);
+int computeStatusBarsHeight(bool showBookProgressBar, bool showChapterProgressBar, int statusBarProgressHeight,
+                            bool includeTopMargin);
 int computeStatusBarReservedHeight(const GfxRenderer& renderer, int fontId, bool showStatusTextRow,
                                    bool showBookProgressBar, bool showChapterProgressBar, int titleLineCount);
-std::vector<std::string> wrapStatusText(const GfxRenderer& renderer, int fontId,
-                                        const std::string& text, int maxWidth);
+std::vector<std::string> wrapStatusText(const GfxRenderer& renderer, int fontId, const std::string& text, int maxWidth);
 
 // Main rendering function — called by both EPUB and TXT readers.
-void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& layout,
-                     int orientedMarginRight, int orientedMarginBottom,
-                     int orientedMarginLeft, bool debugBorders);
+void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& layout, int orientedMarginRight,
+                     int orientedMarginBottom, int orientedMarginLeft, bool debugBorders);
 
 }  // namespace ReaderStatusBar

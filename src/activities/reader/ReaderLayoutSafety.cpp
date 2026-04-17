@@ -15,24 +15,19 @@ constexpr int kStatusTextBottomPadding = 4;
 constexpr int kStatusTextLineGap = 1;
 constexpr int kStatusTextToBarsGap = 0;
 
-StatusBarBandBudget makeBandBudget(const GfxRenderer& renderer,
-                                   const int fontId,
-                                   const StatusBarBandConfig& config,
-                                   const int titleLineCount,
-                                   const int statusBarProgressHeight) {
+StatusBarBandBudget makeBandBudget(const GfxRenderer& renderer, const int fontId, const StatusBarBandConfig& config,
+                                   const int titleLineCount, const int statusBarProgressHeight) {
   StatusBarBandBudget budget;
   budget.titleLineCount = std::max(0, titleLineCount);
   budget.reservedHeight =
-      computeReservedHeight(renderer, fontId, config.showStatusTextRow,
-                            config.showBookProgressBar,
-                            config.showChapterProgressBar, budget.titleLineCount,
-                            statusBarProgressHeight);
+      computeReservedHeight(renderer, fontId, config.showStatusTextRow, config.showBookProgressBar,
+                            config.showChapterProgressBar, budget.titleLineCount, statusBarProgressHeight);
   return budget;
 }
 }  // namespace
 
-std::vector<std::string> wrapText(const GfxRenderer& renderer, const int fontId,
-                                  const std::string& text, const int maxWidth) {
+std::vector<std::string> wrapText(const GfxRenderer& renderer, const int fontId, const std::string& text,
+                                  const int maxWidth) {
   if (text.empty()) {
     return {};
   }
@@ -71,10 +66,7 @@ std::vector<std::string> wrapText(const GfxRenderer& renderer, const int fontId,
 
       if (line.empty()) {
         size_t fit = 1;
-        while (fit < word.size() &&
-               renderer.getTextWidth(fontId,
-                                     word.substr(0, fit + 1).c_str()) <=
-                   maxWidth) {
+        while (fit < word.size() && renderer.getTextWidth(fontId, word.substr(0, fit + 1).c_str()) <= maxWidth) {
           fit++;
         }
         line = word.substr(0, fit);
@@ -84,8 +76,7 @@ std::vector<std::string> wrapText(const GfxRenderer& renderer, const int fontId,
     }
 
     if (line.empty()) {
-      lines.push_back(renderer.truncatedText(fontId, text.substr(i).c_str(),
-                                             maxWidth));
+      lines.push_back(renderer.truncatedText(fontId, text.substr(i).c_str(), maxWidth));
       break;
     }
 
@@ -99,12 +90,8 @@ std::vector<std::string> wrapText(const GfxRenderer& renderer, const int fontId,
   return lines;
 }
 
-std::vector<std::string> buildTitleLines(const GfxRenderer& renderer,
-                                         const int fontId,
-                                         const std::string& text,
-                                         const int maxWidth,
-                                         const bool noTitleTruncation,
-                                         const int maxLineCount) {
+std::vector<std::string> buildTitleLines(const GfxRenderer& renderer, const int fontId, const std::string& text,
+                                         const int maxWidth, const bool noTitleTruncation, const int maxLineCount) {
   if (text.empty() || maxLineCount <= 0 || maxWidth <= 0) {
     return {};
   }
@@ -121,8 +108,7 @@ std::vector<std::string> buildTitleLines(const GfxRenderer& renderer,
   const std::vector<std::string> allWrapped = wrapped;
   wrapped.resize(static_cast<size_t>(maxLineCount));
   std::string finalLine = wrapped.back();
-  for (size_t i = static_cast<size_t>(maxLineCount); i < allWrapped.size();
-       i++) {
+  for (size_t i = static_cast<size_t>(maxLineCount); i < allWrapped.size(); i++) {
     if (!finalLine.empty()) {
       finalLine += " ";
     }
@@ -132,9 +118,7 @@ std::vector<std::string> buildTitleLines(const GfxRenderer& renderer,
   return wrapped;
 }
 
-int computeStatusTextBlockHeight(const GfxRenderer& renderer,
-                                 const int fontId,
-                                 const bool showStatusTextRow,
+int computeStatusTextBlockHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow,
                                  const int titleLineCount) {
   const int statusTextHeight = renderer.getTextHeight(fontId);
   int textBlockHeight = 0;
@@ -145,38 +129,26 @@ int computeStatusTextBlockHeight(const GfxRenderer& renderer,
     if (textBlockHeight > 0) {
       textBlockHeight += kStatusTextLineGap;
     }
-    textBlockHeight +=
-        titleLineCount * statusTextHeight +
-        (titleLineCount - 1) * kStatusTextLineGap;
+    textBlockHeight += titleLineCount * statusTextHeight + (titleLineCount - 1) * kStatusTextLineGap;
   }
   return textBlockHeight;
 }
 
-int computeStatusBarsHeight(const bool showBookProgressBar,
-                            const bool showChapterProgressBar,
-                            const int statusBarProgressHeight,
-                            const bool includeTopMargin) {
-  const int activeBars =
-      (showBookProgressBar ? 1 : 0) + (showChapterProgressBar ? 1 : 0);
+int computeStatusBarsHeight(const bool showBookProgressBar, const bool showChapterProgressBar,
+                            const int statusBarProgressHeight, const bool includeTopMargin) {
+  const int activeBars = (showBookProgressBar ? 1 : 0) + (showChapterProgressBar ? 1 : 0);
   if (activeBars == 0) {
     return 0;
   }
-  return activeBars * statusBarProgressHeight + (activeBars - 1) * 0 +
-         (includeTopMargin ? kProgressBarMarginTop : 0);
+  return activeBars * statusBarProgressHeight + (activeBars - 1) * 0 + (includeTopMargin ? kProgressBarMarginTop : 0);
 }
 
-int computeReservedHeight(const GfxRenderer& renderer,
-                          const int fontId,
-                          const bool showStatusTextRow,
-                          const bool showBookProgressBar,
-                          const bool showChapterProgressBar,
-                          const int titleLineCount,
+int computeReservedHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow,
+                          const bool showBookProgressBar, const bool showChapterProgressBar, const int titleLineCount,
                           const int statusBarProgressHeight) {
-  const int textBlockHeight = computeStatusTextBlockHeight(
-      renderer, fontId, showStatusTextRow, titleLineCount);
-  const int barsHeight =
-      computeStatusBarsHeight(showBookProgressBar, showChapterProgressBar,
-                              statusBarProgressHeight, textBlockHeight > 0);
+  const int textBlockHeight = computeStatusTextBlockHeight(renderer, fontId, showStatusTextRow, titleLineCount);
+  const int barsHeight = computeStatusBarsHeight(showBookProgressBar, showChapterProgressBar, statusBarProgressHeight,
+                                                 textBlockHeight > 0);
   int reservedHeight = 0;
   if (textBlockHeight > 0) {
     reservedHeight += kStatusTextTopPadding + textBlockHeight;
@@ -193,54 +165,43 @@ int computeReservedHeight(const GfxRenderer& renderer,
   return reservedHeight;
 }
 
-StatusBarBudgetResult resolveStatusBarBudget(
-    const GfxRenderer& renderer, const int fontId, const char* logTag,
-    const int screenHeight,
-    const int statusTopInset, const int statusBottomInset, const int marginTop,
-    const int marginBottom, const int minContentHeight,
-    const int statusBarProgressHeight, const StatusBarBandConfig& topConfig,
-    const StatusBarBandConfig& bottomConfig) {
+StatusBarBudgetResult resolveStatusBarBudget(const GfxRenderer& renderer, const int fontId, const char* logTag,
+                                             const int screenHeight, const int statusTopInset,
+                                             const int statusBottomInset, const int marginTop, const int marginBottom,
+                                             const int minContentHeight, const int statusBarProgressHeight,
+                                             const StatusBarBandConfig& topConfig,
+                                             const StatusBarBandConfig& bottomConfig) {
   StatusBarBudgetResult result;
-  result.top = makeBandBudget(renderer, fontId, topConfig, topConfig.desiredTitleLineCount,
-                              statusBarProgressHeight);
+  result.top = makeBandBudget(renderer, fontId, topConfig, topConfig.desiredTitleLineCount, statusBarProgressHeight);
   result.bottom =
-      makeBandBudget(renderer, fontId, bottomConfig, bottomConfig.desiredTitleLineCount,
-                     statusBarProgressHeight);
+      makeBandBudget(renderer, fontId, bottomConfig, bottomConfig.desiredTitleLineCount, statusBarProgressHeight);
 
   const int availableStatusHeight =
-      std::max(0, screenHeight - statusTopInset - statusBottomInset - marginTop -
-                      marginBottom - minContentHeight);
+      std::max(0, screenHeight - statusTopInset - statusBottomInset - marginTop - marginBottom - minContentHeight);
   int totalReserved = result.top.reservedHeight + result.bottom.reservedHeight;
 
-  while (totalReserved > availableStatusHeight &&
-         (result.top.titleLineCount > 0 || result.bottom.titleLineCount > 0)) {
-    const bool reduceTop =
-        result.top.titleLineCount > result.bottom.titleLineCount ||
-        (result.top.titleLineCount == result.bottom.titleLineCount &&
-         result.top.reservedHeight >= result.bottom.reservedHeight);
+  while (totalReserved > availableStatusHeight && (result.top.titleLineCount > 0 || result.bottom.titleLineCount > 0)) {
+    const bool reduceTop = result.top.titleLineCount > result.bottom.titleLineCount ||
+                           (result.top.titleLineCount == result.bottom.titleLineCount &&
+                            result.top.reservedHeight >= result.bottom.reservedHeight);
     if (reduceTop && result.top.titleLineCount > 0) {
-      result.top =
-          makeBandBudget(renderer, fontId, topConfig, result.top.titleLineCount - 1,
-                         statusBarProgressHeight);
+      result.top = makeBandBudget(renderer, fontId, topConfig, result.top.titleLineCount - 1, statusBarProgressHeight);
     } else if (result.bottom.titleLineCount > 0) {
-      result.bottom = makeBandBudget(renderer, fontId, bottomConfig,
-                                     result.bottom.titleLineCount - 1,
-                                     statusBarProgressHeight);
+      result.bottom =
+          makeBandBudget(renderer, fontId, bottomConfig, result.bottom.titleLineCount - 1, statusBarProgressHeight);
     } else if (result.top.titleLineCount > 0) {
-      result.top =
-          makeBandBudget(renderer, fontId, topConfig, result.top.titleLineCount - 1,
-                         statusBarProgressHeight);
+      result.top = makeBandBudget(renderer, fontId, topConfig, result.top.titleLineCount - 1, statusBarProgressHeight);
     }
     totalReserved = result.top.reservedHeight + result.bottom.reservedHeight;
   }
 
   if (result.top.titleLineCount < topConfig.desiredTitleLineCount) {
-    LOG_DBG(logTag, "Status title lines capped (top): %d -> %d",
-            topConfig.desiredTitleLineCount, result.top.titleLineCount);
+    LOG_DBG(logTag, "Status title lines capped (top): %d -> %d", topConfig.desiredTitleLineCount,
+            result.top.titleLineCount);
   }
   if (result.bottom.titleLineCount < bottomConfig.desiredTitleLineCount) {
-    LOG_DBG(logTag, "Status title lines capped (bottom): %d -> %d",
-            bottomConfig.desiredTitleLineCount, result.bottom.titleLineCount);
+    LOG_DBG(logTag, "Status title lines capped (bottom): %d -> %d", bottomConfig.desiredTitleLineCount,
+            result.bottom.titleLineCount);
   }
 
   totalReserved = result.top.reservedHeight + result.bottom.reservedHeight;
@@ -253,16 +214,14 @@ StatusBarBudgetResult resolveStatusBarBudget(
       const int reduceTop = std::min(result.top.reservedHeight, overflow);
       result.top.reservedHeight -= reduceTop;
     }
-    LOG_DBG(logTag,
-            "Status bar reserve clamped to preserve viewport: top=%d bottom=%d",
-            result.top.reservedHeight, result.bottom.reservedHeight);
+    LOG_DBG(logTag, "Status bar reserve clamped to preserve viewport: top=%d bottom=%d", result.top.reservedHeight,
+            result.bottom.reservedHeight);
   }
 
   return result;
 }
 
-int clampViewportDimension(const int value, const int minValue,
-                           const char* logTag, const char* dimensionName) {
+int clampViewportDimension(const int value, const int minValue, const char* logTag, const char* dimensionName) {
   if (value >= minValue) {
     return value;
   }

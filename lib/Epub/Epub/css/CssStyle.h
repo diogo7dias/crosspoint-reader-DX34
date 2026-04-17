@@ -119,18 +119,18 @@ struct CssStyle {
   CssFontWeight fontWeight = CssFontWeight::Normal;
   CssTextDecoration textDecoration = CssTextDecoration::None;
 
-  CssLength textIndent;     // First-line indent (deferred resolution)
-  CssLength marginTop;      // Vertical spacing before block
-  CssLength marginBottom;   // Vertical spacing after block
-  CssLength marginLeft;     // Horizontal spacing left of block
-  CssLength marginRight;    // Horizontal spacing right of block
-  CssLength paddingTop;     // Padding before
-  CssLength paddingBottom;  // Padding after
-  CssLength paddingLeft;    // Padding left
-  CssLength paddingRight;   // Padding right
-  CssLength lineHeight;     // Per-paragraph line height
-  CssLength letterSpacing;  // Per-glyph spacing
-  CssLength wordSpacing;    // Additional spacing between words
+  CssLength textIndent;                    // First-line indent (deferred resolution)
+  CssLength marginTop;                     // Vertical spacing before block
+  CssLength marginBottom;                  // Vertical spacing after block
+  CssLength marginLeft;                    // Horizontal spacing left of block
+  CssLength marginRight;                   // Horizontal spacing right of block
+  CssLength paddingTop;                    // Padding before
+  CssLength paddingBottom;                 // Padding after
+  CssLength paddingLeft;                   // Padding left
+  CssLength paddingRight;                  // Padding right
+  CssLength lineHeight;                    // Per-paragraph line height
+  CssLength letterSpacing;                 // Per-glyph spacing
+  CssLength wordSpacing;                   // Additional spacing between words
   CssDisplay display = CssDisplay::Block;  // display property (Block or None)
 
   CssPropertyFlags defined;  // Tracks which properties were explicitly set

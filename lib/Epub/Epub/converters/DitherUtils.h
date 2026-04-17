@@ -94,10 +94,10 @@ class EpubFloydSteinbergDitherer {
     // Compute quantization error and diffuse to neighbors
     int err = val - target;
     // Floyd-Steinberg distribution: right 7/16, below-left 3/16, below 5/16, below-right 1/16
-    errCurr_[x + 2] += (err * 7) >> 4;      // right neighbor (current row)
-    errNext_[x]     += (err * 3) >> 4;       // below-left (next row)
-    errNext_[x + 1] += (err * 5) >> 4;       // below (next row)
-    errNext_[x + 2] += (err * 1) >> 4;       // below-right (next row)
+    errCurr_[x + 2] += (err * 7) >> 4;  // right neighbor (current row)
+    errNext_[x] += (err * 3) >> 4;      // below-left (next row)
+    errNext_[x + 1] += (err * 5) >> 4;  // below (next row)
+    errNext_[x + 2] += (err * 1) >> 4;  // below-right (next row)
 
     return quantized;
   }

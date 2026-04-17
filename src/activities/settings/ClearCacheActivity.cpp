@@ -96,9 +96,8 @@ void ClearCacheActivity::clearCache() {
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
     file.getName(name, sizeof(name));
     const std::string itemName(name);
-    const bool isCacheDir = file.isDirectory() &&
-                            (itemName.rfind("epub_", 0) == 0 || itemName.rfind("xtc_", 0) == 0 ||
-                             itemName.rfind("txt_", 0) == 0);
+    const bool isCacheDir = file.isDirectory() && (itemName.rfind("epub_", 0) == 0 || itemName.rfind("xtc_", 0) == 0 ||
+                                                   itemName.rfind("txt_", 0) == 0);
     file.close();
     if (isCacheDir) {
       cacheDirs.push_back(std::string(Paths::kDataDir) + "/" + itemName);
@@ -160,8 +159,7 @@ void ClearCacheActivity::clearCache() {
       FsFile out;
       const std::string path = fullPath + preserved[i].suffix;
       if (!Storage.openFileForWrite("CLEAR_CACHE", path, out) ||
-          out.write(preserved[i].data.data(), preserved[i].data.size()) !=
-              preserved[i].data.size()) {
+          out.write(preserved[i].data.data(), preserved[i].data.size()) != preserved[i].data.size()) {
         LOG_ERR("CLEAR_CACHE", "Failed to restore: %s", path.c_str());
         restoreFailed = true;
         if (out) out.close();

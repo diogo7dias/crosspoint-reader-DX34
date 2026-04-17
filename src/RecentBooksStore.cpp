@@ -8,12 +8,11 @@
 #include <Serialization.h>
 #include <Xtc.h>
 
-#include "Paths.h"
-
 #include <algorithm>
 #include <cctype>
 
 #include "CrossPointState.h"
+#include "Paths.h"
 #include "util/StringUtils.h"
 
 namespace {
@@ -43,15 +42,14 @@ std::string normalizeRecentPath(std::string path) {
   return normalized;
 }
 
-std::string makeRecentPathKey(const std::string &rawPath) {
+std::string makeRecentPathKey(const std::string& rawPath) {
   std::string key = normalizeRecentPath(rawPath);
-  std::transform(key.begin(), key.end(), key.begin(), [](const char c) {
-    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  });
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](const char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
   return key;
 }
 
-void dedupeRecentBooks(std::vector<RecentBook> &books) {
+void dedupeRecentBooks(std::vector<RecentBook>& books) {
   // In-place dedupe: O(n²) but avoids allocating a full-size temp vector +
   // unordered_set (~45 KB spike for 100 books). n ≤ 100 so this is fast.
   for (size_t i = 0; i < books.size(); ++i) {
@@ -75,14 +73,12 @@ void dedupeRecentBooks(std::vector<RecentBook> &books) {
     books.resize(MAX_RECENT_BOOKS);
   }
 }
-} // namespace
+}  // namespace
 
 RecentBooksStore RecentBooksStore::instance;
 
-void RecentBooksStore::addBook(const std::string &path,
-                               const std::string &title,
-                               const std::string &author,
-                               const std::string &coverBmpPath) {
+void RecentBooksStore::addBook(const std::string& path, const std::string& title, const std::string& author,
+                               const std::string& coverBmpPath) {
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);
   if (normalizedPath.empty()) {
@@ -99,26 +95,21 @@ void RecentBooksStore::addBook(const std::string &path,
   }
 
   // Add to front
-  recentBooks.insert(recentBooks.begin(),
-                     {normalizedPath, title, author, coverBmpPath});
+  recentBooks.insert(recentBooks.begin(), {normalizedPath, title, author, coverBmpPath});
 
   dedupeRecentBooks(recentBooks);
 
   saveToFile();
 }
 
-void RecentBooksStore::updateBook(const std::string &path,
-                                  const std::string &title,
-                                  const std::string &author,
-                                  const std::string &coverBmpPath) {
+void RecentBooksStore::updateBook(const std::string& path, const std::string& title, const std::string& author,
+                                  const std::string& coverBmpPath) {
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);
   auto it = std::find_if(recentBooks.begin(), recentBooks.end(),
-                         [&](const RecentBook &book) {
-                           return makeRecentPathKey(book.path) == normalizedKey;
-                         });
+                         [&](const RecentBook& book) { return makeRecentPathKey(book.path) == normalizedKey; });
   if (it != recentBooks.end()) {
-    RecentBook &book = *it;
+    RecentBook& book = *it;
     book.path = normalizedPath;
     book.title = title;
     book.author = author;
@@ -128,7 +119,7 @@ void RecentBooksStore::updateBook(const std::string &path,
   }
 }
 
-void RecentBooksStore::removeBook(const std::string &path) {
+void RecentBooksStore::removeBook(const std::string& path) {
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);
   bool removed = false;
@@ -146,7 +137,7 @@ void RecentBooksStore::removeBook(const std::string &path) {
   }
 }
 
-std::string RecentBooksStore::moveBookToRecents(const std::string &bookPath) {
+std::string RecentBooksStore::moveBookToRecents(const std::string& bookPath) {
   const std::string normalized = normalizeRecentPath(bookPath);
   if (normalized.empty()) {
     return {};
@@ -163,8 +154,7 @@ std::string RecentBooksStore::moveBookToRecents(const std::string &bookPath) {
 
   // Extract filename
   const auto slashPos = normalized.find_last_of('/');
-  const std::string filename =
-      (slashPos == std::string::npos) ? normalized : normalized.substr(slashPos + 1);
+  const std::string filename = (slashPos == std::string::npos) ? normalized : normalized.substr(slashPos + 1);
   const std::string destination = "/recents/" + filename;
 
   // Skip if destination already exists (name collision)
@@ -177,30 +167,25 @@ std::string RecentBooksStore::moveBookToRecents(const std::string &bookPath) {
   std::string quotesNew;
   {
     const auto dotPos = normalized.rfind('.');
-    const std::string basePath =
-        (dotPos != std::string::npos) ? normalized.substr(0, dotPos) : normalized;
+    const std::string basePath = (dotPos != std::string::npos) ? normalized.substr(0, dotPos) : normalized;
     quotesOld = basePath + "_QUOTES.txt";
 
     const auto dotDst = destination.rfind('.');
-    const std::string baseDst =
-        (dotDst != std::string::npos) ? destination.substr(0, dotDst) : destination;
+    const std::string baseDst = (dotDst != std::string::npos) ? destination.substr(0, dotDst) : destination;
     quotesNew = baseDst + "_QUOTES.txt";
   }
 
   // Move the book file (rename is instant on same filesystem)
   if (!Storage.rename(normalized.c_str(), destination.c_str())) {
-    LOG_ERR("RBS", "Failed to move book to recents: %s -> %s",
-            normalized.c_str(), destination.c_str());
+    LOG_ERR("RBS", "Failed to move book to recents: %s -> %s", normalized.c_str(), destination.c_str());
     return {};
   }
-  LOG_INF("RBS", "Moved book to recents: %s -> %s",
-          normalized.c_str(), destination.c_str());
+  LOG_INF("RBS", "Moved book to recents: %s -> %s", normalized.c_str(), destination.c_str());
 
   // Move QUOTES sidecar if it exists
   if (Storage.exists(quotesOld.c_str())) {
     if (Storage.rename(quotesOld.c_str(), quotesNew.c_str())) {
-      LOG_DBG("RBS", "Moved QUOTES sidecar: %s -> %s",
-              quotesOld.c_str(), quotesNew.c_str());
+      LOG_DBG("RBS", "Moved QUOTES sidecar: %s -> %s", quotesOld.c_str(), quotesNew.c_str());
     } else {
       LOG_ERR("RBS", "Failed to move QUOTES sidecar: %s", quotesOld.c_str());
     }
@@ -242,15 +227,13 @@ RecentBook RecentBooksStore::getDataFromBook(std::string path) const {
   if (StringUtils::checkFileExtension(lastBookFileName, ".epub")) {
     Epub epub(path, Paths::kDataDir);
     epub.load(false, true);
-    return RecentBook{path, epub.getTitle(), epub.getAuthor(),
-                      epub.getThumbBmpPath()};
+    return RecentBook{path, epub.getTitle(), epub.getAuthor(), epub.getThumbBmpPath()};
   } else if (StringUtils::checkFileExtension(lastBookFileName, ".xtch") ||
              StringUtils::checkFileExtension(lastBookFileName, ".xtc")) {
     // Handle XTC file
     Xtc xtc(path, Paths::kDataDir);
     if (xtc.load()) {
-      return RecentBook{path, xtc.getTitle(), xtc.getAuthor(),
-                        xtc.getThumbBmpPath()};
+      return RecentBook{path, xtc.getTitle(), xtc.getAuthor(), xtc.getThumbBmpPath()};
     }
   } else if (StringUtils::checkFileExtension(lastBookFileName, ".txt") ||
              StringUtils::checkFileExtension(lastBookFileName, ".md")) {
@@ -272,17 +255,15 @@ bool RecentBooksStore::loadFromFile() {
 
   // Fall back to binary migration — check upstream path first, then DX34 legacy
   // path
-  const char *binPaths[] = {
-      RECENT_BOOKS_FILE_BIN,        // "/.crosspoint/recent.bin"
-      "/.crosspoint/recent_v2.bin", // DX34 legacy path before JSON migration
+  const char* binPaths[] = {
+      RECENT_BOOKS_FILE_BIN,         // "/.crosspoint/recent.bin"
+      "/.crosspoint/recent_v2.bin",  // DX34 legacy path before JSON migration
   };
-  for (const char *binPath : binPaths) {
-    if (!Storage.exists(binPath))
-      continue;
+  for (const char* binPath : binPaths) {
+    if (!Storage.exists(binPath)) continue;
 
     FsFile inputFile;
-    if (!Storage.openFileForRead("RBS", binPath, inputFile))
-      continue;
+    if (!Storage.openFileForRead("RBS", binPath, inputFile)) continue;
 
     // Inline the binary parse (same logic as loadFromBinaryFile but
     // path-agnostic)
@@ -310,15 +291,13 @@ bool RecentBooksStore::loadFromFile() {
         serialization::readString(inputFile, coverBmpPath);
       }
       if (!path.empty()) {
-        recentBooks.push_back(
-            {normalizeRecentPath(path), title, author, coverBmpPath});
+        recentBooks.push_back({normalizeRecentPath(path), title, author, coverBmpPath});
       }
     }
     inputFile.close();
 
     dedupeRecentBooks(recentBooks);
-    LOG_DBG("RBS", "Migrated %d books from %s to recent.json",
-            static_cast<int>(recentBooks.size()), binPath);
+    LOG_DBG("RBS", "Migrated %d books from %s to recent.json", static_cast<int>(recentBooks.size()), binPath);
 
     saveToFile();
     Storage.rename(binPath, RECENT_BOOKS_FILE_BAK);
@@ -376,14 +355,12 @@ bool RecentBooksStore::loadFromBinaryFile() {
       serialization::readString(inputFile, title);
       serialization::readString(inputFile, author);
       serialization::readString(inputFile, coverBmpPath);
-      recentBooks.push_back(
-          {normalizeRecentPath(path), title, author, coverBmpPath});
+      recentBooks.push_back({normalizeRecentPath(path), title, author, coverBmpPath});
     }
   }
 
   dedupeRecentBooks(recentBooks);
   inputFile.close();
-  LOG_DBG("RBS", "Recent books loaded from binary file (%d entries)",
-          static_cast<int>(recentBooks.size()));
+  LOG_DBG("RBS", "Recent books loaded from binary file (%d entries)", static_cast<int>(recentBooks.size()));
   return true;
 }

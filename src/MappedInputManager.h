@@ -38,10 +38,9 @@ class MappedInputManager {
   // are divided into equal zones mapped to the active buttons in display order.
   // Each entry holds the hardware button index whose action should fire when that
   // physical position is pressed.  Default: identity (1:1 mapping).
-  static constexpr uint8_t kFrontButtons[4] = {HalGPIO::BTN_BACK, HalGPIO::BTN_CONFIRM,
-                                                HalGPIO::BTN_LEFT, HalGPIO::BTN_RIGHT};
-  mutable uint8_t zoneOwner[4] = {HalGPIO::BTN_BACK, HalGPIO::BTN_CONFIRM,
-                                  HalGPIO::BTN_LEFT, HalGPIO::BTN_RIGHT};
+  static constexpr uint8_t kFrontButtons[4] = {HalGPIO::BTN_BACK, HalGPIO::BTN_CONFIRM, HalGPIO::BTN_LEFT,
+                                               HalGPIO::BTN_RIGHT};
+  mutable uint8_t zoneOwner[4] = {HalGPIO::BTN_BACK, HalGPIO::BTN_CONFIRM, HalGPIO::BTN_LEFT, HalGPIO::BTN_RIGHT};
 
   bool mapButton(Button button, bool (HalGPIO::*fn)(uint8_t) const) const;
   // Check the target hardware button plus any zone-mapped buttons that delegate to it.

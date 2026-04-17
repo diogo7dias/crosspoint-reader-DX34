@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
+
 #include <new>
 
 #ifdef ESP_PLATFORM
@@ -18,8 +19,7 @@ static size_t bionicSplitOffset(const char* s, const size_t len) {
   size_t pos = 0;
   // Skip leading em-space (\xe2\x80\x83 = U+2003)
   size_t leadingBytes = 0;
-  if (len >= 3 && static_cast<uint8_t>(s[0]) == 0xE2 &&
-      static_cast<uint8_t>(s[1]) == 0x80 &&
+  if (len >= 3 && static_cast<uint8_t>(s[0]) == 0xE2 && static_cast<uint8_t>(s[1]) == 0x80 &&
       static_cast<uint8_t>(s[2]) == 0x83) {
     leadingBytes = 3;
     pos = 3;
@@ -30,10 +30,14 @@ static size_t bionicSplitOffset(const char* s, const size_t len) {
   size_t tmpPos = pos;
   while (tmpPos < len) {
     const uint8_t b = static_cast<uint8_t>(s[tmpPos]);
-    if (b < 0x80) tmpPos += 1;
-    else if ((b & 0xE0) == 0xC0) tmpPos += 2;
-    else if ((b & 0xF0) == 0xE0) tmpPos += 3;
-    else tmpPos += 4;
+    if (b < 0x80)
+      tmpPos += 1;
+    else if ((b & 0xE0) == 0xC0)
+      tmpPos += 2;
+    else if ((b & 0xF0) == 0xE0)
+      tmpPos += 3;
+    else
+      tmpPos += 4;
     cpCount++;
   }
 
@@ -57,10 +61,14 @@ static size_t bionicSplitOffset(const char* s, const size_t len) {
   size_t splitPos = pos;
   while (splitPos < len && counted < prefixCps) {
     const uint8_t b = static_cast<uint8_t>(s[splitPos]);
-    if (b < 0x80) splitPos += 1;
-    else if ((b & 0xE0) == 0xC0) splitPos += 2;
-    else if ((b & 0xF0) == 0xE0) splitPos += 3;
-    else splitPos += 4;
+    if (b < 0x80)
+      splitPos += 1;
+    else if ((b & 0xE0) == 0xC0)
+      splitPos += 2;
+    else if ((b & 0xF0) == 0xE0)
+      splitPos += 3;
+    else
+      splitPos += 4;
     counted++;
   }
 
@@ -90,8 +98,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
       if (splitAt >= len) {
         // Whole word bold
         const auto boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-        renderer.drawTextSpaced(fontId, wordX, y, text,
-                                blockStyle.letterSpacing, true, boldStyle);
+        renderer.drawTextSpaced(fontId, wordX, y, text, blockStyle.letterSpacing, true, boldStyle);
       } else {
         // Draw bold prefix
         char prefixBuf[64];
@@ -100,25 +107,21 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
         prefixBuf[copyLen] = '\0';
 
         const auto boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-        renderer.drawTextSpaced(fontId, wordX, y, prefixBuf,
-                                blockStyle.letterSpacing, true, boldStyle);
-        const int prefixAdvance = renderer.getTextAdvanceXSpaced(
-            fontId, prefixBuf, blockStyle.letterSpacing, boldStyle);
+        renderer.drawTextSpaced(fontId, wordX, y, prefixBuf, blockStyle.letterSpacing, true, boldStyle);
+        const int prefixAdvance =
+            renderer.getTextAdvanceXSpaced(fontId, prefixBuf, blockStyle.letterSpacing, boldStyle);
 
         // Draw regular suffix
-        renderer.drawTextSpaced(fontId, wordX + prefixAdvance, y, text + splitAt,
-                                blockStyle.letterSpacing, true, currentStyle);
+        renderer.drawTextSpaced(fontId, wordX + prefixAdvance, y, text + splitAt, blockStyle.letterSpacing, true,
+                                currentStyle);
       }
     } else {
-      renderer.drawTextSpaced(fontId, wordX, y, words[i].c_str(),
-                              blockStyle.letterSpacing, true, currentStyle);
+      renderer.drawTextSpaced(fontId, wordX, y, words[i].c_str(), blockStyle.letterSpacing, true, currentStyle);
     }
 
     if ((currentStyle & EpdFontFamily::UNDERLINE) != 0) {
       const std::string& w = words[i];
-      const int fullWordWidth =
-          renderer.getTextWidthSpaced(fontId, w.c_str(), blockStyle.letterSpacing,
-                                      currentStyle);
+      const int fullWordWidth = renderer.getTextWidthSpaced(fontId, w.c_str(), blockStyle.letterSpacing, currentStyle);
       // y is the top of the text line; add ascender to reach baseline, then offset 2px below
       const int underlineY = y + renderer.getFontAscenderSize(fontId) + 2;
 
@@ -129,10 +132,10 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
       if (w.size() >= 3 && static_cast<uint8_t>(w[0]) == 0xE2 && static_cast<uint8_t>(w[1]) == 0x80 &&
           static_cast<uint8_t>(w[2]) == 0x83) {
         const char* visiblePtr = w.c_str() + 3;
-        const int prefixWidth = renderer.getTextAdvanceXSpaced(
-            fontId, "\xe2\x80\x83", blockStyle.letterSpacing, currentStyle);
-        const int visibleWidth = renderer.getTextWidthSpaced(
-            fontId, visiblePtr, blockStyle.letterSpacing, currentStyle);
+        const int prefixWidth =
+            renderer.getTextAdvanceXSpaced(fontId, "\xe2\x80\x83", blockStyle.letterSpacing, currentStyle);
+        const int visibleWidth =
+            renderer.getTextWidthSpaced(fontId, visiblePtr, blockStyle.letterSpacing, currentStyle);
         startX = wordX + prefixWidth;
         underlineWidth = visibleWidth;
       }
@@ -200,8 +203,8 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
     // Estimate: each word averages ~12 bytes string + 2 bytes xpos + 1 byte style
     const size_t estimatedBytes = wc * 20u;
     if (estimatedBytes > esp_get_free_heap_size() / 2) {
-      LOG_ERR("TXB", "Deserialization skipped: %u words (~%u bytes) would exceed safe heap limit",
-              wc, (unsigned)estimatedBytes);
+      LOG_ERR("TXB", "Deserialization skipped: %u words (~%u bytes) would exceed safe heap limit", wc,
+              (unsigned)estimatedBytes);
       return nullptr;
     }
   }
@@ -236,6 +239,9 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   serialization::readPod(file, blockStyle.lineHeightDefined);
 
   auto* tb = new (std::nothrow) TextBlock(std::move(words), std::move(wordXpos), std::move(wordStyles), blockStyle);
-  if (!tb) { LOG_ERR("TXB", "OOM: TextBlock"); return nullptr; }
+  if (!tb) {
+    LOG_ERR("TXB", "OOM: TextBlock");
+    return nullptr;
+  }
   return std::unique_ptr<TextBlock>(tb);
 }

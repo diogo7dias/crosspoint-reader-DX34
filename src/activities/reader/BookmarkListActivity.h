@@ -13,12 +13,10 @@
 /// Select jumps to that position; long-press opens a Rename / Delete popup.
 class BookmarkListActivity final : public ActivityWithSubactivity {
  public:
-  explicit BookmarkListActivity(
-      GfxRenderer& renderer, MappedInputManager& mappedInput,
-      const std::shared_ptr<Epub>& epub, BookmarkStore& store,
-      const std::string& cachePath, int currentSpineIndex, int currentPage,
-      const std::function<void()>& onGoBack,
-      const std::function<void(int spineIndex, int pageNumber)>& onJump)
+  explicit BookmarkListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                const std::shared_ptr<Epub>& epub, BookmarkStore& store, const std::string& cachePath,
+                                int currentSpineIndex, int currentPage, const std::function<void()>& onGoBack,
+                                const std::function<void(int spineIndex, int pageNumber)>& onJump)
       : ActivityWithSubactivity("BookmarkList", renderer, mappedInput),
         epub(epub),
         store(store),

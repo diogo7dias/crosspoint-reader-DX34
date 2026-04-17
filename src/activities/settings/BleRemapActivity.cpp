@@ -134,13 +134,20 @@ bool BleRemapActivity::validateUnassigned(uint16_t keycode) {
 
 const char* BleRemapActivity::getRoleName(uint8_t step) const {
   switch (step) {
-    case 0: return tr(STR_BACK);
-    case 1: return tr(STR_CONFIRM);
-    case 2: return tr(STR_DIR_LEFT);
-    case 3: return tr(STR_DIR_RIGHT);
-    case 4: return tr(STR_DIR_UP);
-    case 5: return tr(STR_DIR_DOWN);
-    default: return "?";
+    case 0:
+      return tr(STR_BACK);
+    case 1:
+      return tr(STR_CONFIRM);
+    case 2:
+      return tr(STR_DIR_LEFT);
+    case 3:
+      return tr(STR_DIR_RIGHT);
+    case 4:
+      return tr(STR_DIR_UP);
+    case 5:
+      return tr(STR_DIR_DOWN);
+    default:
+      return "?";
   }
 }
 
@@ -161,39 +168,118 @@ const char* BleRemapActivity::getKeycodeName(uint16_t keycode) {
 
   if (mod == 0) {
     switch (key) {
-      case 0x04: return "A";  case 0x05: return "B";  case 0x06: return "C";
-      case 0x07: return "D";  case 0x08: return "E";  case 0x09: return "F";
-      case 0x0A: return "G";  case 0x0B: return "H";  case 0x0C: return "I";
-      case 0x0D: return "J";  case 0x0E: return "K";  case 0x0F: return "L";
-      case 0x10: return "M";  case 0x11: return "N";  case 0x12: return "O";
-      case 0x13: return "P";  case 0x14: return "Q";  case 0x15: return "R";
-      case 0x16: return "S";  case 0x17: return "T";  case 0x18: return "U";
-      case 0x19: return "V";  case 0x1A: return "W";  case 0x1B: return "X";
-      case 0x1C: return "Y";  case 0x1D: return "Z";
-      case 0x1E: return "1";  case 0x1F: return "2";  case 0x20: return "3";
-      case 0x21: return "4";  case 0x22: return "5";  case 0x23: return "6";
-      case 0x24: return "7";  case 0x25: return "8";  case 0x26: return "9";
-      case 0x27: return "0";
-      case 0x28: return "Enter";
-      case 0x29: return "Escape";
-      case 0x2A: return "Backspace";
-      case 0x2B: return "Tab";
-      case 0x2C: return "Space";
-      case 0x39: return "CapsLock";
-      case 0x4F: return "Right";
-      case 0x50: return "Left";
-      case 0x51: return "Down";
-      case 0x52: return "Up";
-      case 0x4B: return "PageUp";
-      case 0x4E: return "PageDown";
-      case 0x4A: return "Home";
-      case 0x4D: return "End";
-      case 0xE9: return "Vol+";
-      case 0xEA: return "Vol-";
-      case 0xE2: return "Mute";
-      case 0xB5: return "Next";
-      case 0xB6: return "Prev";
-      case 0xCD: return "Play";
+      case 0x04:
+        return "A";
+      case 0x05:
+        return "B";
+      case 0x06:
+        return "C";
+      case 0x07:
+        return "D";
+      case 0x08:
+        return "E";
+      case 0x09:
+        return "F";
+      case 0x0A:
+        return "G";
+      case 0x0B:
+        return "H";
+      case 0x0C:
+        return "I";
+      case 0x0D:
+        return "J";
+      case 0x0E:
+        return "K";
+      case 0x0F:
+        return "L";
+      case 0x10:
+        return "M";
+      case 0x11:
+        return "N";
+      case 0x12:
+        return "O";
+      case 0x13:
+        return "P";
+      case 0x14:
+        return "Q";
+      case 0x15:
+        return "R";
+      case 0x16:
+        return "S";
+      case 0x17:
+        return "T";
+      case 0x18:
+        return "U";
+      case 0x19:
+        return "V";
+      case 0x1A:
+        return "W";
+      case 0x1B:
+        return "X";
+      case 0x1C:
+        return "Y";
+      case 0x1D:
+        return "Z";
+      case 0x1E:
+        return "1";
+      case 0x1F:
+        return "2";
+      case 0x20:
+        return "3";
+      case 0x21:
+        return "4";
+      case 0x22:
+        return "5";
+      case 0x23:
+        return "6";
+      case 0x24:
+        return "7";
+      case 0x25:
+        return "8";
+      case 0x26:
+        return "9";
+      case 0x27:
+        return "0";
+      case 0x28:
+        return "Enter";
+      case 0x29:
+        return "Escape";
+      case 0x2A:
+        return "Backspace";
+      case 0x2B:
+        return "Tab";
+      case 0x2C:
+        return "Space";
+      case 0x39:
+        return "CapsLock";
+      case 0x4F:
+        return "Right";
+      case 0x50:
+        return "Left";
+      case 0x51:
+        return "Down";
+      case 0x52:
+        return "Up";
+      case 0x4B:
+        return "PageUp";
+      case 0x4E:
+        return "PageDown";
+      case 0x4A:
+        return "Home";
+      case 0x4D:
+        return "End";
+      case 0xE9:
+        return "Vol+";
+      case 0xEA:
+        return "Vol-";
+      case 0xE2:
+        return "Mute";
+      case 0xB5:
+        return "Next";
+      case 0xB6:
+        return "Prev";
+      case 0xCD:
+        return "Play";
     }
   }
 

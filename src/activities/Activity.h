@@ -20,10 +20,9 @@
 #include <string>
 #include <utility>
 
-#include "esp_system.h"  // esp_restart()
-
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
+#include "esp_system.h"  // esp_restart()
 
 class Activity {
  protected:
@@ -52,8 +51,7 @@ class Activity {
     // nothing in release builds (NDEBUG), so use an explicit check + restart.
     // The device is non-functional without these semaphores.
     if (!renderingMutex || !renderDoneSemaphore) {
-      LOG_ERR("ACT", "FATAL: semaphore alloc failed for '%s' — heap exhausted, restarting",
-              name.c_str());
+      LOG_ERR("ACT", "FATAL: semaphore alloc failed for '%s' — heap exhausted, restarting", name.c_str());
       esp_restart();
     }
   }

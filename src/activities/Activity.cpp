@@ -29,8 +29,7 @@ void Activity::onEnter() {
               &renderTaskHandle  // Task handle
   );
   if (!renderTaskHandle) {
-    LOG_ERR("ACT", "FATAL: render task alloc failed for '%s' — heap exhausted, restarting",
-            name.c_str());
+    LOG_ERR("ACT", "FATAL: render task alloc failed for '%s' — heap exhausted, restarting", name.c_str());
     esp_restart();
   }
   LOG_DBG("ACT", "Entering activity: %s", name.c_str());

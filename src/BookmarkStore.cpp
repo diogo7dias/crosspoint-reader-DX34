@@ -126,11 +126,10 @@ int BookmarkStore::toggle(int spineIndex, int pageNumber) {
   bookmarks.push_back({spineIndex, pageNumber, ""});
 
   // Sort by spine index, then page number for consistent display order
-  std::sort(bookmarks.begin(), bookmarks.end(),
-            [](const Bookmark& a, const Bookmark& b) {
-              if (a.spineIndex != b.spineIndex) return a.spineIndex < b.spineIndex;
-              return a.pageNumber < b.pageNumber;
-            });
+  std::sort(bookmarks.begin(), bookmarks.end(), [](const Bookmark& a, const Bookmark& b) {
+    if (a.spineIndex != b.spineIndex) return a.spineIndex < b.spineIndex;
+    return a.pageNumber < b.pageNumber;
+  });
 
   return 1;  // Added
 }

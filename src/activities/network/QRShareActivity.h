@@ -16,8 +16,7 @@ enum class QRShareState {
 class QRShareActivity final : public ActivityWithSubactivity {
  public:
   explicit QRShareActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                           const std::function<void()>& onGoBack,
-                           std::string filePath);
+                           const std::function<void()>& onGoBack, std::string filePath);
   void onEnter() override;
   void onExit() override;
   void loop() override;

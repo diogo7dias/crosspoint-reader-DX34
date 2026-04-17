@@ -190,15 +190,17 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
       const int outY = cfgY + dstY;
       pw.beginRow(outY);
       if (caching) cw.beginRow(outY, ctx->config->y);
-      if (useFS && outY != ctx->lastFsRow) { ctx->fsDitherer.beginRow(); ctx->lastFsRow = outY; }
+      if (useFS && outY != ctx->lastFsRow) {
+        ctx->fsDitherer.beginRow();
+        ctx->lastFsRow = outY;
+      }
       const uint8_t* row = &pixels[(dstY - blockY) * stride];
       for (int dstX = dstXStart; dstX < dstXEnd; dstX++) {
         const int outX = cfgX + dstX;
         uint8_t gray = row[dstX - blockX];
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX)
-                           : applyBayerDither4Level(gray, outX, outY);
+          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -226,7 +228,10 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
       const int outY = cfgY + dstY;
       pw.beginRow(outY);
       if (caching) cw.beginRow(outY, ctx->config->y);
-      if (useFS && outY != ctx->lastFsRow) { ctx->fsDitherer.beginRow(); ctx->lastFsRow = outY; }
+      if (useFS && outY != ctx->lastFsRow) {
+        ctx->fsDitherer.beginRow();
+        ctx->lastFsRow = outY;
+      }
       const int32_t srcFyFP = dstY * invScaleFP;
       const int32_t fy = srcFyFP & FP_MASK;
       const int32_t fyInv = FP_ONE - fy;
@@ -258,8 +263,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX)
-                           : applyBayerDither4Level(gray, outX, outY);
+          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -282,8 +286,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX)
-                           : applyBayerDither4Level(gray, outX, outY);
+          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -309,8 +312,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX)
-                           : applyBayerDither4Level(gray, outX, outY);
+          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -327,7 +329,10 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
     const int outY = cfgY + dstY;
     pw.beginRow(outY);
     if (caching) cw.beginRow(outY, ctx->config->y);
-    if (useFS && outY != ctx->lastFsRow) { ctx->fsDitherer.beginRow(); ctx->lastFsRow = outY; }
+    if (useFS && outY != ctx->lastFsRow) {
+      ctx->fsDitherer.beginRow();
+      ctx->lastFsRow = outY;
+    }
     const int32_t srcFyFP = dstY * invScaleFP;
     int ly = (srcFyFP >> FP_SHIFT) - blockY;
     if (ly < 0) ly = 0;
@@ -344,8 +349,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
       uint8_t dithered;
       if (useDithering) {
-        dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX)
-                         : applyBayerDither4Level(gray, outX, outY);
+        dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
       } else {
         dithered = gray / 85;
         if (dithered > 3) dithered = 3;

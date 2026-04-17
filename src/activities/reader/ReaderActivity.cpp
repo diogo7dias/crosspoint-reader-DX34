@@ -6,14 +6,14 @@
 #include "CrossPointSettings.h"
 #include "Epub.h"
 #include "EpubReaderActivity.h"
+#include "Paths.h"
+#include "QuotesViewerActivity.h"
 #include "ReadingThemeStore.h"
 #include "Txt.h"
 #include "TxtReaderActivity.h"
-#include "QuotesViewerActivity.h"
 #include "Xtc.h"
 #include "XtcReaderActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
-#include "Paths.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
 
@@ -35,8 +35,7 @@ bool ReaderActivity::isTxtFile(const std::string& path) {
 }
 
 bool ReaderActivity::isQuotesFile(const std::string& path) {
-  return path.size() >= 11 &&
-         path.compare(path.size() - 11, 11, "_QUOTES.txt") == 0;
+  return path.size() >= 11 && path.compare(path.size() - 11, 11, "_QUOTES.txt") == 0;
 }
 
 std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
@@ -49,13 +48,11 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
 
   uint8_t readerStyleMode = SETTINGS.readerStyleMode;
   ReadingTheme savedBookSettings;
-  if (ReadingThemeStore::loadBookSettings(epub->getCachePath(),
-                                          savedBookSettings)) {
+  if (ReadingThemeStore::loadBookSettings(epub->getCachePath(), savedBookSettings)) {
     readerStyleMode = savedBookSettings.readerStyleMode;
   }
 
-  if (epub->load(true, readerStyleMode ==
-                           CrossPointSettings::READER_STYLE_USER)) {
+  if (epub->load(true, readerStyleMode == CrossPointSettings::READER_STYLE_USER)) {
     return epub;
   }
 
@@ -158,9 +155,8 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
 
   if (isQuotesFile(bookPath)) {
     exitActivity();
-    enterNewActivity(new QuotesViewerActivity(
-        renderer, mappedInput, bookPath,
-        [this, bookPath] { goToLibrary(bookPath); }));
+    enterNewActivity(
+        new QuotesViewerActivity(renderer, mappedInput, bookPath, [this, bookPath] { goToLibrary(bookPath); }));
     return;
   }
 

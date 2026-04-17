@@ -12,8 +12,7 @@ class BootActivity final : public Activity {
   bool tryDrawCustomBootImage() const;
   void drawStaticBootScreen() const;
   void drawDynamicBootScreen() const;
-  void renderEmbeddedBootScreen(HalDisplay::RefreshMode refreshMode,
-                                bool fullRedraw) const;
+  void renderEmbeddedBootScreen(HalDisplay::RefreshMode refreshMode, bool fullRedraw) const;
 
   int progressPercent = 12;
   mutable bool customBootImageLoaded = false;

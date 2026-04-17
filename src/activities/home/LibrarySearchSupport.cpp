@@ -1,8 +1,9 @@
 #include "LibrarySearchSupport.h"
 
+#include <esp_task_wdt.h>
+
 #include <algorithm>
 #include <cctype>
-#include <esp_task_wdt.h>
 #include <limits>
 #include <tuple>
 #include <vector>
@@ -10,14 +11,11 @@
 namespace LibrarySearchSupport {
 namespace {
 
-char toLowerAscii(const char c) {
-  return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-}
+char toLowerAscii(const char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
 
 std::string toLowerAsciiCopy(const std::string& text) {
   std::string lowered = text;
-  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                 [](const char c) { return toLowerAscii(c); });
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](const char c) { return toLowerAscii(c); });
   return lowered;
 }
 
@@ -64,8 +62,7 @@ struct SubsequenceScore {
   int gaps = std::numeric_limits<int>::max();
 };
 
-SubsequenceScore computeSubsequenceScore(const std::string& loweredText,
-                                         const std::string& loweredQuery) {
+SubsequenceScore computeSubsequenceScore(const std::string& loweredText, const std::string& loweredQuery) {
   if (loweredQuery.empty()) {
     return {.matched = true, .start = 0, .span = 0, .gaps = 0};
   }
@@ -95,9 +92,7 @@ SubsequenceScore computeSubsequenceScore(const std::string& loweredText,
     const int span = static_cast<int>(lastMatch - startPos);
     const int gaps = span - static_cast<int>(loweredQuery.size()) + 1;
 
-    if (!best.matched ||
-        std::tie(start, span, gaps) <
-            std::tie(best.start, best.span, best.gaps)) {
+    if (!best.matched || std::tie(start, span, gaps) < std::tie(best.start, best.span, best.gaps)) {
       best = {.matched = true, .start = start, .span = span, .gaps = gaps};
     }
   }
@@ -122,8 +117,7 @@ std::string searchLabelForEntry(const std::string& entry) {
   return entry;
 }
 
-std::vector<size_t> rankMatches(const std::vector<std::string>& entries,
-                                const std::string& query) {
+std::vector<size_t> rankMatches(const std::vector<std::string>& entries, const std::string& query) {
   if (query.empty()) {
     return {};
   }
@@ -140,8 +134,7 @@ std::vector<size_t> rankMatches(const std::vector<std::string>& entries,
     const std::string loweredLabel = toLowerAsciiCopy(label);
 
     if (startsWithIgnoreCase(label, query)) {
-      matches.push_back(
-          {.fileIndex = fileIndex, .category = 0, .start = 0, .span = 0, .gaps = 0});
+      matches.push_back({.fileIndex = fileIndex, .category = 0, .start = 0, .span = 0, .gaps = 0});
       continue;
     }
 
@@ -167,17 +160,14 @@ std::vector<size_t> rankMatches(const std::vector<std::string>& entries,
                        .gaps = subsequence.gaps});
   }
 
-  std::stable_sort(
-      matches.begin(), matches.end(),
-      [](const MatchCandidate& lhs, const MatchCandidate& rhs) {
-        return std::tie(lhs.category, lhs.start, lhs.span, lhs.gaps) <
-               std::tie(rhs.category, rhs.start, rhs.span, rhs.gaps);
-      });
+  std::stable_sort(matches.begin(), matches.end(), [](const MatchCandidate& lhs, const MatchCandidate& rhs) {
+    return std::tie(lhs.category, lhs.start, lhs.span, lhs.gaps) <
+           std::tie(rhs.category, rhs.start, rhs.span, rhs.gaps);
+  });
 
   std::vector<size_t> rankedFileIndexes;
   rankedFileIndexes.reserve(matches.size());
-  std::transform(matches.begin(), matches.end(),
-                 std::back_inserter(rankedFileIndexes),
+  std::transform(matches.begin(), matches.end(), std::back_inserter(rankedFileIndexes),
                  [](const MatchCandidate& match) { return match.fileIndex; });
   return rankedFileIndexes;
 }

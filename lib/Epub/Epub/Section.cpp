@@ -1,24 +1,23 @@
 #include "Section.h"
 
-#include <algorithm>
-
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Serialization.h>
 #include <esp_task_wdt.h>
+
+#include <algorithm>
 
 #include "Page.h"
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
 constexpr uint8_t SECTION_FILE_VERSION = 21;
-constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) +
-                                 sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) +
-                                 sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) +
-                                 sizeof(bool) + sizeof(uint16_t) + sizeof(uint32_t);
+constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
+                                 sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint8_t) +
+                                 sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) + sizeof(uint16_t) +
+                                 sizeof(uint32_t);
 
-int getAnchorPage(const std::vector<std::pair<std::string, uint16_t>>& anchors,
-                  const std::string& anchor) {
+int getAnchorPage(const std::vector<std::pair<std::string, uint16_t>>& anchors, const std::string& anchor) {
   if (anchor.empty()) {
     return -1;
   }
@@ -32,9 +31,7 @@ int getAnchorPage(const std::vector<std::pair<std::string, uint16_t>>& anchors,
   return -1;
 }
 
-std::vector<int16_t> buildPageTocLut(const std::shared_ptr<Epub>& epub,
-                                     const int spineIndex,
-                                     const uint16_t pageCount,
+std::vector<int16_t> buildPageTocLut(const std::shared_ptr<Epub>& epub, const int spineIndex, const uint16_t pageCount,
                                      const std::vector<std::pair<std::string, uint16_t>>& anchors) {
   std::vector<int16_t> pageTocLut(pageCount, -1);
   if (!epub || pageCount == 0) {
@@ -62,23 +59,20 @@ std::vector<int16_t> buildPageTocLut(const std::shared_ptr<Epub>& epub,
       continue;
     }
 
-    transitions.push_back(
-        TocTransition{.pageIndex = pageIndex, .tocIndex = tocIndex, .order = order++});
+    transitions.push_back(TocTransition{.pageIndex = pageIndex, .tocIndex = tocIndex, .order = order++});
   }
 
-  std::stable_sort(transitions.begin(), transitions.end(),
-                   [](const TocTransition& lhs, const TocTransition& rhs) {
-                     if (lhs.pageIndex != rhs.pageIndex) {
-                       return lhs.pageIndex < rhs.pageIndex;
-                     }
-                     return lhs.order < rhs.order;
-                   });
+  std::stable_sort(transitions.begin(), transitions.end(), [](const TocTransition& lhs, const TocTransition& rhs) {
+    if (lhs.pageIndex != rhs.pageIndex) {
+      return lhs.pageIndex < rhs.pageIndex;
+    }
+    return lhs.order < rhs.order;
+  });
 
   int activeTocIndex = fallbackIndex;
   size_t transitionIndex = 0;
   for (uint16_t pageIndex = 0; pageIndex < pageCount; pageIndex++) {
-    while (transitionIndex < transitions.size() &&
-           transitions[transitionIndex].pageIndex <= pageIndex) {
+    while (transitionIndex < transitions.size() && transitions[transitionIndex].pageIndex <= pageIndex) {
       activeTocIndex = transitions[transitionIndex].tocIndex;
       transitionIndex++;
     }
@@ -107,24 +101,20 @@ uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
 }
 
 void Section::writeSectionFileHeader(const int fontId, const float lineCompression,
-                                     const uint8_t extraParagraphSpacingLevel,
-                                     const uint8_t paragraphAlignment, const uint16_t viewportWidth,
-                                     const uint16_t viewportHeight, const bool hyphenationEnabled,
-                                     const uint8_t wordSpacingPercent,
-                                     const uint8_t firstLineIndentMode,
-                                     const uint8_t readerStyleMode,
-                                     const uint8_t textRenderMode,
-                                     const bool readerBoldSwap) {
+                                     const uint8_t extraParagraphSpacingLevel, const uint8_t paragraphAlignment,
+                                     const uint16_t viewportWidth, const uint16_t viewportHeight,
+                                     const bool hyphenationEnabled, const uint8_t wordSpacingPercent,
+                                     const uint8_t firstLineIndentMode, const uint8_t readerStyleMode,
+                                     const uint8_t textRenderMode, const bool readerBoldSwap) {
   if (!file) {
     LOG_DBG("SCT", "File not open for writing header");
     return;
   }
   static_assert(HEADER_SIZE == sizeof(SECTION_FILE_VERSION) + sizeof(fontId) + sizeof(lineCompression) +
-                                   sizeof(extraParagraphSpacingLevel) +
-                                   sizeof(paragraphAlignment) + sizeof(viewportWidth) +
-                                   sizeof(viewportHeight) + sizeof(pageCount) + sizeof(hyphenationEnabled) +
-                                   sizeof(wordSpacingPercent) + sizeof(firstLineIndentMode) +
-                                   sizeof(readerStyleMode) + sizeof(textRenderMode) +
+                                   sizeof(extraParagraphSpacingLevel) + sizeof(paragraphAlignment) +
+                                   sizeof(viewportWidth) + sizeof(viewportHeight) + sizeof(pageCount) +
+                                   sizeof(hyphenationEnabled) + sizeof(wordSpacingPercent) +
+                                   sizeof(firstLineIndentMode) + sizeof(readerStyleMode) + sizeof(textRenderMode) +
                                    sizeof(readerBoldSwap) + sizeof(uint32_t),
                 "Header size mismatch");
   serialization::writePod(file, SECTION_FILE_VERSION);
@@ -144,15 +134,11 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
   serialization::writePod(file, static_cast<uint32_t>(0));  // Placeholder for LUT offset
 }
 
-bool Section::loadSectionFile(const int fontId, const float lineCompression,
-                              const uint8_t extraParagraphSpacingLevel,
+bool Section::loadSectionFile(const int fontId, const float lineCompression, const uint8_t extraParagraphSpacingLevel,
                               const uint8_t paragraphAlignment, const uint16_t viewportWidth,
                               const uint16_t viewportHeight, const bool hyphenationEnabled,
-                              const uint8_t wordSpacingPercent,
-                              const uint8_t firstLineIndentMode,
-                              const uint8_t readerStyleMode,
-                              const uint8_t textRenderMode,
-                              const bool readerBoldSwap) {
+                              const uint8_t wordSpacingPercent, const uint8_t firstLineIndentMode,
+                              const uint8_t readerStyleMode, const uint8_t textRenderMode, const bool readerBoldSwap) {
   if (!Storage.openFileForRead("SCT", filePath, file)) {
     return false;
   }
@@ -197,8 +183,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression,
         viewportWidth != fileViewportWidth || viewportHeight != fileViewportHeight ||
         hyphenationEnabled != fileHyphenationEnabled || wordSpacingPercent != fileWordSpacingPercent ||
         firstLineIndentMode != fileFirstLineIndentMode || readerStyleMode != fileReaderStyleMode ||
-        textRenderMode != fileTextRenderMode ||
-        readerBoldSwap != fileReaderBoldSwap) {
+        textRenderMode != fileTextRenderMode || readerBoldSwap != fileReaderBoldSwap) {
       file.close();
       LOG_ERR("SCT", "Deserialization failed: Parameters do not match");
       clearCache();
@@ -277,15 +262,12 @@ bool Section::clearCache() const {
   return true;
 }
 
-bool Section::createSectionFile(const int fontId, const float lineCompression,
-                                const uint8_t extraParagraphSpacingLevel,
+bool Section::createSectionFile(const int fontId, const float lineCompression, const uint8_t extraParagraphSpacingLevel,
                                 const uint8_t paragraphAlignment, const uint16_t viewportWidth,
                                 const uint16_t viewportHeight, const bool hyphenationEnabled,
-                                const uint8_t wordSpacingPercent,
-                                const uint8_t firstLineIndentMode,
-                                const uint8_t readerStyleMode,
-                                const uint8_t textRenderMode,
-                                const bool readerBoldSwap, const std::function<void(int)>& progressFn) {
+                                const uint8_t wordSpacingPercent, const uint8_t firstLineIndentMode,
+                                const uint8_t readerStyleMode, const uint8_t textRenderMode, const bool readerBoldSwap,
+                                const std::function<void(int)>& progressFn) {
   const auto localPath = epub->getSpineItem(spineIndex).href;
   const auto tmpHtmlPath = epub->getCachePath() + "/.tmp_" + std::to_string(spineIndex) + ".html";
 
@@ -342,9 +324,9 @@ bool Section::createSectionFile(const int fontId, const float lineCompression,
   if (!Storage.openFileForWrite("SCT", filePath, file)) {
     return false;
   }
-  writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment,
-                         viewportWidth, viewportHeight, hyphenationEnabled, wordSpacingPercent,
-                         firstLineIndentMode, readerStyleMode, textRenderMode, readerBoldSwap);
+  writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment, viewportWidth,
+                         viewportHeight, hyphenationEnabled, wordSpacingPercent, firstLineIndentMode, readerStyleMode,
+                         textRenderMode, readerBoldSwap);
   std::vector<uint32_t> lut = {};
   std::vector<std::pair<std::string, uint16_t>> anchors = {};
 
@@ -364,13 +346,10 @@ bool Section::createSectionFile(const int fontId, const float lineCompression,
   }
 
   ChapterHtmlSlimParser visitor(
-      epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacingLevel,
-      paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled,
-      wordSpacingPercent, firstLineIndentMode, readerStyleMode != 0,
+      epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment,
+      viewportWidth, viewportHeight, hyphenationEnabled, wordSpacingPercent, firstLineIndentMode, readerStyleMode != 0,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },
-      [&anchors](const std::string& anchor, const uint16_t pageIndex) {
-        anchors.emplace_back(anchor, pageIndex);
-      },
+      [&anchors](const std::string& anchor, const uint16_t pageIndex) { anchors.emplace_back(anchor, pageIndex); },
       contentBase, imageBasePath, progressFn, cssParser);
   success = visitor.parseAndBuildPages();
 
@@ -428,9 +407,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression,
   return true;
 }
 
-std::unique_ptr<Page> Section::loadPageFromSectionFile() {
-  return loadPageFromSectionFile(currentPage);
-}
+std::unique_ptr<Page> Section::loadPageFromSectionFile() { return loadPageFromSectionFile(currentPage); }
 
 std::unique_ptr<Page> Section::loadPageFromSectionFile(const int pageIndex) {
   if (pageIndex < 0 || static_cast<size_t>(pageIndex) >= pageLut.size()) {
