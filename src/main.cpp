@@ -244,11 +244,22 @@ void onGoToRecentBooks();
 // before entering activities that can modify /sleep (e.g. file transfer).
 static bool sleepFolderDirty = true;
 
-void onGoToReader(const std::string& initialEpubPath) {
+// Inline Reader activity construction. Used by both the V2 factory and the
+// boot-time resume path in setup() (which bypasses the router since the main
+// loop has not yet started draining pending transitions).
+static void openReaderInline(const std::string& initialEpubPath) {
   const std::string bookPath = initialEpubPath;  // Copy before exitActivity() invalidates the reference
   TransitionFeedback::show(renderer, "Opening book...");
   exitActivity();
   enterNewActivity(new ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
+}
+
+void onGoToReader(const std::string& initialEpubPath) {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Reader, initialEpubPath});
+#else
+  openReaderInline(initialEpubPath);
+#endif
 }
 
 void onGoToFileTransfer() {
@@ -531,6 +542,9 @@ void setup() {
       exitActivity();
       enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
     });
+    router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) {
+      openReaderInline(payload);
+    });
   }
 #endif
 
@@ -539,7 +553,14 @@ void setup() {
     onGoHome();
   } else {
     bootActivity->setProgress(100, "Opening book");
+#if LIFECYCLE_V2
+    // Bypass the router at boot — the main loop hasn't started, so a
+    // routed request would sit in pending_ until the first loop tick.
+    // Constructing Reader inline matches the pre-V2 behaviour exactly.
+    openReaderInline(readerPath);
+#else
     onGoToReader(readerPath);
+#endif
   }
 
   // Ensure we're not still holding the power button before leaving setup
