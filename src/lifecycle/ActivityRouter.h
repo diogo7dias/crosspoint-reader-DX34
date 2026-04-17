@@ -23,6 +23,12 @@ class ActivityRouter {
   void applyIfPending();
   void enterDeepSleep(bool fromReader);
 
+  // main.cpp owns activity construction (it holds the globals: renderer,
+  // mappedInputManager, onGoHome, etc.). It registers one factory per route;
+  // applyIfPending dispatches on the pending Nav and calls the factory.
+  using Factory = std::function<void(const std::string& payload)>;
+  void setRouteFactory(RouteId route, Factory factory);
+
   std::function<void(const std::string&)> makeGoToReader() const;
   std::function<void()>                   makeGoHome() const;
   std::function<void()>                   makeGoToSettings() const;
@@ -42,9 +48,11 @@ class ActivityRouter {
 
  private:
   ActivityRouter() = default;
+  static constexpr size_t kRouteCount = 8;
   std::optional<Nav> pending_;
   bool busy_ = false;
   Deps deps_{};
+  Factory factories_[kRouteCount];
 };
 
 }  // namespace lifecycle

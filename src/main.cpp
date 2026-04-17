@@ -51,6 +51,9 @@
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/TransitionFeedback.h"
+#if LIFECYCLE_V2
+#include "lifecycle/ActivityRouter.h"
+#endif
 
 HalDisplay display;
 HalGPIO gpio;
@@ -256,9 +259,13 @@ void onGoToFileTransfer() {
 }
 
 void onGoToSettings() {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Settings, ""});
+#else
   TransitionFeedback::show(renderer, "Loading settings...");
   exitActivity();
   enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
+#endif
 }
 
 void onGoToMyLibrary() {
@@ -514,6 +521,19 @@ void setup() {
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
+#if LIFECYCLE_V2
+  // Register route factories with ActivityRouter (#23). Only migrated routes
+  // are registered; unmigrated ones still use the legacy onGoToX lambda path.
+  {
+    auto& router = lifecycle::ActivityRouter::instance();
+    router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
+      TransitionFeedback::show(renderer, "Loading settings...");
+      exitActivity();
+      enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
+    });
+  }
+#endif
+
   if (goHome) {
     bootActivity->setProgress(100, "Opening home");
     onGoHome();
@@ -604,6 +624,12 @@ void loop() {
   if (currentActivity) {
     currentActivity->loop();
   }
+
+#if LIFECYCLE_V2
+  // Drain any transition requested during currentActivity->loop() at a safe
+  // boundary (after the activity has returned from its tick).
+  lifecycle::ActivityRouter::instance().applyIfPending();
+#endif
 
   const unsigned long loopDuration = millis() - loopStartTime;
   if (loopDuration > maxLoopDuration) {

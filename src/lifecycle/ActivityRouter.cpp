@@ -17,9 +17,23 @@ void ActivityRouter::request(const Nav& nav) {
 }
 
 void ActivityRouter::applyIfPending() {
-  // Scaffold: no-op. Follow-up PR performs the transition.
   if (!pending_) return;
+  if (busy_) return;
+  const Nav nav = *pending_;
   pending_.reset();
+  const size_t idx = static_cast<size_t>(nav.route);
+  if (idx >= kRouteCount) return;
+  auto& factory = factories_[idx];
+  if (!factory) return;  // Route not migrated yet — caller must still use legacy path.
+  busy_ = true;
+  factory(nav.payload);
+  busy_ = false;
+}
+
+void ActivityRouter::setRouteFactory(RouteId route, Factory factory) {
+  const size_t idx = static_cast<size_t>(route);
+  if (idx >= kRouteCount) return;
+  factories_[idx] = std::move(factory);
 }
 
 void ActivityRouter::enterDeepSleep(bool /*fromReader*/) {
