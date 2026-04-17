@@ -10,7 +10,7 @@
 #include "util/ButtonNavigator.h"
 
 /// Displays a scrollable list of bookmarks for the current book.
-/// Select jumps to that position; long-press deletes a bookmark.
+/// Select jumps to that position; long-press opens a Rename / Delete popup.
 class BookmarkListActivity final : public ActivityWithSubactivity {
  public:
   explicit BookmarkListActivity(
@@ -47,6 +47,18 @@ class BookmarkListActivity final : public ActivityWithSubactivity {
   const std::function<void(int spineIndex, int pageNumber)> onJump;
 
   static constexpr int kLineHeight = 30;
+
+  // Inline action popup (shown on hold). Lets the user pick between
+  // Rename, Delete, or Cancel for the selected bookmark.
+  bool actionPopupOpen = false;
+  int actionPopupBookmarkIndex = -1;
+  int actionPopupSelectedIndex = 0;
+
+  void openActionPopup(int bookmarkIndex);
+  void executeBookmarkAction();
+  void openKeyboardForRename(int bookmarkIndex);
+  void openDeleteConfirm(int bookmarkIndex);
+  void renderActionPopup();
 
   /// Build a display label for a bookmark (chapter name + page).
   std::string formatBookmark(const BookmarkStore::Bookmark& bm) const;
