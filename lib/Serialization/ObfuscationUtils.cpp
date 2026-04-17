@@ -1,6 +1,22 @@
 #include "ObfuscationUtils.h"
 
 #include <Logging.h>
+
+#ifdef SIMULATOR
+// Simulator has no ESP32 MAC / mbedtls. Stub encryption as identity — acceptable
+// for the sim since credentials are inside the working dir, not on a shared SD.
+namespace obfuscation {
+void xorTransform(std::string&) {}
+void xorTransform(std::string&, const uint8_t*, size_t) {}
+String obfuscateToBase64(const std::string& plaintext) { return String(plaintext.c_str()); }
+std::string deobfuscateFromBase64(const char* encoded, bool* ok) {
+  if (ok) *ok = true;
+  return std::string(encoded ? encoded : "");
+}
+void selfTest() {}
+}  // namespace obfuscation
+#else
+
 #include <base64.h>
 #include <esp_mac.h>
 #include <esp_random.h>
@@ -207,3 +223,5 @@ void selfTest() {
 }
 
 }  // namespace obfuscation
+
+#endif // SIMULATOR

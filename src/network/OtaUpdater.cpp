@@ -1,5 +1,13 @@
 #include "OtaUpdater.h"
 
+#ifdef SIMULATOR
+// OTA has no desktop equivalent — stub all methods to report "no update".
+bool OtaUpdater::isUpdateNewer() const { return false; }
+const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }
+OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() { return NO_UPDATE; }
+OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() { return INTERNAL_UPDATE_ERROR; }
+#else
+
 #include <ArduinoJson.h>
 #include <Logging.h>
 
@@ -340,3 +348,5 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
   LOG_INF("OTA", "Update completed");
   return OK;
 }
+
+#endif // SIMULATOR

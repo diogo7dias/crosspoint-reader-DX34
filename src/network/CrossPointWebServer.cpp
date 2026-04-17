@@ -1,6 +1,9 @@
 #include "CrossPointWebServer.h"
 
 #include <ArduinoJson.h>
+#ifdef SIMULATOR
+#include <ArduinoJsonStringCompat.h>
+#endif
 #include <BookFingerprint.h>
 #include <Epub.h>
 #include <FsHelpers.h>
