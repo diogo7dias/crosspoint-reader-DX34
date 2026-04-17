@@ -1,9 +1,6 @@
 #include "KOReaderSyncClient.h"
 
 #include <ArduinoJson.h>
-#ifdef SIMULATOR
-#include <ArduinoJsonStringCompat.h>
-#endif
 #include <HTTPClient.h>
 #include <Logging.h>
 #include <WiFi.h>

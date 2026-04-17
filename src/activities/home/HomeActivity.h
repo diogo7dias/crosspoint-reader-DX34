@@ -7,7 +7,7 @@
 #include "./MyLibraryActivity.h"
 #include "util/ButtonNavigator.h"
 
-#include "../../RecentBooksStore.h"
+struct RecentBook;
 struct Rect;
 
 class HomeActivity final : public ActivityWithSubactivity {

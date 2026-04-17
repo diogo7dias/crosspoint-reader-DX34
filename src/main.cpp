@@ -52,15 +52,8 @@
 #include "util/ButtonNavigator.h"
 #include "util/TransitionFeedback.h"
 
-#ifndef SIMULATOR
 HalDisplay display;
 HalGPIO gpio;
-#else
-// Simulator build: `display` and `gpio` singletons are defined inside the
-// simulator_mock lib (HalDisplay.cpp / HalGPIO.cpp). Refer to the externs.
-extern HalDisplay display;
-extern HalGPIO gpio;
-#endif
 MappedInputManager mappedInputManager(gpio);
 GfxRenderer renderer(display);
 FontDecompressor fontDecompressor;
