@@ -27,7 +27,7 @@ bool BleHidManager::init() {
 
   LOG_INF("BLE", "Initializing NimBLE stack");
   NimBLEDevice::init("CrossPoint");
-  NimBLEDevice::setPower(3);  // +3 dBm
+  NimBLEDevice::setPower(ESP_PWR_LVL_P3);  // +3 dBm
 
   state = State::Idle;
   scanComplete = false;
@@ -53,11 +53,11 @@ void BleHidManager::deinit() {
 
 // --- Scanning ---
 
-class BleHidScanCallbacks : public NimBLEScanCallbacks {
+class BleHidScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
  public:
   explicit BleHidScanCallbacks(BleHidManager& mgr) : mgr(mgr) {}
 
-  void onResult(const NimBLEAdvertisedDevice* device) override {
+  void onResult(NimBLEAdvertisedDevice* device) override {
     if (!device->isAdvertisingService(kHidServiceUuid)) return;
 
     auto& results = mgr.scanResults;
@@ -77,14 +77,16 @@ class BleHidScanCallbacks : public NimBLEScanCallbacks {
     LOG_DBG("BLE", "Found HID device: %s (%s) RSSI=%d", sd.name.c_str(), addr.c_str(), sd.rssi);
   }
 
-  void onScanEnd(const NimBLEScanResults& results, int reason) override {
-    LOG_DBG("BLE", "Scan complete, %d HID devices found", (int)mgr.scanResults.size());
-    mgr.scanComplete = true;
-  }
-
  private:
   BleHidManager& mgr;
 };
+
+// NimBLE 1.x signals scan completion via a plain C callback passed to
+// NimBLEScan::start(), not via a method on the advertised-device callback
+// class. Route the signal back to the singleton so isScanComplete() flips.
+static void scanCompleteCallback(NimBLEScanResults results) {
+  BleHidManager::getInstance().markScanComplete((int)results.getCount());
+}
 
 void BleHidManager::startScan(uint32_t durationSec) {
   if (state == State::Uninitialized) return;
@@ -97,13 +99,21 @@ void BleHidManager::startScan(uint32_t durationSec) {
   if (!scanCallbacksInstance) {
     scanCallbacksInstance = new BleHidScanCallbacks(*this);
   }
-  scan->setScanCallbacks(scanCallbacksInstance);
+  scan->setAdvertisedDeviceCallbacks(scanCallbacksInstance, /*wantDuplicates=*/false);
   scan->setActiveScan(true);
   scan->setInterval(100);
   scan->setWindow(99);
   scan->clearResults();
-  scan->start(durationSec, false);  // Non-blocking
+  // Non-blocking: passing scanCompleteCallback returns immediately and
+  // invokes the callback when the scan duration elapses.
+  scan->start(durationSec, scanCompleteCallback, false);
   LOG_INF("BLE", "Scan started for %u seconds", durationSec);
+}
+
+void BleHidManager::markScanComplete(int foundCount) {
+  LOG_DBG("BLE", "Scan complete, %d HID devices found", (int)scanResults.size());
+  (void)foundCount;
+  scanComplete = true;
 }
 
 void BleHidManager::stopScan() {
@@ -117,8 +127,8 @@ void BleHidManager::stopScan() {
 
 class BleHidClientCallbacks : public NimBLEClientCallbacks {
  public:
-  void onDisconnect(NimBLEClient*, int reason) override {
-    LOG_INF("BLE", "BLE device disconnected, reason=%d", reason);
+  void onDisconnect(NimBLEClient*) override {
+    LOG_INF("BLE", "BLE device disconnected");
     // State transition handled in updateButtonState() via isConnected() check
   }
 };
@@ -155,7 +165,8 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
   // Reuse existing client or create new one (fix #4: client leak)
   if (!client) {
     client = NimBLEDevice::createClient();
-    client->setClientCallbacks(&clientCallbacks);
+    // false = don't let NimBLE delete the static callbacks instance.
+    client->setClientCallbacks(&clientCallbacks, /*deleteCallbacks=*/false);
   } else if (client->isConnected()) {
     client->disconnect();
   }
@@ -216,16 +227,19 @@ bool BleHidManager::subscribeToHid() {
     return true;
   }
 
-  // Fall back to HID Report characteristics (for gamepads and non-boot devices)
+  // Fall back to HID Report characteristics (for gamepads and non-boot devices).
+  // NimBLE 1.x returns a pointer-to-vector (nullable), unlike the const-ref in 2.x.
   bool subscribed = false;
-  const auto& chars = hidService->getCharacteristics(true);
-  for (auto* chr : chars) {
-    if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
-      chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-        onHidReport(data, len);
-      });
-      subscribed = true;
-      LOG_INF("BLE", "Subscribed to HID Report characteristic");
+  const auto* chars = hidService->getCharacteristics(true);
+  if (chars) {
+    for (auto* chr : *chars) {
+      if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
+        chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len);
+        });
+        subscribed = true;
+        LOG_INF("BLE", "Subscribed to HID Report characteristic");
+      }
     }
   }
 

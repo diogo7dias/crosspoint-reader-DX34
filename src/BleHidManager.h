@@ -48,6 +48,8 @@ class BleHidManager {
   void stopScan();
   const std::vector<ScannedDevice>& getScanResults() const { return scanResults; }
   bool isScanComplete() const { return scanComplete; }
+  // Invoked by the NimBLE scan-complete C callback; internal.
+  void markScanComplete(int foundCount);
 
   // --- Connection (non-blocking) ---
   // Launches connection on a background FreeRTOS task.
