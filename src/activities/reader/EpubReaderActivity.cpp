@@ -27,6 +27,7 @@
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
+#include "QuotesViewerActivity.h"
 #include "RecentBooksStore.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "activities/network/QRShareActivity.h"
@@ -691,10 +692,12 @@ void EpubReaderActivity::openReaderMenu() {
   const int pageNum = section ? section->currentPage : 0;
   const bool isBookmarked = bookmarkStore.has(currentSpineIndex, pageNum);
   const int bmCount = bookmarkStore.count();
+  const std::string quotesPath = getQuotesFilePath();
+  const bool hasQuotes = !quotesPath.empty() && Storage.exists(quotesPath.c_str());
   exitActivity();
   enterNewActivity(new EpubReaderMenuActivity(
       this->renderer, this->mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
-      SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount,
+      SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount, hasQuotes,
       [this](const uint8_t orientation) { onReaderMenuBack(orientation); },
       [this](EpubReaderMenuActivity::MenuAction action) { onReaderMenuConfirm(action); }));
 }
@@ -826,6 +829,19 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::HIGHLIGHT_QUOTE: {
       exitActivity();
       enterHighlightMode();
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::VIEW_QUOTES: {
+      const std::string quotesPath = getQuotesFilePath();
+      if (quotesPath.empty() || !Storage.exists(quotesPath.c_str())) {
+        exitActivity();
+        requestUpdate();
+        break;
+      }
+      exitActivity();
+      enterNewActivity(new QuotesViewerActivity(
+          this->renderer, this->mappedInput, quotesPath,
+          [this] { pendingSubactivityExit = true; }));
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER: {
@@ -2092,15 +2108,18 @@ std::string EpubReaderActivity::getChapterTitle() const {
   return "Chapter " + std::to_string(currentSpineIndex + 1);
 }
 
+std::string EpubReaderActivity::getQuotesFilePath() const {
+  if (!epub) return "";
+  const std::string bookPath = epub->getPath();
+  const auto dotPos = bookPath.rfind('.');
+  const std::string basePath = (dotPos != std::string::npos) ? bookPath.substr(0, dotPos) : bookPath;
+  return basePath + "_QUOTES.txt";
+}
+
 void EpubReaderActivity::saveQuoteToFile(const std::string& quote) {
   if (!epub || quote.empty()) return;
 
-  // Build quotes file path: same directory as book, with _QUOTES.txt suffix
-  std::string bookPath = epub->getPath();
-  // Find last dot to strip extension
-  auto dotPos = bookPath.rfind('.');
-  std::string basePath = (dotPos != std::string::npos) ? bookPath.substr(0, dotPos) : bookPath;
-  std::string quotesPath = basePath + "_QUOTES.txt";
+  const std::string quotesPath = getQuotesFilePath();
 
   // Open file in append mode
   HalFile file = Storage.open(quotesPath.c_str(), O_WRITE | O_CREAT | O_APPEND);

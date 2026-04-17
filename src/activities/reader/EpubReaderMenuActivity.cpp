@@ -15,11 +15,11 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
                                                const std::string& title, const int currentPage, const int totalPages,
                                                const int bookProgressPercent, const uint8_t currentOrientation,
                                                const bool hasFootnotes, const bool isPageBookmarked,
-                                               const int bookmarkCount,
+                                               const int bookmarkCount, const bool hasQuotes,
                                                const std::function<void(uint8_t)>& onBack,
                                                const std::function<void(MenuAction)>& onAction)
     : ActivityWithSubactivity("EpubReaderMenu", renderer, mappedInput),
-      menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount)),
+      menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount, hasQuotes)),
       title(title),
       pendingOrientation(currentOrientation),
       currentPage(currentPage),
@@ -30,11 +30,15 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
 
 std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes,
                                                                                      bool isPageBookmarked,
-                                                                                     int bookmarkCount) {
+                                                                                     int bookmarkCount,
+                                                                                     bool hasQuotes) {
   std::vector<MenuItem> items;
-  items.reserve(18);
+  items.reserve(19);
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   items.push_back({MenuAction::HIGHLIGHT_QUOTE, StrId::STR_HIGHLIGHT_MODE});
+  if (hasQuotes) {
+    items.push_back({MenuAction::VIEW_QUOTES, StrId::STR_VIEW_QUOTES});
+  }
   items.push_back({MenuAction::BOOKMARK_TOGGLE,
                    isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
   if (bookmarkCount > 0) {

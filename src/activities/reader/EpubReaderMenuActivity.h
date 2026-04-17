@@ -16,6 +16,7 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
     NONE,
     SELECT_CHAPTER,
     HIGHLIGHT_QUOTE,
+    VIEW_QUOTES,
     BOOKMARK_TOGGLE,
     BOOKMARK_LIST,
     FOOTNOTES,
@@ -38,7 +39,7 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                   const int currentPage, const int totalPages, const int bookProgressPercent,
                                   const uint8_t currentOrientation, const bool hasFootnotes,
-                                  const bool isPageBookmarked, const int bookmarkCount,
+                                  const bool isPageBookmarked, const int bookmarkCount, const bool hasQuotes,
                                   const std::function<void(uint8_t)>& onBack,
                                   const std::function<void(MenuAction)>& onAction);
 
@@ -57,7 +58,8 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
 
   static std::vector<MenuItem> buildMenuItems(bool hasFootnotes,
                                                 bool isPageBookmarked,
-                                                int bookmarkCount);
+                                                int bookmarkCount,
+                                                bool hasQuotes);
 
   // Menu layout (built dynamically based on whether page has footnotes)
   const std::vector<MenuItem> menuItems;

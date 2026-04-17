@@ -65,6 +65,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   void renderHighlights(const Page& page, int fontId, int xOffset, int yOffset);
   std::string extractQuoteText();
   void saveQuoteToFile(const std::string& quote);
+  std::string getQuotesFilePath() const;
   std::string getChapterTitle() const;
   using StatusBarLayout = ReaderStatusBar::StatusBarLayout;
 
