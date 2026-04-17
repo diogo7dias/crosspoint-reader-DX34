@@ -56,10 +56,8 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
     bool isSeparator = false;
   };
 
-  static std::vector<MenuItem> buildMenuItems(bool hasFootnotes,
-                                                bool isPageBookmarked,
-                                                int bookmarkCount,
-                                                bool hasQuotes);
+  static std::vector<MenuItem> buildMenuItems(bool hasFootnotes, bool isPageBookmarked, int bookmarkCount,
+                                              bool hasQuotes);
 
   // Menu layout (built dynamically based on whether page has footnotes)
   const std::vector<MenuItem> menuItems;

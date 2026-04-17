@@ -39,8 +39,8 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   if (hasQuotes) {
     items.push_back({MenuAction::VIEW_QUOTES, StrId::STR_VIEW_QUOTES});
   }
-  items.push_back({MenuAction::BOOKMARK_TOGGLE,
-                   isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
+  items.push_back(
+      {MenuAction::BOOKMARK_TOGGLE, isPageBookmarked ? StrId::STR_REMOVE_BOOKMARK : StrId::STR_ADD_BOOKMARK});
   if (bookmarkCount > 0) {
     items.push_back({MenuAction::BOOKMARK_LIST, StrId::STR_BOOKMARKS});
   }
@@ -60,11 +60,9 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   if (!wallpaperPath.empty() && Storage.exists(wallpaperPath.c_str())) {
     items.push_back({MenuAction::NONE, StrId::STR_WALLPAPER_TRIAGE, nullptr, true});
     const bool isFav = FavoriteBmp::isFavoritePath(wallpaperPath);
-    items.push_back({MenuAction::TRIAGE_FAVORITE,
-                     isFav ? StrId::STR_UNFAVORITE : StrId::STR_FAVORITE});
+    items.push_back({MenuAction::TRIAGE_FAVORITE, isFav ? StrId::STR_UNFAVORITE : StrId::STR_FAVORITE});
     items.push_back({MenuAction::TRIAGE_PAUSE_ROTATION,
-                     APP_STATE.wallpaperRotationPaused ? StrId::STR_TRIAGE_UNPAUSE
-                                                      : StrId::STR_TRIAGE_PAUSE});
+                     APP_STATE.wallpaperRotationPaused ? StrId::STR_TRIAGE_UNPAUSE : StrId::STR_TRIAGE_PAUSE});
     items.push_back({MenuAction::TRIAGE_MOVE_PAUSE, StrId::STR_MOVE_TO_SLEEP_PAUSE});
     items.push_back({MenuAction::TRIAGE_DELETE, StrId::STR_TRIAGE_DELETE});
   }
@@ -95,8 +93,7 @@ void EpubReaderMenuActivity::loop() {
     const int count = static_cast<int>(menuItems.size());
     int next = selectedIndex;
     for (int i = 0; i < count; i++) {
-      next = (direction > 0) ? ButtonNavigator::nextIndex(next, count)
-                             : ButtonNavigator::previousIndex(next, count);
+      next = (direction > 0) ? ButtonNavigator::nextIndex(next, count) : ButtonNavigator::previousIndex(next, count);
       if (!menuItems[next].isSeparator) {
         selectedIndex = next;
         break;
@@ -187,8 +184,8 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
       renderer.fillRect(contentX, displayY, contentWidth, lineHeight, true);
       const char* label = I18N.get(item.labelId);
       const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, contentX + (contentWidth - textW) / 2,
-                        displayY, label, false, EpdFontFamily::REGULAR);
+      renderer.drawText(UI_10_FONT_ID, contentX + (contentWidth - textW) / 2, displayY, label, false,
+                        EpdFontFamily::REGULAR);
       continue;
     }
 
@@ -198,9 +195,7 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
       renderer.fillRect(contentX, displayY, contentWidth - 1, lineHeight, true);
     }
 
-    const char* label = item.literalLabel != nullptr
-                            ? item.literalLabel
-                            : I18N.get(item.labelId);
+    const char* label = item.literalLabel != nullptr ? item.literalLabel : I18N.get(item.labelId);
     renderer.drawText(UI_10_FONT_ID, contentX + 20, displayY, label, !isSelected);
 
     if (item.action == MenuAction::ROTATE_SCREEN) {
