@@ -1986,7 +1986,7 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
 
   const int wordCount = static_cast<int>(wordList.size());
   const int textHeight = renderer.getTextHeight(fontId);
-  constexpr int thickness = 6;
+  constexpr int thickness = 2;
 
   // Clamp cursor indices to current word list size (guards against stale index after rebuild)
   if (highlightCursorIndex >= wordCount) {
@@ -2007,7 +2007,7 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
     }
     // Draw thick underline beneath the word
     const int underY = cw.y + textHeight + 1;
-    renderer.fillRect(cw.x, underY, cw.width, thickness, true);
+    drawDashedHLine(renderer, cw.x, underY, cw.width, thickness);
   };
 
   if (highlightState == HighlightState::SELECT_START) {
@@ -2048,7 +2048,7 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
         const auto& w = wordList[i];
         if (w.y != lineY) {
           // Flush previous line
-          renderer.fillRect(lineMinX, lineY + textHeight + 1, lineMaxX - lineMinX, thickness, true);
+          drawDashedHLine(renderer, lineMinX, lineY + textHeight + 1, lineMaxX - lineMinX, thickness);
           lineY = w.y;
           lineMinX = w.x;
           lineMaxX = w.x + w.width;
@@ -2057,7 +2057,7 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
         }
       }
       // Flush last line
-      renderer.fillRect(lineMinX, lineY + textHeight + 1, lineMaxX - lineMinX, thickness, true);
+      drawDashedHLine(renderer, lineMinX, lineY + textHeight + 1, lineMaxX - lineMinX, thickness);
     }
   }
 }
