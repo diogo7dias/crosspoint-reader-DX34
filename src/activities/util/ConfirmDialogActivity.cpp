@@ -21,7 +21,8 @@ void ConfirmDialogActivity::onEnter() {
 
 void ConfirmDialogActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    onCancel();
+    auto cb = std::move(onCancel);
+    if (cb) cb();
     return;
   }
 
@@ -36,9 +37,11 @@ void ConfirmDialogActivity::loop() {
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     if (selectedOptionIndex == 0) {
-      onConfirm();
+      auto cb = std::move(onConfirm);
+      if (cb) cb();
     } else {
-      onCancel();
+      auto cb = std::move(onCancel);
+      if (cb) cb();
     }
   }
 }

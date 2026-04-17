@@ -19,8 +19,8 @@ class ConfirmDialogActivity final : public Activity {
 
  private:
   const std::string message;
-  const std::function<void()> onConfirm;
-  const std::function<void()> onCancel;
+  std::function<void()> onConfirm;
+  std::function<void()> onCancel;
   ButtonNavigator buttonNavigator;
   int selectedOptionIndex = 1;  // Default to Cancel for safety
 };
