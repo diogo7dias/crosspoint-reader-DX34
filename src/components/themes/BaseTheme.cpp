@@ -161,6 +161,17 @@ uint32_t countBmpsInDir(const char* path) {
   return count;
 }
 
+void drawDashedHLine(const GfxRenderer& renderer, int x, int y, int w, int thickness) {
+  constexpr int dash = 8;
+  constexpr int gap = 4;
+  constexpr int step = dash + gap;
+  const int x2 = x + w - 1;
+  for (int px = x; px <= x2; px += step) {
+    const int segW = std::min(dash, x2 - px + 1);
+    renderer.fillRect(px, y, segW, thickness, true);
+  }
+}
+
 void drawDashedRect(const GfxRenderer& renderer, int x, int y, int w, int h) {
   constexpr int dash = 5;
   constexpr int gap = 3;

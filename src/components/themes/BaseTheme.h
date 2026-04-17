@@ -141,6 +141,8 @@ class BaseTheme {
   void drawReadingProgressBar(const GfxRenderer& renderer, const size_t bookProgress) const;
 };
 
+void drawDashedHLine(const GfxRenderer& renderer, int x, int y, int w, int thickness);
+
 // Global theme instance — used by all UI drawing code via the GUI macro.
 extern BaseTheme baseTheme;
 #define GUI baseTheme
