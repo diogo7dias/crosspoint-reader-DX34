@@ -273,7 +273,19 @@ static void wireWallpaperPlaylist() {
   deps.lastShownFilename = &APP_STATE.lastShownSleepFilename;
   deps.cursor = &APP_STATE.lastSleepImage;
   deps.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
-  deps.saveState = []() { return APP_STATE.saveToFile(); };
+  // WallpaperPlaylist::advance() runs inside SleepActivity::onEnter, AFTER
+  // enterDeepSleep's persistAppState flush and milliseconds before the CPU
+  // enters deep sleep. Under PERSIST_V2 saveToFile() is debounced — the
+  // debounce window never fires, so the new lastShownSleepFilename is lost
+  // and the next boot loads the stale value (same wallpaper every wake).
+  // Force a sync flush so rotation survives the deep-sleep boundary.
+  deps.saveState = []() {
+    const bool ok = APP_STATE.saveToFile();
+#ifdef PERSIST_V2
+    crosspoint::persist::PersistManager().flushAll();
+#endif
+    return ok;
+  };
   deps.randomFn = [](long mod) -> long { return ::random(mod); };
   deps.isFavorite = [](const std::string& path) { return FavoriteBmp::isFavoritePath(path); };
   deps.onPathRenamed = [](const std::string& from, const std::string& to) {
