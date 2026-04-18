@@ -41,13 +41,13 @@ class ActivityRouter {
   void setRouteFactory(RouteId route, Factory factory);
 
   std::function<void(const std::string&)> makeGoToReader() const;
-  std::function<void()>                   makeGoHome() const;
-  std::function<void()>                   makeGoToSettings() const;
-  std::function<void()>                   makeGoToMyLibrary() const;
+  std::function<void()> makeGoHome() const;
+  std::function<void()> makeGoToSettings() const;
+  std::function<void()> makeGoToMyLibrary() const;
   std::function<void(const std::string&)> makeGoToMyLibraryWithPath() const;
-  std::function<void()>                   makeGoToRecentBooks() const;
-  std::function<void()>                   makeGoToFileTransfer() const;
-  std::function<void()>                   makeGoToBrowser() const;
+  std::function<void()> makeGoToRecentBooks() const;
+  std::function<void()> makeGoToFileTransfer() const;
+  std::function<void()> makeGoToBrowser() const;
 
   // Injection seam for main.cpp (production) and host tests (stubs).
   // All side-effecting calls flow through these — router itself never touches

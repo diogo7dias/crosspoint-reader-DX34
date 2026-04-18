@@ -7,8 +7,8 @@
 // key-dispatch logic lives in an injected ApplyFn and is exercised on
 // device, not here.
 
-#include <unity.h>
 #include <ArduinoJson.h>
+#include <unity.h>
 
 #include "network/SettingsGateway.h"
 
@@ -42,14 +42,12 @@ void test_happy_path_applies_and_persists() {
 }
 
 void test_disk_error_populates_error_message() {
-  SettingsGateway g(
-      [](const JsonDocument&) { return 5; },
-      []() { return false; });
+  SettingsGateway g([](const JsonDocument&) { return 5; }, []() { return false; });
 
   JsonDocument doc;
   auto r = g.applyJson(doc);
 
-  TEST_ASSERT_EQUAL(5, r.applied);        // apply still ran
+  TEST_ASSERT_EQUAL(5, r.applied);  // apply still ran
   TEST_ASSERT_FALSE(r.persisted);
   TEST_ASSERT_FALSE(r.error.empty());
 }
@@ -59,12 +57,11 @@ void test_zero_applied_still_calls_persist() {
   // still invoked. Preserving that contract means the 500-on-disk-error fix
   // works the same whether or not the body had known keys.
   int persistCalls = 0;
-  SettingsGateway g(
-      [](const JsonDocument&) { return 0; },
-      [&persistCalls]() {
-        persistCalls++;
-        return true;
-      });
+  SettingsGateway g([](const JsonDocument&) { return 0; },
+                    [&persistCalls]() {
+                      persistCalls++;
+                      return true;
+                    });
 
   JsonDocument doc;
   auto r = g.applyJson(doc);

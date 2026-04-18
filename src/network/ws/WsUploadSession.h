@@ -110,8 +110,7 @@ class WsUploadSession {
 
   void reset();
   void sendProgress();
-  bool parseStart(const std::string& msg, std::string& name, size_t& size,
-                  std::string& path);
+  bool parseStart(const std::string& msg, std::string& name, size_t& size, std::string& path);
 };
 
 }  // namespace ws

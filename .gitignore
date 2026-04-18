@@ -18,3 +18,4 @@ backups/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/.DS_Store
+.claude/scheduled_tasks.lock
