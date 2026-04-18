@@ -16,15 +16,23 @@ class BleRemapActivity final : public Activity {
   void render(Activity::RenderLock&&) override;
 
  private:
+  enum class UiMode : uint8_t {
+    List,      // Navigate the role list, pick one to bind or clear
+    Waiting,   // Waiting for a BLE keypress to bind to selectedRole
+  };
+
   const std::function<void()> onBack;
-  uint8_t currentStep = 0;
   static constexpr uint8_t kRoleCount = 6;
+
+  UiMode uiMode = UiMode::List;
+  uint8_t selectedRole = 0;
   uint16_t tempMapping[kRoleCount] = {};
   unsigned long errorUntil = 0;
   std::string errorMessage;
 
-  void applyMapping();
+  void commitMapping();
   bool validateUnassigned(uint16_t keycode);
-  const char* getRoleName(uint8_t step) const;
+  void showError(const char* msg);
+  const char* getRoleName(uint8_t role) const;
   static const char* getKeycodeName(uint16_t keycode);
 };
