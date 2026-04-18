@@ -48,7 +48,11 @@ jobs:
         run: pip install --upgrade platformio
 
       - name: Run cppcheck
-        run: pio check --fail-on-defect low --fail-on-defect medium --fail-on-defect high
+        # Gate on MEDIUM+HIGH only. LOW is mostly environmental noise
+        # (missingInclude for ESP32 SDK headers cppcheck cannot resolve) and
+        # style suggestions — surfacing them in the report is useful, failing
+        # CI on them is not.
+        run: pio check --fail-on-defect medium --fail-on-defect high
 
   build:
     runs-on: ubuntu-latest
