@@ -220,8 +220,9 @@ bool BleHidManager::subscribeToHid() {
       protoMode->writeValue(&bootMode, 1);
     }
 
-    bootKbChar->subscribe(
-        true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) { onHidReport(data, len); });
+    bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+      onHidReport(data, len, /*isBootKeyboard=*/true);
+    });
     LOG_INF("BLE", "Subscribed to Boot Keyboard Input");
     return true;
   }
@@ -233,8 +234,9 @@ bool BleHidManager::subscribeToHid() {
   if (chars) {
     for (auto* chr : *chars) {
       if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
-        chr->subscribe(
-            true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) { onHidReport(data, len); });
+        chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len, /*isBootKeyboard=*/false);
+        });
         subscribed = true;
         LOG_INF("BLE", "Subscribed to HID Report characteristic");
       }
@@ -259,6 +261,8 @@ void BleHidManager::disconnect() {
     edgeReleased[i] = false;
   }
   portEXIT_CRITICAL(&stateLock);
+
+  resetReportBaseline();
 }
 
 // --- Auto-reconnect ---
@@ -284,15 +288,16 @@ void BleHidManager::tryAutoReconnect() {
 
 // --- HID Report Parsing ---
 
-void BleHidManager::onHidReport(const uint8_t* data, size_t len) {
+void BleHidManager::onHidReport(const uint8_t* data, size_t len, bool isBootKeyboard) {
   if (len == 0) return;
 
-  // Boot keyboard protocol: 8 bytes
-  // [0] = modifier keys, [1] = reserved, [2..7] = up to 6 keycodes
-  if (len >= 3 && len <= 8) {
+  // Boot keyboard protocol: [0]=modifiers, [1]=reserved, [2..7]=up to 6 keycodes.
+  // Only apply this interpretation to reports that actually came from the boot-
+  // keyboard input characteristic — a gamepad's generic report may coincidentally
+  // be 3–8 bytes long and would be garbled if parsed as boot keyboard.
+  if (isBootKeyboard && len >= 3 && len <= 8) {
     uint8_t modifiers = data[0];
 
-    // Collect all active keycodes from this report
     uint16_t activeKeycodes[6] = {};
     int activeCount = 0;
     for (size_t i = 2; i < len; i++) {
@@ -305,11 +310,8 @@ void BleHidManager::onHidReport(const uint8_t* data, size_t len) {
       lastRawKeycode = fullCode;
     }
 
-    // Fix #6: In capture mode, don't translate — just store raw keycode
     if (captureMode) return;
 
-    // Fix #7: Per-key release — compute which buttons SHOULD be pressed,
-    // then set all others to false.
     portENTER_CRITICAL(&stateLock);
     bool shouldBePressed[kButtonCount] = {};
     for (int k = 0; k < activeCount; k++) {
@@ -326,38 +328,68 @@ void BleHidManager::onHidReport(const uint8_t* data, size_t len) {
     return;
   }
 
-  // Generic HID report (gamepads, custom remotes)
-  if (len >= 1) {
-    uint16_t rawCode = data[0];
-    if (len >= 2) {
-      rawCode = (uint16_t)((data[1] << 8) | data[0]);
-    }
+  // Generic HID report (gamepads, custom remotes). We don't parse the HID
+  // descriptor, so we can't know which bytes encode buttons vs analog axes.
+  // Instead, snapshot the previous report and diff byte-by-byte: each bit that
+  // transitions 0→1 is treated as a button-press event, 1→0 as release. The
+  // synthesized keycode encodes the (byte, bit) position, which users bind in
+  // the remap activity the same way they'd bind a keyboard key.
+  const size_t n = (len < kMaxDiffBytes) ? len : kMaxDiffBytes;
 
-    if (rawCode != 0) {
-      lastRawKeycode = rawCode;
-    }
+  if (!reportBaselined) {
+    memcpy(lastReport, data, n);
+    for (size_t i = n; i < kMaxDiffBytes; i++) lastReport[i] = 0;
+    lastReportLen = n;
+    reportBaselined = true;
+    return;
+  }
 
-    if (captureMode) return;
+  const size_t diffLen = (n > lastReportLen) ? n : lastReportLen;
 
-    portENTER_CRITICAL(&stateLock);
-    if (rawCode != 0) {
-      // Set the matching button, clear others
-      bool shouldBePressed[kButtonCount] = {};
-      for (int b = 0; b < kButtonCount; b++) {
-        if (SETTINGS.bleKeyMap[b] == rawCode && rawCode != 0) {
-          shouldBePressed[b] = true;
+  portENTER_CRITICAL(&stateLock);
+  for (size_t i = 0; i < diffLen && i < kMaxDiffBytes; i++) {
+    const uint8_t prev = (i < lastReportLen) ? lastReport[i] : 0;
+    const uint8_t curr = (i < n) ? data[i] : 0;
+    if (prev == curr) continue;
+
+    const uint8_t rising = (uint8_t)(curr & ~prev);
+    const uint8_t falling = (uint8_t)(prev & ~curr);
+
+    for (uint8_t b = 0; b < 8; b++) {
+      const uint8_t mask = (uint8_t)(1u << b);
+      const uint16_t code = (uint16_t)(0xF000u | ((i & 0x1Fu) << 3) | (b & 0x07u));
+      if (rising & mask) {
+        if (captureMode) {
+          lastRawKeycode = code;
+        } else {
+          for (int bt = 0; bt < kButtonCount; bt++) {
+            if (SETTINGS.bleKeyMap[bt] == code) currentPressed[bt] = true;
+          }
         }
       }
-      for (int b = 0; b < kButtonCount; b++) {
-        currentPressed[b] = shouldBePressed[b];
-      }
-    } else {
-      for (int b = 0; b < kButtonCount; b++) {
-        currentPressed[b] = false;
+      if ((falling & mask) && !captureMode) {
+        for (int bt = 0; bt < kButtonCount; bt++) {
+          if (SETTINGS.bleKeyMap[bt] == code) currentPressed[bt] = false;
+        }
       }
     }
-    portEXIT_CRITICAL(&stateLock);
   }
+  portEXIT_CRITICAL(&stateLock);
+
+  memcpy(lastReport, data, n);
+  for (size_t i = n; i < kMaxDiffBytes; i++) lastReport[i] = 0;
+  lastReportLen = n;
+}
+
+void BleHidManager::resetReportBaseline() {
+  // Seed baseline with all-zeros and mark as baselined. Gamepads over BLE HID
+  // typically only notify on state change, so if we wait for the first report
+  // to establish the baseline the user's first button press is silently
+  // consumed. Starting from a zeroed baseline makes the first real report
+  // produce correct rising-edge events relative to the resting state.
+  for (size_t i = 0; i < kMaxDiffBytes; i++) lastReport[i] = 0;
+  lastReportLen = kMaxDiffBytes;
+  reportBaselined = true;
 }
 
 void BleHidManager::translateKeycode(uint16_t keycode, bool pressed) {
@@ -434,6 +466,10 @@ void BleHidManager::setCaptureMode(bool enabled) {
       currentPressed[i] = false;
     }
     portEXIT_CRITICAL(&stateLock);
+    // Rebaseline the diff buffer so the next generic report establishes the
+    // resting state — otherwise the first user-initiated edge might be missed
+    // (or an old edge from before capture began would fire).
+    resetReportBaseline();
   }
 }
 

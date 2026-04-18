@@ -16,14 +16,18 @@ constexpr unsigned long kErrorDisplayMs = 1500;
 
 void BleRemapActivity::onEnter() {
   Activity::onEnter();
-  currentStep = 0;
-  for (int i = 0; i < kRoleCount; i++) tempMapping[i] = 0;
+  uiMode = UiMode::List;
+  selectedRole = 0;
+  for (int i = 0; i < kRoleCount; i++) {
+    tempMapping[i] = SETTINGS.bleKeyMap[i];
+  }
   errorMessage.clear();
   errorUntil = 0;
 
-  // Enable capture mode so BLE keycodes are NOT translated into button
-  // presses (which would leak into MappedInputManager side-button checks).
-  BLE_HID.setCaptureMode(true);
+  // Capture mode stays OFF while in the list; we only flip it on when the
+  // user enters Waiting, so browsing the list with a still-connected BT device
+  // doesn't accidentally trigger mapped presses.
+  BLE_HID.setCaptureMode(false);
   requestUpdate();
 }
 
@@ -33,7 +37,6 @@ void BleRemapActivity::onExit() {
 }
 
 void BleRemapActivity::loop() {
-  // Clear error banner after timeout
   if (errorUntil > 0 && millis() > errorUntil) {
     errorMessage.clear();
     errorUntil = 0;
@@ -41,46 +44,90 @@ void BleRemapActivity::loop() {
     return;
   }
 
-  // Use MappedInputManager for side buttons — safe because capture mode
-  // prevents BLE keypresses from reaching button translation.
-  // Side Up: reset to defaults and exit
-  if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-    for (int i = 0; i < CrossPointSettings::BLE_KEY_MAP_SIZE; i++) {
-      SETTINGS.bleKeyMap[i] = 0;
+  switch (uiMode) {
+    case UiMode::List: {
+      // Side Up: reset every binding to unassigned (does not exit)
+      if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
+        for (int i = 0; i < kRoleCount; i++) tempMapping[i] = 0;
+        requestUpdate();
+        return;
+      }
+
+      // Side Down: cancel — exit without saving
+      if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
+        onBack();
+        return;
+      }
+
+      // Back: save whatever subset is currently bound and exit
+      if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+        commitMapping();
+        SETTINGS.saveToFile();
+        onBack();
+        return;
+      }
+
+      // Left/Right: move selection through the role list
+      if (mappedInput.wasPressed(MappedInputManager::Button::Right)) {
+        selectedRole = (uint8_t)((selectedRole + 1) % kRoleCount);
+        requestUpdate();
+      }
+      if (mappedInput.wasPressed(MappedInputManager::Button::Left)) {
+        selectedRole = (uint8_t)((selectedRole + kRoleCount - 1) % kRoleCount);
+        requestUpdate();
+      }
+
+      // PageForward: begin capture for the selected role
+      if (mappedInput.wasPressed(MappedInputManager::Button::PageForward) ||
+          mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+        uiMode = UiMode::Waiting;
+        BLE_HID.setCaptureMode(true);
+        BLE_HID.clearCapturedKeycode();
+        requestUpdate();
+      }
+
+      // PageBack: clear this role's binding
+      if (mappedInput.wasPressed(MappedInputManager::Button::PageBack)) {
+        tempMapping[selectedRole] = 0;
+        requestUpdate();
+      }
+      break;
     }
-    SETTINGS.saveToFile();
-    onBack();
-    return;
+
+    case UiMode::Waiting: {
+      // Back: cancel wait, return to list without changing the binding
+      if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+        BLE_HID.setCaptureMode(false);
+        uiMode = UiMode::List;
+        requestUpdate();
+        return;
+      }
+
+      // Side Down: also acts as "cancel capture"
+      if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
+        BLE_HID.setCaptureMode(false);
+        uiMode = UiMode::List;
+        requestUpdate();
+        return;
+      }
+
+      // Wait for a BLE keypress
+      const uint16_t rawCode = BLE_HID.captureRawKeycode();
+      if (rawCode == 0) return;
+
+      if (!validateUnassigned(rawCode)) {
+        requestUpdate();
+        return;
+      }
+
+      tempMapping[selectedRole] = rawCode;
+      BLE_HID.setCaptureMode(false);
+      BLE_HID.clearCapturedKeycode();
+      uiMode = UiMode::List;
+      requestUpdate();
+      break;
+    }
   }
-
-  // Side Down: cancel without saving
-  if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-    onBack();
-    return;
-  }
-
-  // Wait for BLE keypress
-  uint16_t rawCode = BLE_HID.captureRawKeycode();
-  if (rawCode == 0) return;
-
-  // Validate not already assigned to another role
-  if (!validateUnassigned(rawCode)) {
-    requestUpdate();
-    return;
-  }
-
-  tempMapping[currentStep] = rawCode;
-  currentStep++;
-
-  if (currentStep >= kRoleCount) {
-    applyMapping();
-    SETTINGS.saveToFile();
-    onBack();
-    return;
-  }
-
-  BLE_HID.clearCapturedKeycode();
-  requestUpdate();
 }
 
 void BleRemapActivity::render(Activity::RenderLock&&) {
@@ -88,11 +135,14 @@ void BleRemapActivity::render(Activity::RenderLock&&) {
   const auto pageWidth = renderer.getScreenWidth();
 
   renderer.drawCenteredText(UI_12_FONT_ID, 15, tr(STR_BLE_REMAP_TITLE), true, EpdFontFamily::REGULAR);
-  renderer.drawCenteredText(UI_10_FONT_ID, 40, tr(STR_BLE_REMAP_PROMPT));
+
+  if (uiMode == UiMode::Waiting) {
+    renderer.drawCenteredText(UI_10_FONT_ID, 40, tr(STR_BLE_REMAP_PROMPT));
+  }
 
   for (uint8_t i = 0; i < kRoleCount; i++) {
     const int y = 70 + i * 28;
-    const bool isSelected = (i == currentStep);
+    const bool isSelected = (i == selectedRole);
 
     if (isSelected) {
       renderer.fillRect(0, y - 2, pageWidth - 1, 28);
@@ -109,13 +159,19 @@ void BleRemapActivity::render(Activity::RenderLock&&) {
     renderer.drawCenteredText(UI_10_FONT_ID, 250, errorMessage.c_str(), true);
   }
 
-  renderer.drawCenteredText(SMALL_FONT_ID, 270, tr(STR_BLE_REMAP_RESET_HINT), true);
-  renderer.drawCenteredText(SMALL_FONT_ID, 290, tr(STR_BLE_REMAP_CANCEL_HINT), true);
+  // Hints differ by mode. Line-wrap them so the existing two-line layout covers both.
+  if (uiMode == UiMode::List) {
+    renderer.drawCenteredText(SMALL_FONT_ID, 270, "Left/Right: Select  PageFwd: Bind  PageBack: Clear", true);
+    renderer.drawCenteredText(SMALL_FONT_ID, 290, "Back: Save & exit  Side Up: Reset  Side Down: Cancel", true);
+  } else {
+    renderer.drawCenteredText(SMALL_FONT_ID, 270, "Press a button on the BT device", true);
+    renderer.drawCenteredText(SMALL_FONT_ID, 290, "Back or Side Down: cancel", true);
+  }
 
   renderer.displayBuffer();
 }
 
-void BleRemapActivity::applyMapping() {
+void BleRemapActivity::commitMapping() {
   for (int i = 0; i < kRoleCount; i++) {
     SETTINGS.bleKeyMap[i] = tempMapping[i];
   }
@@ -123,17 +179,21 @@ void BleRemapActivity::applyMapping() {
 
 bool BleRemapActivity::validateUnassigned(uint16_t keycode) {
   for (uint8_t i = 0; i < kRoleCount; i++) {
-    if (tempMapping[i] == keycode && i != currentStep && tempMapping[i] != 0) {
-      errorMessage = tr(STR_ALREADY_ASSIGNED);
-      errorUntil = millis() + kErrorDisplayMs;
+    if (tempMapping[i] == keycode && i != selectedRole && tempMapping[i] != 0) {
+      showError(tr(STR_ALREADY_ASSIGNED));
       return false;
     }
   }
   return true;
 }
 
-const char* BleRemapActivity::getRoleName(uint8_t step) const {
-  switch (step) {
+void BleRemapActivity::showError(const char* msg) {
+  errorMessage = msg;
+  errorUntil = millis() + kErrorDisplayMs;
+}
+
+const char* BleRemapActivity::getRoleName(uint8_t role) const {
+  switch (role) {
     case 0:
       return tr(STR_BACK);
     case 1:
@@ -152,6 +212,16 @@ const char* BleRemapActivity::getRoleName(uint8_t step) const {
 }
 
 const char* BleRemapActivity::getKeycodeName(uint16_t keycode) {
+  // Synthetic gamepad codes from the generic-report diff parser: 0xF000 | byte<<3 | bit.
+  // Display as "Btn <byte>.<bit>" so the user has a stable label for any bit-field button.
+  if ((keycode & 0xFF00u) == 0xF000u) {
+    static char btnBuf[16];
+    const uint8_t byteIdx = (uint8_t)((keycode >> 3) & 0x1Fu);
+    const uint8_t bitIdx = (uint8_t)(keycode & 0x07u);
+    snprintf(btnBuf, sizeof(btnBuf), "Btn %u.%u", (unsigned)byteIdx, (unsigned)bitIdx);
+    return btnBuf;
+  }
+
   const uint8_t key = keycode & 0xFF;
   const uint8_t mod = (keycode >> 8) & 0xFF;
 

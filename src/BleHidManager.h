@@ -97,11 +97,24 @@ class BleHidManager {
   mutable portMUX_TYPE stateLock = portMUX_INITIALIZER_UNLOCKED;
 
   // HID report callback — translates raw reports into button state.
-  void onHidReport(const uint8_t* data, size_t len);
+  // isBootKeyboard = true for reports from UUID 0x2A22 (boot-keyboard input);
+  // false for generic report chars (UUID 0x2A4D) like gamepads and custom remotes,
+  // which may use arbitrary bit-field layouts we can't know a priori.
+  void onHidReport(const uint8_t* data, size_t len, bool isBootKeyboard);
 
   // Raw keycode for remap capture mode.
   volatile uint16_t lastRawKeycode = 0;
   bool captureMode = false;
+
+  // Baseline of the last generic HID report. We diff each incoming report
+  // against this to find rising/falling bits — that lets us treat arbitrary
+  // gamepad button layouts as synthetic keycodes (0xF000 | byte<<3 | bit)
+  // without parsing the HID descriptor.
+  static constexpr size_t kMaxDiffBytes = 20;
+  uint8_t lastReport[kMaxDiffBytes] = {};
+  size_t lastReportLen = 0;
+  bool reportBaselined = false;
+  void resetReportBaseline();
 
   // Button state arrays (protected by stateLock).
   bool currentPressed[kButtonCount] = {};
