@@ -31,9 +31,9 @@ namespace reader {
 
 struct PendingNav {
   bool hasPercentJump = false;
-  float spineProgress = 0.0f;   // 0..1 within the target spine item
+  float spineProgress = 0.0f;  // 0..1 within the target spine item
   bool hasAnchor = false;
-  std::string anchor;           // element id (e.g. "#chap3")
+  std::string anchor;  // element id (e.g. "#chap3")
 
   bool empty() const { return !hasPercentJump && !hasAnchor; }
   void clear() {
