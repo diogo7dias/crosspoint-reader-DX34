@@ -464,6 +464,8 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return BOOKERLY;
     case VOLLKORN:
       return VOLLKORN;
+    case ATKINSON:
+      return ATKINSON;
     case CHAREINK:
     default:
       return CHAREINK;
@@ -476,6 +478,8 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 1;
     case VOLLKORN:
       return 2;
+    case ATKINSON:
+      return 3;
     case CHAREINK:
     default:
       return 0;
@@ -488,14 +492,20 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
       return BOOKERLY;
     case 2:
       return VOLLKORN;
+    case 3:
+      return ATKINSON;
     case 0:
     default:
       return CHAREINK;
   }
 }
 
-uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t /*family*/, const uint8_t fontSize) {
-  // All families share the same active set: 12, 14, 16, 17 (LARGE)
+uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
+  // Atkinson ships at sizes 13 and 16 only.
+  if (normalizeFontFamily(family) == ATKINSON) {
+    return (fontSize == SIZE_16) ? SIZE_16 : SIZE_13;
+  }
+  // All other families share the same active set: 12, 14, 16, 17 (LARGE)
   switch (fontSize) {
     case SIZE_12:
       return SIZE_12;
@@ -527,6 +537,8 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
   switch (normalizeFontSizeForFamily(family, fontSize)) {
     case SIZE_12:
       return 12;
+    case SIZE_13:
+      return 13;
     case SIZE_14:
       return 14;
     case SIZE_16:
@@ -537,11 +549,17 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
   }
 }
 
-uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t /*family*/) {
-  return 4;  // 12, 14, 16, 17 — same for all families
+uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
+  if (normalizeFontFamily(family) == ATKINSON) {
+    return 2;  // Atkinson: 13, 16
+  }
+  return 4;  // 12, 14, 16, 17 — all other families
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
+  if (normalizeFontFamily(family) == ATKINSON) {
+    return (normalizeFontSizeForFamily(family, fontSize) == SIZE_16) ? 1 : 0;
+  }
   switch (normalizeFontSizeForFamily(family, fontSize)) {
     case SIZE_12:
       return 0;
@@ -555,7 +573,10 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
   }
 }
 
-uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t /*family*/, const uint8_t displayIndex) {
+uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
+  if (normalizeFontFamily(family) == ATKINSON) {
+    return (displayIndex == 1) ? SIZE_16 : SIZE_13;
+  }
   switch (displayIndex) {
     case 0:
       return SIZE_12;
@@ -588,6 +609,9 @@ int CrossPointSettings::wordSpacingSettingToPixelDelta(const uint8_t mode, const
 int CrossPointSettings::getReaderFontId() const {
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
+  if (normalizedFamily == ATKINSON) {
+    return (normalizedFontSize == SIZE_16) ? ATKINSON_16_FONT_ID : ATKINSON_13_FONT_ID;
+  }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {
       case SIZE_12:

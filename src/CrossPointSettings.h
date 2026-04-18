@@ -137,6 +137,7 @@ class CrossPointSettings {
     LEGACY_IMFELL = 4,            // removed, normalize to CHAREINK
     FREESERIF = 5,                // legacy, normalize to CHAREINK
     LEGACY_REMOVED_FAMILY_2 = 6,  // legacy, normalize to CHAREINK
+    ATKINSON = 7,
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {

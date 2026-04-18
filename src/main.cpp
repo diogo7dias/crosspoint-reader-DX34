@@ -111,6 +111,16 @@ EpdFont vollkorn17RegularFont(&vollkorn_17_regular);
 EpdFont vollkorn17BoldFont(&vollkorn_17_bold);
 EpdFont vollkorn17ItalicFont(&vollkorn_17_italic);
 EpdFontFamily vollkorn17FontFamily(&vollkorn17RegularFont, &vollkorn17BoldFont, &vollkorn17ItalicFont, nullptr);
+
+EpdFont atkinson13RegularFont(&atkinson_13_regular);
+EpdFont atkinson13BoldFont(&atkinson_13_bold);
+EpdFont atkinson13ItalicFont(&atkinson_13_italic);
+EpdFontFamily atkinson13FontFamily(&atkinson13RegularFont, &atkinson13BoldFont, &atkinson13ItalicFont, nullptr);
+EpdFont atkinson16RegularFont(&atkinson_16_regular);
+EpdFont atkinson16BoldFont(&atkinson_16_bold);
+EpdFont atkinson16ItalicFont(&atkinson_16_italic);
+EpdFontFamily atkinson16FontFamily(&atkinson16RegularFont, &atkinson16BoldFont, &atkinson16ItalicFont, nullptr);
+
 EpdFont unifont14RegularFont(&unifont_14_regular);
 EpdFontFamily unifont14FontFamily(&unifont14RegularFont, nullptr, nullptr, nullptr, 1, 0, false);
 EpdFont unifont18RegularFont(&unifont_18_regular);
@@ -335,6 +345,8 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_14_FONT_ID, vollkorn14FontFamily);
   renderer.insertFont(VOLLKORN_16_FONT_ID, vollkorn16FontFamily);
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn17FontFamily);
+  renderer.insertFont(ATKINSON_13_FONT_ID, atkinson13FontFamily);
+  renderer.insertFont(ATKINSON_16_FONT_ID, atkinson16FontFamily);
   renderer.insertFont(UNIFONT_14_FONT_ID, unifont14FontFamily);
   renderer.insertFont(UNIFONT_18_FONT_ID, unifont18FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);

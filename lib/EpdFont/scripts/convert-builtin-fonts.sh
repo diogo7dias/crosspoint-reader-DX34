@@ -40,6 +40,20 @@ for size in ${VOLLKORN_FONT_SIZES[@]}; do
   done
 done
 
+# Atkinson Hyperlegible: proportional readable font, sizes 13 and 16, 2-bit + compress.
+ATKINSON_FONT_SIZES=(13 16)
+ATKINSON_STYLES=("Regular:AtkinsonHyperlegible-Regular.ttf" "Bold:AtkinsonHyperlegible-Bold.ttf" "Italic:AtkinsonHyperlegible-Italic.ttf")
+for size in ${ATKINSON_FONT_SIZES[@]}; do
+  for entry in "${ATKINSON_STYLES[@]}"; do
+    style="${entry%%:*}"
+    filename="${entry#*:}"
+    lower_style=$(echo $style | tr '[:upper:]' '[:lower:]')
+    font_name="atkinson_${size}_${lower_style}"
+    echo "Generating ${font_name}..."
+    "$PYTHON_BIN" fontconvert.py "${font_name}" $size "../builtinFonts/source/Atkinson/${filename}" --2bit --compress > "../builtinFonts/${font_name}.h"
+  done
+done
+
 for size in 14 18; do
   echo "Generating unifont_${size}_regular..."
   "$PYTHON_BIN" fontconvert.py "unifont_${size}_regular" $size "../builtinFonts/source/UI/unifont-english.ttf" > "../builtinFonts/unifont_${size}_regular.h"
