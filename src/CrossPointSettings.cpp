@@ -495,25 +495,25 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t /*family*/, const uint8_t fontSize) {
-  // All families share the same active set: 10, 14, 15, 16, 17
+  // All families share the same active set: 12, 14, 16, 17 (LARGE)
   switch (fontSize) {
-    case SIZE_10:
-      return SIZE_10;
+    case SIZE_12:
+      return SIZE_12;
     case SIZE_14:
       return SIZE_14;
-    case MEDIUM:
-      return MEDIUM;  // 15pt
     case SIZE_16:
       return SIZE_16;
     case LARGE:
       return LARGE;  // 17pt
+    case SIZE_10:
+    case SIZE_13:
+      return SIZE_12;  // legacy 10/13 -> 12
+    case MEDIUM:
+      return SIZE_14;  // legacy 15 -> 14
     case SIZE_18:
     case X_LARGE:
-      return LARGE;  // legacy 18/19 -> 17
-    case SIZE_12:
-    case SIZE_13:
     default:
-      return SIZE_14;  // legacy 12/13 -> 14
+      return LARGE;  // legacy 18/19 -> 17
   }
 }
 
@@ -525,12 +525,10 @@ uint8_t CrossPointSettings::nextFontSize(const uint8_t family, const uint8_t fon
 
 uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint8_t fontSize) {
   switch (normalizeFontSizeForFamily(family, fontSize)) {
-    case SIZE_10:
-      return 10;
+    case SIZE_12:
+      return 12;
     case SIZE_14:
       return 14;
-    case MEDIUM:
-      return 15;
     case SIZE_16:
       return 16;
     case LARGE:
@@ -540,36 +538,32 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 }
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t /*family*/) {
-  return 5;  // 10, 14, 15, 16, 17 — same for all families
+  return 4;  // 12, 14, 16, 17 — same for all families
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
   switch (normalizeFontSizeForFamily(family, fontSize)) {
-    case SIZE_10:
+    case SIZE_12:
       return 0;
     case SIZE_14:
       return 1;
-    case MEDIUM:
-      return 2;
     case SIZE_16:
-      return 3;
+      return 2;
     case LARGE:
     default:
-      return 4;
+      return 3;
   }
 }
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t /*family*/, const uint8_t displayIndex) {
   switch (displayIndex) {
     case 0:
-      return SIZE_10;
+      return SIZE_12;
     case 1:
       return SIZE_14;
     case 2:
-      return MEDIUM;  // 15pt
-    case 3:
       return SIZE_16;
-    case 4:
+    case 3:
     default:
       return LARGE;  // 17pt
   }
@@ -596,12 +590,10 @@ int CrossPointSettings::getReaderFontId() const {
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {
-      case SIZE_10:
-        return BOOKERLY_10_FONT_ID;
+      case SIZE_12:
+        return BOOKERLY_12_FONT_ID;
       case SIZE_14:
         return BOOKERLY_14_FONT_ID;
-      case MEDIUM:
-        return BOOKERLY_15_FONT_ID;
       case SIZE_16:
         return BOOKERLY_16_FONT_ID;
       case LARGE:
@@ -611,12 +603,10 @@ int CrossPointSettings::getReaderFontId() const {
   }
   if (normalizedFamily == VOLLKORN) {
     switch (normalizedFontSize) {
-      case SIZE_10:
-        return VOLLKORN_10_FONT_ID;
+      case SIZE_12:
+        return VOLLKORN_12_FONT_ID;
       case SIZE_14:
         return VOLLKORN_14_FONT_ID;
-      case MEDIUM:
-        return VOLLKORN_15_FONT_ID;
       case SIZE_16:
         return VOLLKORN_16_FONT_ID;
       case LARGE:
@@ -625,12 +615,10 @@ int CrossPointSettings::getReaderFontId() const {
     }
   }
   switch (normalizedFontSize) {
-    case SIZE_10:
-      return CHAREINK_10_FONT_ID;
+    case SIZE_12:
+      return CHAREINK_12_FONT_ID;
     case SIZE_14:
       return CHAREINK_14_FONT_ID;
-    case MEDIUM:
-      return CHAREINK_15_FONT_ID;
     case SIZE_16:
       return CHAREINK_16_FONT_ID;
     case LARGE:

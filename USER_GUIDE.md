@@ -156,7 +156,7 @@ The Settings screen allows you to configure the device's behavior. There are a f
   - "Bookerly" (default)
   - "ChareInk"
   - "Chare"
-- **Reader Font Size**: Adjust text size for reading; options are "Medium", "Large", or "X Large".
+- **Reader Font Size**: Adjust text size for reading; options are 12, 14, 16, or 17 pt (default 16).
 - **Reader Line Spacing**: Adjust line spacing as a percentage value in reader settings.
 - **Reader Screen Margin**: Controls the screen margins in reader mode between 5 and 40 pixels in 5 pixel increments.
 - **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Justified" (default), "Left", "Center", or "Right".

@@ -86,7 +86,7 @@ pio run -t upload
 
 - [Supported book formats](#supported-book-formats) — EPUB, TXT/MD, XTC/XTCH
 - [EPUB reading experience](#epub-reading-experience) — in-book menu, reading themes, highlights, footnotes
-- [Fonts and sizes](#fonts-and-sizes) — 3 font families with multiple sizes each
+- [Fonts and sizes](#fonts-and-sizes) — 3 font families, 4 sizes each (12, 14, 16, 17 pt)
 - [Reader layout and appearance](#reader-layout-and-appearance) — full control over text rendering
 - [Sleep screen and wallpaper system](#sleep-screen-and-wallpaper-system) — managed wallpaper folder with favorites
 - [Home screen and library](#home-screen-and-library) — recents, file browser, search, QR sharing
@@ -232,9 +232,9 @@ The DX34 firmware ships with **three built-in reader font families**, each with 
 
 | Font | Style | Sizes Available | Character |
 |------|-------|-----------------|-----------|
-| **ChareInk** | Serif, optimized for e-ink | 14, 15, 16, 17, 18 | DX34-specific, clean and readable |
-| **Bookerly** | Serif | 13, 14, 15, 16, 17, 18 | Amazon's reading font |
-| **Vollkorn** | Serif | 13, 14, 15, 16, 17, 18 | Open-source book font |
+| **ChareInk** | Serif, optimized for e-ink | 12, 14, 16, 17 | DX34-specific, clean and readable |
+| **Bookerly** | Serif | 12, 14, 16, 17 | Amazon's reading font |
+| **Vollkorn** | Serif | 12, 14, 16, 17 | Open-source book font |
 
 | ChareInk | Bookerly | Vollkorn |
 |:---:|:---:|:---:|
@@ -242,42 +242,19 @@ The DX34 firmware ships with **three built-in reader font families**, each with 
 
 ### Size details
 
-**ChareInk** — 5 sizes
+All three families share the same 4-size set:
 
 | Size | Point Size |
 |------|-----------|
-| 1 | 14 pt |
-| 2 | 15 pt |
+| 1 | 12 pt |
+| 2 | 14 pt |
 | 3 | 16 pt (default) |
 | 4 | 17 pt |
-| 5 | 18 pt |
-
-**Bookerly** — 6 sizes
-
-| Size | Point Size |
-|------|-----------|
-| 1 | 13 pt |
-| 2 | 14 pt |
-| 3 | 15 pt |
-| 4 | 16 pt |
-| 5 | 17 pt |
-| 6 | 18 pt |
-
-**Vollkorn** — 6 sizes
-
-| Size | Point Size |
-|------|-----------|
-| 1 | 13 pt |
-| 2 | 14 pt |
-| 3 | 15 pt |
-| 4 | 16 pt |
-| 5 | 17 pt |
-| 6 | 18 pt |
 
 ### How size switching works
 
-- When you switch font family, the firmware automatically remaps your current size to the nearest valid size for the new family.
-- For example, switching from ChareInk 14pt to Bookerly would land on Bookerly 14pt. Bookerly and Vollkorn now share the same 13–18pt range, so switching between them preserves the exact size.
+- All families use the same size set, so switching font family preserves the exact size.
+- Settings saved under older firmware are migrated automatically to the nearest current size (10/13→12, 15→14, 18/19→17).
 
 ### Additional font notes
 
@@ -297,7 +274,7 @@ The firmware exposes extensive control over how text is rendered. All of these c
 | Setting | Options | Default |
 |---------|---------|---------|
 | **Font family** | ChareInk, Bookerly, Vollkorn | ChareInk |
-| **Font size** | Depends on family (see above) | 16 pt (ChareInk) |
+| **Font size** | 12, 14, 16, 17 pt (all families) | 16 pt |
 | **Line spacing** | 65% to 150% | 90% |
 | **Paragraph alignment** | Justified, Left, Center, Right, Book Style | Justified |
 | **First-line indent** | Book (follow CSS), Off, Small, Medium, Large | Book |

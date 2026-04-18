@@ -140,15 +140,15 @@ class CrossPointSettings {
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
-    MEDIUM = 0,   // 15pt
+    MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14
     LARGE = 1,    // 17pt
-    X_LARGE = 2,  // legacy 19 -> normalize to LARGE (17)
+    X_LARGE = 2,  // legacy 19 -> normalize to LARGE
     SIZE_14 = 3,
     SIZE_16 = 4,
     SIZE_18 = 5,  // legacy -> normalize to LARGE (17)
-    SIZE_13 = 6,  // legacy -> normalize to SIZE_14
-    SIZE_12 = 7,  // legacy -> normalize to SIZE_14
-    SIZE_10 = 8,
+    SIZE_13 = 6,  // legacy -> normalize to SIZE_12
+    SIZE_12 = 7,
+    SIZE_10 = 8,  // legacy -> normalize to SIZE_12
     FONT_SIZE_COUNT
   };
   // Legacy line spacing enum (kept for settings migration compatibility)
