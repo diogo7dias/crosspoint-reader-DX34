@@ -46,6 +46,33 @@ bool InMemoryFileIO::safeWrite(const std::string& path, const std::string& conte
   return true;
 }
 
+namespace {
+// JsonSink that accumulates into a std::string. Host tests don't need real
+// streaming — they just need the same atomic semantics.
+class StringJsonSink : public JsonSink {
+ public:
+  explicit StringJsonSink(std::string& s) : s_(s) {}
+  size_t write(uint8_t b) override {
+    s_.push_back(static_cast<char>(b));
+    return 1;
+  }
+  size_t write(const uint8_t* buf, size_t n) override {
+    s_.append(reinterpret_cast<const char*>(buf), n);
+    return n;
+  }
+
+ private:
+  std::string& s_;
+};
+}  // namespace
+
+bool InMemoryFileIO::safeWriteStreamed(const std::string& path, const StreamProducer& produce) {
+  std::string buffer;
+  StringJsonSink sink(buffer);
+  if (!produce || !produce(sink)) return false;
+  return safeWrite(path, buffer);
+}
+
 std::string InMemoryFileIO::safeRead(const std::string& path) {
   auto it = files_.find(path);
   if (it != files_.end() && !it->second.empty()) return it->second;
