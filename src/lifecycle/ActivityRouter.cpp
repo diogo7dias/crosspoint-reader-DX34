@@ -68,20 +68,35 @@ void ActivityRouter::enterDeepSleep(bool fromReader) {
   if (deps_.onAfterDeepSleep) deps_.onAfterDeepSleep();
 }
 
-// Lambda synthesizers — still empty stubs. Separate PR wires these to
-// request() and drops the legacy free functions in main.cpp.
+// Lambda synthesizers — return std::function callbacks bound to router.request.
+// Activities continue to receive the callbacks they have always received;
+// these let a caller (production main.cpp, or a host test) swap out the source
+// without touching every activity constructor. main.cpp still passes its own
+// free functions for the legacy LIFECYCLE_V2=0 path.
 std::function<void(const std::string&)> ActivityRouter::makeGoToReader() const {
-  return [](const std::string&) {};
+  return [](const std::string& p) { instance().request({RouteId::Reader, p}); };
 }
-std::function<void()> ActivityRouter::makeGoHome() const { return [] {}; }
-std::function<void()> ActivityRouter::makeGoToSettings() const { return [] {}; }
-std::function<void()> ActivityRouter::makeGoToMyLibrary() const { return [] {}; }
+std::function<void()> ActivityRouter::makeGoHome() const {
+  return [] { instance().request({RouteId::Home, ""}); };
+}
+std::function<void()> ActivityRouter::makeGoToSettings() const {
+  return [] { instance().request({RouteId::Settings, ""}); };
+}
+std::function<void()> ActivityRouter::makeGoToMyLibrary() const {
+  return [] { instance().request({RouteId::MyLibrary, ""}); };
+}
 std::function<void(const std::string&)> ActivityRouter::makeGoToMyLibraryWithPath() const {
-  return [](const std::string&) {};
+  return [](const std::string& p) { instance().request({RouteId::MyLibraryAt, p}); };
 }
-std::function<void()> ActivityRouter::makeGoToRecentBooks() const { return [] {}; }
-std::function<void()> ActivityRouter::makeGoToFileTransfer() const { return [] {}; }
-std::function<void()> ActivityRouter::makeGoToBrowser() const { return [] {}; }
+std::function<void()> ActivityRouter::makeGoToRecentBooks() const {
+  return [] { instance().request({RouteId::RecentBooks, ""}); };
+}
+std::function<void()> ActivityRouter::makeGoToFileTransfer() const {
+  return [] { instance().request({RouteId::FileTransfer, ""}); };
+}
+std::function<void()> ActivityRouter::makeGoToBrowser() const {
+  return [] { instance().request({RouteId::Browser, ""}); };
+}
 
 void ActivityRouter::setDeps(Deps deps) { deps_ = std::move(deps); }
 
