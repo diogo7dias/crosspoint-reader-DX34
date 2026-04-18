@@ -28,8 +28,7 @@ class EpubProgressSink : public IProgressSink {
   // `cachePath` is the per-book cache dir (no trailing slash), e.g.
   // /.crosspoint/cache/<fingerprint>. `spineCount` is the total number of
   // spine items — used for bounds clamping matching legacy behaviour.
-  EpubProgressSink(std::string cachePath, int spineCount)
-      : cachePath_(std::move(cachePath)), spineCount_(spineCount) {}
+  EpubProgressSink(std::string cachePath, int spineCount) : cachePath_(std::move(cachePath)), spineCount_(spineCount) {}
 
   // IProgressSink
   bool write(const ReaderPosition& p) override;

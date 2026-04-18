@@ -1,9 +1,9 @@
 #include "EpubProgressSink.h"
 
-#include <cstdint>
-
 #include <HalStorage.h>
 #include <Logging.h>
+
+#include <cstdint>
 
 namespace crosspoint {
 namespace reader {
