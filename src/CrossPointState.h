@@ -17,8 +17,10 @@
 #include <vector>
 
 class CrossPointState {
-  // Static instance
+#ifndef PERSIST_V2
+  // V1: static singleton lives in-class. V2: owned by PersistentStore instead.
   static CrossPointState instance;
+#endif
 
  public:
   // Collections larger than this threshold are handled without a full in-memory
@@ -38,8 +40,10 @@ class CrossPointState {
   bool lastSleepWasQuotes = false;
   ~CrossPointState() = default;
 
-  // Get singleton instance
-  static CrossPointState& getInstance() { return instance; }
+  // Singleton — V1 returns the in-class static, V2 returns the data inside
+  // the PersistentStore wrapper. All 24 APP_STATE.x mutations + saveToFile()
+  // call sites work identically under either gate.
+  static CrossPointState& getInstance();
 
   bool saveToFile() const;
 

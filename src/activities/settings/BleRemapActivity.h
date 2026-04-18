@@ -17,8 +17,8 @@ class BleRemapActivity final : public Activity {
 
  private:
   enum class UiMode : uint8_t {
-    List,      // Navigate the role list, pick one to bind or clear
-    Waiting,   // Waiting for a BLE keypress to bind to selectedRole
+    List,     // Navigate the role list, pick one to bind or clear
+    Waiting,  // Waiting for a BLE keypress to bind to selectedRole
   };
 
   const std::function<void()> onBack;
