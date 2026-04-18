@@ -103,11 +103,12 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
   if (state == UPDATE_IN_PROGRESS) {
     LOG_DBG("OTA", "Update progress: %d / %d", updater.getProcessedSize(), updater.getTotalSize());
     updaterProgress = static_cast<float>(updater.getProcessedSize()) / static_cast<float>(updater.getTotalSize());
-    // Only update every 2% at the most
-    if (static_cast<int>(updaterProgress * 50) == lastUpdaterPercentage / 2) {
+    // Only redraw every 5% to limit e-paper refresh cost during download
+    const int currentPct = static_cast<int>(updaterProgress * 100);
+    if (currentPct != 100 && currentPct - lastUpdaterPercentage < 5) {
       return;
     }
-    lastUpdaterPercentage = static_cast<int>(updaterProgress * 100);
+    lastUpdaterPercentage = currentPct;
   }
 
   const auto pageWidth = renderer.getScreenWidth();
@@ -188,7 +189,7 @@ void OtaUpdateActivity::loop() {
       }
       requestUpdate();
       requestUpdateAndWait();
-      const auto res = updater.installUpdate();
+      const auto res = updater.installUpdate([this]() { requestUpdate(); });
 
       if (res != OtaUpdater::OK) {
         LOG_DBG("OTA", "Update failed: %d", res);

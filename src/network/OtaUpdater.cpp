@@ -246,7 +246,7 @@ bool OtaUpdater::isUpdateNewer() const {
 
 const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }
 
-OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
+OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onProgress) {
   if (!isUpdateNewer()) {
     return UPDATE_OLDER_ERROR;
   }
@@ -289,6 +289,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate() {
     processedSize = esp_https_ota_get_image_len_read(ota_handle);
     /* Sent signal to  OtaUpdateActivity */
     render = true;
+    if (onProgress) onProgress();
     delay(100);  // Yield time for the UI render loop between OTA chunks
   } while (esp_err == ESP_ERR_HTTPS_OTA_IN_PROGRESS);
 
