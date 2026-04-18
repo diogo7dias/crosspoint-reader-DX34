@@ -128,9 +128,9 @@ void test_observe_matching_saved_not_dirty() {
   ReaderProgressTracker t(sink, 500);
   t.seed(P(0, 5, 10));
 
-  t.observe(P(0, 6, 10), 100);    // dirty
+  t.observe(P(0, 6, 10), 100);  // dirty
   TEST_ASSERT_TRUE(t.dirty());
-  t.observe(P(0, 5, 10), 200);    // matches saved — dirty stays false after
+  t.observe(P(0, 5, 10), 200);  // matches saved — dirty stays false after
   TEST_ASSERT_FALSE(t.dirty());
   TEST_ASSERT_FALSE(t.flush(5000, true));
   TEST_ASSERT_EQUAL_INT(0u, sink.writes.size());
@@ -144,11 +144,11 @@ void test_failed_write_retries() {
 
   t.observe(P(0, 1, 1), 0);
   sink.nextWriteFails = true;
-  TEST_ASSERT_FALSE(t.flush(1000, true));   // write failed
-  TEST_ASSERT_TRUE(t.dirty());              // still dirty
+  TEST_ASSERT_FALSE(t.flush(1000, true));  // write failed
+  TEST_ASSERT_TRUE(t.dirty());             // still dirty
   TEST_ASSERT_EQUAL_INT(0u, sink.writes.size());
 
-  TEST_ASSERT_TRUE(t.flush(2000, true));    // retry succeeds
+  TEST_ASSERT_TRUE(t.flush(2000, true));  // retry succeeds
   TEST_ASSERT_FALSE(t.dirty());
   TEST_ASSERT_EQUAL_INT(1u, sink.writes.size());
   TEST_ASSERT_EQUAL_INT(1, sink.writes[0].page);
@@ -162,7 +162,7 @@ void test_snapshot_for_reset_flushes_then_seeds() {
   ReaderProgressTracker t(sink, 5000);
   t.seed(P(0, 10, 100));
 
-  t.observe(P(0, 11, 100), 100);   // local page turn, debounced
+  t.observe(P(0, 11, 100), 100);  // local page turn, debounced
   TEST_ASSERT_TRUE(t.dirty());
 
   // KOReader says jump to chapter 2, page 0.
