@@ -19,6 +19,9 @@
 #include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
+#if SLEEP_V2
+#include "sleep/WallpaperPlaylist.h"
+#endif
 
 namespace {
 void clearLastSleepWallpaperPath() {
@@ -292,54 +295,59 @@ void SleepActivity::renderCustomSleepScreen() const {
     }
   }
 
-  const auto files = getValidSleepBitmaps();
-  if (!files.empty()) {
-    std::string selectedImage;
-
-    if (files.size() > CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-      // Large collection: skip the full in-memory playlist to avoid heap
-      // exhaustion. Advance sequentially by filename using a binary search.
-      selectedImage = nextSleepImageLargeCollection(files);
-    } else {
-      // Small collection: maintain the full shuffleable playlist.
-      syncSleepPlaylistWithFiles(files, false);
-      auto& playlist = APP_STATE.sleepImagePlaylist;
-      if (!playlist.empty()) {
-        bool changed = false;
-        // Advance to the next image only after the first custom sleep render.
-        // This keeps playlist[0] as the image just shown and playlist[1] as next.
-        if (APP_STATE.lastSleepImage != 0 && playlist.size() > 1) {
-          const auto first = playlist.front();
-          playlist.erase(playlist.begin());
-          playlist.push_back(first);
-          changed = true;
-        }
-        selectedImage = playlist.front();
-        if (APP_STATE.lastSleepImage != 1) {
-          APP_STATE.lastSleepImage = 1;
-          changed = true;
-        }
-        if (changed) {
-          APP_STATE.saveToFile();
+  std::string selectedImage;
+#if SLEEP_V2
+  selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
+#else
+  {
+    const auto files = getValidSleepBitmaps();
+    if (!files.empty()) {
+      if (files.size() > CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
+        // Large collection: skip the full in-memory playlist to avoid heap
+        // exhaustion. Advance sequentially by filename using a binary search.
+        selectedImage = nextSleepImageLargeCollection(files);
+      } else {
+        // Small collection: maintain the full shuffleable playlist.
+        syncSleepPlaylistWithFiles(files, false);
+        auto& playlist = APP_STATE.sleepImagePlaylist;
+        if (!playlist.empty()) {
+          bool changed = false;
+          // Advance to the next image only after the first custom sleep render.
+          // This keeps playlist[0] as the image just shown and playlist[1] as next.
+          if (APP_STATE.lastSleepImage != 0 && playlist.size() > 1) {
+            const auto first = playlist.front();
+            playlist.erase(playlist.begin());
+            playlist.push_back(first);
+            changed = true;
+          }
+          selectedImage = playlist.front();
+          if (APP_STATE.lastSleepImage != 1) {
+            APP_STATE.lastSleepImage = 1;
+            changed = true;
+          }
+          if (changed) {
+            APP_STATE.saveToFile();
+          }
         }
       }
     }
-    if (!selectedImage.empty()) {
-      const auto filename = "/sleep/" + selectedImage;
-      FsFile file;
-      if (Storage.openFileForRead("SLP", filename, file)) {
-        LOG_DBG("SLP", "Loading: %s", filename.c_str());
-        delay(100);
-        Bitmap bitmap(file, true);
-        if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-          const std::string displayName = FavoriteBmp::displayNameForPath(filename);
-          rememberLastRenderedSleepBitmap(filename, selectedImage);
-          renderBitmapSleepScreen(bitmap, displayName.c_str());
-          file.close();
-          return;
-        }
+  }
+#endif
+  if (!selectedImage.empty()) {
+    const auto filename = "/sleep/" + selectedImage;
+    FsFile file;
+    if (Storage.openFileForRead("SLP", filename, file)) {
+      LOG_DBG("SLP", "Loading: %s", filename.c_str());
+      delay(100);
+      Bitmap bitmap(file, true);
+      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+        const std::string displayName = FavoriteBmp::displayNameForPath(filename);
+        rememberLastRenderedSleepBitmap(filename, selectedImage);
+        renderBitmapSleepScreen(bitmap, displayName.c_str());
         file.close();
+        return;
       }
+      file.close();
     }
   }
 
@@ -365,6 +373,9 @@ void SleepActivity::renderCustomSleepScreen() const {
 }
 
 bool SleepActivity::randomizeSleepImagePlaylist() {
+#if SLEEP_V2
+  return crosspoint::sleep::WallpaperPlaylist::instance().reshuffle();
+#else
   const auto files = getValidSleepBitmaps();
   if (files.empty()) {
     if (!APP_STATE.sleepImagePlaylist.empty()) {
@@ -387,13 +398,25 @@ bool SleepActivity::randomizeSleepImagePlaylist() {
 
   syncSleepPlaylistWithFiles(files, true);
   return true;
+#endif
 }
 
 static size_t s_cachedSleepFavoriteCount = 0;
 
-size_t SleepActivity::cachedSleepFavoriteCount() { return s_cachedSleepFavoriteCount; }
+size_t SleepActivity::cachedSleepFavoriteCount() {
+#if SLEEP_V2
+  return crosspoint::sleep::WallpaperPlaylist::instance().cachedFavoriteCount();
+#else
+  return s_cachedSleepFavoriteCount;
+#endif
+}
 
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
+#if SLEEP_V2
+  (void)popupRenderer;  // No caller passes a non-null renderer today.
+  crosspoint::sleep::WallpaperPlaylist::instance().trimToLimit();
+  return;
+#else
   const size_t kLimit = CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
   const size_t kScanCap = kLimit + 500;  // Hard cap on scanning to avoid OOM
 
@@ -526,6 +549,7 @@ void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
     }
   }
   APP_STATE.saveToFile();
+#endif
 }
 
 void SleepActivity::renderDefaultSleepScreen() const {
