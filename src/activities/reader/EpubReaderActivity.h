@@ -16,22 +16,23 @@
 #include <string>
 
 #include "BookmarkStore.h"
+#include "EpubProgressSink.h"
 #include "EpubReaderMenuActivity.h"
+#include "HighlightController.h"
+#include "ReaderProgressTracker.h"
 #include "ReaderStatusBar.h"
+#include "SectionPageCache.h"
 #include "activities/ActivityWithSubactivity.h"
 
 class EpubReaderActivity final : public ActivityWithSubactivity {
   // --- Highlight/Quote selection mode ---
-  enum class HighlightState { NONE, SELECT_START, SELECT_END, SHOW_UNDERLINE };
+  // State machine + cursor/word-cache lives in HighlightController. This class
+  // retains only the rendering + quote-extraction bits that touch GfxRenderer
+  // / Page / Section (not host-testable).
+  using HighlightState = crosspoint::reader::HighlightController::State;
 
-  // Lightweight word position info for cursor/underline rendering (no text storage)
-  struct WordPos {
-    int16_t x;      // screen x position
-    int16_t y;      // screen y position
-    int16_t width;  // pixel width of the word
-  };
-
-  // Full word info including text (only used for quote extraction, not cached)
+  // Full word info including text (only used for quote extraction, not cached
+  // — HighlightController holds the 6-byte WordPos cache for cursor rendering).
   struct WordInfo {
     int x;
     int y;
@@ -41,20 +42,10 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
     int16_t letterSpacing;
   };
 
-  HighlightState highlightState = HighlightState::NONE;
-  int highlightCursorIndex = 0;                 // current cursor position (flat word index on current page)
-  int highlightStartSpine = -1;                 // spine index where selection started
-  int highlightStartPage = -1;                  // page number where selection started
-  int highlightStartWordIndex = -1;             // flat word index of start on start page
-  int highlightEndPage = -1;                    // page number of end cursor (may differ from start)
-  int highlightEndWordIndex = -1;               // flat word index of end on end page
-  unsigned long highlightUnderlineStartMs = 0;  // millis() timestamp when underline display began
-  std::vector<WordPos> highlightWordCache;      // cached word positions (6 bytes/word vs ~40 for WordInfo)
-  int highlightWordCachePage = -1;              // page index the cache was built for
+  crosspoint::reader::HighlightController highlights_;
 
   std::vector<WordInfo> buildWordList(const Page& page, int xOffset, int yOffset, int fontId) const;
   void rebuildHighlightWordCache(int xOffset, int yOffset);  // rebuild cache with correct render offsets
-  int highlightWordCount() const;                            // word count from cache (0 if empty)
   void enterHighlightMode();
   void exitHighlightMode();
   void highlightMoveCursor(int direction);
@@ -68,10 +59,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   std::string getChapterTitle() const;
   using StatusBarLayout = ReaderStatusBar::StatusBarLayout;
 
-  struct PageCacheEntry {
-    int pageIndex = -1;
-    std::shared_ptr<Page> page;
-  };
+  crosspoint::reader::SectionPageCache<Page> cache_;
 
   std::shared_ptr<Epub> epub;
   std::unique_ptr<Section> section = nullptr;
@@ -93,14 +81,8 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool pendingThemeReload = false;  // Defer settings reload after ReadingThemesActivity exits
   unsigned long lastConfirmReleaseMs = 0;
   bool confirmLongPressHandled = false;
-  bool progressDirty = false;
-  unsigned long lastProgressChangeMs = 0;
-  int lastObservedSpineIndex = -1;
-  int lastObservedPage = -1;
-  int lastObservedPageCount = -1;
-  int lastSavedSpineIndex = -1;
-  int lastSavedPage = -1;
-  int lastSavedPageCount = -1;
+  crosspoint::reader::EpubProgressSink progressSink_{"", 0};
+  crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int pageLoadFailCount = 0;         // Tracks consecutive page load failures to prevent infinite retry loops
   bool pendingSectionReset = false;  // Defer section.reset() from render task to loop (avoids race)
   int cachedReserveSpineIndex = -1;
@@ -112,8 +94,6 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool cachedTitleNoTitleTruncation = false;
   int cachedTitleMaxLines = -1;
   std::vector<std::string> cachedTitleLines;
-  int pageCacheSpineIndex = -1;
-  std::array<PageCacheEntry, 3> pageCache;
   const std::function<void()> onGoBack;
   const std::function<void()> onGoHome;
   const std::function<void(const std::string&)> onOpenBook;

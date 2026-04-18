@@ -19,3 +19,4 @@ backups/
 .claude/worktrees/
 .claude/.DS_Store
 .claude/scheduled_tasks.lock
+CLAUDE.md
