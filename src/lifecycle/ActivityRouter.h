@@ -63,6 +63,11 @@ class ActivityRouter {
   void setDeps(Deps deps);
   static void setDepsForTest(Deps deps);
 
+#ifdef UNIT_TEST_HOST
+  // Clears deps, factories, and pending nav on the singleton. Host tests only.
+  static void resetForTest();
+#endif
+
  private:
   ActivityRouter() = default;
   void dispatch(const Nav& nav);

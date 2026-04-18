@@ -1,6 +1,10 @@
 #include "ActivityRouter.h"
 
+#ifdef UNIT_TEST_HOST
+#include "ActivityStubForHostTest.h"
+#else
 #include "../activities/Activity.h"
+#endif
 
 namespace lifecycle {
 
@@ -101,5 +105,15 @@ std::function<void()> ActivityRouter::makeGoToBrowser() const {
 void ActivityRouter::setDeps(Deps deps) { deps_ = std::move(deps); }
 
 void ActivityRouter::setDepsForTest(Deps deps) { instance().deps_ = std::move(deps); }
+
+#ifdef UNIT_TEST_HOST
+void ActivityRouter::resetForTest() {
+  auto& r = instance();
+  r.deps_ = Deps{};
+  for (size_t i = 0; i < kRouteCount; ++i) r.factories_[i] = Factory{};
+  r.pending_.reset();
+  r.busy_ = false;
+}
+#endif
 
 }  // namespace lifecycle
