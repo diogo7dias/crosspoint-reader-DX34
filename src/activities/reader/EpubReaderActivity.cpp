@@ -2158,8 +2158,8 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
     // Draw dashed border around text area to indicate highlight mode —
     // same dashed styling (2px, dash=8, gap=4) as the word cursor.
-    constexpr int frameOffset = 6;    // padding from text area to the frame
-    constexpr int frameThickness = 3; // match cursor border thickness
+    constexpr int frameOffset = 6;     // padding from text area to the frame
+    constexpr int frameThickness = 3;  // match cursor border thickness
     const int bx = orientedMarginLeft - frameOffset;
     const int by = contentY - frameOffset;
     const int bw = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight + 2 * frameOffset;

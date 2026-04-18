@@ -13,13 +13,9 @@ ActivityRouter& ActivityRouter::instance() {
   return s_instance;
 }
 
-void ActivityRouter::begin(const Nav& initial) {
-  dispatch(initial);
-}
+void ActivityRouter::begin(const Nav& initial) { dispatch(initial); }
 
-void ActivityRouter::request(const Nav& nav) {
-  pending_ = nav;
-}
+void ActivityRouter::request(const Nav& nav) { pending_ = nav; }
 
 void ActivityRouter::applyIfPending() {
   if (!pending_ || busy_) return;

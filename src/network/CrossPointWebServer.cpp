@@ -365,13 +365,12 @@ void CrossPointWebServer::begin() {
               if (val >= 0 && val < maxEnumValue) {
                 if (s.valuePtr) {
                   if (s.valuePtr == &CrossPointSettings::fontSize) {
-                    SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(
-                        SETTINGS.fontFamily, static_cast<uint8_t>(val));
+                    SETTINGS.fontSize =
+                        CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, static_cast<uint8_t>(val));
                   } else if (s.valuePtr == &CrossPointSettings::fontFamily) {
-                    SETTINGS.fontFamily =
-                        CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(val));
-                    SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(
-                        SETTINGS.fontFamily, SETTINGS.fontSize);
+                    SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(val));
+                    SETTINGS.fontSize =
+                        CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
                     SETTINGS.lineSpacingPercent = 90;
                   } else {
                     SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);

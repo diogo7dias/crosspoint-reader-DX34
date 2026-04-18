@@ -607,9 +607,7 @@ void setup() {
       LOG_DBG("MAIN", "Entering deep sleep");
       powerManager.startDeepSleep(gpio);
     };
-    deps.enterSleepActivity = []() {
-      enterNewActivity(new SleepActivity(renderer, mappedInputManager));
-    };
+    deps.enterSleepActivity = []() { enterNewActivity(new SleepActivity(renderer, mappedInputManager)); };
     router.setDeps(std::move(deps));
 
     router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
@@ -617,27 +615,17 @@ void setup() {
       exitActivity();
       enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
     });
-    router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) {
-      openReaderInline(payload);
-    });
-    router.setRouteFactory(lifecycle::RouteId::MyLibrary, [](const std::string& /*payload*/) {
-      openMyLibraryInline("");
-    });
-    router.setRouteFactory(lifecycle::RouteId::MyLibraryAt, [](const std::string& payload) {
-      openMyLibraryInline(payload);
-    });
-    router.setRouteFactory(lifecycle::RouteId::RecentBooks, [](const std::string& /*payload*/) {
-      openRecentBooksInline();
-    });
-    router.setRouteFactory(lifecycle::RouteId::FileTransfer, [](const std::string& /*payload*/) {
-      openFileTransferInline();
-    });
-    router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) {
-      openBrowserInline();
-    });
-    router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) {
-      openHomeInline();
-    });
+    router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) { openReaderInline(payload); });
+    router.setRouteFactory(lifecycle::RouteId::MyLibrary,
+                           [](const std::string& /*payload*/) { openMyLibraryInline(""); });
+    router.setRouteFactory(lifecycle::RouteId::MyLibraryAt,
+                           [](const std::string& payload) { openMyLibraryInline(payload); });
+    router.setRouteFactory(lifecycle::RouteId::RecentBooks,
+                           [](const std::string& /*payload*/) { openRecentBooksInline(); });
+    router.setRouteFactory(lifecycle::RouteId::FileTransfer,
+                           [](const std::string& /*payload*/) { openFileTransferInline(); });
+    router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) { openBrowserInline(); });
+    router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) { openHomeInline(); });
   }
 #endif
 

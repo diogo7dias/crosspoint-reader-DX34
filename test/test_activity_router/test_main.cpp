@@ -17,8 +17,8 @@
 
 using lifecycle::ActivityRouter;
 using lifecycle::Nav;
-using lifecycle::RouteId;
 using lifecycle::policyFor;
+using lifecycle::RouteId;
 
 namespace {
 
@@ -41,29 +41,33 @@ void thunkAfter() { g_afterSleep++; }
 
 const char* routeName(RouteId r) {
   switch (r) {
-    case RouteId::Home: return "Home";
-    case RouteId::Reader: return "Reader";
-    case RouteId::MyLibrary: return "MyLibrary";
-    case RouteId::MyLibraryAt: return "MyLibraryAt";
-    case RouteId::RecentBooks: return "RecentBooks";
-    case RouteId::Settings: return "Settings";
-    case RouteId::FileTransfer: return "FileTransfer";
-    case RouteId::Browser: return "Browser";
+    case RouteId::Home:
+      return "Home";
+    case RouteId::Reader:
+      return "Reader";
+    case RouteId::MyLibrary:
+      return "MyLibrary";
+    case RouteId::MyLibraryAt:
+      return "MyLibraryAt";
+    case RouteId::RecentBooks:
+      return "RecentBooks";
+    case RouteId::Settings:
+      return "Settings";
+    case RouteId::FileTransfer:
+      return "FileTransfer";
+    case RouteId::Browser:
+      return "Browser";
   }
   return "?";
 }
 
 void registerRecordingFactories() {
   auto& r = ActivityRouter::instance();
-  const RouteId all[] = {RouteId::Home, RouteId::Reader, RouteId::MyLibrary,
-                         RouteId::MyLibraryAt, RouteId::RecentBooks,
-                         RouteId::Settings, RouteId::FileTransfer,
-                         RouteId::Browser};
+  const RouteId all[] = {RouteId::Home,        RouteId::Reader,   RouteId::MyLibrary,    RouteId::MyLibraryAt,
+                         RouteId::RecentBooks, RouteId::Settings, RouteId::FileTransfer, RouteId::Browser};
   for (RouteId id : all) {
     const char* name = routeName(id);
-    r.setRouteFactory(id, [name](const std::string& p) {
-      g_factoryCalls.push_back(std::string(name) + ":" + p);
-    });
+    r.setRouteFactory(id, [name](const std::string& p) { g_factoryCalls.push_back(std::string(name) + ":" + p); });
   }
 }
 
@@ -127,8 +131,7 @@ void test_no_persist_routes_skip_persist() {
   d.trimSleepFolderIfDirty = &thunkTrim;
   ActivityRouter::setDepsForTest(d);
 
-  const RouteId skipRoutes[] = {RouteId::Reader, RouteId::Settings,
-                                RouteId::FileTransfer, RouteId::Browser};
+  const RouteId skipRoutes[] = {RouteId::Reader, RouteId::Settings, RouteId::FileTransfer, RouteId::Browser};
   for (RouteId r : skipRoutes) {
     ActivityRouter::instance().request({r, "x"});
     ActivityRouter::instance().applyIfPending();
@@ -204,9 +207,7 @@ void test_unmigrated_route_is_noop() {
 // Ordering is captured by recording every hook into a single vector of tags.
 std::vector<std::string> g_sleepOrder;
 
-void orderBefore(bool fromReader) {
-  g_sleepOrder.push_back(fromReader ? "before:true" : "before:false");
-}
+void orderBefore(bool fromReader) { g_sleepOrder.push_back(fromReader ? "before:true" : "before:false"); }
 bool orderPersist(const char* ctx) {
   g_sleepOrder.push_back(std::string("persist:") + (ctx ? ctx : ""));
   return true;

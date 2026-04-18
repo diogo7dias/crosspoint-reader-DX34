@@ -42,8 +42,7 @@ void WsUploadSession::reset() {
   lastDataMs_ = 0;
 }
 
-bool WsUploadSession::parseStart(const std::string& msg, std::string& name,
-                                 size_t& size, std::string& path) {
+bool WsUploadSession::parseStart(const std::string& msg, std::string& name, size_t& size, std::string& path) {
   // Format: "START:<name>:<size>:<path>"
   constexpr const char* kPrefix = "START:";
   constexpr size_t kPrefixLen = 6;
@@ -72,8 +71,7 @@ bool WsUploadSession::parseStart(const std::string& msg, std::string& name,
   return true;
 }
 
-WsUploadSession::Result WsUploadSession::onStart(uint8_t client,
-                                                 const std::string& startMsg) {
+WsUploadSession::Result WsUploadSession::onStart(uint8_t client, const std::string& startMsg) {
   if (state_ == State::Active) {
     if (deps_.sendText) deps_.sendText(client, "ERROR:Upload already in progress");
     return Result::Rejected;
@@ -112,8 +110,7 @@ WsUploadSession::Result WsUploadSession::onStart(uint8_t client,
   return Result::Ok;
 }
 
-WsUploadSession::Result WsUploadSession::onBinary(uint8_t client,
-                                                  const uint8_t* data, size_t len) {
+WsUploadSession::Result WsUploadSession::onBinary(uint8_t client, const uint8_t* data, size_t len) {
   if (state_ != State::Active || client != client_) {
     if (deps_.sendText) deps_.sendText(client, "ERROR:No upload in progress");
     return Result::Rejected;
