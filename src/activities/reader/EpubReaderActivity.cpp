@@ -151,6 +151,7 @@ void EpubReaderActivity::onEnter() {
 
   epub->setupCacheDir();
 
+  int32_t loadedPageCount = -1;
   FsFile f;
   if (Storage.openFileForRead("ERS", epub->getCachePath() + "/progress.bin", f)) {
     uint8_t data[6];
@@ -158,17 +159,12 @@ void EpubReaderActivity::onEnter() {
     if (dataSize == 4 || dataSize == 6) {
       currentSpineIndex = data[0] + (data[1] << 8);
       nextPageNumber = data[2] + (data[3] << 8);
-      lastSavedSpineIndex = currentSpineIndex;
-      lastSavedPage = nextPageNumber;
-      lastObservedSpineIndex = currentSpineIndex;
-      lastObservedPage = nextPageNumber;
       cachedSpineIndex = currentSpineIndex;
       LOG_DBG("ERS", "Loaded cache: %d, %d", currentSpineIndex, nextPageNumber);
     }
     if (dataSize == 6) {
       cachedChapterTotalPageCount = data[4] + (data[5] << 8);
-      lastSavedPageCount = cachedChapterTotalPageCount;
-      lastObservedPageCount = cachedChapterTotalPageCount;
+      loadedPageCount = cachedChapterTotalPageCount;
     }
     f.close();
   }
@@ -177,6 +173,11 @@ void EpubReaderActivity::onEnter() {
     currentSpineIndex = spineCount - 1;
     nextPageNumber = UINT16_MAX;
   }
+
+  progressSink_.setCachePath(epub->getCachePath());
+  progressSink_.setSpineCount(spineCount);
+  progress_.setDebounceMs(progressSaveDebounceMs);
+  progress_.seed({static_cast<int32_t>(currentSpineIndex), static_cast<int32_t>(nextPageNumber), loadedPageCount});
 
   // We may want a better condition to detect if we are opening for the first
   // time. This will trigger if the book is re-opened at Chapter 0.
@@ -216,7 +217,7 @@ void EpubReaderActivity::onEnter() {
 void EpubReaderActivity::onExit() {
   flushProgressIfNeeded(true);
   pendingMenuOpen = false;
-  highlightState = HighlightState::NONE;
+  highlights_.exit();
   EpdFontFamily::setReaderBoldSwapEnabled(false);
   ActivityWithSubactivity::onExit();
 
@@ -243,26 +244,10 @@ void EpubReaderActivity::invalidateStatusBarCaches() {
   cachedTitleLines.clear();
 }
 
-void EpubReaderActivity::clearPageCache() {
-  for (auto& entry : pageCache) {
-    entry.pageIndex = -1;
-    entry.page.reset();
-  }
-  pageCacheSpineIndex = -1;
-}
+void EpubReaderActivity::clearPageCache() { cache_.detach(); }
 
 std::shared_ptr<Page> EpubReaderActivity::getCachedPage(const int pageIndex) const {
-  if (pageCacheSpineIndex != currentSpineIndex) {
-    return {};
-  }
-
-  const auto it = std::find_if(pageCache.begin(), pageCache.end(),
-                               [pageIndex](const PageCacheEntry& entry) { return entry.pageIndex == pageIndex; });
-  if (it != pageCache.end()) {
-    return it->page;
-  }
-
-  return {};
+  return cache_.get(pageIndex, currentSpineIndex);
 }
 
 std::shared_ptr<Page> EpubReaderActivity::loadAndCachePage(const int pageIndex) {
@@ -275,50 +260,26 @@ std::shared_ptr<Page> EpubReaderActivity::loadAndCachePage(const int pageIndex) 
     return {};
   }
 
-  pageCacheSpineIndex = currentSpineIndex;
-  const auto it = std::find_if(pageCache.begin(), pageCache.end(),
-                               [pageIndex](const PageCacheEntry& entry) { return entry.pageIndex == pageIndex; });
-  if (it != pageCache.end()) {
-    it->page = page;
-    return page;
+  if (cache_.spineIndex() != currentSpineIndex) {
+    cache_.attach(currentSpineIndex);
   }
-
-  pageCache[0] = pageCache[1];
-  pageCache[1] = pageCache[2];
-  pageCache[2] = PageCacheEntry{.pageIndex = pageIndex, .page = std::move(page)};
-  return pageCache[2].page;
+  cache_.insert(pageIndex, page);
+  return page;
 }
 
 void EpubReaderActivity::refreshPageCacheWindow(const int centerPage, const std::shared_ptr<Page>& currentPage) {
   if (!section || centerPage < 0 || centerPage >= section->pageCount) {
-    clearPageCache();
+    cache_.clear();
     return;
   }
 
-  std::array<PageCacheEntry, 3> nextWindow{};
-  const int targets[3] = {centerPage - 1, centerPage, centerPage + 1};
-
-  for (size_t i = 0; i < nextWindow.size(); i++) {
-    const int targetPage = targets[i];
-    if (targetPage < 0 || targetPage >= section->pageCount) {
-      continue;
-    }
-
-    std::shared_ptr<Page> page;
-    if (targetPage == centerPage) {
-      page = currentPage;
-    } else {
-      page = getCachedPage(targetPage);
-      if (!page) {
-        page = std::shared_ptr<Page>(section->loadPageFromSectionFile(targetPage));
-      }
-    }
-
-    nextWindow[i] = PageCacheEntry{.pageIndex = targetPage, .page = std::move(page)};
+  if (cache_.spineIndex() != currentSpineIndex) {
+    cache_.attach(currentSpineIndex);
   }
 
-  pageCache = std::move(nextWindow);
-  pageCacheSpineIndex = currentSpineIndex;
+  cache_.refreshWindow(centerPage, currentPage, section->pageCount, [this](int pageIndex) {
+    return std::shared_ptr<Page>(section->loadPageFromSectionFile(pageIndex));
+  });
 }
 
 int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidth) {
@@ -485,7 +446,7 @@ void EpubReaderActivity::loop() {
   }
 
   // Highlight mode intercepts all input while active
-  if (highlightState != HighlightState::NONE) {
+  if (highlights_.state() != HighlightState::NONE) {
     loopHighlightMode();
     return;
   }
@@ -576,9 +537,10 @@ void EpubReaderActivity::loopSubActivity() {
 }
 
 void EpubReaderActivity::loopHighlightMode() {
-  // SHOW_UNDERLINE: wait 3 seconds then save quote and exit
-  if (highlightState == HighlightState::SHOW_UNDERLINE) {
-    if (millis() - highlightUnderlineStartMs >= 3000) {
+  // SHOW_UNDERLINE: wait 3 seconds (HighlightController::kUnderlineTimeoutMs)
+  // then save quote and exit.
+  if (highlights_.state() == HighlightState::SHOW_UNDERLINE) {
+    if (highlights_.underlineTimedOut(millis())) {
       std::string quote = extractQuoteText();
       if (!quote.empty()) {
         saveQuoteToFile(quote);
@@ -619,10 +581,6 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
       nextPageNumber = 0;
       currentSpineIndex = nextTriggered ? currentSpineIndex + 1 : currentSpineIndex - 1;
       saveProgress(currentSpineIndex, nextPageNumber, 1);
-      lastSavedSpineIndex = currentSpineIndex;
-      lastSavedPage = nextPageNumber;
-      lastSavedPageCount = 1;
-      progressDirty = false;
       clearPageCache();
       section.reset();
     }
@@ -641,8 +599,6 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
   if (prevTriggered) {
     if (section->currentPage > 0) {
       section->currentPage--;
-      progressDirty = true;
-      lastProgressChangeMs = millis();
       flushProgressIfNeeded(true);
     } else if (currentSpineIndex > 0) {
       TransitionFeedback::show(renderer, tr(STR_LOADING));
@@ -651,10 +607,6 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
         nextPageNumber = UINT16_MAX;
         currentSpineIndex--;
         saveProgress(currentSpineIndex, nextPageNumber, 1);
-        lastSavedSpineIndex = currentSpineIndex;
-        lastSavedPage = nextPageNumber;
-        lastSavedPageCount = 1;
-        progressDirty = false;
         clearPageCache();
         section.reset();
       }
@@ -664,8 +616,6 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
     if (section->currentPage < section->pageCount - 1) {
       section->currentPage++;
       addSessionPagesRead();
-      progressDirty = true;
-      lastProgressChangeMs = millis();
       flushProgressIfNeeded(true);
     } else {
       TransitionFeedback::show(renderer, tr(STR_LOADING));
@@ -678,10 +628,6 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
           addSessionPagesRead();
         }
         saveProgress(currentSpineIndex, nextPageNumber, 1);
-        lastSavedSpineIndex = currentSpineIndex;
-        lastSavedPage = nextPageNumber;
-        lastSavedPageCount = 1;
-        progressDirty = false;
         clearPageCache();
         section.reset();
       }
@@ -744,13 +690,6 @@ void EpubReaderActivity::toggleTextRenderMode() {
     clearPageCache();
     section.reset();
     saveProgress(backupSpine, backupPage, backupPageCount);
-    lastSavedSpineIndex = backupSpine;
-    lastSavedPage = backupPage;
-    lastSavedPageCount = backupPageCount;
-    lastObservedSpineIndex = backupSpine;
-    lastObservedPage = backupPage;
-    lastObservedPageCount = backupPageCount;
-    progressDirty = false;
     nextPageNumber = backupPage;
     cachedSpineIndex = backupSpine;
     cachedChapterTotalPageCount = backupPageCount;
@@ -1100,13 +1039,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                 nextPageNumber = resetPage;
                 cachedSpineIndex = resetSpine;
                 cachedChapterTotalPageCount = resetPageCount;
-                lastSavedSpineIndex = resetSpine;
-                lastSavedPage = resetPage;
-                lastSavedPageCount = resetPageCount;
-                lastObservedSpineIndex = resetSpine;
-                lastObservedPage = resetPage;
-                lastObservedPageCount = resetPageCount;
-                progressDirty = false;
               }
             }
             pendingGoHome = true;
@@ -1270,13 +1202,6 @@ void EpubReaderActivity::reloadCurrentSectionForDisplaySettings() {
       cachedChapterTotalPageCount = section->pageCount;
       nextPageNumber = section->currentPage;
       saveProgress(currentSpineIndex, section->currentPage, section->pageCount);
-      lastSavedSpineIndex = currentSpineIndex;
-      lastSavedPage = section->currentPage;
-      lastSavedPageCount = section->pageCount;
-      lastObservedSpineIndex = currentSpineIndex;
-      lastObservedPage = section->currentPage;
-      lastObservedPageCount = section->pageCount;
-      progressDirty = false;
     }
     invalidateStatusBarCaches();
     clearPageCache();
@@ -1556,19 +1481,7 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
   }
   silentIndexNextChapterIfNeeded(viewportWidth, viewportHeight);
-  if (lastObservedSpineIndex != currentSpineIndex || lastObservedPage != section->currentPage ||
-      lastObservedPageCount != section->pageCount) {
-    lastObservedSpineIndex = currentSpineIndex;
-    lastObservedPage = section->currentPage;
-    lastObservedPageCount = section->pageCount;
-    if (lastSavedSpineIndex != currentSpineIndex || lastSavedPage != section->currentPage ||
-        lastSavedPageCount != section->pageCount) {
-      progressDirty = true;
-      lastProgressChangeMs = millis();
-    }
-  }
-
-  flushProgressIfNeeded(false);
+  flushProgressIfNeeded(false);  // observes current render position + debounce-flushes
 }
 
 void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportWidth, const uint16_t viewportHeight) {
@@ -1608,70 +1521,23 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
 }
 
 void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount) {
-  if (!epub) {
-    return;
-  }
-  const int spineCount = epub->getSpineItemsCount();
-  if (spineCount <= 0) {
-    return;
-  }
-  if (spineIndex < 0) {
-    spineIndex = 0;
-  } else if (spineIndex >= spineCount) {
-    spineIndex = spineCount - 1;
-    currentPage = UINT16_MAX;
-  }
-  if (pageCount <= 0) {
-    pageCount = 1;
-  }
-
-  const std::string progPath = epub->getCachePath() + "/progress.bin";
-  const std::string tmpPath = epub->getCachePath() + "/progress_tmp.bin";
-
-  if (Storage.exists(tmpPath.c_str())) {
-    Storage.remove(tmpPath.c_str());
-  }
-
-  FsFile f;
-  if (Storage.openFileForWrite("ERS", tmpPath.c_str(), f)) {
-    uint8_t data[6];
-    data[0] = spineIndex & 0xFF;
-    data[1] = (spineIndex >> 8) & 0xFF;
-    data[2] = currentPage & 0xFF;
-    data[3] = (currentPage >> 8) & 0xFF;
-    data[4] = pageCount & 0xFF;
-    data[5] = (pageCount >> 8) & 0xFF;
-    f.write(data, 6);
-    f.close();
-
-    if (Storage.exists(progPath.c_str())) {
-      Storage.remove(progPath.c_str());
-    }
-    Storage.rename(tmpPath.c_str(), progPath.c_str());
-
-    LOG_DBG("ERS", "Progress saved: Chapter %d, Page %d", spineIndex, currentPage);
-  } else {
-    LOG_ERR("ERS", "Could not save progress!");
-  }
+  // Force-write a specific position (chapter skip, orientation change, etc.)
+  // and align the tracker so the next debounced flush doesn't rewrite stale
+  // values. Sink owns the 6-byte atomic-write format + bounds clamping.
+  const crosspoint::reader::ReaderPosition pos{static_cast<int32_t>(spineIndex), static_cast<int32_t>(currentPage),
+                                               static_cast<int32_t>(pageCount)};
+  progressSink_.write(pos);
+  progress_.seed(pos);
 }
 void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
   if (!epub || !section || section->pageCount == 0) {
     return;
   }
-  if (!progressDirty) {
-    return;
-  }
-
   const auto now = millis();
-  if (!force && now - lastProgressChangeMs < progressSaveDebounceMs) {
-    return;
-  }
-
-  saveProgress(currentSpineIndex, section->currentPage, section->pageCount);
-  lastSavedSpineIndex = currentSpineIndex;
-  lastSavedPage = section->currentPage;
-  lastSavedPageCount = section->pageCount;
-  progressDirty = false;
+  progress_.observe({static_cast<int32_t>(currentSpineIndex), static_cast<int32_t>(section->currentPage),
+                     static_cast<int32_t>(section->pageCount)},
+                    now);
+  progress_.flush(now, force);
 }
 
 void EpubReaderActivity::addSessionPagesRead(const uint32_t amount) { APP_STATE.sessionPagesRead += amount; }
@@ -1704,7 +1570,7 @@ std::vector<EpubReaderActivity::WordInfo> EpubReaderActivity::buildWordList(cons
 }
 
 void EpubReaderActivity::rebuildHighlightWordCache(const int xOffset, const int yOffset) {
-  highlightWordCache.clear();
+  std::vector<crosspoint::reader::WordPos> words;
   auto page = loadAndCachePage(section->currentPage);
   if (page) {
     const int fontId = SETTINGS.getReaderFontId();
@@ -1712,197 +1578,54 @@ void EpubReaderActivity::rebuildHighlightWordCache(const int xOffset, const int 
       if (el->getTag() != TAG_PageLine) continue;
       const auto& line = static_cast<const PageLine&>(*el);
       const auto& tb = line.getTextBlock();
-      const auto& words = tb.getWords();
+      const auto& wordsRef = tb.getWords();
       const auto& xpos = tb.getWordXpos();
       const auto& styles = tb.getWordStyles();
       const int16_t ls = tb.getLetterSpacing();
-      for (size_t i = 0; i < words.size(); i++) {
-        WordPos wp;
+      for (size_t i = 0; i < wordsRef.size(); i++) {
+        crosspoint::reader::WordPos wp;
         wp.x = static_cast<int16_t>(static_cast<int>(xpos[i]) + line.xPos + xOffset);
         wp.y = static_cast<int16_t>(line.yPos + yOffset);
-        wp.width = static_cast<int16_t>(renderer.getTextWidthSpaced(fontId, words[i].c_str(), ls, styles[i]));
-        highlightWordCache.push_back(wp);
+        wp.width = static_cast<int16_t>(renderer.getTextWidthSpaced(fontId, wordsRef[i].c_str(), ls, styles[i]));
+        words.push_back(wp);
       }
     }
   }
-  highlightWordCachePage = section->currentPage;
+  highlights_.setWordsForPage(section->currentPage, std::move(words));
 }
-
-int EpubReaderActivity::highlightWordCount() const { return static_cast<int>(highlightWordCache.size()); }
 
 void EpubReaderActivity::enterHighlightMode() {
   if (!section || section->pageCount == 0) return;
-  highlightState = HighlightState::SELECT_START;
-  highlightStartSpine = -1;
-  highlightStartPage = -1;
-  highlightStartWordIndex = -1;
-  highlightEndPage = -1;
-  highlightEndWordIndex = -1;
-  highlightUnderlineStartMs = 0;
-  highlightWordCachePage = -1;
-  highlightWordCache.clear();
-
-  // Always start cursor at first word
-  highlightCursorIndex = 0;
+  highlights_.enter();
   requestUpdate();
 }
 
 void EpubReaderActivity::exitHighlightMode() {
-  highlightState = HighlightState::NONE;
-  highlightCursorIndex = 0;
-  highlightStartSpine = -1;
-  highlightStartPage = -1;
-  highlightStartWordIndex = -1;
-  highlightEndPage = -1;
-  highlightEndWordIndex = -1;
-  highlightUnderlineStartMs = 0;
-  // Free cached word list memory
-  highlightWordCache.clear();
-  highlightWordCache.shrink_to_fit();
-  highlightWordCachePage = -1;
+  highlights_.exit();
   requestUpdate();
 }
 
 void EpubReaderActivity::highlightMoveCursor(const int direction) {
   if (!section) return;
-  const int wordCount = highlightWordCount();
-
-  if (highlightState == HighlightState::SELECT_START) {
-    if (wordCount == 0) return;
-
-    int newIndex = highlightCursorIndex + direction;
-    if (newIndex < 0) newIndex = 0;
-    if (newIndex >= wordCount) newIndex = wordCount - 1;
-    highlightCursorIndex = newIndex;
-    requestUpdate();
-  } else if (highlightState == HighlightState::SELECT_END) {
-    // Clamp end index to this page's word count (guards against stale index after page cross)
-    if (highlightEndWordIndex >= wordCount) {
-      highlightEndWordIndex = wordCount > 0 ? wordCount - 1 : 0;
-    }
-
-    int newIndex = highlightEndWordIndex + direction;
-
-    // Check if we need to go to next page
-    if (newIndex >= wordCount) {
-      if (section->currentPage < section->pageCount - 1) {
-        section->currentPage++;
-        highlightEndPage = section->currentPage;
-        highlightWordCachePage = -1;  // invalidate — will rebuild on next render
-        highlightEndWordIndex = 0;
-        requestUpdate();
-        return;
-      }
-      newIndex = wordCount > 0 ? wordCount - 1 : 0;
-    }
-
-    // Check if we need to go to previous page
-    if (newIndex < 0) {
-      if (section->currentPage > highlightStartPage) {
-        section->currentPage--;
-        highlightEndPage = section->currentPage;
-        highlightWordCachePage = -1;  // invalidate — will rebuild on next render
-        // We don't know the new page's word count yet (cache rebuilds on render),
-        // so set to max int and let render clamp it
-        highlightEndWordIndex = INT_MAX;
-        requestUpdate();
-        return;
-      }
-      if (section->currentPage == highlightStartPage) {
-        newIndex = highlightStartWordIndex;
-      } else {
-        newIndex = 0;
-      }
-    }
-
-    // Don't allow end to go before start on the same page
-    if (section->currentPage == highlightStartPage && newIndex < highlightStartWordIndex) {
-      newIndex = highlightStartWordIndex;
-    }
-
-    highlightEndWordIndex = newIndex;
-    requestUpdate();
-  }
+  const crosspoint::reader::PageContext ctx{section->currentPage, section->pageCount, highlights_.wordCount()};
+  const auto r = highlights_.moveCursor(direction, ctx);
+  if (r.pageDelta != 0) section->currentPage += r.pageDelta;
+  if (r.stateChanged) requestUpdate();
 }
 
 void EpubReaderActivity::highlightMoveCursorLine(const int direction) {
   if (!section) return;
-
-  // Use cached word list (built with correct offsets during last render)
-  const auto& wordList = highlightWordCache;
-  if (wordList.empty()) return;
-
-  const bool isEnd = (highlightState == HighlightState::SELECT_END);
-  const int curIdx = isEnd ? highlightEndWordIndex : highlightCursorIndex;
-  if (curIdx < 0 || curIdx >= static_cast<int>(wordList.size())) return;
-
-  const int curY = wordList[curIdx].y;
-  const int curX = wordList[curIdx].x;
-
-  // Find the target line's y value
-  int targetY = -1;
-  if (direction < 0) {
-    for (const auto& w : wordList) {
-      if (w.y < curY && (targetY < 0 || w.y > targetY)) targetY = w.y;
-    }
-  } else {
-    for (const auto& w : wordList) {
-      if (w.y > curY && (targetY < 0 || w.y < targetY)) targetY = w.y;
-    }
-  }
-
-  if (targetY < 0) {
-    highlightMoveCursor(direction);
-    return;
-  }
-
-  // Find the word on the target line closest in x position
-  int bestIdx = -1;
-  int bestDist = INT_MAX;
-  for (int i = 0; i < static_cast<int>(wordList.size()); i++) {
-    if (wordList[i].y == targetY) {
-      int dist = std::abs(wordList[i].x - curX);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestIdx = i;
-      }
-    }
-  }
-
-  if (bestIdx < 0) return;
-
-  if (isEnd && section->currentPage == highlightStartPage && bestIdx < highlightStartWordIndex) {
-    bestIdx = highlightStartWordIndex;
-  }
-
-  if (isEnd) {
-    highlightEndWordIndex = bestIdx;
-  } else {
-    highlightCursorIndex = bestIdx;
-  }
-  requestUpdate();
+  const crosspoint::reader::PageContext ctx{section->currentPage, section->pageCount, highlights_.wordCount()};
+  const auto r = highlights_.moveCursorLine(direction, ctx);
+  if (r.pageDelta != 0) section->currentPage += r.pageDelta;
+  if (r.stateChanged) requestUpdate();
 }
 
 void EpubReaderActivity::highlightConfirmSelection() {
-  if (highlightState == HighlightState::SELECT_START) {
-    highlightStartSpine = currentSpineIndex;
-    highlightStartPage = section->currentPage;
-    highlightStartWordIndex = highlightCursorIndex;
-    highlightEndPage = section->currentPage;
-
-    // End cursor jumps to last word on page (cache was built during last render)
-    highlightEndWordIndex = highlightWordCount() - 1;
-    if (highlightEndWordIndex < 0) highlightEndWordIndex = 0;
-
-    highlightState = HighlightState::SELECT_END;
-    requestUpdate();
-  } else if (highlightState == HighlightState::SELECT_END) {
-    section->currentPage = highlightStartPage;
-    highlightWordCachePage = -1;  // invalidate cache for start page
-    highlightState = HighlightState::SHOW_UNDERLINE;
-    highlightUnderlineStartMs = millis();
-    requestUpdate();
-  }
+  if (!section) return;
+  const auto r = highlights_.confirm(currentSpineIndex, section->currentPage, millis());
+  if (r.pageDelta != 0) section->currentPage += r.pageDelta;
+  if (r.stateChanged) requestUpdate();
 }
 
 void EpubReaderActivity::handleHighlightInput() {
@@ -1951,10 +1674,10 @@ void EpubReaderActivity::handleHighlightInput() {
 void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, const int xOffset, const int yOffset) {
   if (!section) return;
   // Rebuild cache if page changed (uses correct render offsets from renderContents)
-  if (highlightWordCachePage != section->currentPage) {
+  if (!highlights_.wordCacheValidFor(section->currentPage)) {
     rebuildHighlightWordCache(xOffset, yOffset);
   }
-  const auto& wordList = highlightWordCache;
+  const auto& wordList = highlights_.words();
   if (wordList.empty()) return;
 
   const int wordCount = static_cast<int>(wordList.size());
@@ -1962,15 +1685,12 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
   constexpr int thickness = 2;        // SHOW_UNDERLINE dashed underline thickness
   constexpr int cursorThickness = 3;  // cursor dashed border thickness (thicker for visibility)
 
-  // Clamp cursor indices to current word list size (guards against stale index after rebuild)
-  if (highlightCursorIndex >= wordCount) {
-    highlightCursorIndex = wordCount - 1;
-  }
+  const int cursorIdx = highlights_.cursorIndex() >= wordCount ? wordCount - 1 : highlights_.cursorIndex();
 
   // Helper: draw cursor as a dashed border (2px) around the word — same dashed
   // pattern as the final-selection underline. Keeps word black-on-white; the
   // continuous underline only appears during the SHOW_UNDERLINE confirmation.
-  const auto drawCursor = [&](const WordPos& cw, const int /*cursorWordIdx*/) {
+  const auto drawCursor = [&](const crosspoint::reader::WordPos& cw, const int /*cursorWordIdx*/) {
     constexpr int pad = 2;  // breathing room between word glyphs and border
     const int bx = (cw.x > pad) ? cw.x - pad : 0;
     const int by = (cw.y > pad) ? cw.y - pad : 0;
@@ -1979,29 +1699,34 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
     drawDashedRect(renderer, bx, by, bw, bh, cursorThickness);
   };
 
-  if (highlightState == HighlightState::SELECT_START) {
-    if (highlightCursorIndex >= 0 && highlightCursorIndex < wordCount) {
-      drawCursor(wordList[highlightCursorIndex], highlightCursorIndex);
+  const auto state = highlights_.state();
+  if (state == HighlightState::SELECT_START) {
+    if (cursorIdx >= 0 && cursorIdx < wordCount) {
+      drawCursor(wordList[cursorIdx], cursorIdx);
     }
-  } else if (highlightState == HighlightState::SELECT_END) {
-    const int endIdx = highlightEndWordIndex;
-    if (section->currentPage == highlightEndPage && endIdx >= 0 && endIdx < wordCount) {
+  } else if (state == HighlightState::SELECT_END) {
+    const int endIdx = highlights_.endWordIndex();
+    if (section->currentPage == highlights_.endPage() && endIdx >= 0 && endIdx < wordCount) {
       drawCursor(wordList[endIdx], endIdx);
     }
-  } else if (highlightState == HighlightState::SHOW_UNDERLINE) {
+  } else if (state == HighlightState::SHOW_UNDERLINE) {
+    const int startPage = highlights_.startPage();
+    const int endPage = highlights_.endPage();
+    const int startWord = highlights_.startWordIndex();
+    const int endWord = highlights_.endWordIndex();
     int selStart = -1;
     int selEnd = -1;
 
-    if (section->currentPage == highlightStartPage && section->currentPage == highlightEndPage) {
-      selStart = highlightStartWordIndex;
-      selEnd = highlightEndWordIndex;
-    } else if (section->currentPage == highlightStartPage) {
-      selStart = highlightStartWordIndex;
+    if (section->currentPage == startPage && section->currentPage == endPage) {
+      selStart = startWord;
+      selEnd = endWord;
+    } else if (section->currentPage == startPage) {
+      selStart = startWord;
       selEnd = wordCount - 1;
-    } else if (section->currentPage == highlightEndPage) {
+    } else if (section->currentPage == endPage) {
       selStart = 0;
-      selEnd = highlightEndWordIndex;
-    } else if (section->currentPage > highlightStartPage && section->currentPage < highlightEndPage) {
+      selEnd = endWord;
+    } else if (section->currentPage > startPage && section->currentPage < endPage) {
       selStart = 0;
       selEnd = wordCount - 1;
     }
@@ -2032,8 +1757,12 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
 }
 
 std::string EpubReaderActivity::extractQuoteText() {
-  if (highlightStartPage < 0 || highlightEndPage < 0 || !section) return "";
-  if (highlightStartWordIndex < 0 || highlightEndWordIndex < 0) return "";
+  const int startPage = highlights_.startPage();
+  const int endPage = highlights_.endPage();
+  const int startWord = highlights_.startWordIndex();
+  const int endWord = highlights_.endWordIndex();
+  if (startPage < 0 || endPage < 0 || !section) return "";
+  if (startWord < 0 || endWord < 0) return "";
 
   constexpr size_t kMaxQuoteLength = 8192;
   std::string result;
@@ -2043,15 +1772,15 @@ std::string EpubReaderActivity::extractQuoteText() {
   const int contentY = orientedMarginTop;
   const int fontId = SETTINGS.getReaderFontId();
 
-  for (int pg = highlightStartPage; pg <= highlightEndPage; pg++) {
+  for (int pg = startPage; pg <= endPage; pg++) {
     auto page = loadAndCachePage(pg);
     if (!page) continue;
 
     auto wordList = buildWordList(*page, orientedMarginLeft, contentY, fontId);
     if (wordList.empty()) continue;
 
-    int startIdx = (pg == highlightStartPage) ? highlightStartWordIndex : 0;
-    int endIdx = (pg == highlightEndPage) ? highlightEndWordIndex : static_cast<int>(wordList.size()) - 1;
+    int startIdx = (pg == startPage) ? startWord : 0;
+    int endIdx = (pg == endPage) ? endWord : static_cast<int>(wordList.size()) - 1;
 
     // Clamp to word list bounds
     if (startIdx < 0) startIdx = 0;
@@ -2154,7 +1883,7 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
   }
   // Render highlight overlay and border if in highlight/quote selection mode
-  if (highlightState != HighlightState::NONE) {
+  if (highlights_.state() != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
     // Draw dashed border around text area to indicate highlight mode —
     // same dashed styling (2px, dash=8, gap=4) as the word cursor.

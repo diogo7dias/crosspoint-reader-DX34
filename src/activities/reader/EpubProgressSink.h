@@ -34,6 +34,7 @@ class EpubProgressSink : public IProgressSink {
   bool write(const ReaderPosition& p) override;
 
   void setSpineCount(int n) { spineCount_ = n; }
+  void setCachePath(std::string path) { cachePath_ = std::move(path); }
 
  private:
   std::string cachePath_;
