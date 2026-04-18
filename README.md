@@ -30,7 +30,7 @@ This is an independent fork. DX34 behavior and stability are always prioritized 
 | Area | DX34 Mod | Upstream CrossPoint |
 |------|----------|---------------------|
 | **UX language** | English-first | Multi-language |
-| **Font families** | ChareInk, Bookerly, Vollkorn, Atkinson Hyperlegible | Different font set |
+| **Font families** | ChareInk, Bookerly, Vollkorn, IM Fell DW Pica | Different font set |
 | **In-book workflow** | Reading Themes, live settings, highlights, footnotes | Basic reader controls |
 | **Sleep wallpapers** | Managed folder system with favorites, trimming, randomization | Basic sleep image |
 | **Reader settings** | Extensive (word spacing, indent modes, render modes, etc.) | Fewer options |
@@ -86,7 +86,7 @@ pio run -t upload
 
 - [Supported book formats](#supported-book-formats) — EPUB, TXT/MD, XTC/XTCH
 - [EPUB reading experience](#epub-reading-experience) — in-book menu, reading themes, highlights, footnotes
-- [Fonts and sizes](#fonts-and-sizes) — 4 font families; ChareInk/Bookerly/Vollkorn at 12/14/16/17 pt, Atkinson Hyperlegible at 13/16 pt
+- [Fonts and sizes](#fonts-and-sizes) — 4 font families; ChareInk/Bookerly/Vollkorn at 12/14/16/17 pt, IM Fell DW Pica at 15 pt
 - [Reader layout and appearance](#reader-layout-and-appearance) — full control over text rendering
 - [Sleep screen and wallpaper system](#sleep-screen-and-wallpaper-system) — managed wallpaper folder with favorites
 - [Home screen and library](#home-screen-and-library) — recents, file browser, search, QR sharing
@@ -235,7 +235,7 @@ The DX34 firmware ships with **four built-in reader font families**, each with f
 | **ChareInk** | Serif, optimized for e-ink | 12, 14, 16, 17 | DX34-specific, clean and readable |
 | **Bookerly** | Serif | 12, 14, 16, 17 | Amazon's reading font |
 | **Vollkorn** | Serif | 12, 14, 16, 17 | Open-source book font |
-| **Atkinson Hyperlegible** | Sans-serif, high-legibility | 13, 16 | Braille Institute font designed for low-vision readability |
+| **IM Fell DW Pica** | Antique serif, historical-look | 15 | Period-authentic 17th-century revival; Bold rendered via synthetic emboldening |
 
 | ChareInk | Bookerly | Vollkorn |
 |:---:|:---:|:---:|
@@ -252,17 +252,17 @@ ChareInk, Bookerly, and Vollkorn share a 4-size set:
 | 3 | 16 pt (default) |
 | 4 | 17 pt |
 
-Atkinson Hyperlegible ships at two sizes only: **13 pt** and **16 pt**.
+IM Fell DW Pica ships at one size only: **15 pt**.
 
 ### How size switching works
 
 - ChareInk, Bookerly, and Vollkorn use the same size set, so switching between them preserves the exact size.
-- Switching to or from Atkinson maps the size to its nearest Atkinson size (13 or 16).
-- Settings saved under older firmware are migrated automatically to the nearest current size (10/13→12, 15→14, 18/19→17 for non-Atkinson families).
+- Switching to IM Fell forces the size to 15 pt (its only supported size); switching away restores a size from the shared set.
+- Settings saved under older firmware are migrated automatically to the nearest current size (10/13→12, 18/19→17 for non-IMFell families).
 
 ### Additional font notes
 
-- All four font families support **regular**, **bold**, and **italic** rendering (ChareInk and Bookerly also support bold italic).
+- ChareInk, Bookerly, and Vollkorn support **regular**, **bold**, and **italic** rendering (ChareInk and Bookerly also support bold italic). IM Fell supports **regular** and **italic**; its **bold** is synthesized at render time.
 - Default line spacing is **90%** for all families.
 - UI text (menus, popups, status bar) uses separate built-in bitmap fonts, not the reader font.
 - The firmware includes **Unifont** internally as a Unicode fallback for broader glyph coverage, but it is not selectable as a reader font.
@@ -277,8 +277,8 @@ The firmware exposes extensive control over how text is rendered. All of these c
 
 | Setting | Options | Default |
 |---------|---------|---------|
-| **Font family** | ChareInk, Bookerly, Vollkorn, Atkinson Hyperlegible | ChareInk |
-| **Font size** | 12, 14, 16, 17 pt (ChareInk/Bookerly/Vollkorn); 13, 16 pt (Atkinson) | 16 pt |
+| **Font family** | ChareInk, Bookerly, Vollkorn, IM Fell DW Pica | ChareInk |
+| **Font size** | 12, 14, 16, 17 pt (ChareInk/Bookerly/Vollkorn); 15 pt (IM Fell) | 16 pt |
 | **Line spacing** | 65% to 150% | 90% |
 | **Paragraph alignment** | Justified, Left, Center, Right, Book Style | Justified |
 | **First-line indent** | Book (follow CSS), Off, Small, Medium, Large | Book |

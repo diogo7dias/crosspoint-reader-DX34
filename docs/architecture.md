@@ -168,7 +168,7 @@ Fonts are stored compressed in flash. On first use, glyphs are decompressed
 into a RAM cache (`FontCacheManager`). The cache evicts least-recently-used
 glyphs when full.
 
-Font families: ChareInk (primary), Bookerly, Vollkorn, Atkinson Hyperlegible (13/16 pt only).
+Font families: ChareInk (primary), Bookerly, Vollkorn, IM Fell DW Pica (15 pt only, synthetic bold).
 Sizes: Small through X-Large (mapped to point sizes per family).
 
 **Note:** Unifont must remain in the build even if it appears unused — removing

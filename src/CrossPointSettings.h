@@ -134,14 +134,15 @@ class CrossPointSettings {
     BOOKERLY = 1,
     VOLLKORN = 2,
     LEGACY_GEORGIA = 3,           // removed, normalize to CHAREINK
-    LEGACY_IMFELL = 4,            // removed, normalize to CHAREINK
+    LEGACY_IMFELL_OLD = 4,        // removed, normalize to CHAREINK
     FREESERIF = 5,                // legacy, normalize to CHAREINK
     LEGACY_REMOVED_FAMILY_2 = 6,  // legacy, normalize to CHAREINK
-    ATKINSON = 7,
+    LEGACY_ATKINSON = 7,          // removed, normalize to CHAREINK
+    IMFELL = 8,
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
-    MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14
+    MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14 (except IMFELL which only supports 15)
     LARGE = 1,    // 17pt
     X_LARGE = 2,  // legacy 19 -> normalize to LARGE
     SIZE_14 = 3,
@@ -150,6 +151,7 @@ class CrossPointSettings {
     SIZE_13 = 6,  // legacy -> normalize to SIZE_12
     SIZE_12 = 7,
     SIZE_10 = 8,  // legacy -> normalize to SIZE_12
+    SIZE_15 = 9,  // IMFELL only
     FONT_SIZE_COUNT
   };
   // Legacy line spacing enum (kept for settings migration compatibility)

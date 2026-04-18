@@ -39,12 +39,8 @@
 #include <builtinFonts/vollkorn_17_bold.h>
 #include <builtinFonts/vollkorn_17_italic.h>
 
-#include <builtinFonts/atkinson_13_regular.h>
-#include <builtinFonts/atkinson_13_bold.h>
-#include <builtinFonts/atkinson_13_italic.h>
-#include <builtinFonts/atkinson_16_regular.h>
-#include <builtinFonts/atkinson_16_bold.h>
-#include <builtinFonts/atkinson_16_italic.h>
+#include <builtinFonts/imfell_15_regular.h>
+#include <builtinFonts/imfell_15_italic.h>
 
 #include <builtinFonts/unifont_14_regular.h>
 #include <builtinFonts/unifont_18_regular.h>

@@ -464,8 +464,8 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return BOOKERLY;
     case VOLLKORN:
       return VOLLKORN;
-    case ATKINSON:
-      return ATKINSON;
+    case IMFELL:
+      return IMFELL;
     case CHAREINK:
     default:
       return CHAREINK;
@@ -478,7 +478,7 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 1;
     case VOLLKORN:
       return 2;
-    case ATKINSON:
+    case IMFELL:
       return 3;
     case CHAREINK:
     default:
@@ -493,7 +493,7 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
     case 2:
       return VOLLKORN;
     case 3:
-      return ATKINSON;
+      return IMFELL;
     case 0:
     default:
       return CHAREINK;
@@ -501,9 +501,9 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
-  // Atkinson ships at sizes 13 and 16 only.
-  if (normalizeFontFamily(family) == ATKINSON) {
-    return (fontSize == SIZE_16) ? SIZE_16 : SIZE_13;
+  // IM Fell ships at size 15 only — any stored size normalizes to SIZE_15.
+  if (normalizeFontFamily(family) == IMFELL) {
+    return SIZE_15;
   }
   // All other families share the same active set: 12, 14, 16, 17 (LARGE)
   switch (fontSize) {
@@ -519,7 +519,8 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
     case SIZE_13:
       return SIZE_12;  // legacy 10/13 -> 12
     case MEDIUM:
-      return SIZE_14;  // legacy 15 -> 14
+    case SIZE_15:
+      return SIZE_14;  // legacy 15 -> 14 for non-IMFELL families
     case SIZE_18:
     case X_LARGE:
     default:
@@ -541,6 +542,8 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
       return 13;
     case SIZE_14:
       return 14;
+    case SIZE_15:
+      return 15;
     case SIZE_16:
       return 16;
     case LARGE:
@@ -550,15 +553,15 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 }
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
-  if (normalizeFontFamily(family) == ATKINSON) {
-    return 2;  // Atkinson: 13, 16
+  if (normalizeFontFamily(family) == IMFELL) {
+    return 1;  // IM Fell: 15 only
   }
   return 4;  // 12, 14, 16, 17 — all other families
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
-  if (normalizeFontFamily(family) == ATKINSON) {
-    return (normalizeFontSizeForFamily(family, fontSize) == SIZE_16) ? 1 : 0;
+  if (normalizeFontFamily(family) == IMFELL) {
+    return 0;
   }
   switch (normalizeFontSizeForFamily(family, fontSize)) {
     case SIZE_12:
@@ -574,8 +577,8 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
 }
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
-  if (normalizeFontFamily(family) == ATKINSON) {
-    return (displayIndex == 1) ? SIZE_16 : SIZE_13;
+  if (normalizeFontFamily(family) == IMFELL) {
+    return SIZE_15;
   }
   switch (displayIndex) {
     case 0:
@@ -609,8 +612,8 @@ int CrossPointSettings::wordSpacingSettingToPixelDelta(const uint8_t mode, const
 int CrossPointSettings::getReaderFontId() const {
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
-  if (normalizedFamily == ATKINSON) {
-    return (normalizedFontSize == SIZE_16) ? ATKINSON_16_FONT_ID : ATKINSON_13_FONT_ID;
+  if (normalizedFamily == IMFELL) {
+    return IMFELL_15_FONT_ID;
   }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {

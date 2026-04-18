@@ -26,6 +26,9 @@ int getValueEditHoldStep(const MappedInputManager& mappedInput, const ReaderSett
 int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
   const uint8_t normalizedFontSize = CrossPointSettings::normalizeFontSizeForFamily(family, fontSize);
 
+  if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::IMFELL) {
+    return IMFELL_15_FONT_ID;
+  }
   if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::BOOKERLY) {
     switch (normalizedFontSize) {
       case CrossPointSettings::SIZE_12:
@@ -250,7 +253,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   // --- Build reader settings directly (no intermediate vector) ---
   pushReader(ReaderSettingInfo::Enum(
       StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN, StrId::STR_ATKINSON}));
+      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN, StrId::STR_IMFELL}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));

@@ -112,14 +112,11 @@ EpdFont vollkorn17BoldFont(&vollkorn_17_bold);
 EpdFont vollkorn17ItalicFont(&vollkorn_17_italic);
 EpdFontFamily vollkorn17FontFamily(&vollkorn17RegularFont, &vollkorn17BoldFont, &vollkorn17ItalicFont, nullptr);
 
-EpdFont atkinson13RegularFont(&atkinson_13_regular);
-EpdFont atkinson13BoldFont(&atkinson_13_bold);
-EpdFont atkinson13ItalicFont(&atkinson_13_italic);
-EpdFontFamily atkinson13FontFamily(&atkinson13RegularFont, &atkinson13BoldFont, &atkinson13ItalicFont, nullptr);
-EpdFont atkinson16RegularFont(&atkinson_16_regular);
-EpdFont atkinson16BoldFont(&atkinson_16_bold);
-EpdFont atkinson16ItalicFont(&atkinson_16_italic);
-EpdFontFamily atkinson16FontFamily(&atkinson16RegularFont, &atkinson16BoldFont, &atkinson16ItalicFont, nullptr);
+// IM Fell DW Pica: Regular + Italic source; Bold is synthesized at runtime
+// via syntheticBoldExtraPasses (1 extra smear-pass on bold glyphs).
+EpdFont imfell15RegularFont(&imfell_15_regular);
+EpdFont imfell15ItalicFont(&imfell_15_italic);
+EpdFontFamily imfell15FontFamily(&imfell15RegularFont, nullptr, &imfell15ItalicFont, nullptr, 0, 1, false);
 
 EpdFont unifont14RegularFont(&unifont_14_regular);
 EpdFontFamily unifont14FontFamily(&unifont14RegularFont, nullptr, nullptr, nullptr, 1, 0, false);
@@ -260,11 +257,19 @@ void onGoToReader(const std::string& initialEpubPath) {
 #endif
 }
 
-void onGoToFileTransfer() {
+static void openFileTransferInline() {
   TransitionFeedback::show(renderer, "Starting server...");
   sleepFolderDirty = true;  // Files may be uploaded to /sleep during transfer
   exitActivity();
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
+}
+
+void onGoToFileTransfer() {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::FileTransfer, ""});
+#else
+  openFileTransferInline();
+#endif
 }
 
 void onGoToSettings() {
@@ -296,11 +301,19 @@ void onGoToMyLibrary() {
 #endif
 }
 
-void onGoToRecentBooks() {
+static void openRecentBooksInline() {
   TransitionFeedback::show(renderer, "Loading recents...");
   persistAppState("go to recents");
   exitActivity();
   enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
+}
+
+void onGoToRecentBooks() {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""});
+#else
+  openRecentBooksInline();
+#endif
 }
 
 void onGoToMyLibraryWithPath(const std::string& path) {
@@ -311,13 +324,21 @@ void onGoToMyLibraryWithPath(const std::string& path) {
 #endif
 }
 
-void onGoToBrowser() {
+static void openBrowserInline() {
   TransitionFeedback::show(renderer, "Loading browser...");
   exitActivity();
   enterNewActivity(new OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
 }
 
-void onGoHome() {
+void onGoToBrowser() {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""});
+#else
+  openBrowserInline();
+#endif
+}
+
+static void openHomeInline() {
   TransitionFeedback::show(renderer, "Loading home...");
   if (sleepFolderDirty) {
     SleepActivity::trimSleepFolderToLimit();
@@ -327,6 +348,14 @@ void onGoHome() {
   exitActivity();
   enterNewActivity(new HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
                                     onGoToSettings, onGoToFileTransfer, onGoToBrowser));
+}
+
+void onGoHome() {
+#if LIFECYCLE_V2
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""});
+#else
+  openHomeInline();
+#endif
 }
 
 void setupDisplayAndFonts() {
@@ -345,8 +374,7 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_14_FONT_ID, vollkorn14FontFamily);
   renderer.insertFont(VOLLKORN_16_FONT_ID, vollkorn16FontFamily);
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn17FontFamily);
-  renderer.insertFont(ATKINSON_13_FONT_ID, atkinson13FontFamily);
-  renderer.insertFont(ATKINSON_16_FONT_ID, atkinson16FontFamily);
+  renderer.insertFont(IMFELL_15_FONT_ID, imfell15FontFamily);
   renderer.insertFont(UNIFONT_14_FONT_ID, unifont14FontFamily);
   renderer.insertFont(UNIFONT_18_FONT_ID, unifont18FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
@@ -561,18 +589,33 @@ void setup() {
     router.setRouteFactory(lifecycle::RouteId::MyLibraryAt, [](const std::string& payload) {
       openMyLibraryInline(payload);
     });
+    router.setRouteFactory(lifecycle::RouteId::RecentBooks, [](const std::string& /*payload*/) {
+      openRecentBooksInline();
+    });
+    router.setRouteFactory(lifecycle::RouteId::FileTransfer, [](const std::string& /*payload*/) {
+      openFileTransferInline();
+    });
+    router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) {
+      openBrowserInline();
+    });
+    router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) {
+      openHomeInline();
+    });
   }
 #endif
 
   if (goHome) {
     bootActivity->setProgress(100, "Opening home");
-    onGoHome();
-  } else {
-    bootActivity->setProgress(100, "Opening book");
 #if LIFECYCLE_V2
     // Bypass the router at boot — the main loop hasn't started, so a
     // routed request would sit in pending_ until the first loop tick.
-    // Constructing Reader inline matches the pre-V2 behaviour exactly.
+    openHomeInline();
+#else
+    onGoHome();
+#endif
+  } else {
+    bootActivity->setProgress(100, "Opening book");
+#if LIFECYCLE_V2
     openReaderInline(readerPath);
 #else
     onGoToReader(readerPath);

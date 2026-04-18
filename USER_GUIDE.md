@@ -156,10 +156,10 @@ The Settings screen allows you to configure the device's behavior. There are a f
   - "ChareInk" (default)
   - "Bookerly"
   - "Vollkorn"
-  - "Atkinson" — Atkinson Hyperlegible, sans-serif high-legibility font from the Braille Institute
+  - "IM Fell" — IM Fell DW Pica, antique 17th-century-revival serif (bold is synthesized)
 - **Reader Font Size**: Adjust text size for reading.
   - ChareInk / Bookerly / Vollkorn: 12, 14, 16, or 17 pt (default 16).
-  - Atkinson: 13 or 16 pt only.
+  - IM Fell: 15 pt only.
 - **Reader Line Spacing**: Adjust line spacing as a percentage value in reader settings.
 - **Reader Screen Margin**: Controls the screen margins in reader mode between 5 and 40 pixels in 5 pixel increments.
 - **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Justified" (default), "Left", "Center", or "Right".
