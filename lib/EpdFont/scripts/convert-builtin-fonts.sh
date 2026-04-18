@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 READER_FONT_STYLES=("Regular" "Italic" "Bold")
-CHAREINK_FONT_SIZES=(12 14 16 17)
+CHAREINK_FONT_SIZES=(12 13 14 15 16 17)
 for size in ${CHAREINK_FONT_SIZES[@]}; do
   for style in ${READER_FONT_STYLES[@]}; do
     lower_style=$(echo $style | tr '[:upper:]' '[:lower:]')
@@ -13,7 +13,7 @@ for size in ${CHAREINK_FONT_SIZES[@]}; do
   done
 done
 
-BOOKERLY_FONT_SIZES=(12 14 16 17)
+BOOKERLY_FONT_SIZES=(12 13 14 15 16 17)
 BOOKERLY_STYLES=("Regular:Bookerly.ttf" "Bold:Bookerly Bold.ttf" "Italic:Bookerly Italic.ttf")
 for size in ${BOOKERLY_FONT_SIZES[@]}; do
   for entry in "${BOOKERLY_STYLES[@]}"; do
@@ -27,7 +27,7 @@ for size in ${BOOKERLY_FONT_SIZES[@]}; do
 done
 
 # Georgia: only regular, bold, italic (no bold-italic source)
-VOLLKORN_FONT_SIZES=(12 14 16 17)
+VOLLKORN_FONT_SIZES=(12 13 14 15 16 17)
 VOLLKORN_STYLES=("Regular:Vollkorn-Regular.ttf" "Bold:Vollkorn-Bold.ttf" "Italic:Vollkorn-Italic.ttf")
 for size in ${VOLLKORN_FONT_SIZES[@]}; do
   for entry in "${VOLLKORN_STYLES[@]}"; do

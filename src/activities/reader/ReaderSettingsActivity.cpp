@@ -33,8 +33,12 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
     switch (normalizedFontSize) {
       case CrossPointSettings::SIZE_12:
         return BOOKERLY_12_FONT_ID;
+      case CrossPointSettings::SIZE_13:
+        return BOOKERLY_13_FONT_ID;
       case CrossPointSettings::SIZE_14:
         return BOOKERLY_14_FONT_ID;
+      case CrossPointSettings::SIZE_15:
+        return BOOKERLY_15_FONT_ID;
       case CrossPointSettings::SIZE_16:
         return BOOKERLY_16_FONT_ID;
       case CrossPointSettings::LARGE:
@@ -46,8 +50,12 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
     switch (normalizedFontSize) {
       case CrossPointSettings::SIZE_12:
         return VOLLKORN_12_FONT_ID;
+      case CrossPointSettings::SIZE_13:
+        return VOLLKORN_13_FONT_ID;
       case CrossPointSettings::SIZE_14:
         return VOLLKORN_14_FONT_ID;
+      case CrossPointSettings::SIZE_15:
+        return VOLLKORN_15_FONT_ID;
       case CrossPointSettings::SIZE_16:
         return VOLLKORN_16_FONT_ID;
       case CrossPointSettings::LARGE:
@@ -58,8 +66,12 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
   switch (normalizedFontSize) {
     case CrossPointSettings::SIZE_12:
       return CHAREINK_12_FONT_ID;
+    case CrossPointSettings::SIZE_13:
+      return CHAREINK_13_FONT_ID;
     case CrossPointSettings::SIZE_14:
       return CHAREINK_14_FONT_ID;
+    case CrossPointSettings::SIZE_15:
+      return CHAREINK_15_FONT_ID;
     case CrossPointSettings::SIZE_16:
       return CHAREINK_16_FONT_ID;
     case CrossPointSettings::LARGE:

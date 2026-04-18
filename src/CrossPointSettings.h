@@ -148,10 +148,10 @@ class CrossPointSettings {
     SIZE_14 = 3,
     SIZE_16 = 4,
     SIZE_18 = 5,  // legacy -> normalize to LARGE (17)
-    SIZE_13 = 6,  // legacy -> normalize to SIZE_12
+    SIZE_13 = 6,
     SIZE_12 = 7,
     SIZE_10 = 8,  // legacy -> normalize to SIZE_12
-    SIZE_15 = 9,  // IMFELL only
+    SIZE_15 = 9,
     FONT_SIZE_COUNT
   };
   // Legacy line spacing enum (kept for settings migration compatibility)
