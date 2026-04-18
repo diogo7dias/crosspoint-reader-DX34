@@ -393,7 +393,7 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
                                                                   "ERS", "status width");
   layout.topReservedHeight = topReservedHeight;
   layout.bottomReservedHeight = bottomReservedHeight;
-  if (!SETTINGS.statusBarEnabled || !section) {
+  if (!SETTINGS.statusBarEnabled || !section || !epub) {
     return layout;
   }
 
@@ -423,7 +423,7 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
         renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
   }
 
-  if (SETTINGS.statusBarShowBookPageCounter && epub && section->pageCount > 0) {
+  if (SETTINGS.statusBarShowBookPageCounter && section->pageCount > 0) {
     // Estimate total book pages by extrapolating the current chapter's
     // pages-per-byte ratio to the entire book. This is approximate —
     // chapters with images or code have different density than prose,
