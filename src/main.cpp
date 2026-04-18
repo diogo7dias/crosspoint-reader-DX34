@@ -146,12 +146,6 @@ EpdFont vollkorn17BoldFont(&vollkorn_17_bold);
 EpdFont vollkorn17ItalicFont(&vollkorn_17_italic);
 EpdFontFamily vollkorn17FontFamily(&vollkorn17RegularFont, &vollkorn17BoldFont, &vollkorn17ItalicFont, nullptr);
 
-// IM Fell DW Pica: Regular + Italic source; Bold is synthesized at runtime
-// via syntheticBoldExtraPasses (1 extra smear-pass on bold glyphs).
-EpdFont imfell15RegularFont(&imfell_15_regular);
-EpdFont imfell15ItalicFont(&imfell_15_italic);
-EpdFontFamily imfell15FontFamily(&imfell15RegularFont, nullptr, &imfell15ItalicFont, nullptr, 0, 1, false);
-
 EpdFont unifont14RegularFont(&unifont_14_regular);
 EpdFontFamily unifont14FontFamily(&unifont14RegularFont, nullptr, nullptr, nullptr, 1, 0, false);
 EpdFont unifont18RegularFont(&unifont_18_regular);
@@ -478,7 +472,6 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_15_FONT_ID, vollkorn15FontFamily);
   renderer.insertFont(VOLLKORN_16_FONT_ID, vollkorn16FontFamily);
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn17FontFamily);
-  renderer.insertFont(IMFELL_15_FONT_ID, imfell15FontFamily);
   renderer.insertFont(UNIFONT_14_FONT_ID, unifont14FontFamily);
   renderer.insertFont(UNIFONT_18_FONT_ID, unifont18FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);

@@ -40,22 +40,6 @@ for size in ${VOLLKORN_FONT_SIZES[@]}; do
   done
 done
 
-# IM Fell DW Pica: single reader size 15, Regular + Italic only.
-# Bold is synthesized at runtime via EpdFontFamily syntheticBoldExtraPasses,
-# so no bold source file or header is generated.
-IMFELL_FONT_SIZES=(15)
-IMFELL_STYLES=("Regular:IMFellDWPica-Regular.ttf" "Italic:IMFellDWPica-Italic.ttf")
-for size in ${IMFELL_FONT_SIZES[@]}; do
-  for entry in "${IMFELL_STYLES[@]}"; do
-    style="${entry%%:*}"
-    filename="${entry#*:}"
-    lower_style=$(echo $style | tr '[:upper:]' '[:lower:]')
-    font_name="imfell_${size}_${lower_style}"
-    echo "Generating ${font_name}..."
-    "$PYTHON_BIN" fontconvert.py "${font_name}" $size "../builtinFonts/source/IMFell/${filename}" --2bit --compress > "../builtinFonts/${font_name}.h"
-  done
-done
-
 for size in 14 18; do
   echo "Generating unifont_${size}_regular..."
   "$PYTHON_BIN" fontconvert.py "unifont_${size}_regular" $size "../builtinFonts/source/UI/unifont-english.ttf" > "../builtinFonts/unifont_${size}_regular.h"

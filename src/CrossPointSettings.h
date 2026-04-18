@@ -128,21 +128,16 @@ class CrossPointSettings {
   // Swapped: Next, Previous
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
-  // Font family options
+  // Font family options. Values 3-8 are legacy (removed families) and
+  // normalize to CHAREINK via normalizeFontFamily().
   enum FONT_FAMILY {
     CHAREINK = 0,
     BOOKERLY = 1,
     VOLLKORN = 2,
-    LEGACY_GEORGIA = 3,           // removed, normalize to CHAREINK
-    LEGACY_IMFELL_OLD = 4,        // removed, normalize to CHAREINK
-    FREESERIF = 5,                // legacy, normalize to CHAREINK
-    LEGACY_REMOVED_FAMILY_2 = 6,  // legacy, normalize to CHAREINK
-    LEGACY_ATKINSON = 7,          // removed, normalize to CHAREINK
-    IMFELL = 8,
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
-    MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14 (except IMFELL which only supports 15)
+    MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14
     LARGE = 1,    // 17pt
     X_LARGE = 2,  // legacy 19 -> normalize to LARGE
     SIZE_14 = 3,

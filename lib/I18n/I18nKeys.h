@@ -9,7 +9,10 @@ extern const char* const STRINGS_EN[];
 }  // namespace i18n_strings
 
 // Language enum
-enum class Language : uint8_t { ENGLISH = 0, _COUNT };
+enum class Language : uint8_t {
+  ENGLISH = 0,
+  _COUNT
+};
 
 // Language display names (defined in I18nStrings.cpp)
 extern const char* const LANGUAGE_NAMES[];
@@ -227,19 +230,12 @@ enum class StrId : uint16_t {
   STR_FRONT_LAYOUT_LBCR,
   STR_PREV_NEXT,
   STR_NEXT_PREV,
-  STR_FREESERIF,
-  STR_NOTO_SANS,
-  STR_OPEN_DYSLEXIC,
   STR_CHAREINK,
   STR_BOOKERLY,
   STR_VOLLKORN,
-  STR_GEORGIA,
-  STR_IMFELL,
-  STR_UBUNTU,
   STR_SMALL,
   STR_MEDIUM,
   STR_LARGE,
-  STR_X_LARGE,
   STR_BOOK_STYLE_OPT,
   STR_INDENT_SMALL,
   STR_INDENT_MEDIUM,

@@ -464,8 +464,6 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return BOOKERLY;
     case VOLLKORN:
       return VOLLKORN;
-    case IMFELL:
-      return IMFELL;
     case CHAREINK:
     default:
       return CHAREINK;
@@ -478,8 +476,6 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 1;
     case VOLLKORN:
       return 2;
-    case IMFELL:
-      return 3;
     case CHAREINK:
     default:
       return 0;
@@ -492,8 +488,6 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
       return BOOKERLY;
     case 2:
       return VOLLKORN;
-    case 3:
-      return IMFELL;
     case 0:
     default:
       return CHAREINK;
@@ -501,11 +495,8 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
-  // IM Fell ships at size 15 only — any stored size normalizes to SIZE_15.
-  if (normalizeFontFamily(family) == IMFELL) {
-    return SIZE_15;
-  }
-  // All other families: active set 12, 13, 14, 15, 16, 17 (LARGE)
+  (void)family;
+  // All families share the same active set: 12, 13, 14, 15, 16, 17 (LARGE)
   switch (fontSize) {
     case SIZE_12:
       return SIZE_12;
@@ -555,16 +546,11 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 }
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
-  if (normalizeFontFamily(family) == IMFELL) {
-    return 1;  // IM Fell: 15 only
-  }
-  return 6;  // 12, 13, 14, 15, 16, 17 — all other families
+  (void)family;
+  return 6;  // 12, 13, 14, 15, 16, 17
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
-  if (normalizeFontFamily(family) == IMFELL) {
-    return 0;
-  }
   switch (normalizeFontSizeForFamily(family, fontSize)) {
     case SIZE_12:
       return 0;
@@ -583,9 +569,7 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
 }
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
-  if (normalizeFontFamily(family) == IMFELL) {
-    return SIZE_15;
-  }
+  (void)family;
   switch (displayIndex) {
     case 0:
       return SIZE_12;
@@ -622,9 +606,6 @@ int CrossPointSettings::wordSpacingSettingToPixelDelta(const uint8_t mode, const
 int CrossPointSettings::getReaderFontId() const {
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
-  if (normalizedFamily == IMFELL) {
-    return IMFELL_15_FONT_ID;
-  }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {
       case SIZE_12:

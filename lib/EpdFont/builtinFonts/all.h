@@ -57,9 +57,6 @@
 #include <builtinFonts/vollkorn_17_bold.h>
 #include <builtinFonts/vollkorn_17_italic.h>
 
-#include <builtinFonts/imfell_15_regular.h>
-#include <builtinFonts/imfell_15_italic.h>
-
 #include <builtinFonts/unifont_14_regular.h>
 #include <builtinFonts/unifont_18_regular.h>
 

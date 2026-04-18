@@ -29,8 +29,6 @@ echo "#define VOLLKORN_15_FONT_ID ($(font_id ./vollkorn_15_regular.h ./vollkorn_
 echo "#define VOLLKORN_16_FONT_ID ($(font_id ./vollkorn_16_regular.h ./vollkorn_16_bold.h ./vollkorn_16_italic.h))"
 echo "#define VOLLKORN_17_FONT_ID ($(font_id ./vollkorn_17_regular.h ./vollkorn_17_bold.h ./vollkorn_17_italic.h))"
 echo ""
-echo "#define IMFELL_15_FONT_ID ($(font_id ./imfell_15_regular.h ./imfell_15_italic.h))"
-echo ""
 echo "#define UNIFONT_14_FONT_ID ($(font_id ./unifont_14_regular.h))"
 echo "#define UNIFONT_18_FONT_ID ($(font_id ./unifont_18_regular.h))"
 echo ""
