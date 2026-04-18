@@ -252,7 +252,7 @@ void test_large_advance_uses_next_after() {
 void test_large_advance_wraps_at_end() {
   Fixture fx;
   fx.fs.sleepFiles = makeBmps(kSmallToLargeThreshold + 1);
-  fx.lastShownFilename = fx.fs.sleepFiles.back();  // last alphabetically
+  fx.lastShownFilename = fx.fs.sleepFiles.back();                       // last alphabetically
   std::sort(fx.lastShownFilename.begin(), fx.lastShownFilename.end());  // no-op, already sorted input
   fx.cursor = 1;
   auto& wp = WallpaperPlaylist::instance();
@@ -329,9 +329,7 @@ void test_trim_moves_overflow_preserves_favorites() {
   fx.fs.sleepFiles = makeBmps(250);
   auto d = fx.deps();
   // Mark last 10 as favorites; they must all survive.
-  d.isFavorite = [](const std::string& path) {
-    return path >= "/sleep/f0240.bmp";
-  };
+  d.isFavorite = [](const std::string& path) { return path >= "/sleep/f0240.bmp"; };
   auto& wp = WallpaperPlaylist::instance();
   wp.setDeps(d);
   wp.markFolderDirty();

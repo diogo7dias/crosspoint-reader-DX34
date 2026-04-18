@@ -358,8 +358,10 @@ TrimResult WallpaperPlaylist::trimToLimit() {
   nonFavorites.reserve(files.size());
   for (auto& f : files) {
     const bool isFav = deps_.isFavorite && deps_.isFavorite(makeSleepPath(f));
-    if (isFav) favorites.push_back(std::move(f));
-    else nonFavorites.push_back(std::move(f));
+    if (isFav)
+      favorites.push_back(std::move(f));
+    else
+      nonFavorites.push_back(std::move(f));
   }
   cachedFavoriteCount_ = favorites.size();
   result.favoriteCount = favorites.size();

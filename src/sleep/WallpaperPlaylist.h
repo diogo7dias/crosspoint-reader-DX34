@@ -42,10 +42,10 @@ class WallpaperPlaylist {
 
     // State slots — module never copies, only reads/writes through pointers.
     // Production wires to APP_STATE fields; tests wire to a local struct.
-    std::vector<std::string>* playlist = nullptr;      // APP_STATE.sleepImagePlaylist
-    std::string* lastShownFilename = nullptr;           // APP_STATE.lastShownSleepFilename
-    uint8_t* cursor = nullptr;                          // APP_STATE.lastSleepImage (0 = not yet shown, 1 = shown)
-    std::string* lastRenderedPath = nullptr;            // APP_STATE.lastSleepWallpaperPath
+    std::vector<std::string>* playlist = nullptr;  // APP_STATE.sleepImagePlaylist
+    std::string* lastShownFilename = nullptr;      // APP_STATE.lastShownSleepFilename
+    uint8_t* cursor = nullptr;                     // APP_STATE.lastSleepImage (0 = not yet shown, 1 = shown)
+    std::string* lastRenderedPath = nullptr;       // APP_STATE.lastSleepWallpaperPath
 
     // Persistence. Defaults wire to APP_STATE.saveToFile in production.
     std::function<bool()> saveState;
@@ -108,7 +108,7 @@ class WallpaperPlaylist {
   std::string advanceSmallWithFiles(const std::vector<std::string>& files);
   std::string advanceLarge();
   bool resyncSmallPlaylist(const std::vector<std::string>& files);
-  void migrateToLarge();                              // drop playlist, keep lastShownFilename
+  void migrateToLarge();                                       // drop playlist, keep lastShownFilename
   void migrateToSmall(const std::vector<std::string>& files);  // build + seek cursor
 
   Deps deps_;

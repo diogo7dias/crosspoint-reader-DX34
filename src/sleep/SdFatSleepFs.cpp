@@ -79,8 +79,8 @@ std::string SdFatSleepFs::nextSleepBmpAfter(const std::string& after) {
     if (dir) dir.close();
     return "";
   }
-  std::string minName;     // lex-min (fallback for wrap)
-  std::string nextName;    // lex-smallest strictly greater than `after`
+  std::string minName;   // lex-min (fallback for wrap)
+  std::string nextName;  // lex-smallest strictly greater than `after`
   char name[256];
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
     if (!file.isDirectory()) {
