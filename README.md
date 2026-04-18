@@ -621,6 +621,28 @@ macOS example:
 python3 scripts/debugging_monitor.py /dev/cu.usbmodem101
 ```
 
+### Host-side tests
+
+Pure-logic tests that run on your laptop (no ESP32 hardware needed) live
+under `test/test_*/` and use PlatformIO's Unity framework.
+
+```sh
+pio test -e test_host
+```
+
+The `test_host` environment uses `platform = native`. Currently covered:
+
+- `test/test_activity_router/` — `lifecycle::ActivityRouter` policy, pending
+  coalesce, deep-sleep sequencing, and make* synthesizers
+
+Sources compiled into this env are explicitly whitelisted in
+`platformio.ini` via `build_src_filter` — Arduino/FreeRTOS-dependent code
+is excluded. When adding a new module that needs host tests, either keep
+it free of Arduino includes or provide a `#ifdef UNIT_TEST_HOST` stub
+header (see `src/lifecycle/ActivityStubForHostTest.h`).
+
+CI integration (GitHub Actions) is not yet wired up — tracked as follow-up.
+
 ---
 
 ## Limitations and Scope Notes
