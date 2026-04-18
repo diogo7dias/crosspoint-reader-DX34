@@ -59,6 +59,11 @@
 #include "sleep/WallpaperPlaylist.h"
 #include "util/FavoriteBmp.h"
 #endif
+#ifdef PERSIST_V2
+#include "persist/AppStateStore.h"
+#include "persist/PersistManager.h"
+#include "persist/SdFatFileIO.h"
+#endif
 
 HalDisplay display;
 HalGPIO gpio;
@@ -156,11 +161,20 @@ void enterNewActivity(Activity* activity) {
 }
 
 bool persistAppState(const char* context) {
+#ifdef PERSIST_V2
+  // V2: force sync flush of all dirty stores (not just APP_STATE). Activity
+  // transitions are the crash-safety boundary — debounce only coalesces
+  // within an activity, never across one.
+  const size_t flushed = crosspoint::persist::PersistManager().flushAll();
+  (void)flushed;
+  return true;
+#else
   if (!APP_STATE.saveToFile()) {
     LOG_ERR("MAIN", "Failed to save app state (%s)", context);
     return false;
   }
   return true;
+#endif
 }
 
 static void trimSleepFolderIfDirty();  // fwd decl — defined with sleepFolderDirty below
@@ -568,6 +582,17 @@ void setup() {
   enterNewActivity(bootActivity);
 
   bootActivity->setProgress(32, "Restoring state");
+#ifdef PERSIST_V2
+  {
+    // Touch the store so it registers with PersistManager before the sidecar
+    // backup runs (backup iterates registered store paths).
+    (void)crosspoint::persist::appStateStore();
+    crosspoint::persist::SdFatFileIO sidecarIo;
+    if (crosspoint::persist::PersistManager().backupSidecarIfNewFirmware(sidecarIo, CROSSPOINT_VERSION)) {
+      LOG_INF("MAIN", "First boot of %s — SD sidecar backup written", CROSSPOINT_VERSION);
+    }
+  }
+#endif
   APP_STATE.loadFromFile();
 
 #if SLEEP_V2
@@ -704,6 +729,12 @@ void loop() {
   static unsigned long lastMemPrint = 0;
 
   gpio.update();
+
+#ifdef PERSIST_V2
+  // Drain any coalesced dirty writes. Stores flush only when debounce
+  // window has elapsed since the last markDirty; most ticks are no-ops.
+  crosspoint::persist::PersistManager().tick(static_cast<uint32_t>(loopStartTime));
+#endif
 
   // Only update fading fix when it changes (avoid calling every loop iteration)
   {
