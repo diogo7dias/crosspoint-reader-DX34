@@ -33,8 +33,11 @@ class FakeSleepFs : public ISleepFs {
   // Recorded renames + mkdirs.
   std::vector<std::pair<std::string, std::string>> renames;
   std::vector<std::string> mkdirs;
+  // Count of full directory scans (countSleepBmps + listSleepBmps).
+  size_t scanCount = 0;
 
   size_t countSleepBmps(size_t scanCap) override {
+    ++scanCount;
     size_t n = 0;
     for (const auto& f : sleepFiles) {
       if (isBmp(f)) {
@@ -46,6 +49,7 @@ class FakeSleepFs : public ISleepFs {
   }
 
   std::vector<std::string> listSleepBmps(size_t maxEntries) override {
+    ++scanCount;
     std::vector<std::string> out;
     for (const auto& f : sleepFiles) {
       if (isBmp(f)) out.push_back(f);
@@ -374,6 +378,35 @@ void test_remember_rendered_updates_path_and_filename() {
   TEST_ASSERT_EQUAL(1, fx.saves);
 }
 
+void test_small_advance_single_scan() {
+  Fixture fx;
+  fx.fs.sleepFiles = makeBmps(50);
+  auto& wp = WallpaperPlaylist::instance();
+  wp.setDeps(fx.deps());
+
+  fx.fs.scanCount = 0;
+  wp.advance();
+  TEST_ASSERT_EQUAL_MESSAGE(1, fx.fs.scanCount, "First Small advance must scan once");
+
+  fx.fs.scanCount = 0;
+  wp.advance();
+  TEST_ASSERT_EQUAL_MESSAGE(1, fx.fs.scanCount, "Subsequent Small advance must scan once");
+}
+
+void test_large_advance_single_scan_pair() {
+  Fixture fx;
+  fx.fs.sleepFiles = makeBmps(kSmallToLargeThreshold + 5);
+  auto& wp = WallpaperPlaylist::instance();
+  wp.setDeps(fx.deps());
+  wp.advance();  // Small→Large migration; not counted
+
+  fx.fs.scanCount = 0;
+  wp.advance();
+  // Large steady state: countSleepBmps for hysteresis + nextSleepBmpAfter for advance.
+  // Only countSleepBmps/listSleepBmps counted — nextSleepBmpAfter is not a full scan in this counter.
+  TEST_ASSERT_EQUAL_MESSAGE(1, fx.fs.scanCount, "Large advance must only count once beyond nextSleepBmpAfter");
+}
+
 void test_clear_rendered_path() {
   Fixture fx;
   fx.lastRenderedPath = "/sleep/x.bmp";
@@ -406,6 +439,8 @@ int main(int, char**) {
   RUN_TEST(test_trim_moves_overflow_preserves_favorites);
   RUN_TEST(test_dirty_reconcile_clears_flag);
   RUN_TEST(test_remember_rendered_updates_path_and_filename);
+  RUN_TEST(test_small_advance_single_scan);
+  RUN_TEST(test_large_advance_single_scan_pair);
   RUN_TEST(test_clear_rendered_path);
   return UNITY_END();
 }

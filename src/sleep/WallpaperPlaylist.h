@@ -105,7 +105,7 @@ class WallpaperPlaylist {
 
   // Strategy helpers — operate via deps_.
   StrategyKind pickStrategy(size_t fileCount) const;
-  std::string advanceSmall();
+  std::string advanceSmallWithFiles(const std::vector<std::string>& files);
   std::string advanceLarge();
   bool resyncSmallPlaylist(const std::vector<std::string>& files);
   void migrateToLarge();                              // drop playlist, keep lastShownFilename

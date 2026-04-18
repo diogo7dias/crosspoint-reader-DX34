@@ -64,24 +64,43 @@ void WallpaperPlaylist::reconcile() {
 std::string WallpaperPlaylist::advance() {
   if (!deps_.fs) return {};
 
-  // Reassessment path — the folder can change
-  // size without markFolderDirty (favorites toggle, user deletes). Cheap
-  // recheck on each advance keeps strategy coherent without disk burst.
-  const size_t count = deps_.fs->countSleepBmps(kTrimScanCap);
-  if (count == 0) return {};
-  const StrategyKind desired = pickStrategy(count);
-  if (desired != strategy_) {
-    if (desired == StrategyKind::Large) migrateToLarge();
-    else migrateToSmall(deps_.fs->listSleepBmps(kPlaylistMaxPersist));
-    strategy_ = desired;
+  // Reassess strategy on each advance — favorites toggle / user deletion can
+  // shrink /sleep without markFolderDirty. Hot-path SD scans kept minimal:
+  //   Small steady: 1 scan (listSleepBmps doubles as count probe)
+  //   Large steady: 1 scan (countSleepBmps only; advanceLarge adds its own)
+  if (strategy_ == StrategyKind::Large) {
+    const size_t count = deps_.fs->countSleepBmps(kTrimScanCap);
+    if (count == 0) return {};
+    const StrategyKind desired = pickStrategy(count);
+    if (desired == StrategyKind::Small) {
+      auto files = deps_.fs->listSleepBmps(kPlaylistMaxPersist);
+      migrateToSmall(files);
+      strategy_ = StrategyKind::Small;
+      return advanceSmallWithFiles(files);
+    }
+    return advanceLarge();
   }
 
-  return (strategy_ == StrategyKind::Large) ? advanceLarge() : advanceSmall();
+  // Small path: one list scan carrying both file set and strategy signal.
+  // Cap = kSmallToLargeThreshold + 1 (211). If returned size == cap, count
+  // exceeded the upgrade threshold; if < cap, size is the exact count.
+  constexpr size_t kProbeCap = kSmallToLargeThreshold + 1;
+  auto files = deps_.fs->listSleepBmps(kProbeCap);
+  if (files.empty()) return {};
+
+  const StrategyKind desired = pickStrategy(files.size());
+  if (desired == StrategyKind::Large) {
+    migrateToLarge();
+    strategy_ = StrategyKind::Large;
+    return advanceLarge();
+  }
+
+  if (files.size() > kPlaylistMaxPersist) files.resize(kPlaylistMaxPersist);
+  return advanceSmallWithFiles(files);
 }
 
-std::string WallpaperPlaylist::advanceSmall() {
+std::string WallpaperPlaylist::advanceSmallWithFiles(const std::vector<std::string>& files) {
   if (!deps_.playlist || !deps_.cursor) return {};
-  const auto files = deps_.fs->listSleepBmps(kPlaylistMaxPersist);
   if (files.empty()) return {};
 
   const bool changed = resyncSmallPlaylist(files);
