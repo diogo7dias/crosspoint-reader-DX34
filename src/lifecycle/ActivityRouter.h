@@ -10,22 +10,33 @@ class Activity;
 
 namespace lifecycle {
 
-// ActivityRouter — scaffold only (issue #23).
-// Owns activity transitions, persist coalescing, and deep-sleep entry once
-// call sites are migrated. Today all methods are no-ops; main.cpp is untouched.
-// Migration is gated per call site in follow-up PRs.
+// ActivityRouter — owns activity transitions, per-route persist/trim policy,
+// and deep-sleep entry sequencing. Activities continue to receive std::function
+// callbacks; main.cpp wraps this router for the V2 path.
 class ActivityRouter {
  public:
   static ActivityRouter& instance();
 
+  // Synchronous boot dispatch — caller expects activity live on return.
+  // Applies RoutePolicy + runs factory directly (no queueing).
   void begin(const Nav& initial);
+
+  // Queue a transition; drained at safe boundary by applyIfPending().
   void request(const Nav& nav);
+
+  // Called once per loop() tick after currentActivity->loop(). Drains pending.
   void applyIfPending();
+
+  // Orchestrate deep-sleep entry in fixed order:
+  //   onBeforeDeepSleep(fromReader)  -> BLE teardown + set lastSleepFromReader
+  //   persistAppState("enter deep sleep")
+  //   exit current activity
+  //   enterSleepActivity               -> construct + enter SleepActivity
+  //   onAfterDeepSleep                 -> display.deepSleep + startDeepSleep (no return)
   void enterDeepSleep(bool fromReader);
 
-  // main.cpp owns activity construction (it holds the globals: renderer,
-  // mappedInputManager, onGoHome, etc.). It registers one factory per route;
-  // applyIfPending dispatches on the pending Nav and calls the factory.
+  // main.cpp owns activity construction (holds renderer, mappedInputManager,
+  // onGoX globals). It registers one factory per route.
   using Factory = std::function<void(const std::string& payload)>;
   void setRouteFactory(RouteId route, Factory factory);
 
@@ -38,16 +49,23 @@ class ActivityRouter {
   std::function<void()>                   makeGoToFileTransfer() const;
   std::function<void()>                   makeGoToBrowser() const;
 
+  // Injection seam for main.cpp (production) and host tests (stubs).
+  // All side-effecting calls flow through these — router itself never touches
+  // SD, display, GPIO, or global APP_STATE directly.
   struct Deps {
     Activity** currentActivitySlot = nullptr;
     bool (*persistAppState)(const char* ctx) = nullptr;
-    void (*onBeforeDeepSleep)() = nullptr;
+    void (*trimSleepFolderIfDirty)() = nullptr;
+    void (*onBeforeDeepSleep)(bool fromReader) = nullptr;
     void (*onAfterDeepSleep)() = nullptr;
+    std::function<void()> enterSleepActivity;
   };
+  void setDeps(Deps deps);
   static void setDepsForTest(Deps deps);
 
  private:
   ActivityRouter() = default;
+  void dispatch(const Nav& nav);
   static constexpr size_t kRouteCount = 8;
   std::optional<Nav> pending_;
   bool busy_ = false;

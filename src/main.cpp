@@ -150,11 +150,15 @@ void enterNewActivity(Activity* activity) {
   currentActivity->onEnter();
 }
 
-void persistAppState(const char* context) {
+bool persistAppState(const char* context) {
   if (!APP_STATE.saveToFile()) {
     LOG_ERR("MAIN", "Failed to save app state (%s)", context);
+    return false;
   }
+  return true;
 }
+
+static void trimSleepFolderIfDirty();  // fwd decl — defined with sleepFolderDirty below
 
 // Verify power button press duration on wake-up from deep sleep
 // Pre-condition: isWakeupByPowerButton() == true
@@ -234,10 +238,17 @@ void onGoHome();
 void onGoToMyLibraryWithPath(const std::string& path);
 void onGoToRecentBooks();
 
-// When true the /sleep folder may have changed since the last trim, so
-// onGoHome() will re-scan.  Set to false after a successful trim and to true
-// before entering activities that can modify /sleep (e.g. file transfer).
+// When true the /sleep folder may have changed since the last trim, so the
+// Home route policy will re-scan. Set to false after a successful trim and to
+// true before entering activities that can modify /sleep (e.g. file transfer).
 static bool sleepFolderDirty = true;
+
+static void trimSleepFolderIfDirty() {
+  if (sleepFolderDirty) {
+    SleepActivity::trimSleepFolderToLimit();
+    sleepFolderDirty = false;
+  }
+}
 
 // Inline Reader activity construction. Used by both the V2 factory and the
 // boot-time resume path in setup() (which bypasses the router since the main
@@ -282,9 +293,11 @@ void onGoToSettings() {
 #endif
 }
 
+// V2 path: ActivityRouter applies persist policy before calling this factory.
+// Legacy path: the #else branch in onGoToMyLibrary / onGoToMyLibraryWithPath
+// explicitly persists before calling this helper.
 static void openMyLibraryInline(const std::string& path) {
   TransitionFeedback::show(renderer, "Loading library...");
-  persistAppState(path.empty() ? "go to library" : "go to library path");
   exitActivity();
   if (path.empty()) {
     enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
@@ -297,13 +310,13 @@ void onGoToMyLibrary() {
 #if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""});
 #else
+  persistAppState("go to library");
   openMyLibraryInline("");
 #endif
 }
 
 static void openRecentBooksInline() {
   TransitionFeedback::show(renderer, "Loading recents...");
-  persistAppState("go to recents");
   exitActivity();
   enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
 }
@@ -312,6 +325,7 @@ void onGoToRecentBooks() {
 #if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""});
 #else
+  persistAppState("go to recents");
   openRecentBooksInline();
 #endif
 }
@@ -320,6 +334,7 @@ void onGoToMyLibraryWithPath(const std::string& path) {
 #if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibraryAt, path});
 #else
+  persistAppState("go to library path");
   openMyLibraryInline(path);
 #endif
 }
@@ -340,11 +355,6 @@ void onGoToBrowser() {
 
 static void openHomeInline() {
   TransitionFeedback::show(renderer, "Loading home...");
-  if (sleepFolderDirty) {
-    SleepActivity::trimSleepFolderToLimit();
-    sleepFolderDirty = false;
-  }
-  persistAppState("go home");
   exitActivity();
   enterNewActivity(new HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
                                     onGoToSettings, onGoToFileTransfer, onGoToBrowser));
@@ -354,6 +364,8 @@ void onGoHome() {
 #if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""});
 #else
+  trimSleepFolderIfDirty();
+  persistAppState("go home");
   openHomeInline();
 #endif
 }
@@ -571,10 +583,35 @@ void setup() {
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
 #if LIFECYCLE_V2
-  // Register route factories with ActivityRouter (#23). Only migrated routes
-  // are registered; unmigrated ones still use the legacy onGoToX lambda path.
+  // Wire ActivityRouter with Deps + route factories (#23). All transitions on
+  // the V2 path flow through the router: per-route persist/trim policy is
+  // applied before the factory runs, and deep-sleep entry follows the fixed
+  // hook sequence in ActivityRouter::enterDeepSleep.
   {
     auto& router = lifecycle::ActivityRouter::instance();
+
+    lifecycle::ActivityRouter::Deps deps;
+    deps.currentActivitySlot = &currentActivity;
+    deps.persistAppState = &::persistAppState;
+    deps.trimSleepFolderIfDirty = &::trimSleepFolderIfDirty;
+    deps.onBeforeDeepSleep = [](bool fromReader) {
+      if (BLE_HID.isInitialized()) {
+        BLE_HID.disconnect();
+        BLE_HID.deinit();
+      }
+      APP_STATE.lastSleepFromReader = fromReader;
+    };
+    deps.onAfterDeepSleep = []() {
+      display.deepSleep();
+      LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);
+      LOG_DBG("MAIN", "Entering deep sleep");
+      powerManager.startDeepSleep(gpio);
+    };
+    deps.enterSleepActivity = []() {
+      enterNewActivity(new SleepActivity(renderer, mappedInputManager));
+    };
+    router.setDeps(std::move(deps));
+
     router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
       TransitionFeedback::show(renderer, "Loading settings...");
       exitActivity();
@@ -607,16 +644,14 @@ void setup() {
   if (goHome) {
     bootActivity->setProgress(100, "Opening home");
 #if LIFECYCLE_V2
-    // Bypass the router at boot — the main loop hasn't started, so a
-    // routed request would sit in pending_ until the first loop tick.
-    openHomeInline();
+    lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Home, ""});
 #else
     onGoHome();
 #endif
   } else {
     bootActivity->setProgress(100, "Opening book");
 #if LIFECYCLE_V2
-    openReaderInline(readerPath);
+    lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Reader, readerPath});
 #else
     onGoToReader(readerPath);
 #endif
@@ -680,17 +715,26 @@ void loop() {
     powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity
   }
 
+  auto triggerDeepSleep = []() {
+#if LIFECYCLE_V2
+    const bool fromReader = currentActivity && currentActivity->isReaderActivity();
+    lifecycle::ActivityRouter::instance().enterDeepSleep(fromReader);
+#else
+    enterDeepSleep();
+#endif
+  };
+
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
   if (millis() - lastActivityTime >= sleepTimeoutMs) {
     LOG_DBG("SLP", "Auto-sleep triggered after %lu ms of inactivity", sleepTimeoutMs);
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+    triggerDeepSleep();
+    // This should never be hit as enterDeepSleep calls esp_deep_sleep_start
     return;
   }
 
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+    triggerDeepSleep();
+    // This should never be hit as enterDeepSleep calls esp_deep_sleep_start
     return;
   }
 
