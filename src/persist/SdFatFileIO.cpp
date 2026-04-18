@@ -67,6 +67,86 @@ bool ensureParentDirectory(const char* targetPath) {
 
 }  // namespace
 
+namespace {
+
+// Wraps HalFile (which is a Print) as a JsonSink so serializers can write
+// chunks straight to SD without an intermediate std::string.
+class HalFileJsonSink : public JsonSink {
+ public:
+  explicit HalFileJsonSink(HalFile& f) : f_(f) {}
+  size_t write(uint8_t b) override { return f_.write(b); }
+  size_t write(const uint8_t* buf, size_t n) override { return f_.write(buf, n); }
+
+ private:
+  HalFile& f_;
+};
+
+}  // namespace
+
+bool SdFatFileIO::safeWriteStreamed(const std::string& path, const StreamProducer& produce) {
+  if (path.empty() || path.size() > kMaxPathLen) {
+    LOG_ERR("PST", "safeWriteStreamed: path null or too long");
+    return false;
+  }
+  if (!ensureParentDirectory(path.c_str())) return false;
+
+  char tmpPath[128];
+  char bakPath[128];
+  snprintf(tmpPath, sizeof(tmpPath), "%s.tmp", path.c_str());
+  snprintf(bakPath, sizeof(bakPath), "%s.bak", path.c_str());
+
+  // Stuck-.tmp fallback, same as safeWrite (MEMORY.md bug fix).
+  const char* activeTmp = tmpPath;
+  char altTmpPath[128];
+  if (Storage.exists(tmpPath)) {
+    if (!Storage.remove(tmpPath)) {
+      LOG_ERR("PST", "safeWriteStreamed: stale tmp %s stuck; using .tmp2", tmpPath);
+      snprintf(altTmpPath, sizeof(altTmpPath), "%s.tmp2", path.c_str());
+      activeTmp = altTmpPath;
+    }
+  }
+
+  HalFile f;
+  if (!Storage.openFileForWrite("PST", activeTmp, f)) {
+    LOG_ERR("PST", "safeWriteStreamed: failed to open tmp %s", activeTmp);
+    return false;
+  }
+  HalFileJsonSink sink(f);
+  const bool produceOk = produce ? produce(sink) : false;
+  f.close();
+  if (!produceOk) {
+    LOG_ERR("PST", "safeWriteStreamed: producer failed for %s", activeTmp);
+    Storage.remove(activeTmp);
+    return false;
+  }
+
+  if (Storage.exists(bakPath)) {
+    if (!Storage.remove(bakPath)) {
+      LOG_ERR("PST", "safeWriteStreamed: failed to remove stale bak %s", bakPath);
+    }
+  }
+  if (Storage.exists(path.c_str())) {
+    if (!Storage.rename(path.c_str(), bakPath)) {
+      LOG_ERR("PST", "safeWriteStreamed: failed to rotate %s → %s", path.c_str(), bakPath);
+      Storage.remove(activeTmp);
+      return false;
+    }
+  }
+  if (!Storage.rename(activeTmp, path.c_str())) {
+    LOG_ERR("PST", "safeWriteStreamed: failed to promote %s", activeTmp);
+    if (Storage.exists(bakPath)) {
+      if (Storage.exists(path.c_str())) Storage.remove(path.c_str());
+      if (Storage.rename(bakPath, path.c_str())) {
+        LOG_ERR("PST", "safeWriteStreamed: restored %s from bak", path.c_str());
+      } else {
+        LOG_ERR("PST", "safeWriteStreamed: cannot restore %s from bak", path.c_str());
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
 bool SdFatFileIO::safeWrite(const std::string& path, const std::string& content) {
   if (path.empty() || path.size() > kMaxPathLen) {
     LOG_ERR("PST", "safeWrite: path null or too long");

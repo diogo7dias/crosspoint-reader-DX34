@@ -212,6 +212,60 @@ void test_large_playlist_omitted() {
   TEST_ASSERT_TRUE(json.find("\"lastShownSleepFilename\":\"current.bmp\"") != std::string::npos);
 }
 
+// ---- Streamed write path produces identical output to string path ----
+void test_streamed_flush_matches_string() {
+  CrossPointState s;
+  s.openEpubPath = "/books/alice.epub";
+  s.lastShownSleepFilename = "wall_042.bmp";
+  s.sessionPagesRead = 77;
+  s.sleepImagePlaylist = {"x.bmp", "y.bmp", "z.bmp"};
+
+  InMemoryFileIO io;
+  PersistentStore<CrossPointState> store("APP_STATE", "/.crosspoint/state.json", io,
+                                         &crosspoint::persist::serializeCrossPointState,
+                                         &crosspoint::persist::deserializeCrossPointState);
+  store.setStreamSerializer(&crosspoint::persist::streamSerializeCrossPointState);
+  store.unsafeMut() = s;
+  TEST_ASSERT_TRUE(store.flushNow());
+
+  // Stream path wrote via safeWriteStreamed which routes through safeWrite —
+  // file must be present and byte-identical to the string serializer output.
+  const std::string expected = crosspoint::persist::serializeCrossPointState(s);
+  const std::string got = io.safeRead("/.crosspoint/state.json");
+  TEST_ASSERT_EQUAL_STRING(expected.c_str(), got.c_str());
+
+  // Load back through a fresh store — round-trip survives.
+  PersistentStore<CrossPointState> loader("APP_STATE", "/.crosspoint/state.json", io,
+                                          &crosspoint::persist::serializeCrossPointState,
+                                          &crosspoint::persist::deserializeCrossPointState);
+  loader.load();
+  TEST_ASSERT_EQUAL_STRING("/books/alice.epub", loader.get().openEpubPath.c_str());
+  TEST_ASSERT_EQUAL_STRING("wall_042.bmp", loader.get().lastShownSleepFilename.c_str());
+  TEST_ASSERT_EQUAL_UINT32(77, loader.get().sessionPagesRead);
+  TEST_ASSERT_EQUAL_size_t(3, loader.get().sleepImagePlaylist.size());
+}
+
+// ---- Streamed write handles a large payload without building std::string peak ----
+void test_streamed_flush_large_playlist_omits() {
+  CrossPointState s;
+  for (size_t i = 0; i < CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST + 5; ++i) {
+    s.sleepImagePlaylist.push_back("/sleep/photo-YYYYMMDD-HHMMSS_F_" + std::to_string(i) + ".bmp");
+  }
+  s.lastShownSleepFilename = "current.bmp";
+
+  InMemoryFileIO io;
+  PersistentStore<CrossPointState> store("APP_STATE", "/.crosspoint/state.json", io,
+                                         &crosspoint::persist::serializeCrossPointState,
+                                         &crosspoint::persist::deserializeCrossPointState);
+  store.setStreamSerializer(&crosspoint::persist::streamSerializeCrossPointState);
+  store.unsafeMut() = s;
+  TEST_ASSERT_TRUE(store.flushNow());
+
+  const std::string got = io.safeRead("/.crosspoint/state.json");
+  TEST_ASSERT_EQUAL_INT(std::string::npos, (int)got.find("\"sleepImagePlaylist\""));
+  TEST_ASSERT_TRUE(got.find("\"lastShownSleepFilename\":\"current.bmp\"") != std::string::npos);
+}
+
 // ---- PersistManager flushAll ticks only dirty stores ----
 void test_persist_manager_flush_all() {
   using crosspoint::persist::PersistManagerImpl;
@@ -249,6 +303,8 @@ int main(int, char**) {
   RUN_TEST(test_mutate_and_flushnow);
   RUN_TEST(test_cross_point_state_round_trip);
   RUN_TEST(test_large_playlist_omitted);
+  RUN_TEST(test_streamed_flush_matches_string);
+  RUN_TEST(test_streamed_flush_large_playlist_omits);
   RUN_TEST(test_persist_manager_flush_all);
   return UNITY_END();
 }

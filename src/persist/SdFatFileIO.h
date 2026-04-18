@@ -11,6 +11,7 @@ namespace persist {
 class SdFatFileIO : public IFileIO {
  public:
   bool safeWrite(const std::string& path, const std::string& content) override;
+  bool safeWriteStreamed(const std::string& path, const StreamProducer& produce) override;
   std::string safeRead(const std::string& path) override;
   bool exists(const std::string& path) override;
   bool mkdir(const std::string& path) override;

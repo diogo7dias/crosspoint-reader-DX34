@@ -9,8 +9,10 @@
 namespace crosspoint {
 namespace persist {
 
-std::string serializeCrossPointState(const CrossPointState& s) {
-  JsonDocument doc;
+namespace {
+// Populate a JsonDocument with the current state. Shared by both the
+// string-based and streamed paths so the schema lives in exactly one place.
+void populateDoc(const CrossPointState& s, JsonDocument& doc) {
   doc["openEpubPath"] = s.openEpubPath;
   doc["lastSleepImage"] = s.lastSleepImage;
   doc["lastShownSleepFilename"] = s.lastShownSleepFilename;
@@ -28,10 +30,26 @@ std::string serializeCrossPointState(const CrossPointState& s) {
   }
   JsonArray favs = doc["favoriteBmpPaths"].to<JsonArray>();
   for (const auto& entry : s.favoriteBmpPaths) favs.add(entry);
+}
+}  // namespace
+
+std::string serializeCrossPointState(const CrossPointState& s) {
+  JsonDocument doc;
+  populateDoc(s, doc);
 
   std::string out;
   serializeJson(doc, out);
   return out;
+}
+
+void streamSerializeCrossPointState(const CrossPointState& s, JsonSink& sink) {
+  JsonDocument doc;
+  populateDoc(s, doc);
+  // ArduinoJson's serializeJson duck-types the sink: any object with
+  // write(uint8_t) and write(uint8_t*, size_t) works. JsonSink provides
+  // exactly that interface, so bytes flow straight to the underlying
+  // HalFile (device) or std::string (host) without an intermediate buffer.
+  serializeJson(doc, sink);
 }
 
 bool deserializeCrossPointState(const std::string& json, CrossPointState& s) {

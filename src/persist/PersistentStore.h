@@ -40,9 +40,20 @@ class PersistentStore {
  public:
   using Serialize = std::string (*)(const T&);
   using Deserialize = bool (*)(const std::string&, T&);
+  // Stream serializer: writes payload bytes directly to a sink without
+  // building a full intermediate std::string. Used for schemas that can
+  // grow large (e.g. APP_STATE with sleep playlist) where the std::string
+  // peak would trip `new` under tight heap.
+  using StreamSerialize = void (*)(const T&, JsonSink&);
 
   PersistentStore(const char* name, const char* path, IFileIO& io, Serialize ser, Deserialize deser)
       : name_(name), path_(path), io_(io), ser_(ser), deser_(deser) {}
+
+  // Attach a stream serializer. When set, flushNow uses streamed write path
+  // (no std::string intermediate). `ser` remains required (used by any
+  // legacy callers / fallback); pass nullptr to disable the string path
+  // explicitly — flushNow will only stream.
+  void setStreamSerializer(StreamSerialize ss) { stream_ser_ = ss; }
 
   // --- Read API ---
   const T& get() const { return data_; }
@@ -65,9 +76,19 @@ class PersistentStore {
 
   // --- Flush ---
   // Force synchronous write. Returns true on success. Clears dirty on success.
+  // Uses streamed write when a stream serializer is attached (peak-heap
+  // safe for large payloads) — otherwise falls back to build-string-then-write.
   bool flushNow() {
-    const std::string payload = ser_(data_);
-    const bool ok = io_.safeWrite(path_, payload);
+    bool ok = false;
+    if (stream_ser_) {
+      ok = io_.safeWriteStreamed(path_, [this](JsonSink& sink) {
+        stream_ser_(data_, sink);
+        return true;
+      });
+    } else {
+      const std::string payload = ser_(data_);
+      ok = io_.safeWrite(path_, payload);
+    }
     if (ok) {
       dirty_ = false;
       flushCount_++;
@@ -141,6 +162,7 @@ class PersistentStore {
   IFileIO& io_;
   Serialize ser_;
   Deserialize deser_;
+  StreamSerialize stream_ser_ = nullptr;
   T data_{};
   bool dirty_ = false;
   uint32_t dirtyAtMs_ = 0;
