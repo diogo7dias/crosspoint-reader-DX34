@@ -44,9 +44,7 @@ void HighlightController::invalidateWordCache() {
   // Callers that need the storage released should call exit().
 }
 
-bool HighlightController::wordCacheValidFor(int pageIndex) const {
-  return wordCachePage_ == pageIndex;
-}
+bool HighlightController::wordCacheValidFor(int pageIndex) const { return wordCachePage_ == pageIndex; }
 
 void HighlightController::onPageChanged(int newPage) {
   if (wordCachePage_ != newPage) {

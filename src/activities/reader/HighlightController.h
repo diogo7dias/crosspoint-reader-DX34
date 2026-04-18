@@ -42,8 +42,8 @@ struct PageContext {
 };
 
 struct MoveOutcome {
-  int pageDelta = 0;         // caller adds this to section->currentPage
-  bool stateChanged = false; // caller requestUpdate()
+  int pageDelta = 0;          // caller adds this to section->currentPage
+  bool stateChanged = false;  // caller requestUpdate()
 };
 
 class HighlightController {

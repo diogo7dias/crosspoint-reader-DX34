@@ -110,14 +110,14 @@ void test_confirm_select_end_jumps_back_and_starts_timer() {
   HighlightController h;
   h.enter();
   h.setWordsForPage(3, makeWordsSingleLine(6));
-  h.confirm(10, 3, 0);          // SELECT_END, endPage=3, endIdx=5
+  h.confirm(10, 3, 0);  // SELECT_END, endPage=3, endIdx=5
   h.setWordsForPage(4, makeWordsSingleLine(6));
   h.moveCursor(+1, ctx(3, 10, 6));  // pageDelta=+1 (off end), endPage=4, endIdx=0
   // simulate caller advancing to page 4
   auto r = h.confirm(10, 4, /*nowMs=*/2000);
 
   TEST_ASSERT_EQUAL_INT(static_cast<int>(HighlightController::State::SHOW_UNDERLINE), static_cast<int>(h.state()));
-  TEST_ASSERT_EQUAL_INT(-1, r.pageDelta);  // 3 (startPage) - 4 (current)
+  TEST_ASSERT_EQUAL_INT(-1, r.pageDelta);     // 3 (startPage) - 4 (current)
   TEST_ASSERT_EQUAL_INT(-1, h.cachedPage());  // invalidated
   TEST_ASSERT_EQUAL_INT(2000, static_cast<int>(h.underlineStartMs()));
 }
@@ -155,9 +155,9 @@ void test_end_cursor_crosses_page_backward() {
   HighlightController h;
   h.enter();
   h.setWordsForPage(3, makeWordsSingleLine(5));
-  h.confirm(0, 3, 0);                          // SELECT_END, endPage=3, endIdx=4
+  h.confirm(0, 3, 0);  // SELECT_END, endPage=3, endIdx=4
   h.setWordsForPage(4, makeWordsSingleLine(5));
-  h.moveCursor(+1, ctx(3, 10, 5));             // cross to page 4, endIdx=0
+  h.moveCursor(+1, ctx(3, 10, 5));  // cross to page 4, endIdx=0
   // simulate caller advanced to page 4 and refreshed cache
 
   auto r = h.moveCursor(-1, ctx(4, 10, 5));
@@ -173,7 +173,7 @@ void test_end_cursor_on_start_page_clamps_to_start_word() {
   h.setWordsForPage(3, makeWordsSingleLine(6));
   h.moveCursor(+1, ctx(3, 10, 6));
   h.moveCursor(+1, ctx(3, 10, 6));  // cursor=2
-  h.confirm(0, 3, 0);                // startPage=3, startWord=2, SELECT_END
+  h.confirm(0, 3, 0);               // startPage=3, startWord=2, SELECT_END
 
   // End cursor was auto-set to word 5 (last on page). Drag it back.
   for (int i = 0; i < 5; ++i) h.moveCursor(-1, ctx(3, 10, 6));
@@ -214,13 +214,13 @@ void test_underline_timeout() {
   HighlightController h;
   h.enter();
   h.setWordsForPage(2, makeWordsSingleLine(3));
-  h.confirm(0, 2, 0);          // SELECT_END
-  h.confirm(0, 2, 1000);       // SHOW_UNDERLINE @ 1000
+  h.confirm(0, 2, 0);     // SELECT_END
+  h.confirm(0, 2, 1000);  // SHOW_UNDERLINE @ 1000
 
   TEST_ASSERT_FALSE(h.underlineTimedOut(1000));
   TEST_ASSERT_FALSE(h.underlineTimedOut(2000));
   TEST_ASSERT_FALSE(h.underlineTimedOut(3999));
-  TEST_ASSERT_TRUE(h.underlineTimedOut(4000));   // 1000 + 3000
+  TEST_ASSERT_TRUE(h.underlineTimedOut(4000));  // 1000 + 3000
   TEST_ASSERT_TRUE(h.underlineTimedOut(9999));
 }
 
