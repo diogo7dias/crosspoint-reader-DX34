@@ -44,9 +44,18 @@ for size in 14 18; do
   echo "Generating unifont_${size}_regular..."
   "$PYTHON_BIN" fontconvert.py "unifont_${size}_regular" $size "../builtinFonts/source/UI/unifont-english.ttf" > "../builtinFonts/unifont_${size}_regular.h"
 done
-for size in 8 10 12; do
-  echo "Generating ui_${size}_regular..."
-  "$PYTHON_BIN" fontconvert.py "ui_${size}_regular" $size "../builtinFonts/source/UI/CozetteVector.ttf" > "../builtinFonts/ui_${size}_regular.h"
+# Cozette UI fonts: the file name indicates the nominal font size, but the actual
+# FreeType point size passed to fontconvert is +2. This mapping is intentional and
+# was established when the UI first shipped — the device UI is tuned to these
+# exact pixel metrics. Do not "fix" the mismatch by passing $size directly; doing
+# so shrinks every UI element and regresses status bar, menus, and settings.
+UI_FONT_NAMES=(8 10 12)
+UI_FONT_RENDER_SIZES=(10 12 14)
+for i in "${!UI_FONT_NAMES[@]}"; do
+  name_size="${UI_FONT_NAMES[$i]}"
+  render_size="${UI_FONT_RENDER_SIZES[$i]}"
+  echo "Generating ui_${name_size}_regular (render at ${render_size}pt)..."
+  "$PYTHON_BIN" fontconvert.py "ui_${name_size}_regular" $render_size "../builtinFonts/source/UI/CozetteVector.ttf" > "../builtinFonts/ui_${name_size}_regular.h"
 done
 
 echo "Running dedup-shared-tables.py..."
