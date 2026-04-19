@@ -36,7 +36,7 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   items.reserve(19);
   items.push_back({MenuAction::THEMES_MENU, StrId::STR_READING_THEMES});
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
-  items.push_back({MenuAction::HIGHLIGHT_QUOTE, StrId::STR_HIGHLIGHT_MODE});
+  items.push_back({MenuAction::HIGHLIGHT_QUOTE, StrId::STR_GRAB_QUOTE});
   if (hasQuotes) {
     items.push_back({MenuAction::VIEW_QUOTES, StrId::STR_VIEW_QUOTES});
   }
