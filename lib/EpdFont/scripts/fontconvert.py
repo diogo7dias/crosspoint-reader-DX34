@@ -143,7 +143,7 @@ def norm_ceil(val):
 #               12 integer bits, 4 fractional bits = 1/16-pixel resolution.
 #               Encoded from FreeType's 16.16 linearHoriAdvance.
 #
-#   kernMatrix  4.4 signed fixed-point (int8_t).
+#   kernValues  4.4 signed fixed-point (int8_t).
 #               4 integer bits, 4 fractional bits = 1/16-pixel resolution.
 #               Range: -8.0 to +7.9375 pixels.
 #               Encoded from font design-unit kerning values.
@@ -838,6 +838,18 @@ def cp_label(cp):
         return '<backslash>'
     return chr(cp) if 0x20 < cp < 0x7F else f'U+{cp:04X}'
 
+# Validate every glyph fits in the packed 10-byte EpdGlyph field widths defined in
+# EpdFontData.h.  If any of these ranges is exceeded, the struct layout there must be
+# widened in sync — don't silently overflow.
+for g in glyph_props:
+    assert 0 <= g.width      <= 0xFF,   f"{font_name} U+{g.code_point:04X}: width {g.width} out of uint8 range"
+    assert 0 <= g.height     <= 0xFF,   f"{font_name} U+{g.code_point:04X}: height {g.height} out of uint8 range"
+    assert 0 <= g.advance_x  <= 0xFFFF, f"{font_name} U+{g.code_point:04X}: advance_x {g.advance_x} out of uint16 range"
+    assert -128 <= g.left    <= 127,    f"{font_name} U+{g.code_point:04X}: left {g.left} out of int8 range"
+    assert -128 <= g.top     <= 127,    f"{font_name} U+{g.code_point:04X}: top {g.top} out of int8 range"
+    assert 0 <= g.data_length <= 0xFFFF, f"{font_name} U+{g.code_point:04X}: data_length {g.data_length} out of uint16 range"
+    assert 0 <= g.data_offset <= 0xFFFF, f"{font_name} U+{g.code_point:04X}: data_offset {g.data_offset} out of uint16 range"
+
 print(f"static const EpdGlyph {font_name}Glyphs[] = {{")
 for i, g in enumerate(glyph_props):
     print ("    { " + ", ".join([f"{a}" for a in list(g[:-1])]),"},", f"// {cp_label(g.code_point)}")
@@ -869,12 +881,42 @@ if kern_map:
         print(f"    {{ 0x{cp:04X}, {cls} }}, // {cp_label(cp)}")
     print("};\n")
 
-    print(f"static const int8_t {font_name}KernMatrix[] = {{")
+    # CSR-encode the dense matrix.  `row_start` has length (leftClassCount + 1) with
+    # row_start[0] = 0 and row_start[leftClassCount] = total non-zeros.  Within each
+    # row, columns are emitted in ascending order so runtime lookup can early-exit.
+    assert kern_left_class_count <= 0xFF and kern_right_class_count <= 0xFF, \
+        f"class counts exceed uint8_t range (left={kern_left_class_count}, right={kern_right_class_count})"
+    row_start = [0]
+    col_idx = []
+    col_val = []
     for row in range(kern_left_class_count):
-        row_start = row * kern_right_class_count
-        row_vals = kern_matrix[row_start:row_start + kern_right_class_count]
-        print("    " + ", ".join(f"{v:4d}" for v in row_vals) + ",")
+        base = row * kern_right_class_count
+        for col in range(kern_right_class_count):
+            v = kern_matrix[base + col]
+            if v != 0:
+                col_idx.append(col)
+                col_val.append(v)
+        row_start.append(len(col_idx))
+    assert row_start[-1] <= 0xFFFF, \
+        f"non-zero count {row_start[-1]} exceeds uint16 rowStart range"
+
+    print(f"static const uint16_t {font_name}KernRowStart[] = {{")
+    for c in chunks(row_start, 16):
+        print("    " + " ".join(f"{v:5d}," for v in c))
     print("};\n")
+    print(f"static const uint8_t {font_name}KernCols[] = {{")
+    for c in chunks(col_idx, 32):
+        print("    " + " ".join(f"{v:3d}," for v in c))
+    print("};\n")
+    print(f"static const int8_t {font_name}KernValues[] = {{")
+    for c in chunks(col_val, 32):
+        print("    " + " ".join(f"{v:4d}," for v in c))
+    print("};\n")
+
+    dense_bytes = kern_left_class_count * kern_right_class_count
+    csr_bytes = len(row_start) * 2 + len(col_idx) * 2  # uint16 rowStart + uint8 cols + int8 vals
+    print(f"// kernMatrix sparse: {dense_bytes} -> {csr_bytes} bytes "
+          f"({100*csr_bytes/max(dense_bytes,1):.1f}%, {len(col_idx)} non-zeros)", file=sys.stderr)
 
 if ligature_pairs:
     print(f"static const EpdLigaturePair {font_name}LigaturePairs[] = {{")
@@ -902,12 +944,16 @@ print("    nullptr,")
 if kern_map:
     print(f"    {font_name}KernLeftClasses,")
     print(f"    {font_name}KernRightClasses,")
-    print(f"    {font_name}KernMatrix,")
+    print(f"    {font_name}KernRowStart,")
+    print(f"    {font_name}KernCols,")
+    print(f"    {font_name}KernValues,")
     print(f"    {len(kern_left_classes)},")
     print(f"    {len(kern_right_classes)},")
     print(f"    {kern_left_class_count},")
     print(f"    {kern_right_class_count},")
 else:
+    print(f"    nullptr,")
+    print(f"    nullptr,")
     print(f"    nullptr,")
     print(f"    nullptr,")
     print(f"    nullptr,")

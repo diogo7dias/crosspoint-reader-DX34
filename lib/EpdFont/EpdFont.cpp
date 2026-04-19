@@ -100,14 +100,25 @@ static uint8_t lookupKernClass(const EpdKernClassEntry* entries, const uint16_t 
 }
 
 int8_t EpdFont::getKerning(const uint32_t leftCp, const uint32_t rightCp) const {
-  if (!data->kernMatrix) {
+  if (!data->kernRowStart) {
     return 0;
   }
   const uint8_t lc = lookupKernClass(data->kernLeftClasses, data->kernLeftEntryCount, leftCp);
   if (lc == 0) return 0;
   const uint8_t rc = lookupKernClass(data->kernRightClasses, data->kernRightEntryCount, rightCp);
   if (rc == 0) return 0;
-  return data->kernMatrix[(lc - 1) * data->kernRightClassCount + (rc - 1)];
+
+  // CSR row range: non-zero cells for left class lc live at [rowStart[lc-1], rowStart[lc]).
+  // kernCols within a row are sorted ascending, so we can stop as soon as we pass target.
+  const uint8_t targetCol = rc - 1;
+  const uint16_t rowStart = data->kernRowStart[lc - 1];
+  const uint16_t rowEnd = data->kernRowStart[lc];
+  for (uint16_t i = rowStart; i < rowEnd; ++i) {
+    const uint8_t col = data->kernCols[i];
+    if (col == targetCol) return data->kernValues[i];
+    if (col > targetCol) break;  // sorted: target not present
+  }
+  return 0;
 }
 
 uint32_t EpdFont::getLigature(const uint32_t leftCp, const uint32_t rightCp) const {

@@ -29,20 +29,40 @@ constexpr float toFloat(int32_t fp) { return fp / static_cast<float>(1 << FRAC_B
 }  // namespace fp4
 
 /// Fixed-point conventions used by EpdGlyph and EpdFontData:
-///   advanceX:   12.4 unsigned fixed-point in uint16_t  (use fp4::toPixel)
-///   kernMatrix:  4.4 signed fixed-point in int8_t      (use fp4::toPixel)
+///   advanceX:    12.4 unsigned fixed-point in uint16_t (use fp4::toPixel)
+///   kernValues:  4.4 signed fixed-point in int8_t      (use fp4::toPixel)
 /// Both share 4 fractional bits so they combine directly in an accumulator.
 
-/// Font data stored PER GLYPH
+/// Font data stored PER GLYPH.
+///
+/// Layout is hand-packed to 10 bytes (down from 16 with natural alignment).  This saves
+/// ~6 bytes per glyph × thousands of glyphs per font × dozens of fonts = hundreds of KB of
+/// flash in the OTA app partition.  Field widths were chosen after auditing the entire
+/// built-in font collection:
+///
+///   width/height  ≤ 51 / 44 in the shipping 12–17 pt reader fonts        → uint8_t
+///   left          in [-26, 11]                                           → int8_t
+///   top           in [-9, 43]                                            → int8_t
+///   dataLength    ≤ 420 bytes (largest packed 2-bit glyph)               → uint16_t
+///   dataOffset    ≤ 46,435 bytes (largest uncompressed-font bitmap, and
+///                 groups are ≤ 36 KB uncompressed for compressed fonts)  → uint16_t
+///
+/// fontconvert.py asserts each of these ranges at emit time so a future font addition that
+/// would overflow fails the build loudly rather than producing a silently corrupted header.
+///
+/// The struct is marked `packed` because the mix of 1/2-byte fields would otherwise get
+/// padded to 12 bytes on ESP32-C3 (RV32).  RV32IMC handles unaligned `lh`/`lw` transparently
+/// in hardware, so the per-access cost is negligible and glyph lookup is not on any hot
+/// inner loop.
 typedef struct {
-  uint8_t width;        ///< Bitmap dimensions in pixels
-  uint8_t height;       ///< Bitmap dimensions in pixels
+  uint8_t width;        ///< Bitmap width in pixels
+  uint8_t height;       ///< Bitmap height in pixels
   uint16_t advanceX;    ///< Distance to advance cursor (x axis), 12.4 fixed-point in pixels
-  int16_t left;         ///< X dist from cursor pos to UL corner
-  int16_t top;          ///< Y dist from cursor pos to UL corner
+  int8_t left;          ///< X dist from cursor pos to UL corner
+  int8_t top;           ///< Y dist from cursor pos to UL corner
   uint16_t dataLength;  ///< Size of the font data.
-  uint32_t dataOffset;  ///< Pointer into EpdFont->bitmap (or within-group offset for compressed fonts)
-} EpdGlyph;
+  uint16_t dataOffset;  ///< Pointer into EpdFont->bitmap (or within-group offset for compressed fonts)
+} __attribute__((packed)) EpdGlyph;
 
 /// Compressed font group: a DEFLATE-compressed block of glyph bitmaps
 typedef struct {
@@ -90,11 +110,26 @@ typedef struct {
   const uint16_t* glyphToGroup = nullptr;               ///< Per-glyph group ID (nullptr for contiguous-group fonts)
   const EpdKernClassEntry* kernLeftClasses = nullptr;   ///< Sorted left-side class map (nullptr if none)
   const EpdKernClassEntry* kernRightClasses = nullptr;  ///< Sorted right-side class map (nullptr if none)
-  const int8_t* kernMatrix = nullptr;              ///< Flat leftClassCount x rightClassCount matrix, 4.4 fixed-point
+  /// CSR-style sparse kerning matrix.  A dense leftClassCount x rightClassCount grid of
+  /// int8_t 4.4 values is typically ~90 % zeros for Latin class-based kerning, so we store
+  /// only the non-zero cells:
+  ///
+  ///   kernRowStart[leftClassId - 1]       points to the first entry for that row
+  ///   kernRowStart[leftClassId]           points one past the last entry
+  ///   kernCols[i]   is the (rightClassId - 1) of the i-th non-zero
+  ///   kernValues[i] is the 4.4 fixed-point adjustment of the i-th non-zero
+  ///
+  /// kernRowStart has length (leftClassCount + 1) and is non-decreasing, with
+  /// kernRowStart[0] = 0 and kernRowStart[leftClassCount] = total non-zeros.  Within each
+  /// row, kernCols is sorted ascending so getKerning() can linear-scan (rows are short
+  /// enough that binary search costs more than it saves).
+  const uint16_t* kernRowStart = nullptr;          ///< Row offsets into kernCols/kernValues (nullptr if no kerning)
+  const uint8_t* kernCols = nullptr;               ///< Right-class indices of non-zero cells (0-based)
+  const int8_t* kernValues = nullptr;              ///< 4.4 fixed-point kerning values, one per non-zero
   uint16_t kernLeftEntryCount = 0;                 ///< Entries in kernLeftClasses
   uint16_t kernRightEntryCount = 0;                ///< Entries in kernRightClasses
-  uint8_t kernLeftClassCount = 0;                  ///< Number of distinct left classes (matrix rows)
-  uint8_t kernRightClassCount = 0;                 ///< Number of distinct right classes (matrix cols)
+  uint8_t kernLeftClassCount = 0;                  ///< Number of distinct left classes (CSR rows)
+  uint8_t kernRightClassCount = 0;                 ///< Number of distinct right classes (CSR columns)
   const EpdLigaturePair* ligaturePairs = nullptr;  ///< Sorted ligature pair table (nullptr if none)
   uint32_t ligaturePairCount = 0;                  ///< Number of entries in ligaturePairs
 } EpdFontData;

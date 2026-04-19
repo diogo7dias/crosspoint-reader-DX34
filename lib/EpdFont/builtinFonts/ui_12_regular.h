@@ -3,7 +3,7 @@
  * name: ui_12_regular
  * size: 14
  * mode: 1-bit
- * Command used: lib/EpdFont/scripts/fontconvert.py ui_12_regular 14 lib/EpdFont/builtinFonts/source/UI/CozetteVector.ttf
+ * Command used: fontconvert.py ui_12_regular 14 ../builtinFonts/source/UI/CozetteVector.ttf
  */
 #pragma once
 #include "EpdFontData.h"
@@ -3025,6 +3025,8 @@ static const EpdFontData ui_12_regular = {
     false,
     nullptr,
     0,
+    nullptr,
+    nullptr,
     nullptr,
     nullptr,
     nullptr,
