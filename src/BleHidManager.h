@@ -141,7 +141,6 @@ class BleHidManager {
   // Internal helpers (blocking — only called from background task or boot)
   bool connectToDeviceBlocking(const std::string& address);
   bool subscribeToHid();
-  void translateKeycode(uint16_t keycode, bool pressed);
 };
 
 #define BLE_HID BleHidManager::getInstance()

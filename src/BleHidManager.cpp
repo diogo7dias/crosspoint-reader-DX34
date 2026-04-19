@@ -164,8 +164,10 @@ void BleHidManager::connectToDeviceAsync(const std::string& address) {
   state = State::Connecting;
   pendingConnectAddr = address;
 
-  // Launch blocking connect on a background task (4KB stack is enough)
-  xTaskCreate(connectTask, "ble_conn", 4096, this, 1, nullptr);
+  // Launch blocking connect on a background task. 6KB stack leaves headroom
+  // for the NimBLE-Arduino call chain (connect → secureConnection → subscribe
+  // per characteristic); 4KB was tight once explicit pairing was added.
+  xTaskCreate(connectTask, "ble_conn", 6144, this, 1, nullptr);
 }
 
 bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
@@ -448,15 +450,6 @@ void BleHidManager::resetReportBaseline() {
   for (size_t i = 0; i < kMaxDiffBytes; i++) lastReport[i] = 0;
   lastReportLen = kMaxDiffBytes;
   reportBaselined = true;
-}
-
-void BleHidManager::translateKeycode(uint16_t keycode, bool pressed) {
-  for (int i = 0; i < kButtonCount; i++) {
-    if (SETTINGS.bleKeyMap[i] == keycode && keycode != 0) {
-      currentPressed[i] = pressed;
-      return;
-    }
-  }
 }
 
 // --- Button State Polling ---
