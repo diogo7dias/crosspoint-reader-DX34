@@ -126,7 +126,9 @@ class BleHidManager {
   unsigned long lastReconnectAttempt = 0;
   uint8_t reconnectAttempts = 0;
   static constexpr unsigned long kReconnectIntervalMs = 5000;
-  static constexpr uint8_t kConnectTimeoutSec = 5;
+  // 10s covers BLE connect + JustWorks pairing + service discovery; 5s was
+  // too tight once bonding was enabled and the first connect had to pair.
+  static constexpr uint8_t kConnectTimeoutSec = 10;
   static constexpr uint8_t kMaxReconnectAttempts = 5;
 
   // Max scan results

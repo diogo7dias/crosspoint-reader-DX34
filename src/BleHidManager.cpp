@@ -203,6 +203,16 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
   // params and use their own until we issue an L2CAP update.
   client->updateConnParams(12, 24, 0, 600);
 
+  // Force pairing/encryption now rather than waiting for NimBLE to auto-retry
+  // an ATT Insufficient Authentication on the first CCCD write. Explicit is
+  // more reliable: on a first connect we pair and persist an LTK; on reconnect
+  // with an existing bond NimBLE reuses the key and this returns quickly.
+  // We tolerate failure — some devices (non-HID or open HID) don't require it,
+  // and subscribe() below still has NimBLE's implicit retry as a backstop.
+  if (!client->secureConnection()) {
+    LOG_INF("BLE", "secureConnection() did not complete (continuing, subscribe may still work)");
+  }
+
   if (!subscribeToHid()) {
     LOG_ERR("BLE", "Failed to subscribe to HID reports");
     client->disconnect();
@@ -255,6 +265,11 @@ bool BleHidManager::subscribeToHid() {
   if (chars) {
     for (auto* chr : *chars) {
       if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
+        // Clear stale CCCD state when reusing a client across reconnects —
+        // NimBLE-Arduino caches subscription state on the characteristic, and
+        // a previous connection's ghost value can make subscribe() think it
+        // has nothing to do and return without writing CCCD.
+        (void)chr->unsubscribe();
         const bool ok =
             chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
               onHidReport(data, len, /*isBootKeyboard=*/false);
@@ -275,6 +290,7 @@ bool BleHidManager::subscribeToHid() {
   // its Report-Protocol stream on the generic chars above.
   NimBLERemoteCharacteristic* bootKbChar = hidService->getCharacteristic(kHidBootKbInputCharUuid);
   if (bootKbChar && bootKbChar->canNotify()) {
+    (void)bootKbChar->unsubscribe();
     const bool ok =
         bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
           onHidReport(data, len, /*isBootKeyboard=*/true);
