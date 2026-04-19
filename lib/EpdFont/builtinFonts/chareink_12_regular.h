@@ -7,6 +7,7 @@
  */
 #pragma once
 #include "EpdFontData.h"
+#include "shared/chareink_regular_tables.h"
 
 static const uint8_t chareink_12_regularBitmaps[25552] = {
     0x95, 0x58, 0xBF, 0x8F, 0xDC, 0xC6, 0x15, 0x7E, 0x24, 0xED, 0x23, 0x02, 0x06, 0x18, 0x15, 0x49,
@@ -2644,55 +2645,6 @@ static const EpdGlyph chareink_12_regularGlyphs[] = {
     { 26, 26, 385, -1, 22, 169, 0 }, // U+FFFD
 };
 
-static const EpdUnicodeInterval chareink_12_regularIntervals[] = {
-    { 0x20, 0x7E, 0x0 },
-    { 0xA0, 0xFF, 0x5F },
-    { 0x100, 0x148, 0xBF },
-    { 0x14A, 0x17F, 0x108 },
-    { 0x1A0, 0x1A1, 0x13E },
-    { 0x1AF, 0x1B0, 0x140 },
-    { 0x1C4, 0x21F, 0x142 },
-    { 0x300, 0x320, 0x19E },
-    { 0x323, 0x33F, 0x1BF },
-    { 0x346, 0x36F, 0x1DC },
-    { 0x400, 0x45F, 0x206 },
-    { 0x462, 0x463, 0x266 },
-    { 0x472, 0x475, 0x268 },
-    { 0x48A, 0x4FF, 0x26C },
-    { 0x1EA0, 0x1EF9, 0x2E2 },
-    { 0x2000, 0x2030, 0x33C },
-    { 0x2032, 0x203A, 0x36D },
-    { 0x203C, 0x203C, 0x376 },
-    { 0x203F, 0x2041, 0x377 },
-    { 0x2044, 0x2044, 0x37A },
-    { 0x2053, 0x2053, 0x37B },
-    { 0x2057, 0x2057, 0x37C },
-    { 0x2060, 0x2063, 0x37D },
-    { 0x206A, 0x206F, 0x381 },
-    { 0x2070, 0x2071, 0x387 },
-    { 0x2074, 0x208E, 0x389 },
-    { 0x2090, 0x209C, 0x3A4 },
-    { 0x20A0, 0x20BD, 0x3B1 },
-    { 0x2190, 0x219B, 0x3CF },
-    { 0x21A8, 0x21A8, 0x3DB },
-    { 0x21D0, 0x21D5, 0x3DC },
-    { 0x2202, 0x2206, 0x3E2 },
-    { 0x220F, 0x220F, 0x3E7 },
-    { 0x2211, 0x2213, 0x3E8 },
-    { 0x2219, 0x221A, 0x3EB },
-    { 0x221E, 0x221E, 0x3ED },
-    { 0x2225, 0x2226, 0x3EE },
-    { 0x222B, 0x222B, 0x3F0 },
-    { 0x2234, 0x2235, 0x3F1 },
-    { 0x223C, 0x223C, 0x3F3 },
-    { 0x2248, 0x2248, 0x3F4 },
-    { 0x225F, 0x2262, 0x3F5 },
-    { 0x2264, 0x2265, 0x3F9 },
-    { 0x2282, 0x2287, 0x3FB },
-    { 0xFB00, 0xFB06, 0x401 },
-    { 0xFFFD, 0xFFFD, 0x408 },
-};
-
 static const EpdFontGroup chareink_12_regularGroups[] = {
     { 0, 2704, 5743, 95, 0 },
     { 2704, 2640, 6916, 96, 95 },
@@ -2708,148 +2660,6 @@ static const EpdFontGroup chareink_12_regularGroups[] = {
     { 24341, 933, 2043, 31, 994 },
     { 25274, 166, 475, 7, 1025 },
     { 25440, 112, 182, 1, 1032 },
-};
-
-static const EpdKernClassEntry chareink_12_regularKernLeftClasses[] = {
-    { 0x002D, 1 }, // -
-    { 0x0031, 2 }, // 1
-    { 0x0037, 3 }, // 7
-    { 0x003F, 4 }, // ?
-    { 0x0041, 5 }, // A
-    { 0x0042, 6 }, // B
-    { 0x0044, 7 }, // D
-    { 0x0046, 8 }, // F
-    { 0x0047, 9 }, // G
-    { 0x0048, 10 }, // H
-    { 0x004A, 11 }, // J
-    { 0x004B, 12 }, // K
-    { 0x004C, 13 }, // L
-    { 0x004F, 14 }, // O
-    { 0x0050, 15 }, // P
-    { 0x0052, 16 }, // R
-    { 0x0054, 17 }, // T
-    { 0x0055, 18 }, // U
-    { 0x0056, 19 }, // V
-    { 0x0057, 20 }, // W
-    { 0x0058, 21 }, // X
-    { 0x0059, 22 }, // Y
-    { 0x0061, 23 }, // a
-    { 0x0062, 24 }, // b
-    { 0x0063, 25 }, // c
-    { 0x0064, 26 }, // d
-    { 0x0065, 27 }, // e
-    { 0x0066, 28 }, // f
-    { 0x0068, 29 }, // h
-    { 0x0069, 30 }, // i
-    { 0x006C, 31 }, // l
-    { 0x006E, 32 }, // n
-    { 0x006F, 33 }, // o
-    { 0x0070, 34 }, // p
-    { 0x0072, 35 }, // r
-    { 0x0073, 36 }, // s
-    { 0x0074, 37 }, // t
-    { 0x0075, 38 }, // u
-    { 0x0076, 39 }, // v
-    { 0x0077, 40 }, // w
-    { 0x0079, 41 }, // y
-    { 0x00BB, 42 }, // U+00BB
-    { 0x00C1, 43 }, // U+00C1
-    { 0x00C4, 44 }, // U+00C4
-    { 0x00C5, 45 }, // U+00C5
-    { 0x00C6, 46 }, // U+00C6
-    { 0x00D0, 47 }, // U+00D0
-    { 0x00D3, 48 }, // U+00D3
-    { 0x00D6, 49 }, // U+00D6
-    { 0x00D8, 50 }, // U+00D8
-    { 0x00DA, 51 }, // U+00DA
-    { 0x00DC, 52 }, // U+00DC
-    { 0x0141, 53 }, // U+0141
-    { 0x2018, 54 }, // U+2018
-    { 0x2019, 55 }, // U+2019
-    { 0x201A, 56 }, // U+201A
-    { 0x201C, 57 }, // U+201C
-    { 0x201D, 58 }, // U+201D
-    { 0x201E, 59 }, // U+201E
-    { 0x203A, 42 }, // U+203A
-};
-
-static const EpdKernClassEntry chareink_12_regularKernRightClasses[] = {
-    { 0x002C, 1 }, // ,
-    { 0x002D, 2 }, // -
-    { 0x002E, 3 }, // .
-    { 0x0030, 4 }, // 0
-    { 0x0031, 4 }, // 1
-    { 0x0032, 4 }, // 2
-    { 0x0033, 4 }, // 3
-    { 0x0034, 5 }, // 4
-    { 0x0035, 4 }, // 5
-    { 0x0036, 6 }, // 6
-    { 0x0037, 7 }, // 7
-    { 0x0038, 8 }, // 8
-    { 0x0039, 8 }, // 9
-    { 0x003A, 9 }, // :
-    { 0x003B, 10 }, // ;
-    { 0x0041, 11 }, // A
-    { 0x0043, 12 }, // C
-    { 0x0047, 13 }, // G
-    { 0x004A, 14 }, // J
-    { 0x004F, 15 }, // O
-    { 0x0051, 16 }, // Q
-    { 0x0054, 17 }, // T
-    { 0x0055, 18 }, // U
-    { 0x0056, 19 }, // V
-    { 0x0057, 20 }, // W
-    { 0x0058, 21 }, // X
-    { 0x0059, 22 }, // Y
-    { 0x0061, 23 }, // a
-    { 0x0062, 24 }, // b
-    { 0x0063, 25 }, // c
-    { 0x0064, 26 }, // d
-    { 0x0065, 27 }, // e
-    { 0x0066, 28 }, // f
-    { 0x0068, 29 }, // h
-    { 0x0069, 30 }, // i
-    { 0x006C, 31 }, // l
-    { 0x006E, 32 }, // n
-    { 0x006F, 33 }, // o
-    { 0x0070, 34 }, // p
-    { 0x0072, 35 }, // r
-    { 0x0073, 36 }, // s
-    { 0x0074, 37 }, // t
-    { 0x0075, 38 }, // u
-    { 0x0076, 39 }, // v
-    { 0x0077, 40 }, // w
-    { 0x0079, 41 }, // y
-    { 0x00AB, 42 }, // U+00AB
-    { 0x00C1, 43 }, // U+00C1
-    { 0x00C4, 44 }, // U+00C4
-    { 0x00C5, 45 }, // U+00C5
-    { 0x00C6, 46 }, // U+00C6
-    { 0x00D2, 47 }, // U+00D2
-    { 0x00D3, 48 }, // U+00D3
-    { 0x00D6, 49 }, // U+00D6
-    { 0x00D8, 50 }, // U+00D8
-    { 0x00D9, 47 }, // U+00D9
-    { 0x00DA, 51 }, // U+00DA
-    { 0x00DC, 52 }, // U+00DC
-    { 0x00E1, 53 }, // U+00E1
-    { 0x00E4, 54 }, // U+00E4
-    { 0x00E6, 55 }, // U+00E6
-    { 0x00E8, 56 }, // U+00E8
-    { 0x00E9, 57 }, // U+00E9
-    { 0x00EB, 58 }, // U+00EB
-    { 0x00F3, 59 }, // U+00F3
-    { 0x00F6, 60 }, // U+00F6
-    { 0x00F8, 61 }, // U+00F8
-    { 0x00FA, 62 }, // U+00FA
-    { 0x00FC, 63 }, // U+00FC
-    { 0x0152, 64 }, // U+0152
-    { 0x0153, 65 }, // U+0153
-    { 0x2018, 66 }, // U+2018
-    { 0x2019, 67 }, // U+2019
-    { 0x201C, 66 }, // U+201C
-    { 0x201D, 67 }, // U+201D
-    { 0x2039, 42 }, // U+2039
 };
 
 static const int8_t chareink_12_regularKernMatrix[] = {
@@ -2914,18 +2724,10 @@ static const int8_t chareink_12_regularKernMatrix[] = {
        0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  -15,  -15,   15,  -15,  -15,  -20,  -15,  -54,  -39,    0,  -39,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  -34,  -34,    0,    0,    0,    0,    0,    0,  -15,  -15,  -15,    0,  -15,  -15,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
 };
 
-static const EpdLigaturePair chareink_12_regularLigaturePairs[] = {
-    { 0x00660066, 0xFB00 }, // f f -> U+FB00
-    { 0x00660069, 0xFB01 }, // f i -> U+FB01
-    { 0x0066006C, 0xFB02 }, // f l -> U+FB02
-    { 0xFB000069, 0xFB03 }, // U+FB00 i -> U+FB03
-    { 0xFB00006C, 0xFB04 }, // U+FB00 l -> U+FB04
-};
-
 static const EpdFontData chareink_12_regular = {
     chareink_12_regularBitmaps,
     chareink_12_regularGlyphs,
-    chareink_12_regularIntervals,
+    chareink_regularIntervals,
     46,
     26,
     21,
@@ -2934,13 +2736,13 @@ static const EpdFontData chareink_12_regular = {
     chareink_12_regularGroups,
     14,
     nullptr,
-    chareink_12_regularKernLeftClasses,
-    chareink_12_regularKernRightClasses,
+    chareink_regularKernLeftClasses,
+    chareink_regularKernRightClasses,
     chareink_12_regularKernMatrix,
     60,
     76,
     59,
     67,
-    chareink_12_regularLigaturePairs,
+    chareink_regularLigaturePairs,
     5,
 };

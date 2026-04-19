@@ -7,6 +7,7 @@
  */
 #pragma once
 #include "EpdFontData.h"
+#include "shared/chareink_bold_tables.h"
 
 static const uint8_t chareink_15_boldBitmaps[35981] = {
     0xA5, 0x59, 0x3D, 0x93, 0xDD, 0x56, 0x19, 0x3E, 0xBA, 0x8A, 0xAD, 0xC1, 0x2A, 0x44, 0x81, 0x09,
@@ -3294,55 +3295,6 @@ static const EpdGlyph chareink_15_boldGlyphs[] = {
     { 32, 33, 481, -1, 28, 264, 0 }, // U+FFFD
 };
 
-static const EpdUnicodeInterval chareink_15_boldIntervals[] = {
-    { 0x20, 0x7E, 0x0 },
-    { 0xA0, 0xFF, 0x5F },
-    { 0x100, 0x148, 0xBF },
-    { 0x14A, 0x17F, 0x108 },
-    { 0x1A0, 0x1A1, 0x13E },
-    { 0x1AF, 0x1B0, 0x140 },
-    { 0x1C4, 0x21F, 0x142 },
-    { 0x300, 0x320, 0x19E },
-    { 0x323, 0x33F, 0x1BF },
-    { 0x346, 0x36F, 0x1DC },
-    { 0x400, 0x45F, 0x206 },
-    { 0x462, 0x463, 0x266 },
-    { 0x472, 0x475, 0x268 },
-    { 0x48A, 0x4FF, 0x26C },
-    { 0x1EA0, 0x1EF9, 0x2E2 },
-    { 0x2000, 0x2030, 0x33C },
-    { 0x2032, 0x203A, 0x36D },
-    { 0x203C, 0x203C, 0x376 },
-    { 0x203F, 0x2041, 0x377 },
-    { 0x2044, 0x2044, 0x37A },
-    { 0x2053, 0x2053, 0x37B },
-    { 0x2057, 0x2057, 0x37C },
-    { 0x2060, 0x2063, 0x37D },
-    { 0x206A, 0x206F, 0x381 },
-    { 0x2070, 0x2071, 0x387 },
-    { 0x2074, 0x208E, 0x389 },
-    { 0x2090, 0x209C, 0x3A4 },
-    { 0x20A0, 0x20BD, 0x3B1 },
-    { 0x2190, 0x219B, 0x3CF },
-    { 0x21A8, 0x21A8, 0x3DB },
-    { 0x21D0, 0x21D5, 0x3DC },
-    { 0x2202, 0x2206, 0x3E2 },
-    { 0x220F, 0x220F, 0x3E7 },
-    { 0x2211, 0x2213, 0x3E8 },
-    { 0x2219, 0x221A, 0x3EB },
-    { 0x221E, 0x221E, 0x3ED },
-    { 0x2225, 0x2226, 0x3EE },
-    { 0x222B, 0x222B, 0x3F0 },
-    { 0x2234, 0x2235, 0x3F1 },
-    { 0x223C, 0x223C, 0x3F3 },
-    { 0x2248, 0x2248, 0x3F4 },
-    { 0x225F, 0x2262, 0x3F5 },
-    { 0x2264, 0x2265, 0x3F9 },
-    { 0x2282, 0x2287, 0x3FB },
-    { 0xFB00, 0xFB04, 0x401 },
-    { 0xFFFD, 0xFFFD, 0x406 },
-};
-
 static const EpdFontGroup chareink_15_boldGroups[] = {
     { 0, 3792, 8964, 95, 0 },
     { 3792, 3687, 10856, 96, 95 },
@@ -3358,150 +3310,6 @@ static const EpdFontGroup chareink_15_boldGroups[] = {
     { 34363, 1212, 3030, 31, 994 },
     { 35575, 266, 759, 5, 1025 },
     { 35841, 140, 264, 1, 1030 },
-};
-
-static const EpdKernClassEntry chareink_15_boldKernLeftClasses[] = {
-    { 0x002D, 1 }, // -
-    { 0x0031, 2 }, // 1
-    { 0x0037, 3 }, // 7
-    { 0x003F, 4 }, // ?
-    { 0x0041, 5 }, // A
-    { 0x0042, 6 }, // B
-    { 0x0043, 7 }, // C
-    { 0x0044, 8 }, // D
-    { 0x0046, 9 }, // F
-    { 0x0047, 10 }, // G
-    { 0x004A, 11 }, // J
-    { 0x004B, 12 }, // K
-    { 0x004C, 13 }, // L
-    { 0x004F, 14 }, // O
-    { 0x0050, 15 }, // P
-    { 0x0051, 16 }, // Q
-    { 0x0052, 17 }, // R
-    { 0x0054, 18 }, // T
-    { 0x0055, 19 }, // U
-    { 0x0056, 20 }, // V
-    { 0x0057, 21 }, // W
-    { 0x0058, 22 }, // X
-    { 0x0059, 23 }, // Y
-    { 0x0061, 24 }, // a
-    { 0x0062, 25 }, // b
-    { 0x0063, 26 }, // c
-    { 0x0064, 27 }, // d
-    { 0x0065, 28 }, // e
-    { 0x0066, 29 }, // f
-    { 0x0068, 30 }, // h
-    { 0x0069, 31 }, // i
-    { 0x006C, 32 }, // l
-    { 0x006E, 33 }, // n
-    { 0x006F, 34 }, // o
-    { 0x0072, 35 }, // r
-    { 0x0074, 36 }, // t
-    { 0x0075, 37 }, // u
-    { 0x0076, 38 }, // v
-    { 0x0077, 39 }, // w
-    { 0x0079, 38 }, // y
-    { 0x00BB, 40 }, // U+00BB
-    { 0x00C1, 41 }, // U+00C1
-    { 0x00C4, 42 }, // U+00C4
-    { 0x00C5, 43 }, // U+00C5
-    { 0x00C6, 44 }, // U+00C6
-    { 0x00D0, 45 }, // U+00D0
-    { 0x00D3, 46 }, // U+00D3
-    { 0x00D6, 46 }, // U+00D6
-    { 0x00D8, 47 }, // U+00D8
-    { 0x00DA, 48 }, // U+00DA
-    { 0x00DC, 49 }, // U+00DC
-    { 0x0141, 50 }, // U+0141
-    { 0x2018, 51 }, // U+2018
-    { 0x2019, 52 }, // U+2019
-    { 0x201A, 53 }, // U+201A
-    { 0x201C, 54 }, // U+201C
-    { 0x201D, 52 }, // U+201D
-    { 0x201E, 55 }, // U+201E
-    { 0x203A, 56 }, // U+203A
-};
-
-static const EpdKernClassEntry chareink_15_boldKernRightClasses[] = {
-    { 0x002C, 1 }, // ,
-    { 0x002D, 2 }, // -
-    { 0x002E, 3 }, // .
-    { 0x0030, 4 }, // 0
-    { 0x0031, 5 }, // 1
-    { 0x0032, 6 }, // 2
-    { 0x0033, 7 }, // 3
-    { 0x0034, 8 }, // 4
-    { 0x0035, 9 }, // 5
-    { 0x0036, 10 }, // 6
-    { 0x0037, 11 }, // 7
-    { 0x0038, 12 }, // 8
-    { 0x0039, 13 }, // 9
-    { 0x003A, 14 }, // :
-    { 0x003B, 15 }, // ;
-    { 0x0041, 16 }, // A
-    { 0x0043, 17 }, // C
-    { 0x0047, 18 }, // G
-    { 0x004A, 19 }, // J
-    { 0x004F, 20 }, // O
-    { 0x0051, 18 }, // Q
-    { 0x0054, 21 }, // T
-    { 0x0055, 22 }, // U
-    { 0x0056, 23 }, // V
-    { 0x0057, 24 }, // W
-    { 0x0058, 25 }, // X
-    { 0x0059, 26 }, // Y
-    { 0x0061, 27 }, // a
-    { 0x0062, 28 }, // b
-    { 0x0063, 29 }, // c
-    { 0x0064, 30 }, // d
-    { 0x0065, 31 }, // e
-    { 0x0066, 32 }, // f
-    { 0x0068, 33 }, // h
-    { 0x0069, 34 }, // i
-    { 0x006C, 35 }, // l
-    { 0x006E, 36 }, // n
-    { 0x006F, 37 }, // o
-    { 0x0072, 38 }, // r
-    { 0x0073, 39 }, // s
-    { 0x0074, 40 }, // t
-    { 0x0075, 41 }, // u
-    { 0x0076, 42 }, // v
-    { 0x0077, 43 }, // w
-    { 0x0079, 44 }, // y
-    { 0x00AB, 45 }, // U+00AB
-    { 0x00C1, 46 }, // U+00C1
-    { 0x00C4, 47 }, // U+00C4
-    { 0x00C5, 48 }, // U+00C5
-    { 0x00C6, 49 }, // U+00C6
-    { 0x00D2, 18 }, // U+00D2
-    { 0x00D3, 50 }, // U+00D3
-    { 0x00D6, 50 }, // U+00D6
-    { 0x00D8, 51 }, // U+00D8
-    { 0x00D9, 52 }, // U+00D9
-    { 0x00DA, 53 }, // U+00DA
-    { 0x00DC, 54 }, // U+00DC
-    { 0x00E1, 55 }, // U+00E1
-    { 0x00E4, 56 }, // U+00E4
-    { 0x00E6, 57 }, // U+00E6
-    { 0x00E8, 58 }, // U+00E8
-    { 0x00E9, 59 }, // U+00E9
-    { 0x00EB, 60 }, // U+00EB
-    { 0x00F3, 61 }, // U+00F3
-    { 0x00F6, 62 }, // U+00F6
-    { 0x00F8, 63 }, // U+00F8
-    { 0x00FA, 64 }, // U+00FA
-    { 0x00FC, 65 }, // U+00FC
-    { 0x0152, 66 }, // U+0152
-    { 0x0153, 67 }, // U+0153
-    { 0x2018, 68 }, // U+2018
-    { 0x2019, 69 }, // U+2019
-    { 0x201A, 70 }, // U+201A
-    { 0x201C, 71 }, // U+201C
-    { 0x201D, 72 }, // U+201D
-    { 0x201E, 70 }, // U+201E
-    { 0x2039, 73 }, // U+2039
-    { 0xFB01, 32 }, // U+FB01
-    { 0xFB02, 32 }, // U+FB02
 };
 
 static const int8_t chareink_15_boldKernMatrix[] = {
@@ -3563,18 +3371,10 @@ static const int8_t chareink_15_boldKernMatrix[] = {
        0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,  -34,    0,  -15,  -12,    0,  -47,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
 };
 
-static const EpdLigaturePair chareink_15_boldLigaturePairs[] = {
-    { 0x00660066, 0xFB00 }, // f f -> U+FB00
-    { 0x00660069, 0xFB01 }, // f i -> U+FB01
-    { 0x0066006C, 0xFB02 }, // f l -> U+FB02
-    { 0xFB000069, 0xFB03 }, // U+FB00 i -> U+FB03
-    { 0xFB00006C, 0xFB04 }, // U+FB00 l -> U+FB04
-};
-
 static const EpdFontData chareink_15_bold = {
     chareink_15_boldBitmaps,
     chareink_15_boldGlyphs,
-    chareink_15_boldIntervals,
+    chareink_boldIntervals,
     46,
     33,
     26,
@@ -3583,13 +3383,13 @@ static const EpdFontData chareink_15_bold = {
     chareink_15_boldGroups,
     14,
     nullptr,
-    chareink_15_boldKernLeftClasses,
-    chareink_15_boldKernRightClasses,
+    chareink_boldKernLeftClasses,
+    chareink_boldKernRightClasses,
     chareink_15_boldKernMatrix,
     59,
     79,
     56,
     73,
-    chareink_15_boldLigaturePairs,
+    chareink_boldLigaturePairs,
     5,
 };

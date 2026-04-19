@@ -49,4 +49,7 @@ for size in 8 10 12; do
   "$PYTHON_BIN" fontconvert.py "ui_${size}_regular" $size "../builtinFonts/source/UI/CozetteVector.ttf" > "../builtinFonts/ui_${size}_regular.h"
 done
 
+echo "Running dedup-shared-tables.py..."
+"$PYTHON_BIN" "$(dirname "$0")/dedup-shared-tables.py"
+
 echo "All fonts generated."

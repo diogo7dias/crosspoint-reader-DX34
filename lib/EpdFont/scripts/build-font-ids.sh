@@ -8,26 +8,34 @@ font_id() {
   ruby -rdigest -e 'puts(ARGV.map{|f| Digest::SHA256.hexdigest(File.read(f)).to_i(16)}.sum % (2**32) - (2**31))' "$@"
 }
 
-echo "#define CHAREINK_12_FONT_ID ($(font_id ./chareink_12_regular.h ./chareink_12_bold.h ./chareink_12_italic.h))"
-echo "#define CHAREINK_13_FONT_ID ($(font_id ./chareink_13_regular.h ./chareink_13_bold.h ./chareink_13_italic.h))"
-echo "#define CHAREINK_14_FONT_ID ($(font_id ./chareink_14_regular.h ./chareink_14_bold.h ./chareink_14_italic.h))"
-echo "#define CHAREINK_15_FONT_ID ($(font_id ./chareink_15_regular.h ./chareink_15_bold.h ./chareink_15_italic.h))"
-echo "#define CHAREINK_16_FONT_ID ($(font_id ./chareink_16_regular.h ./chareink_16_bold.h ./chareink_16_italic.h))"
-echo "#define CHAREINK_17_FONT_ID ($(font_id ./chareink_17_regular.h ./chareink_17_bold.h ./chareink_17_italic.h))"
+# Reader-font IDs hash the 3 weight-specific per-size headers plus the matching shared
+# tables, so a change to either the per-size bitmap / kerning matrix or a shared
+# interval / class / ligature table invalidates the on-SD font cache.
+reader_shared() {
+  local family=$1
+  echo "./shared/${family}_regular_tables.h ./shared/${family}_bold_tables.h ./shared/${family}_italic_tables.h"
+}
+
+echo "#define CHAREINK_12_FONT_ID ($(font_id ./chareink_12_regular.h ./chareink_12_bold.h ./chareink_12_italic.h $(reader_shared chareink)))"
+echo "#define CHAREINK_13_FONT_ID ($(font_id ./chareink_13_regular.h ./chareink_13_bold.h ./chareink_13_italic.h $(reader_shared chareink)))"
+echo "#define CHAREINK_14_FONT_ID ($(font_id ./chareink_14_regular.h ./chareink_14_bold.h ./chareink_14_italic.h $(reader_shared chareink)))"
+echo "#define CHAREINK_15_FONT_ID ($(font_id ./chareink_15_regular.h ./chareink_15_bold.h ./chareink_15_italic.h $(reader_shared chareink)))"
+echo "#define CHAREINK_16_FONT_ID ($(font_id ./chareink_16_regular.h ./chareink_16_bold.h ./chareink_16_italic.h $(reader_shared chareink)))"
+echo "#define CHAREINK_17_FONT_ID ($(font_id ./chareink_17_regular.h ./chareink_17_bold.h ./chareink_17_italic.h $(reader_shared chareink)))"
 echo ""
-echo "#define BOOKERLY_12_FONT_ID ($(font_id ./bookerly_12_regular.h ./bookerly_12_bold.h ./bookerly_12_italic.h))"
-echo "#define BOOKERLY_13_FONT_ID ($(font_id ./bookerly_13_regular.h ./bookerly_13_bold.h ./bookerly_13_italic.h))"
-echo "#define BOOKERLY_14_FONT_ID ($(font_id ./bookerly_14_regular.h ./bookerly_14_bold.h ./bookerly_14_italic.h))"
-echo "#define BOOKERLY_15_FONT_ID ($(font_id ./bookerly_15_regular.h ./bookerly_15_bold.h ./bookerly_15_italic.h))"
-echo "#define BOOKERLY_16_FONT_ID ($(font_id ./bookerly_16_regular.h ./bookerly_16_bold.h ./bookerly_16_italic.h))"
-echo "#define BOOKERLY_17_FONT_ID ($(font_id ./bookerly_17_regular.h ./bookerly_17_bold.h ./bookerly_17_italic.h))"
+echo "#define BOOKERLY_12_FONT_ID ($(font_id ./bookerly_12_regular.h ./bookerly_12_bold.h ./bookerly_12_italic.h $(reader_shared bookerly)))"
+echo "#define BOOKERLY_13_FONT_ID ($(font_id ./bookerly_13_regular.h ./bookerly_13_bold.h ./bookerly_13_italic.h $(reader_shared bookerly)))"
+echo "#define BOOKERLY_14_FONT_ID ($(font_id ./bookerly_14_regular.h ./bookerly_14_bold.h ./bookerly_14_italic.h $(reader_shared bookerly)))"
+echo "#define BOOKERLY_15_FONT_ID ($(font_id ./bookerly_15_regular.h ./bookerly_15_bold.h ./bookerly_15_italic.h $(reader_shared bookerly)))"
+echo "#define BOOKERLY_16_FONT_ID ($(font_id ./bookerly_16_regular.h ./bookerly_16_bold.h ./bookerly_16_italic.h $(reader_shared bookerly)))"
+echo "#define BOOKERLY_17_FONT_ID ($(font_id ./bookerly_17_regular.h ./bookerly_17_bold.h ./bookerly_17_italic.h $(reader_shared bookerly)))"
 echo ""
-echo "#define VOLLKORN_12_FONT_ID ($(font_id ./vollkorn_12_regular.h ./vollkorn_12_bold.h ./vollkorn_12_italic.h))"
-echo "#define VOLLKORN_13_FONT_ID ($(font_id ./vollkorn_13_regular.h ./vollkorn_13_bold.h ./vollkorn_13_italic.h))"
-echo "#define VOLLKORN_14_FONT_ID ($(font_id ./vollkorn_14_regular.h ./vollkorn_14_bold.h ./vollkorn_14_italic.h))"
-echo "#define VOLLKORN_15_FONT_ID ($(font_id ./vollkorn_15_regular.h ./vollkorn_15_bold.h ./vollkorn_15_italic.h))"
-echo "#define VOLLKORN_16_FONT_ID ($(font_id ./vollkorn_16_regular.h ./vollkorn_16_bold.h ./vollkorn_16_italic.h))"
-echo "#define VOLLKORN_17_FONT_ID ($(font_id ./vollkorn_17_regular.h ./vollkorn_17_bold.h ./vollkorn_17_italic.h))"
+echo "#define VOLLKORN_12_FONT_ID ($(font_id ./vollkorn_12_regular.h ./vollkorn_12_bold.h ./vollkorn_12_italic.h $(reader_shared vollkorn)))"
+echo "#define VOLLKORN_13_FONT_ID ($(font_id ./vollkorn_13_regular.h ./vollkorn_13_bold.h ./vollkorn_13_italic.h $(reader_shared vollkorn)))"
+echo "#define VOLLKORN_14_FONT_ID ($(font_id ./vollkorn_14_regular.h ./vollkorn_14_bold.h ./vollkorn_14_italic.h $(reader_shared vollkorn)))"
+echo "#define VOLLKORN_15_FONT_ID ($(font_id ./vollkorn_15_regular.h ./vollkorn_15_bold.h ./vollkorn_15_italic.h $(reader_shared vollkorn)))"
+echo "#define VOLLKORN_16_FONT_ID ($(font_id ./vollkorn_16_regular.h ./vollkorn_16_bold.h ./vollkorn_16_italic.h $(reader_shared vollkorn)))"
+echo "#define VOLLKORN_17_FONT_ID ($(font_id ./vollkorn_17_regular.h ./vollkorn_17_bold.h ./vollkorn_17_italic.h $(reader_shared vollkorn)))"
 echo ""
 echo "#define UNIFONT_14_FONT_ID ($(font_id ./unifont_14_regular.h))"
 echo "#define UNIFONT_18_FONT_ID ($(font_id ./unifont_18_regular.h))"
