@@ -108,9 +108,11 @@ void ClearCacheActivity::clearCache() {
   // Files to preserve during cache clear (reading progress, per-book settings, bookmarks).
   static constexpr const char* kPreserveFiles[] = {
       "/progress.bin",
+      "/progress.bin.bak",
       "/reader_settings.json",
       "/bookmarks.json",
   };
+  constexpr int kPreserveCount = sizeof(kPreserveFiles) / sizeof(kPreserveFiles[0]);
 
   // Pass 2: process each cache directory independently.
   for (const auto& fullPath : cacheDirs) {
@@ -122,9 +124,9 @@ void ClearCacheActivity::clearCache() {
       std::vector<uint8_t> data;
       bool valid = false;
     };
-    PreservedFile preserved[3];  // matches kPreserveFiles count
+    PreservedFile preserved[kPreserveCount];
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < kPreserveCount; i++) {
       preserved[i].suffix = kPreserveFiles[i];
       FsFile f;
       const std::string path = fullPath + kPreserveFiles[i];
@@ -154,7 +156,7 @@ void ClearCacheActivity::clearCache() {
 
     // Restore preserved files.
     bool restoreFailed = false;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < kPreserveCount; i++) {
       if (!preserved[i].valid) continue;
       FsFile out;
       const std::string path = fullPath + preserved[i].suffix;

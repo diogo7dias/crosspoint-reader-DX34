@@ -153,7 +153,14 @@ void EpubReaderActivity::onEnter() {
 
   int32_t loadedPageCount = -1;
   FsFile f;
-  if (Storage.openFileForRead("ERS", epub->getCachePath() + "/progress.bin", f)) {
+  const std::string progPath = epub->getCachePath() + "/progress.bin";
+  const std::string bakPath = epub->getCachePath() + "/progress.bin.bak";
+  bool opened = Storage.openFileForRead("ERS", progPath, f);
+  if (!opened && Storage.exists(bakPath.c_str())) {
+    LOG_INF("ERS", "progress.bin missing, recovering from progress.bin.bak");
+    opened = Storage.openFileForRead("ERS", bakPath, f);
+  }
+  if (opened) {
     uint8_t data[6];
     int dataSize = f.read(data, 6);
     if (dataSize == 4 || dataSize == 6) {

@@ -2,6 +2,7 @@
 
 #include <HalStorage.h>
 
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -31,7 +32,7 @@
 class CssParser {
  public:
   explicit CssParser(std::string cachePath) : cachePath(std::move(cachePath)) {}
-  ~CssParser() = default;
+  ~CssParser() { clear(); }
 
   // Non-copyable
   CssParser(const CssParser&) = delete;
@@ -63,19 +64,22 @@ class CssParser {
   [[nodiscard]] static CssStyle parseInlineStyle(const std::string& styleValue);
 
   /**
-   * Check if any rules have been loaded
+   * Check if any rules have been loaded (RAM map or disk-paged index)
    */
-  [[nodiscard]] bool empty() const { return rulesBySelector_.empty(); }
+  [[nodiscard]] bool empty() const { return rulesBySelector_.empty() && offsetsBySelector_.empty(); }
 
   /**
    * Get count of loaded rule sets
    */
-  [[nodiscard]] size_t ruleCount() const { return rulesBySelector_.size(); }
+  [[nodiscard]] size_t ruleCount() const {
+    return rulesBySelector_.empty() ? offsetsBySelector_.size() : rulesBySelector_.size();
+  }
 
   /**
-   * Clear all loaded rules
+   * Clear all loaded rules and close any open cache file handle.
+   * Safe to call multiple times.
    */
-  void clear() { rulesBySelector_.clear(); }
+  void clear();
 
   /**
    * Check if CSS rules cache file exists
@@ -101,8 +105,33 @@ class CssParser {
   bool loadFromCache();
 
  private:
-  // Storage: maps normalized selector -> style properties
+  // Build-time: maps normalized selector -> style properties (fully in RAM).
+  // Populated by parseCssFiles / loadFromStream; emptied after saveToCache +
+  // loadFromCache. Not used during rendering.
   std::unordered_map<std::string, CssStyle> rulesBySelector_;
+
+  // Render-time disk-paged index: maps normalized selector -> file offset of
+  // its serialized CssStyle inside the CSS cache file. Populated by
+  // loadFromCache; styles are fetched on demand via readStyleAtOffset.
+  // Dramatically reduces RAM pressure on books with hundreds of CSS rules.
+  std::unordered_map<std::string, uint32_t> offsetsBySelector_;
+
+  // Kept open for the life of loaded cache so resolveStyle can seek+read.
+  // Closed by clear().
+  mutable FsFile cacheFile_;
+  mutable bool cacheFileOpen_ = false;
+
+  // Small LRU of recently-resolved styles keyed by selector. Avoids
+  // re-reading the same rule from SD for every element that uses it.
+  // Kept intentionally small (a few KB) so the savings vs the in-RAM map
+  // are preserved on books with large stylesheets.
+  static constexpr size_t LRU_CAP = 24;
+  mutable std::deque<std::pair<std::string, CssStyle>> lru_;
+
+  // Internal disk-paged helpers
+  [[nodiscard]] bool readStyleAtOffset(uint32_t offset, CssStyle& out) const;
+  [[nodiscard]] bool lruGet(const std::string& key, CssStyle& out) const;
+  void lruPut(const std::string& key, const CssStyle& value) const;
 
   std::string cachePath;
 

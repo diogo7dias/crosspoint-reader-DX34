@@ -1,7 +1,9 @@
 #include "ReaderActivity.h"
 
+#include <Arduino.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <Logging.h>
 
 #include "CrossPointSettings.h"
 #include "Epub.h"
@@ -52,11 +54,16 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
     readerStyleMode = savedBookSettings.readerStyleMode;
   }
 
+  LOG_DBG("HEAP", "READER loadEpub:before free=%u min=%u", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
   if (epub->load(true, readerStyleMode == CrossPointSettings::READER_STYLE_USER)) {
+    LOG_DBG("HEAP", "READER loadEpub:after-ok free=%u min=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)ESP.getMinFreeHeap());
     return epub;
   }
 
   LOG_ERR("READER", "Failed to load epub");
+  LOG_DBG("HEAP", "READER loadEpub:after-fail free=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)ESP.getMinFreeHeap());
   return nullptr;
 }
 

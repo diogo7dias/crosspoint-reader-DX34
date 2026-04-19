@@ -1061,6 +1061,7 @@ void TxtReaderActivity::renderStatusBar(const StatusBarLayout& statusBarLayout, 
 void TxtReaderActivity::saveProgress() const {
   const std::string progPath = txt->getCachePath() + "/progress.bin";
   const std::string tmpPath = txt->getCachePath() + "/progress_tmp.bin";
+  const std::string bakPath = txt->getCachePath() + "/progress.bin.bak";
 
   if (Storage.exists(tmpPath.c_str())) {
     Storage.remove(tmpPath.c_str());
@@ -1077,8 +1078,12 @@ void TxtReaderActivity::saveProgress() const {
     f.write(data, 4);
     f.close();
 
+    // Rotate current progress.bin to progress.bin.bak before replacing.
     if (Storage.exists(progPath.c_str())) {
-      Storage.remove(progPath.c_str());
+      if (Storage.exists(bakPath.c_str())) {
+        Storage.remove(bakPath.c_str());
+      }
+      Storage.rename(progPath.c_str(), bakPath.c_str());
     }
     Storage.rename(tmpPath.c_str(), progPath.c_str());
   }
@@ -1101,7 +1106,14 @@ void TxtReaderActivity::flushProgressIfNeeded(const bool force) {
 
 void TxtReaderActivity::loadProgress() {
   FsFile f;
-  if (Storage.openFileForRead("TRS", txt->getCachePath() + "/progress.bin", f)) {
+  const std::string progPath = txt->getCachePath() + "/progress.bin";
+  const std::string bakPath = txt->getCachePath() + "/progress.bin.bak";
+  bool opened = Storage.openFileForRead("TRS", progPath, f);
+  if (!opened && Storage.exists(bakPath.c_str())) {
+    LOG_INF("TRS", "progress.bin missing, recovering from progress.bin.bak");
+    opened = Storage.openFileForRead("TRS", bakPath, f);
+  }
+  if (opened) {
     uint8_t data[4];
     const int bytesRead = f.read(data, sizeof(data));
     if (bytesRead >= 2) {
