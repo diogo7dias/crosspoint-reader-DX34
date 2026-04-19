@@ -27,7 +27,16 @@ bool BleHidManager::init() {
 
   LOG_INF("BLE", "Initializing NimBLE stack");
   NimBLEDevice::init("CrossPoint");
-  NimBLEDevice::setPower(ESP_PWR_LVL_P3);  // +3 dBm
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);  // +9 dBm — reduce range-based drops
+
+  // Many BLE HID peripherals (the IINE Gamebrick among them) refuse to notify
+  // input reports until the link is encrypted and keys are bonded — the CCCD
+  // write on subscribe returns ATT Insufficient Authentication, and without
+  // bonding enabled NimBLE cannot negotiate encryption, so the peer drops the
+  // link a second or two after service discovery completes. JustWorks pairing
+  // (bonding=true, MITM=false, SC=true) matches what upstream Crosspoint uses
+  // and unblocks these devices.
+  NimBLEDevice::setSecurityAuth(/*bonding=*/true, /*mitm=*/false, /*sc=*/true);
 
   state = State::Idle;
   scanComplete = false;
@@ -173,6 +182,14 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
 
   client->setConnectTimeout(kConnectTimeoutSec);
 
+  // Explicit connection params. The 6s supervision timeout (600 × 10 ms) is
+  // comfortably longer than the default on most stacks, giving gamepads that
+  // notify sparsely (only on button edges) enough slack to avoid link loss
+  // while the user sits on the Map BLE buttons screen waiting to press a key.
+  client->setConnectionParams(/*minInterval=*/12, /*maxInterval=*/24,
+                              /*latency=*/0, /*timeout=*/600,
+                              /*scanInterval=*/60, /*scanWindow=*/30);
+
   NimBLEAddress addr(address, 0);  // 0 = public address type
   if (!client->connect(addr)) {
     LOG_ERR("BLE", "Connection failed to %s", address.c_str());
@@ -180,6 +197,11 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
   }
 
   LOG_INF("BLE", "Connected to %s", address.c_str());
+
+  // Re-request the same params after link-up so the peripheral actually
+  // adopts our supervision timeout; some devices ignore the scan-phase
+  // params and use their own until we issue an L2CAP update.
+  client->updateConnParams(12, 24, 0, 600);
 
   if (!subscribeToHid()) {
     LOG_ERR("BLE", "Failed to subscribe to HID reports");
@@ -211,35 +233,55 @@ bool BleHidManager::subscribeToHid() {
     return false;
   }
 
-  // Try Boot Keyboard Input first (works for most keyboards/remotes)
-  NimBLERemoteCharacteristic* bootKbChar = hidService->getCharacteristic(kHidBootKbInputCharUuid);
-  if (bootKbChar && bootKbChar->canNotify()) {
-    NimBLERemoteCharacteristic* protoMode = hidService->getCharacteristic(kHidProtocolModeCharUuid);
-    if (protoMode && protoMode->canWrite()) {
-      uint8_t bootMode = 0;  // 0 = Boot Protocol
-      protoMode->writeValue(&bootMode, 1);
-    }
-
-    bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-      onHidReport(data, len, /*isBootKeyboard=*/true);
-    });
-    LOG_INF("BLE", "Subscribed to Boot Keyboard Input");
-    return true;
+  // Ask the peer to use Report Protocol (the descriptor-driven mode). Previous
+  // revisions forced Boot Protocol (0x00) whenever a Boot Keyboard Input char
+  // was present, which broke gamepads that also expose the boot chars for
+  // compatibility: the boot reports only ever carry keyboard bytes, so gamepad
+  // input silently stops arriving. Writing 0x01 here is a no-op for devices
+  // that already default to Report Protocol.
+  NimBLERemoteCharacteristic* protoMode = hidService->getCharacteristic(kHidProtocolModeCharUuid);
+  if (protoMode && (protoMode->canWrite() || protoMode->canWriteNoResponse())) {
+    uint8_t reportMode = 0x01;  // 0x01 = Report Protocol
+    protoMode->writeValue(&reportMode, 1, /*response=*/false);
   }
 
-  // Fall back to HID Report characteristics (for gamepads and non-boot devices).
-  // NimBLE 1.x returns a pointer-to-vector (nullable), unlike the const-ref in 2.x.
+  // Subscribe to ALL input Report characteristics that can notify. Gamepads
+  // and combo remotes typically expose multiple input reports (e.g. keyboard
+  // page + consumer page + vendor page); previously we stopped after the
+  // first Report subscribe, so buttons on other reports went unseen even when
+  // the link stayed up. NimBLE 1.x returns a pointer-to-vector (nullable).
   bool subscribed = false;
   const auto* chars = hidService->getCharacteristics(true);
   if (chars) {
     for (auto* chr : *chars) {
       if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
-        chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-          onHidReport(data, len, /*isBootKeyboard=*/false);
-        });
-        subscribed = true;
-        LOG_INF("BLE", "Subscribed to HID Report characteristic");
+        const bool ok =
+            chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+              onHidReport(data, len, /*isBootKeyboard=*/false);
+            });
+        if (ok) {
+          subscribed = true;
+          LOG_INF("BLE", "Subscribed to HID Report characteristic");
+        } else {
+          LOG_INF("BLE", "HID Report subscribe failed (continuing)");
+        }
       }
+    }
+  }
+
+  // Also subscribe to Boot Keyboard Input if present — purely as a fallback
+  // for devices that only notify on the boot char. We no longer switch the
+  // peer into Boot Protocol, so a device that supports both will still emit
+  // its Report-Protocol stream on the generic chars above.
+  NimBLERemoteCharacteristic* bootKbChar = hidService->getCharacteristic(kHidBootKbInputCharUuid);
+  if (bootKbChar && bootKbChar->canNotify()) {
+    const bool ok =
+        bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len, /*isBootKeyboard=*/true);
+        });
+    if (ok) {
+      subscribed = true;
+      LOG_INF("BLE", "Subscribed to Boot Keyboard Input");
     }
   }
 
