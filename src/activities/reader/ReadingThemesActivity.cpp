@@ -16,7 +16,7 @@
 #include "util/TransitionFeedback.h"
 
 namespace {
-constexpr int kBaseRowCount = 2;
+constexpr int kBaseRowCount = 3;
 constexpr int kThemeActionCount = 5;
 
 const char* themeActionLabel(const int index) {
@@ -249,6 +249,24 @@ void ReadingThemesActivity::loop() {
       openKeyboardForNewTheme();
       return;
     }
+    if (selectedRowIndex == 2) {
+      enterNewActivity(new ConfirmDialogActivity(
+          renderer, mappedInput, "Reset current book style to global settings?",
+          [this]() {
+            exitActivity();
+            if (!READING_THEMES.resetBookSettingsToGlobal(bookCachePath)) {
+              showMessage("Failed to reset to global settings");
+              return;
+            }
+            settingsDirty = true;
+            showMessage("Now following global reader style");
+          },
+          [this]() {
+            exitActivity();
+            requestUpdate();
+          }));
+      return;
+    }
     if (isThemeRow(selectedRowIndex)) {
       actionPopupOpen = true;
       actionPopupThemeIndex = themeIndexForRow(selectedRowIndex);
@@ -304,6 +322,8 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
       label = tr(STR_ADJUST_CURRENT_SETTINGS);
     } else if (i == 1) {
       label = tr(STR_SAVE_CURRENT_AS_NEW);
+    } else if (i == 2) {
+      label = "Reset to Global Reader Style";
     } else {
       const int themeIndex = themeIndexForRow(i);
       const ReadingTheme* theme = READING_THEMES.getTheme(themeIndex);
@@ -320,7 +340,7 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
     }
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, rowY, label.c_str(), !isSelected);
 
-    if (i >= 2) {
+    if (i >= kBaseRowCount) {
       const int themeIndex = themeIndexForRow(i);
       const char* stateLabel = nullptr;
       if (themeIndex == currentThemeIndex) {

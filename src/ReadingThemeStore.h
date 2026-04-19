@@ -102,6 +102,7 @@ class ReadingThemeStore {
   static bool loadBookSettings(const std::string& cachePath, ReadingTheme& theme);
   static bool saveCurrentBookSettings(const std::string& cachePath);
   static bool loadBookSettingsIntoCurrent(const std::string& cachePath);
+  static bool resetBookSettingsToGlobal(const std::string& cachePath);
 
   static ReadingTheme fromSettings(const std::string& name, const CrossPointSettings& settings);
   static ReadingTheme normalizeTheme(const ReadingTheme& theme);

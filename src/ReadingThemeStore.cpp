@@ -467,6 +467,17 @@ bool ReadingThemeStore::loadBookSettingsIntoCurrent(const std::string& cachePath
   return true;
 }
 
+bool ReadingThemeStore::resetBookSettingsToGlobal(const std::string& cachePath) {
+  if (!cachePath.empty()) {
+    const std::string settingsPath = bookReaderSettingsPath(cachePath);
+    if (Storage.exists(settingsPath.c_str()) && !Storage.remove(settingsPath.c_str())) {
+      return false;
+    }
+  }
+
+  return SETTINGS.loadFromFile();
+}
+
 ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   ReadingTheme normalized = theme;
   normalized.name = sanitizeName(theme.name);
