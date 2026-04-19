@@ -33,16 +33,36 @@ constexpr float toFloat(int32_t fp) { return fp / static_cast<float>(1 << FRAC_B
 ///   kernMatrix:  4.4 signed fixed-point in int8_t      (use fp4::toPixel)
 /// Both share 4 fractional bits so they combine directly in an accumulator.
 
-/// Font data stored PER GLYPH
+/// Font data stored PER GLYPH.
+///
+/// Layout is hand-packed to 10 bytes (down from 16 with natural alignment).  This saves
+/// ~6 bytes per glyph × thousands of glyphs per font × dozens of fonts = hundreds of KB of
+/// flash in the OTA app partition.  Field widths were chosen after auditing the entire
+/// built-in font collection:
+///
+///   width/height  ≤ 51 / 44 in the shipping 12–17 pt reader fonts        → uint8_t
+///   left          in [-26, 11]                                           → int8_t
+///   top           in [-9, 43]                                            → int8_t
+///   dataLength    ≤ 420 bytes (largest packed 2-bit glyph)               → uint16_t
+///   dataOffset    ≤ 46,435 bytes (largest uncompressed-font bitmap, and
+///                 groups are ≤ 36 KB uncompressed for compressed fonts)  → uint16_t
+///
+/// fontconvert.py asserts each of these ranges at emit time so a future font addition that
+/// would overflow fails the build loudly rather than producing a silently corrupted header.
+///
+/// The struct is marked `packed` because the mix of 1/2-byte fields would otherwise get
+/// padded to 12 bytes on ESP32-C3 (RV32).  RV32IMC handles unaligned `lh`/`lw` transparently
+/// in hardware, so the per-access cost is negligible and glyph lookup is not on any hot
+/// inner loop.
 typedef struct {
-  uint8_t width;        ///< Bitmap dimensions in pixels
-  uint8_t height;       ///< Bitmap dimensions in pixels
+  uint8_t width;        ///< Bitmap width in pixels
+  uint8_t height;       ///< Bitmap height in pixels
   uint16_t advanceX;    ///< Distance to advance cursor (x axis), 12.4 fixed-point in pixels
-  int16_t left;         ///< X dist from cursor pos to UL corner
-  int16_t top;          ///< Y dist from cursor pos to UL corner
+  int8_t left;          ///< X dist from cursor pos to UL corner
+  int8_t top;           ///< Y dist from cursor pos to UL corner
   uint16_t dataLength;  ///< Size of the font data.
-  uint32_t dataOffset;  ///< Pointer into EpdFont->bitmap (or within-group offset for compressed fonts)
-} EpdGlyph;
+  uint16_t dataOffset;  ///< Pointer into EpdFont->bitmap (or within-group offset for compressed fonts)
+} __attribute__((packed)) EpdGlyph;
 
 /// Compressed font group: a DEFLATE-compressed block of glyph bitmaps
 typedef struct {

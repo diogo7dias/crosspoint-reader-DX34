@@ -838,6 +838,18 @@ def cp_label(cp):
         return '<backslash>'
     return chr(cp) if 0x20 < cp < 0x7F else f'U+{cp:04X}'
 
+# Validate every glyph fits in the packed 10-byte EpdGlyph field widths defined in
+# EpdFontData.h.  If any of these ranges is exceeded, the struct layout there must be
+# widened in sync — don't silently overflow.
+for g in glyph_props:
+    assert 0 <= g.width      <= 0xFF,   f"{font_name} U+{g.code_point:04X}: width {g.width} out of uint8 range"
+    assert 0 <= g.height     <= 0xFF,   f"{font_name} U+{g.code_point:04X}: height {g.height} out of uint8 range"
+    assert 0 <= g.advance_x  <= 0xFFFF, f"{font_name} U+{g.code_point:04X}: advance_x {g.advance_x} out of uint16 range"
+    assert -128 <= g.left    <= 127,    f"{font_name} U+{g.code_point:04X}: left {g.left} out of int8 range"
+    assert -128 <= g.top     <= 127,    f"{font_name} U+{g.code_point:04X}: top {g.top} out of int8 range"
+    assert 0 <= g.data_length <= 0xFFFF, f"{font_name} U+{g.code_point:04X}: data_length {g.data_length} out of uint16 range"
+    assert 0 <= g.data_offset <= 0xFFFF, f"{font_name} U+{g.code_point:04X}: data_offset {g.data_offset} out of uint16 range"
+
 print(f"static const EpdGlyph {font_name}Glyphs[] = {{")
 for i, g in enumerate(glyph_props):
     print ("    { " + ", ".join([f"{a}" for a in list(g[:-1])]),"},", f"// {cp_label(g.code_point)}")
