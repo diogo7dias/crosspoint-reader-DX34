@@ -3,6 +3,7 @@
 #include <Bitmap.h>
 #include <Epub.h>
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Txt.h>
@@ -31,6 +32,8 @@
 #include "util/TransitionFeedback.h"
 
 void sortFileList(std::vector<std::string>& strs);
+
+extern HalGPIO gpio;
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
@@ -788,6 +791,11 @@ void MyLibraryActivity::loopBmpView() {
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && !selectedFilePath.empty()) {
     enterFileActions(selectedFilePath);
+    // Opening the Actions popup directly over a freshly rendered bitmap:
+    // FAST_REFRESH shows the popup in ~300ms vs ~1.7s for HALF_REFRESH.
+    // Minor ghosting of the bitmap under the popup edges is acceptable
+    // since the popup is transient.
+    nextRefreshMode = HalDisplay::FAST_REFRESH;
   }
 }
 
@@ -1331,6 +1339,15 @@ void MyLibraryActivity::renderBmpView() {
   nextRefreshMode = HalDisplay::FAST_REFRESH;
 
   if (hasGreyscale) {
+    // Poll input between the (now-complete) BW pass and the expensive
+    // grayscale pass. If the user is already reaching for a button, skip
+    // the grayscale refinement so the next action (Actions popup, Back)
+    // feels responsive instead of waiting ~1.5s for gray to finish.
+    gpio.update();
+    if (gpio.wasAnyPressed()) {
+      return;
+    }
+
     bitmap.rewindToData();
     renderer.clearScreen(0x00);
     renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
