@@ -720,6 +720,8 @@ static const EpdFontData unifont_18_regular = {
     nullptr,
     nullptr,
     nullptr,
+    nullptr,
+    nullptr,
     0,
     0,
     0,

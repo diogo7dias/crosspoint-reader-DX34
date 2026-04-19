@@ -143,7 +143,7 @@ def norm_ceil(val):
 #               12 integer bits, 4 fractional bits = 1/16-pixel resolution.
 #               Encoded from FreeType's 16.16 linearHoriAdvance.
 #
-#   kernMatrix  4.4 signed fixed-point (int8_t).
+#   kernValues  4.4 signed fixed-point (int8_t).
 #               4 integer bits, 4 fractional bits = 1/16-pixel resolution.
 #               Range: -8.0 to +7.9375 pixels.
 #               Encoded from font design-unit kerning values.
@@ -881,12 +881,42 @@ if kern_map:
         print(f"    {{ 0x{cp:04X}, {cls} }}, // {cp_label(cp)}")
     print("};\n")
 
-    print(f"static const int8_t {font_name}KernMatrix[] = {{")
+    # CSR-encode the dense matrix.  `row_start` has length (leftClassCount + 1) with
+    # row_start[0] = 0 and row_start[leftClassCount] = total non-zeros.  Within each
+    # row, columns are emitted in ascending order so runtime lookup can early-exit.
+    assert kern_left_class_count <= 0xFF and kern_right_class_count <= 0xFF, \
+        f"class counts exceed uint8_t range (left={kern_left_class_count}, right={kern_right_class_count})"
+    row_start = [0]
+    col_idx = []
+    col_val = []
     for row in range(kern_left_class_count):
-        row_start = row * kern_right_class_count
-        row_vals = kern_matrix[row_start:row_start + kern_right_class_count]
-        print("    " + ", ".join(f"{v:4d}" for v in row_vals) + ",")
+        base = row * kern_right_class_count
+        for col in range(kern_right_class_count):
+            v = kern_matrix[base + col]
+            if v != 0:
+                col_idx.append(col)
+                col_val.append(v)
+        row_start.append(len(col_idx))
+    assert row_start[-1] <= 0xFFFF, \
+        f"non-zero count {row_start[-1]} exceeds uint16 rowStart range"
+
+    print(f"static const uint16_t {font_name}KernRowStart[] = {{")
+    for c in chunks(row_start, 16):
+        print("    " + " ".join(f"{v:5d}," for v in c))
     print("};\n")
+    print(f"static const uint8_t {font_name}KernCols[] = {{")
+    for c in chunks(col_idx, 32):
+        print("    " + " ".join(f"{v:3d}," for v in c))
+    print("};\n")
+    print(f"static const int8_t {font_name}KernValues[] = {{")
+    for c in chunks(col_val, 32):
+        print("    " + " ".join(f"{v:4d}," for v in c))
+    print("};\n")
+
+    dense_bytes = kern_left_class_count * kern_right_class_count
+    csr_bytes = len(row_start) * 2 + len(col_idx) * 2  # uint16 rowStart + uint8 cols + int8 vals
+    print(f"// kernMatrix sparse: {dense_bytes} -> {csr_bytes} bytes "
+          f"({100*csr_bytes/max(dense_bytes,1):.1f}%, {len(col_idx)} non-zeros)", file=sys.stderr)
 
 if ligature_pairs:
     print(f"static const EpdLigaturePair {font_name}LigaturePairs[] = {{")
@@ -914,12 +944,16 @@ print("    nullptr,")
 if kern_map:
     print(f"    {font_name}KernLeftClasses,")
     print(f"    {font_name}KernRightClasses,")
-    print(f"    {font_name}KernMatrix,")
+    print(f"    {font_name}KernRowStart,")
+    print(f"    {font_name}KernCols,")
+    print(f"    {font_name}KernValues,")
     print(f"    {len(kern_left_classes)},")
     print(f"    {len(kern_right_classes)},")
     print(f"    {kern_left_class_count},")
     print(f"    {kern_right_class_count},")
 else:
+    print(f"    nullptr,")
+    print(f"    nullptr,")
     print(f"    nullptr,")
     print(f"    nullptr,")
     print(f"    nullptr,")

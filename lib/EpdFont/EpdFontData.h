@@ -29,8 +29,8 @@ constexpr float toFloat(int32_t fp) { return fp / static_cast<float>(1 << FRAC_B
 }  // namespace fp4
 
 /// Fixed-point conventions used by EpdGlyph and EpdFontData:
-///   advanceX:   12.4 unsigned fixed-point in uint16_t  (use fp4::toPixel)
-///   kernMatrix:  4.4 signed fixed-point in int8_t      (use fp4::toPixel)
+///   advanceX:    12.4 unsigned fixed-point in uint16_t (use fp4::toPixel)
+///   kernValues:  4.4 signed fixed-point in int8_t      (use fp4::toPixel)
 /// Both share 4 fractional bits so they combine directly in an accumulator.
 
 /// Font data stored PER GLYPH.
@@ -110,11 +110,26 @@ typedef struct {
   const uint16_t* glyphToGroup = nullptr;               ///< Per-glyph group ID (nullptr for contiguous-group fonts)
   const EpdKernClassEntry* kernLeftClasses = nullptr;   ///< Sorted left-side class map (nullptr if none)
   const EpdKernClassEntry* kernRightClasses = nullptr;  ///< Sorted right-side class map (nullptr if none)
-  const int8_t* kernMatrix = nullptr;              ///< Flat leftClassCount x rightClassCount matrix, 4.4 fixed-point
+  /// CSR-style sparse kerning matrix.  A dense leftClassCount x rightClassCount grid of
+  /// int8_t 4.4 values is typically ~90 % zeros for Latin class-based kerning, so we store
+  /// only the non-zero cells:
+  ///
+  ///   kernRowStart[leftClassId - 1]       points to the first entry for that row
+  ///   kernRowStart[leftClassId]           points one past the last entry
+  ///   kernCols[i]   is the (rightClassId - 1) of the i-th non-zero
+  ///   kernValues[i] is the 4.4 fixed-point adjustment of the i-th non-zero
+  ///
+  /// kernRowStart has length (leftClassCount + 1) and is non-decreasing, with
+  /// kernRowStart[0] = 0 and kernRowStart[leftClassCount] = total non-zeros.  Within each
+  /// row, kernCols is sorted ascending so getKerning() can linear-scan (rows are short
+  /// enough that binary search costs more than it saves).
+  const uint16_t* kernRowStart = nullptr;          ///< Row offsets into kernCols/kernValues (nullptr if no kerning)
+  const uint8_t* kernCols = nullptr;               ///< Right-class indices of non-zero cells (0-based)
+  const int8_t* kernValues = nullptr;              ///< 4.4 fixed-point kerning values, one per non-zero
   uint16_t kernLeftEntryCount = 0;                 ///< Entries in kernLeftClasses
   uint16_t kernRightEntryCount = 0;                ///< Entries in kernRightClasses
-  uint8_t kernLeftClassCount = 0;                  ///< Number of distinct left classes (matrix rows)
-  uint8_t kernRightClassCount = 0;                 ///< Number of distinct right classes (matrix cols)
+  uint8_t kernLeftClassCount = 0;                  ///< Number of distinct left classes (CSR rows)
+  uint8_t kernRightClassCount = 0;                 ///< Number of distinct right classes (CSR columns)
   const EpdLigaturePair* ligaturePairs = nullptr;  ///< Sorted ligature pair table (nullptr if none)
   uint32_t ligaturePairCount = 0;                  ///< Number of entries in ligaturePairs
 } EpdFontData;

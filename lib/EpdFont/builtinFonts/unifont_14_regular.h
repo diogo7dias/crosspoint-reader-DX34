@@ -535,6 +535,8 @@ static const EpdFontData unifont_14_regular = {
     nullptr,
     nullptr,
     nullptr,
+    nullptr,
+    nullptr,
     0,
     0,
     0,
