@@ -67,18 +67,33 @@ std::string WallpaperPlaylist::advance() {
   // Reassess strategy on each advance — favorites toggle / user deletion can
   // shrink /sleep without markFolderDirty. Hot-path SD scans kept minimal:
   //   Small steady: 1 scan (listSleepBmps doubles as count probe)
-  //   Large steady: 1 scan (countSleepBmps only; advanceLarge adds its own)
+  //   Large steady: 1 scan (nextSleepBmpAfterWithCount merges count + next)
   if (strategy_ == StrategyKind::Large) {
-    const size_t count = deps_.fs->countSleepBmps(kTrimScanCap);
-    if (count == 0) return {};
-    const StrategyKind desired = pickStrategy(count);
-    if (desired == StrategyKind::Small) {
+    if (!deps_.lastShownFilename || !deps_.cursor) return {};
+    // cursor==0 post-reshuffle: show lastShown directly, not lex-next. Fall
+    // through to advanceLarge() which handles that edge and validates via
+    // exists(). Costs one extra scan on the sleep right after reshuffle only.
+    if (*deps_.cursor == 0 && !deps_.lastShownFilename->empty()) {
+      const size_t count = deps_.fs->countSleepBmps(kTrimScanCap);
+      if (count == 0) return {};
+      if (pickStrategy(count) == StrategyKind::Small) {
+        auto files = deps_.fs->listSleepBmps(kPlaylistMaxPersist);
+        migrateToSmall(files);
+        strategy_ = StrategyKind::Small;
+        return advanceSmallWithFiles(files);
+      }
+      return advanceLarge();
+    }
+    // Steady state: combined scan returns {count, next} in one pass.
+    const auto probe = deps_.fs->nextSleepBmpAfterWithCount(*deps_.lastShownFilename, kTrimScanCap);
+    if (probe.count == 0) return {};
+    if (pickStrategy(probe.count) == StrategyKind::Small) {
       auto files = deps_.fs->listSleepBmps(kPlaylistMaxPersist);
       migrateToSmall(files);
       strategy_ = StrategyKind::Small;
       return advanceSmallWithFiles(files);
     }
-    return advanceLarge();
+    return advanceLargeWithNext(probe.next);
   }
 
   // Small path: one list scan carrying both file set and strategy signal.
@@ -147,8 +162,17 @@ std::string WallpaperPlaylist::advanceLarge() {
     selected = deps_.fs->nextSleepBmpAfter(lastShown);
   }
 
-  if (selected.empty()) return {};
+  return commitLargeSelection(selected);
+}
 
+std::string WallpaperPlaylist::advanceLargeWithNext(const std::string& prefetchedNext) {
+  if (!deps_.lastShownFilename || !deps_.cursor) return {};
+  return commitLargeSelection(prefetchedNext);
+}
+
+std::string WallpaperPlaylist::commitLargeSelection(const std::string& selected) {
+  if (selected.empty()) return {};
+  auto& lastShown = *deps_.lastShownFilename;
   bool persistNeeded = false;
   if (lastShown != selected) {
     lastShown = selected;

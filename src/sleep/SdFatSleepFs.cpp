@@ -1,6 +1,8 @@
 #include "SdFatSleepFs.h"
 
 #include <HalStorage.h>
+#include <esp_task_wdt.h>
+#include <strings.h>
 
 #include <algorithm>
 #include <cstring>
@@ -10,12 +12,13 @@ namespace sleep {
 namespace {
 
 constexpr const char* kSleepDir = "/sleep";
+constexpr size_t kWdtResetInterval = 50;
 
 bool isBmpName(const char* name) {
   if (!name || name[0] == '\0' || name[0] == '.') return false;
   const size_t len = std::strlen(name);
   if (len < 4) return false;
-  return std::strcmp(name + len - 4, ".bmp") == 0;
+  return strcasecmp(name + len - 4, ".bmp") == 0;
 }
 
 }  // namespace
@@ -27,6 +30,7 @@ size_t SdFatSleepFs::countSleepBmps(size_t scanCap) {
     return 0;
   }
   size_t count = 0;
+  size_t iter = 0;
   char name[256];
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
     if (!file.isDirectory()) {
@@ -40,6 +44,7 @@ size_t SdFatSleepFs::countSleepBmps(size_t scanCap) {
       }
     }
     file.close();
+    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
   }
   dir.close();
   return count;
@@ -54,6 +59,7 @@ std::vector<std::string> SdFatSleepFs::listSleepBmps(size_t maxEntries) {
     return out;
   }
   out.reserve(std::min<size_t>(maxEntries, 256));
+  size_t iter = 0;
   char name[256];
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
     if (!file.isDirectory()) {
@@ -67,6 +73,7 @@ std::vector<std::string> SdFatSleepFs::listSleepBmps(size_t maxEntries) {
       }
     }
     file.close();
+    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
   }
   dir.close();
   std::sort(out.begin(), out.end());
@@ -81,6 +88,7 @@ std::string SdFatSleepFs::nextSleepBmpAfter(const std::string& after) {
   }
   std::string minName;   // lex-min (fallback for wrap)
   std::string nextName;  // lex-smallest strictly greater than `after`
+  size_t iter = 0;
   char name[256];
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
     if (!file.isDirectory()) {
@@ -94,10 +102,56 @@ std::string SdFatSleepFs::nextSleepBmpAfter(const std::string& after) {
       }
     }
     file.close();
+    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
   }
   dir.close();
   if (!after.empty() && !nextName.empty()) return nextName;
   return minName;
+}
+
+NextBmpResult SdFatSleepFs::nextSleepBmpAfterWithCount(const std::string& after, size_t scanCap) {
+  NextBmpResult result;
+  result.count = 0;
+  auto dir = Storage.open(kSleepDir);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return result;
+  }
+  std::string minName;
+  std::string nextName;
+  size_t iter = 0;
+  bool capHit = false;
+  char name[256];
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    if (!file.isDirectory()) {
+      file.getName(name, sizeof(name));
+      if (isBmpName(name)) {
+        if (!capHit) {
+          const std::string candidate(name);
+          if (minName.empty() || candidate < minName) minName = candidate;
+          if (!after.empty() && candidate > after) {
+            if (nextName.empty() || candidate < nextName) nextName = candidate;
+          }
+        }
+        ++result.count;
+        if (result.count > scanCap) {
+          // Stop comparing strings but still count — caller only needs count > cap.
+          capHit = true;
+          file.close();
+          break;
+        }
+      }
+    }
+    file.close();
+    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
+  }
+  dir.close();
+  if (!after.empty() && !nextName.empty()) {
+    result.next = nextName;
+  } else {
+    result.next = minName;
+  }
+  return result;
 }
 
 std::string SdFatSleepFs::nthSleepBmp(size_t n) {
@@ -107,6 +161,7 @@ std::string SdFatSleepFs::nthSleepBmp(size_t n) {
     return "";
   }
   size_t idx = 0;
+  size_t iter = 0;
   std::string result;
   char name[256];
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
@@ -122,6 +177,7 @@ std::string SdFatSleepFs::nthSleepBmp(size_t n) {
       }
     }
     file.close();
+    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
   }
   dir.close();
   return result;

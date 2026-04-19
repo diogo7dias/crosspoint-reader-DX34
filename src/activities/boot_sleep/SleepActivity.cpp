@@ -285,69 +285,83 @@ void SleepActivity::renderCustomSleepScreen() const {
       LOG_DBG("SLP", "Paused, re-showing: %s", APP_STATE.lastSleepWallpaperPath.c_str());
       delay(100);
       Bitmap bitmap(file, true);
-      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      const auto parseErr = bitmap.parseHeaders();
+      if (parseErr == BmpReaderError::Ok) {
         const std::string displayName = FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
         file.close();
         return;
       }
+      LOG_ERR("SLP", "Paused wallpaper parse failed: %s (err=%d)", APP_STATE.lastSleepWallpaperPath.c_str(),
+              static_cast<int>(parseErr));
       file.close();
     }
   }
 
+  // Retry advance on parse/open failure so a handful of corrupt BMPs don't
+  // waste a sleep render. Each retry calls advance() again, which skips the
+  // bad file forward (Large: lex-next; Small: rotates head to tail).
+  constexpr int kMaxParseRetries = 5;
   std::string selectedImage;
+  bool rendered = false;
+  for (int attempt = 0; attempt < kMaxParseRetries && !rendered; ++attempt) {
 #if SLEEP_V2
-  selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
+    selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
 #else
-  {
-    const auto files = getValidSleepBitmaps();
-    if (!files.empty()) {
-      if (files.size() > CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-        // Large collection: skip the full in-memory playlist to avoid heap
-        // exhaustion. Advance sequentially by filename using a binary search.
-        selectedImage = nextSleepImageLargeCollection(files);
-      } else {
-        // Small collection: maintain the full shuffleable playlist.
-        syncSleepPlaylistWithFiles(files, false);
-        auto& playlist = APP_STATE.sleepImagePlaylist;
-        if (!playlist.empty()) {
-          bool changed = false;
-          // Advance to the next image only after the first custom sleep render.
-          // This keeps playlist[0] as the image just shown and playlist[1] as next.
-          if (APP_STATE.lastSleepImage != 0 && playlist.size() > 1) {
-            const auto first = playlist.front();
-            playlist.erase(playlist.begin());
-            playlist.push_back(first);
-            changed = true;
-          }
-          selectedImage = playlist.front();
-          if (APP_STATE.lastSleepImage != 1) {
-            APP_STATE.lastSleepImage = 1;
-            changed = true;
-          }
-          if (changed) {
-            APP_STATE.saveToFile();
+    selectedImage.clear();
+    {
+      const auto files = getValidSleepBitmaps();
+      if (!files.empty()) {
+        if (files.size() > CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
+          selectedImage = nextSleepImageLargeCollection(files);
+        } else {
+          syncSleepPlaylistWithFiles(files, false);
+          auto& playlist = APP_STATE.sleepImagePlaylist;
+          if (!playlist.empty()) {
+            bool changed = false;
+            // Rotate head to tail on every pass: first attempt honors the
+            // post-render rotation (lastSleepImage != 0); subsequent attempts
+            // are explicit skips of the bad file we just tried.
+            const bool rotate = (attempt > 0) || (APP_STATE.lastSleepImage != 0 && playlist.size() > 1);
+            if (rotate && playlist.size() > 1) {
+              const auto first = playlist.front();
+              playlist.erase(playlist.begin());
+              playlist.push_back(first);
+              changed = true;
+            }
+            selectedImage = playlist.front();
+            if (APP_STATE.lastSleepImage != 1) {
+              APP_STATE.lastSleepImage = 1;
+              changed = true;
+            }
+            if (changed) APP_STATE.saveToFile();
           }
         }
       }
     }
-  }
 #endif
-  if (!selectedImage.empty()) {
+    if (selectedImage.empty()) break;
     const auto filename = "/sleep/" + selectedImage;
     FsFile file;
     if (Storage.openFileForRead("SLP", filename, file)) {
       LOG_DBG("SLP", "Loading: %s", filename.c_str());
       delay(100);
       Bitmap bitmap(file, true);
-      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      const auto parseErr = bitmap.parseHeaders();
+      if (parseErr == BmpReaderError::Ok) {
         const std::string displayName = FavoriteBmp::displayNameForPath(filename);
         rememberLastRenderedSleepBitmap(filename, selectedImage);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
         file.close();
+        rendered = true;
         return;
       }
+      LOG_ERR("SLP", "Invalid BMP: %s (err=%d, attempt %d/%d)", filename.c_str(), static_cast<int>(parseErr),
+              attempt + 1, kMaxParseRetries);
       file.close();
+    } else {
+      LOG_ERR("SLP", "Failed to open sleep image: %s (attempt %d/%d)", filename.c_str(), attempt + 1,
+              kMaxParseRetries);
     }
   }
 
@@ -357,7 +371,8 @@ void SleepActivity::renderCustomSleepScreen() const {
   for (const char* fallbackPath : {"/sleep_F.bmp", "/sleep.bmp"}) {
     if (Storage.openFileForRead("SLP", fallbackPath, file)) {
       Bitmap bitmap(file, true);
-      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      const auto parseErr = bitmap.parseHeaders();
+      if (parseErr == BmpReaderError::Ok) {
         const std::string displayName = FavoriteBmp::displayNameForPath(fallbackPath);
         LOG_DBG("SLP", "Loading: %s", fallbackPath);
         rememberLastRenderedSleepBitmap(fallbackPath);
@@ -365,6 +380,7 @@ void SleepActivity::renderCustomSleepScreen() const {
         file.close();
         return;
       }
+      LOG_ERR("SLP", "Fallback BMP parse failed: %s (err=%d)", fallbackPath, static_cast<int>(parseErr));
       file.close();
     }
   }

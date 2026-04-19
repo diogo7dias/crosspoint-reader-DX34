@@ -15,6 +15,11 @@
 namespace crosspoint {
 namespace sleep {
 
+struct NextBmpResult {
+  std::string next;  // lex-smallest > after, or lex-min if wrap; empty on no files
+  size_t count;      // total .bmp count, capped at scanCap
+};
+
 struct ISleepFs {
   virtual ~ISleepFs() = default;
 
@@ -39,6 +44,17 @@ struct ISleepFs {
   // O(n) time, O(1) heap. Order follows the SD iteration order (not sorted).
   // Returns empty if n >= total count.
   virtual std::string nthSleepBmp(size_t n) = 0;
+
+  // Combined count + lex-next in a single directory scan. Large strategy
+  // steady state needs both (count for hysteresis, next for advance) —
+  // merging saves one full /sleep scan per sleep render. Default impl falls
+  // back to two separate calls; subclasses override for the single-pass win.
+  virtual NextBmpResult nextSleepBmpAfterWithCount(const std::string& after, size_t scanCap) {
+    NextBmpResult r;
+    r.count = countSleepBmps(scanCap);
+    r.next = nextSleepBmpAfter(after);
+    return r;
+  }
 
   // Generic storage ops used during trim / rename bookkeeping.
   virtual bool exists(const std::string& path) = 0;

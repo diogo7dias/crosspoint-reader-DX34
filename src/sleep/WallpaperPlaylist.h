@@ -107,6 +107,8 @@ class WallpaperPlaylist {
   StrategyKind pickStrategy(size_t fileCount) const;
   std::string advanceSmallWithFiles(const std::vector<std::string>& files);
   std::string advanceLarge();
+  std::string advanceLargeWithNext(const std::string& prefetchedNext);
+  std::string commitLargeSelection(const std::string& selected);
   bool resyncSmallPlaylist(const std::vector<std::string>& files);
   void migrateToLarge();                                       // drop playlist, keep lastShownFilename
   void migrateToSmall(const std::vector<std::string>& files);  // build + seek cursor

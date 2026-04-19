@@ -19,6 +19,7 @@ class SdFatSleepFs final : public ISleepFs {
   std::vector<std::string> listSleepBmps(size_t maxEntries) override;
   std::string nextSleepBmpAfter(const std::string& after) override;
   std::string nthSleepBmp(size_t n) override;
+  NextBmpResult nextSleepBmpAfterWithCount(const std::string& after, size_t scanCap) override;
   bool exists(const std::string& path) override;
   bool mkdir(const std::string& path) override;
   bool rename(const std::string& from, const std::string& to) override;
