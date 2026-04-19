@@ -65,6 +65,19 @@ uint16_t measureWordWidth(const GfxRenderer& renderer, const int fontId, const s
   return renderer.getTextWidthSpaced(fontId, sanitized.c_str(), letterSpacing, style);
 }
 
+size_t nextUtf8Offset(const std::string& text, const size_t offset) {
+  if (offset >= text.size()) {
+    return text.size();
+  }
+  const uint8_t b = static_cast<uint8_t>(text[offset]);
+  if ((b & 0x80) == 0) return offset + 1;
+  if ((b & 0xE0) == 0xC0) return std::min(text.size(), offset + 2);
+  if ((b & 0xF0) == 0xE0) return std::min(text.size(), offset + 3);
+  if ((b & 0xF8) == 0xF0) return std::min(text.size(), offset + 4);
+  // Invalid leading byte: move forward defensively by one byte.
+  return offset + 1;
+}
+
 float indentMultiplierForMode(const uint8_t indentMode) {
   switch (indentMode) {
     case 2:
@@ -123,6 +136,7 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   if (hyphenationEnabled) {
     expandHyphenationBreaks(renderer, fontId, wordWidths, canBreakBefore, wordNeedsHyphenAtBreak);
   }
+  splitOversizedTokens(renderer, fontId, pageWidth, wordWidths, canBreakBefore, wordNeedsHyphenAtBreak);
 
   std::vector<size_t> lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, wordWidths,
                                                            wordContinues, canBreakBefore, wordNeedsHyphenAtBreak);
@@ -139,6 +153,92 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
     words.erase(words.begin(), words.begin() + consumed);
     wordStyles.erase(wordStyles.begin(), wordStyles.begin() + consumed);
     wordContinues.erase(wordContinues.begin(), wordContinues.begin() + consumed);
+  }
+}
+
+void ParsedText::splitOversizedTokens(const GfxRenderer& renderer, const int fontId, const int maxTokenWidth,
+                                      std::vector<uint16_t>& wordWidths, std::vector<bool>& canBreakBefore,
+                                      std::vector<bool>& wordNeedsHyphenAtBreak) {
+  if (maxTokenWidth <= 0) {
+    return;
+  }
+
+  for (size_t i = 0; i < words.size(); ++i) {
+    if (wordWidths[i] <= maxTokenWidth || words[i].size() <= 1) {
+      continue;
+    }
+
+    const std::string original = words[i];
+    const auto style = wordStyles[i];
+    const bool originalCanBreakBefore = canBreakBefore[i];
+    const bool originalNeedsHyphen = wordNeedsHyphenAtBreak[i];
+
+    std::vector<std::string> parts;
+    std::vector<uint16_t> partWidths;
+    parts.reserve(original.size());
+    partWidths.reserve(original.size());
+
+    size_t partStart = 0;
+    size_t cursor = 0;
+    size_t lastFit = 0;
+
+    while (cursor < original.size()) {
+      const size_t next = nextUtf8Offset(original, cursor);
+      const std::string candidate = original.substr(partStart, next - partStart);
+      const uint16_t candidateWidth = measureWordWidth(renderer, fontId, candidate, style, blockStyle.letterSpacing);
+
+      if (candidateWidth <= maxTokenWidth) {
+        lastFit = next;
+        cursor = next;
+        continue;
+      }
+
+      if (lastFit == partStart) {
+        // Single glyph wider than the viewport: force one codepoint so we always progress.
+        parts.push_back(original.substr(partStart, next - partStart));
+        partWidths.push_back(candidateWidth);
+        partStart = next;
+        cursor = next;
+        lastFit = next;
+      } else {
+        const std::string fitted = original.substr(partStart, lastFit - partStart);
+        parts.push_back(fitted);
+        partWidths.push_back(
+            measureWordWidth(renderer, fontId, fitted, style, blockStyle.letterSpacing));
+        partStart = lastFit;
+        cursor = lastFit;
+      }
+    }
+
+    if (partStart < original.size()) {
+      const std::string tail = original.substr(partStart);
+      parts.push_back(tail);
+      partWidths.push_back(measureWordWidth(renderer, fontId, tail, style, blockStyle.letterSpacing));
+    }
+
+    if (parts.size() < 2) {
+      continue;
+    }
+
+    words[i] = std::move(parts[0]);
+    wordWidths[i] = partWidths[0];
+    canBreakBefore[i] = originalCanBreakBefore;
+    wordNeedsHyphenAtBreak[i] = false;
+
+    for (size_t p = 1; p < parts.size(); ++p) {
+      const size_t insertPos = i + p;
+      words.insert(words.begin() + insertPos, std::move(parts[p]));
+      wordStyles.insert(wordStyles.begin() + insertPos, style);
+      wordContinues.insert(wordContinues.begin() + insertPos, true);
+      wordWidths.insert(wordWidths.begin() + insertPos, partWidths[p]);
+      canBreakBefore.insert(canBreakBefore.begin() + insertPos, true);
+      wordNeedsHyphenAtBreak.insert(wordNeedsHyphenAtBreak.begin() + insertPos, false);
+    }
+
+    // Preserve any pre-existing "needs hyphen at break" state on the last piece.
+    wordNeedsHyphenAtBreak[i + parts.size() - 1] = originalNeedsHyphen;
+
+    i += parts.size() - 1;
   }
 }
 
