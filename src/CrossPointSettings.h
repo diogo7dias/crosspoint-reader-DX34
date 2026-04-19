@@ -130,12 +130,7 @@ class CrossPointSettings {
 
   // Font family options. Values 3-8 are legacy (removed families) and
   // normalize to CHAREINK via normalizeFontFamily().
-  enum FONT_FAMILY {
-    CHAREINK = 0,
-    BOOKERLY = 1,
-    VOLLKORN = 2,
-    FONT_FAMILY_COUNT
-  };
+  enum FONT_FAMILY { CHAREINK = 0, BOOKERLY = 1, VOLLKORN = 2, FONT_FAMILY_COUNT };
   enum FONT_SIZE {
     MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14
     LARGE = 1,    // 17pt

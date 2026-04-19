@@ -272,10 +272,9 @@ bool BleHidManager::subscribeToHid() {
         // a previous connection's ghost value can make subscribe() think it
         // has nothing to do and return without writing CCCD.
         (void)chr->unsubscribe();
-        const bool ok =
-            chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-              onHidReport(data, len, /*isBootKeyboard=*/false);
-            });
+        const bool ok = chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len, /*isBootKeyboard=*/false);
+        });
         if (ok) {
           subscribed = true;
           LOG_INF("BLE", "Subscribed to HID Report characteristic");
@@ -293,10 +292,9 @@ bool BleHidManager::subscribeToHid() {
   NimBLERemoteCharacteristic* bootKbChar = hidService->getCharacteristic(kHidBootKbInputCharUuid);
   if (bootKbChar && bootKbChar->canNotify()) {
     (void)bootKbChar->unsubscribe();
-    const bool ok =
-        bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-          onHidReport(data, len, /*isBootKeyboard=*/true);
-        });
+    const bool ok = bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+      onHidReport(data, len, /*isBootKeyboard=*/true);
+    });
     if (ok) {
       subscribed = true;
       LOG_INF("BLE", "Subscribed to Boot Keyboard Input");

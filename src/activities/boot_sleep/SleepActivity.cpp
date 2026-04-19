@@ -360,8 +360,7 @@ void SleepActivity::renderCustomSleepScreen() const {
               attempt + 1, kMaxParseRetries);
       file.close();
     } else {
-      LOG_ERR("SLP", "Failed to open sleep image: %s (attempt %d/%d)", filename.c_str(), attempt + 1,
-              kMaxParseRetries);
+      LOG_ERR("SLP", "Failed to open sleep image: %s (attempt %d/%d)", filename.c_str(), attempt + 1, kMaxParseRetries);
     }
   }
 
