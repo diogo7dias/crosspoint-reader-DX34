@@ -275,10 +275,9 @@ bool BleHidManager::subscribeToHid() {
         // has nothing to do and return without writing CCCD.
         (void)chr->unsubscribe();
         const bool useNotify = chr->canNotify();
-        const bool ok =
-            chr->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-              onHidReport(data, len, /*isBootKeyboard=*/false);
-            });
+        const bool ok = chr->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len, /*isBootKeyboard=*/false);
+        });
         if (ok) {
           subscribed = true;
           LOG_INF("BLE", "Subscribed to HID Report characteristic via %s", useNotify ? "notify" : "indicate");
@@ -297,10 +296,8 @@ bool BleHidManager::subscribeToHid() {
   if (bootKbChar && (bootKbChar->canNotify() || bootKbChar->canIndicate())) {
     (void)bootKbChar->unsubscribe();
     const bool useNotify = bootKbChar->canNotify();
-    const bool ok =
-        bootKbChar->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-          onHidReport(data, len, /*isBootKeyboard=*/true);
-        });
+    const bool ok = bootKbChar->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len,
+                                                            bool) { onHidReport(data, len, /*isBootKeyboard=*/true); });
     if (ok) {
       subscribed = true;
       LOG_INF("BLE", "Subscribed to Boot Keyboard Input via %s", useNotify ? "notify" : "indicate");
