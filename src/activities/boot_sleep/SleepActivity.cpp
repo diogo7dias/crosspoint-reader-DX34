@@ -14,6 +14,7 @@
 #include "CrossPointState.h"
 #include "Paths.h"
 #include "activities/reader/ReaderLayoutSafety.h"
+#include "persist/BackupMirror.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/FavoriteBmp.h"
@@ -236,6 +237,10 @@ void drawSleepFilenameLabel(const GfxRenderer& renderer, const char* filename) {
 
 void SleepActivity::onEnter() {
   Activity::onEnter();
+
+  // Session boundary: mirror important files to /.crosspoint/backups/ so a
+  // later cache-dir wipe or corruption still has a last-resort recovery.
+  backup::snapshotAll();
 
   // Freeze mode keeps the current framebuffer intact — skip the popup
   // so it doesn't get baked into the frozen screen.

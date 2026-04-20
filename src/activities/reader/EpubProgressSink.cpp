@@ -28,6 +28,7 @@ bool EpubProgressSink::write(const ReaderPosition& pos) {
 
   const std::string progPath = cachePath_ + "/progress.bin";
   const std::string tmpPath = cachePath_ + "/progress_tmp.bin";
+  const std::string bakPath = cachePath_ + "/progress.bin.bak";
 
   if (Storage.exists(tmpPath.c_str())) {
     Storage.remove(tmpPath.c_str());
@@ -49,8 +50,14 @@ bool EpubProgressSink::write(const ReaderPosition& pos) {
   f.write(data, 6);
   f.close();
 
+  // Rotate current progress.bin to progress.bin.bak before replacing.
+  // Defence-in-depth: survives an interrupted write, and survives an accidental
+  // removal of progress.bin as long as the .bak is still on disk.
   if (Storage.exists(progPath.c_str())) {
-    Storage.remove(progPath.c_str());
+    if (Storage.exists(bakPath.c_str())) {
+      Storage.remove(bakPath.c_str());
+    }
+    Storage.rename(progPath.c_str(), bakPath.c_str());
   }
   Storage.rename(tmpPath.c_str(), progPath.c_str());
 

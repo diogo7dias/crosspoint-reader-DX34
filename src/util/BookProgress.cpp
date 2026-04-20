@@ -26,7 +26,13 @@ std::optional<int> getEpubPercent(const std::string& path) {
   }
 
   FsFile f;
-  if (!Storage.openFileForRead("BPR", epub.getCachePath() + "/progress.bin", f)) {
+  const std::string epubProgPath = epub.getCachePath() + "/progress.bin";
+  const std::string epubBakPath = epub.getCachePath() + "/progress.bin.bak";
+  bool epubOpened = Storage.openFileForRead("BPR", epubProgPath, f);
+  if (!epubOpened && Storage.exists(epubBakPath.c_str())) {
+    epubOpened = Storage.openFileForRead("BPR", epubBakPath, f);
+  }
+  if (!epubOpened) {
     return std::nullopt;
   }
 
@@ -66,7 +72,13 @@ std::optional<int> getXtcPercent(const std::string& path) {
   }
 
   FsFile f;
-  if (!Storage.openFileForRead("BPR", xtc.getCachePath() + "/progress.bin", f)) {
+  const std::string xtcProgPath = xtc.getCachePath() + "/progress.bin";
+  const std::string xtcBakPath = xtc.getCachePath() + "/progress.bin.bak";
+  bool xtcOpened = Storage.openFileForRead("BPR", xtcProgPath, f);
+  if (!xtcOpened && Storage.exists(xtcBakPath.c_str())) {
+    xtcOpened = Storage.openFileForRead("BPR", xtcBakPath, f);
+  }
+  if (!xtcOpened) {
     return std::nullopt;
   }
 
@@ -91,7 +103,13 @@ std::optional<int> getTxtPercent(const std::string& path) {
   const std::string cachePath = txt.getCachePath();
 
   FsFile progressFile;
-  if (!Storage.openFileForRead("BPR", cachePath + "/progress.bin", progressFile)) {
+  const std::string txtProgPath = cachePath + "/progress.bin";
+  const std::string txtBakPath = cachePath + "/progress.bin.bak";
+  bool txtOpened = Storage.openFileForRead("BPR", txtProgPath, progressFile);
+  if (!txtOpened && Storage.exists(txtBakPath.c_str())) {
+    txtOpened = Storage.openFileForRead("BPR", txtBakPath, progressFile);
+  }
+  if (!txtOpened) {
     return std::nullopt;
   }
 

@@ -440,7 +440,15 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
 
   bool isProgressive = jpeg->getJPEGType() == JPEG_MODE_PROGRESSIVE;
   if (isProgressive) {
-    LOG_INF("JPG", "Progressive JPEG detected - decoding DC coefficients only (lower quality)");
+    // JPEGDEC's progressive MCU decoder (JPEGDecodeMCU_P) has a store-fault
+    // crash on some progressive JPEGs under ESP32-C3 (e.g. Shadow Slave EPUB
+    // cover at 300x400). The DC-only + 8x upscale path is also CPU-heavy
+    // enough to look like a hang on large books. Skip the full decode; the
+    // cover simply won't render, but the book remains openable.
+    LOG_ERR("JPG", "Progressive JPEG not supported - skipping decode to avoid crash: %s", imagePath.c_str());
+    jpeg->close();
+    delete jpeg;
+    return false;
   }
 
   // Calculate overall target scale

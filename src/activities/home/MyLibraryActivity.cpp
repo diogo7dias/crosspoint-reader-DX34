@@ -25,6 +25,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/Trash.h"
 #include "util/BookProgress.h"
 #include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
@@ -642,6 +643,19 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
     return false;
   }
 
+  // Build QUOTES sidecar paths up front so we can carry it along with a book.
+  std::string quotesOld;
+  std::string quotesNew;
+  if (isBookFile(selectedFilePath)) {
+    const auto dotOld = selectedFilePath.rfind('.');
+    const std::string baseOld =
+        (dotOld != std::string::npos) ? selectedFilePath.substr(0, dotOld) : selectedFilePath;
+    quotesOld = baseOld + "_QUOTES.txt";
+    const auto dotNew = destination.rfind('.');
+    const std::string baseNew = (dotNew != std::string::npos) ? destination.substr(0, dotNew) : destination;
+    quotesNew = baseNew + "_QUOTES.txt";
+  }
+
   // rename is instant on the same filesystem (SD card FAT32).
   // Fall back to copy+delete only if rename fails (shouldn't happen).
   if (!Storage.rename(selectedFilePath.c_str(), destination.c_str())) {
@@ -656,6 +670,14 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
   }
 
   if (isBookFile(selectedFilePath)) {
+    // Carry _QUOTES.txt sidecar along with the book so quotes stay attached.
+    if (!quotesOld.empty() && Storage.exists(quotesOld.c_str())) {
+      if (Storage.rename(quotesOld.c_str(), quotesNew.c_str())) {
+        LOG_DBG("LIB", "Moved QUOTES sidecar: %s -> %s", quotesOld.c_str(), quotesNew.c_str());
+      } else {
+        LOG_ERR("LIB", "Failed to move QUOTES sidecar: %s", quotesOld.c_str());
+      }
+    }
     RECENT_BOOKS.removeBook(selectedFilePath);
   } else if (isBmpFile(selectedFilePath)) {
     FavoriteBmp::replacePathReferences(selectedFilePath, destination);
@@ -670,29 +692,27 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
 bool MyLibraryActivity::deleteFile(const std::string& path) {
   if (path.empty()) return false;
   esp_task_wdt_reset();
+
   if (isBookFile(path)) {
     RECENT_BOOKS.removeBook(path);
-    if (StringUtils::checkFileExtension(path, ".epub")) {
-      Epub(path, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(path, ".xtc") || StringUtils::checkFileExtension(path, ".xtch")) {
-      Xtc(path, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(path, ".txt") || StringUtils::checkFileExtension(path, ".md")) {
-      Txt txt(path, Paths::kDataDir);
-      Storage.removeDir(txt.getCachePath().c_str());
-    }
     esp_task_wdt_reset();
   }
 
-  const bool deleted = Storage.remove(path.c_str());
-  LOG_DBG("LIB", "Delete '%s': %s", path.c_str(), deleted ? "ok" : "failed");
-  if (deleted) {
-    if (isBmpFile(path)) {
-      FavoriteBmp::removePathReferences(path);
-      APP_STATE.saveToFile();
-    }
-    if (selectedFilePath == path) selectedFilePath.clear();
+  // Move into /.crosspoint/trash/ instead of hard-deleting so the user has
+  // a window to recover. trash::moveToTrash handles cache dir + QUOTES.txt
+  // for books.
+  const bool moved = trash::moveToTrash(path);
+  if (!moved) {
+    LOG_ERR("LIB", "trash::moveToTrash failed for %s, not hard-deleting", path.c_str());
+    return false;
   }
-  return deleted;
+
+  if (isBmpFile(path)) {
+    FavoriteBmp::removePathReferences(path);
+    APP_STATE.saveToFile();
+  }
+  if (selectedFilePath == path) selectedFilePath.clear();
+  return true;
 }
 
 bool MyLibraryActivity::deleteSelectedFile() { return deleteFile(selectedFilePath); }

@@ -33,6 +33,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
 #include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
@@ -153,7 +154,22 @@ void EpubReaderActivity::onEnter() {
 
   int32_t loadedPageCount = -1;
   FsFile f;
-  if (Storage.openFileForRead("ERS", epub->getCachePath() + "/progress.bin", f)) {
+  const std::string progPath = epub->getCachePath() + "/progress.bin";
+  const std::string bakPath = epub->getCachePath() + "/progress.bin.bak";
+  bool opened = Storage.openFileForRead("ERS", progPath, f);
+  if (!opened && Storage.exists(bakPath.c_str())) {
+    LOG_INF("ERS", "progress.bin missing, recovering from progress.bin.bak");
+    opened = Storage.openFileForRead("ERS", bakPath, f);
+  }
+  if (!opened) {
+    // Last resort: try /.crosspoint/backups/ mirror
+    const std::string flatName = backup::flatNameForCacheFile(epub->getCachePath(), "progress.bin");
+    if (backup::restoreFromMirror(flatName, progPath)) {
+      LOG_INF("ERS", "progress.bin recovered from mirror %s", flatName.c_str());
+      opened = Storage.openFileForRead("ERS", progPath, f);
+    }
+  }
+  if (opened) {
     uint8_t data[6];
     int dataSize = f.read(data, 6);
     if (dataSize == 4 || dataSize == 6) {
@@ -1826,19 +1842,76 @@ void EpubReaderActivity::saveQuoteToFile(const std::string& quote) {
   if (!epub || quote.empty()) return;
 
   const std::string quotesPath = getQuotesFilePath();
+  const std::string tmpPath = quotesPath + ".tmp";
+  const std::string bakPath = quotesPath + ".bak";
 
-  // Open file in append mode
-  HalFile file = Storage.open(quotesPath.c_str(), O_WRITE | O_CREAT | O_APPEND);
-  if (!file) {
-    LOG_ERR("HLT", "Failed to open quotes file: %s", quotesPath.c_str());
+  // Atomic read-modify-write: copy existing primary into .tmp, append the new
+  // entry, then rotate primary -> .bak and .tmp -> primary. A torn write or
+  // power loss leaves .bak as the prior good state.
+  if (Storage.exists(tmpPath.c_str())) {
+    Storage.remove(tmpPath.c_str());
+  }
+
+  HalFile dst;
+  if (!Storage.openFileForWrite("HLT", tmpPath, dst)) {
+    LOG_ERR("HLT", "Failed to open quotes tmp for writing: %s", tmpPath.c_str());
     return;
   }
 
-  // Write chapter info and quote
-  std::string chapterTitle = getChapterTitle();
-  std::string entry = "[" + chapterTitle + "]\n" + quote + "\n---\n\n";
-  file.write(entry.c_str(), entry.size());
-  file.close();
+  // Copy existing content (if any) into tmp
+  if (Storage.exists(quotesPath.c_str())) {
+    HalFile src;
+    if (Storage.openFileForRead("HLT", quotesPath, src)) {
+      uint8_t buffer[512];
+      while (src.available()) {
+        const int rd = src.read(buffer, sizeof(buffer));
+        if (rd <= 0) break;
+        if (dst.write(buffer, rd) != static_cast<size_t>(rd)) {
+          LOG_ERR("HLT", "Failed to copy existing quotes into tmp");
+          src.close();
+          dst.close();
+          Storage.remove(tmpPath.c_str());
+          return;
+        }
+      }
+      src.close();
+    }
+  }
+
+  // Append new entry
+  const std::string chapterTitle = getChapterTitle();
+  const std::string entry = "[" + chapterTitle + "]\n" + quote + "\n---\n\n";
+  if (dst.write(entry.c_str(), entry.size()) != entry.size()) {
+    LOG_ERR("HLT", "Failed to append new quote to tmp");
+    dst.close();
+    Storage.remove(tmpPath.c_str());
+    return;
+  }
+  dst.flush();
+  dst.close();
+
+  // 2-layer rotation
+  if (Storage.exists(bakPath.c_str())) {
+    if (!Storage.remove(bakPath.c_str())) {
+      LOG_ERR("HLT", "Failed to remove stale quotes bak %s", bakPath.c_str());
+    }
+  }
+  if (Storage.exists(quotesPath.c_str())) {
+    if (!Storage.rename(quotesPath.c_str(), bakPath.c_str())) {
+      LOG_ERR("HLT", "Failed to rotate %s -> %s", quotesPath.c_str(), bakPath.c_str());
+      Storage.remove(tmpPath.c_str());
+      return;
+    }
+  }
+  if (!Storage.rename(tmpPath.c_str(), quotesPath.c_str())) {
+    LOG_ERR("HLT", "Failed to promote quotes tmp to %s", quotesPath.c_str());
+    if (Storage.exists(bakPath.c_str())) {
+      if (Storage.rename(bakPath.c_str(), quotesPath.c_str())) {
+        LOG_INF("HLT", "Restored quotes from .bak after promote failure");
+      }
+    }
+    return;
+  }
 
   LOG_DBG("HLT", "Quote saved to %s", quotesPath.c_str());
 }

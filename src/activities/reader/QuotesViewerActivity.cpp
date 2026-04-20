@@ -12,6 +12,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/BackupMirror.h"
 
 namespace {
 constexpr unsigned long kHoldDeleteMs = 2000;
@@ -27,8 +28,40 @@ constexpr size_t kMaxFileRead = 65536;
 
 void QuotesViewerActivity::loadQuotes() {
   quotes.clear();
+
+  // Try primary, then .bak (2-layer recovery), then /.crosspoint/backups/ mirror.
+  const std::string bakPath = filePath + ".bak";
+  const std::string sources[] = {filePath, bakPath};
+  const char* labels[] = {"primary", ".bak"};
+
   FsFile file;
-  if (!Storage.openFileForRead("QV", filePath, file)) return;
+  size_t sourceIdx = 0;
+  bool opened = false;
+  for (size_t i = 0; i < 2; i++) {
+    if (Storage.openFileForRead("QV", sources[i], file)) {
+      if (file.size() == 0) {
+        file.close();
+        continue;
+      }
+      sourceIdx = i;
+      opened = true;
+      break;
+    }
+  }
+  if (!opened) {
+    // Last resort: try /.crosspoint/backups/quotes_<sanitized>.txt mirror
+    const std::string flatName = backup::flatNameForQuotesPath(filePath);
+    if (backup::restoreFromMirror(flatName, filePath)) {
+      if (Storage.openFileForRead("QV", filePath, file) && file.size() > 0) {
+        sourceIdx = 2;
+        opened = true;
+        LOG_INF("QV", "Recovered quotes from mirror %s", flatName.c_str());
+      } else if (file) {
+        file.close();
+      }
+    }
+  }
+  if (!opened) return;
 
   const size_t fileSize = file.size();
   const size_t readSize = (fileSize < kMaxFileRead) ? fileSize : kMaxFileRead;
@@ -39,6 +72,9 @@ void QuotesViewerActivity::loadQuotes() {
   std::string buf(readSize, '\0');
   file.read(&buf[0], readSize);
   file.close();
+  if (sourceIdx == 1) {
+    LOG_INF("QV", "Loaded quotes from %s (%s recovery)", sources[sourceIdx].c_str(), labels[sourceIdx]);
+  }
 
   // Format:  [Chapter Title]\nquote text\n---\n\n
   size_t pos = 0;
@@ -77,16 +113,25 @@ void QuotesViewerActivity::loadQuotes() {
 }
 
 bool QuotesViewerActivity::saveQuotes() const {
+  const std::string tmpPath = filePath + ".tmp";
+  const std::string bakPath = filePath + ".bak";
+
   if (quotes.empty()) {
-    // All quotes deleted — remove the file
+    // User cleared all quotes — remove primary and .bak so nothing resurrects them
     Storage.remove(filePath.c_str());
+    Storage.remove(bakPath.c_str());
     LOG_INF("QV", "All quotes deleted, removed %s", filePath.c_str());
     return true;
   }
 
-  FsFile file = Storage.open(filePath.c_str(), O_WRITE | O_CREAT | O_TRUNC);
+  if (Storage.exists(tmpPath.c_str())) {
+    Storage.remove(tmpPath.c_str());
+  }
+
+  // Write to .tmp first so a torn write doesn't corrupt primary.
+  FsFile file = Storage.open(tmpPath.c_str(), O_WRITE | O_CREAT | O_TRUNC);
   if (!file) {
-    LOG_ERR("QV", "Failed to open quotes file for writing: %s", filePath.c_str());
+    LOG_ERR("QV", "Failed to open quotes tmp for writing: %s", tmpPath.c_str());
     return false;
   }
 
@@ -104,7 +149,32 @@ bool QuotesViewerActivity::saveQuotes() const {
     }
   }
 
+  file.flush();
   file.close();
+
+  // 2-layer rotation: remove stale .bak, rotate primary -> .bak, promote .tmp -> primary.
+  if (Storage.exists(bakPath.c_str())) {
+    if (!Storage.remove(bakPath.c_str())) {
+      LOG_ERR("QV", "Failed to remove stale bak %s", bakPath.c_str());
+    }
+  }
+  if (Storage.exists(filePath.c_str())) {
+    if (!Storage.rename(filePath.c_str(), bakPath.c_str())) {
+      LOG_ERR("QV", "Failed to rotate %s -> %s", filePath.c_str(), bakPath.c_str());
+      Storage.remove(tmpPath.c_str());
+      return false;
+    }
+  }
+  if (!Storage.rename(tmpPath.c_str(), filePath.c_str())) {
+    LOG_ERR("QV", "Failed to promote quotes tmp to %s", filePath.c_str());
+    if (Storage.exists(bakPath.c_str())) {
+      if (Storage.rename(bakPath.c_str(), filePath.c_str())) {
+        LOG_INF("QV", "Restored quotes from .bak after promote failure");
+      }
+    }
+    return false;
+  }
+
   LOG_DBG("QV", "Saved %d quotes to %s", static_cast<int>(quotes.size()), filePath.c_str());
   return true;
 }

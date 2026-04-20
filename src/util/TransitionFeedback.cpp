@@ -39,7 +39,16 @@ void show(GfxRenderer& renderer, const char* message) {
   const int textY = boxY + paddingY - 2;
   renderer.drawText(UI_12_FONT_ID, textX, textY, upper.c_str(), true, EpdFontFamily::REGULAR);
 
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  // FAST_REFRESH diffs new framebuffer vs previous (in RED RAM): only pixels
+  // inside the popup rectangle flip, so feedback appears in ~400 ms instead
+  // of the ~1700 ms a HALF_REFRESH takes. The popup's pixels are NOT written
+  // into RED RAM after a fast refresh, so the next fast refresh would
+  // compare the destination activity's buffer against the pre-popup frame
+  // and leave visible ghosting where the popup sat. Request a HALF on the
+  // next displayBuffer so the destination's first render fully rewrites
+  // both BW and RED RAM and scrubs any ghost.
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  renderer.requestHalfRefresh();
   sBottomY = boxY + boxH + border;
   sActive = true;
 }
@@ -51,6 +60,8 @@ void dismiss(GfxRenderer& renderer) {
   sActive = false;
   sBottomY = 0;
   renderer.clearScreen();
+  // HALF_REFRESH at dismiss time scrubs any popup ghost in a single pass;
+  // we only reach dismiss when no destination render is coming to clean up.
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }
 

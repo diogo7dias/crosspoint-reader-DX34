@@ -1,5 +1,6 @@
 #include "Epub.h"
 
+#include <Arduino.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JpegToBmpConverter.h>
@@ -8,6 +9,9 @@
 #include <ZipFile.h>
 
 #include <algorithm>
+
+#define LOG_HEAP(label) \
+  LOG_DBG("HEAP", "EBP %s free=%u min=%u", label, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap())
 
 #include "Epub/parsers/ContainerParser.h"
 #include "Epub/parsers/ContentOpfParser.h"
@@ -423,6 +427,7 @@ void Epub::parseCssFiles() const {
 bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
                 const std::function<void(int)>& progressCallback) {
   LOG_DBG("EBP", "Loading ePub: %s", filepath.c_str());
+  LOG_HEAP("load:start");
   this->progressCallback = progressCallback;
   ProgressReporter reporter(progressCallback);
 
@@ -438,12 +443,16 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
     cacheProbeSpan.reportPercent(30);
     if (bookMetadataCache->load([&cacheProbeSpan](const int percent) { cacheProbeSpan.reportPercent(percent); })) {
       cacheProbeSpan.finish();
+      LOG_HEAP("load:cache-hit");
+      LOG_DBG("EBP", "cache-hit spineCount=%d tocCount=%d", bookMetadataCache->getSpineCount(),
+              bookMetadataCache->getTocCount());
       if (!skipLoadingCss) {
         ProgressSpan cachedCssSpan(reporter, 10, 90);
         cachedCssSpan.reportPercent(15);
         // Rebuild CSS cache when missing or when cache version changed (loadFromCache removes stale file)
         if (!cssParser->hasCache() || !cssParser->loadFromCache()) {
           LOG_DBG("EBP", "CSS rules cache missing or stale, attempting to parse CSS files");
+          LOG_HEAP("cache-hit:css-rebuild-start");
           cssParser->deleteCache();
 
           ProgressSpan cachedOpfSpan(reporter, 10, 35);
@@ -456,18 +465,22 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
           ProgressSpan cssSpan(reporter, 80, 90);
           parseCssFiles();
           cssSpan.finish();
+          LOG_HEAP("cache-hit:css-rebuild-done");
         } else {
           cachedCssSpan.finish();
+          LOG_HEAP("cache-hit:css-loaded");
         }
       } else {
         reporter.report(90);
       }
       LOG_DBG("EBP", "Loaded ePub: %s", filepath.c_str());
+      LOG_HEAP("load:done-cache-hit");
       return true;
     }
   }
 
   reporter.report(10);
+  LOG_HEAP("load:cache-miss-build-start");
 
   // If we didn't load from cache above and we aren't allowed to build, fail now
   if (!buildIfMissing) {
@@ -507,6 +520,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
     return false;
   }
   LOG_DBG("EBP", "OPF pass completed in %lu ms", millis() - opfStart);
+  LOG_HEAP("build:opf-done");
 
   // TOC Pass - try EPUB 3 nav first, fall back to NCX
   const uint32_t tocStart = millis();
@@ -546,6 +560,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
     return false;
   }
   LOG_DBG("EBP", "TOC pass completed in %lu ms", millis() - tocStart);
+  LOG_HEAP("build:toc-done");
 
   // Close the cache files
   if (!bookMetadataCache->endWrite()) {
@@ -565,7 +580,9 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
     buildSpan.finish();
   }
   LOG_DBG("EBP", "buildBookBin completed in %lu ms", millis() - buildStart);
+  LOG_HEAP("build:bookbin-done");
   LOG_DBG("EBP", "Total indexing completed in %lu ms", millis() - indexingStart);
+  LOG_DBG("EBP", "spineCount=%d tocCount=%d", bookMetadataCache->getSpineCount(), bookMetadataCache->getTocCount());
 
   if (!bookMetadataCache->cleanupTmpFiles()) {
     LOG_DBG("EBP", "Could not cleanup tmp files - ignoring");
@@ -587,11 +604,13 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
     ProgressSpan cssSpan(reporter, 85, 90);
     parseCssFiles();
     cssSpan.finish();
+    LOG_HEAP("build:css-done");
   } else {
     reporter.report(90);
   }
 
   LOG_DBG("EBP", "Loaded ePub: %s", filepath.c_str());
+  LOG_HEAP("load:done-built");
   return true;
 }
 
