@@ -468,14 +468,29 @@ bool ReadingThemeStore::loadBookSettingsIntoCurrent(const std::string& cachePath
 }
 
 bool ReadingThemeStore::resetBookSettingsToGlobal(const std::string& cachePath) {
-  if (!cachePath.empty()) {
-    const std::string settingsPath = bookReaderSettingsPath(cachePath);
-    if (Storage.exists(settingsPath.c_str()) && !Storage.remove(settingsPath.c_str())) {
-      return false;
-    }
+  const ReadingTheme previousSettings = fromSettings(instance.lastAppliedThemeName, SETTINGS);
+  const std::string settingsPath = bookReaderSettingsPath(cachePath);
+  const bool hasBookSettings = !cachePath.empty() && Storage.exists(settingsPath.c_str());
+
+  if (!SETTINGS.loadFromFile()) {
+    return false;
   }
 
-  return SETTINGS.loadFromFile();
+  if (hasBookSettings && !Storage.remove(settingsPath.c_str())) {
+    applyThemeToSettings(previousSettings, SETTINGS);
+    instance.lastAppliedThemeName = previousSettings.name;
+    return false;
+  }
+
+  instance.lastAppliedThemeName.clear();
+  const int matchingThemeIndex = instance.findMatchingTheme();
+  if (matchingThemeIndex >= 0) {
+    const ReadingTheme* matchingTheme = instance.getTheme(static_cast<size_t>(matchingThemeIndex));
+    if (matchingTheme != nullptr) {
+      instance.lastAppliedThemeName = matchingTheme->name;
+    }
+  }
+  return true;
 }
 
 ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
