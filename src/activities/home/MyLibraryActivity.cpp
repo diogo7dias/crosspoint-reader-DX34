@@ -648,8 +648,7 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
   std::string quotesNew;
   if (isBookFile(selectedFilePath)) {
     const auto dotOld = selectedFilePath.rfind('.');
-    const std::string baseOld =
-        (dotOld != std::string::npos) ? selectedFilePath.substr(0, dotOld) : selectedFilePath;
+    const std::string baseOld = (dotOld != std::string::npos) ? selectedFilePath.substr(0, dotOld) : selectedFilePath;
     quotesOld = baseOld + "_QUOTES.txt";
     const auto dotNew = destination.rfind('.');
     const std::string baseNew = (dotNew != std::string::npos) ? destination.substr(0, dotNew) : destination;
