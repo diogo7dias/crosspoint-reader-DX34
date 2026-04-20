@@ -39,7 +39,11 @@ void show(GfxRenderer& renderer, const char* message) {
   const int textY = boxY + paddingY - 2;
   renderer.drawText(UI_12_FONT_ID, textX, textY, upper.c_str(), true, EpdFontFamily::REGULAR);
 
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  // FAST_REFRESH diffs new framebuffer vs previous (in RED RAM): only pixels
+  // inside the popup rectangle flip, so feedback appears in ~400ms instead
+  // of the ~1700ms a HALF_REFRESH takes. Ghosting doesn't matter because
+  // the popup is transient — the destination activity overwrites it shortly.
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   sBottomY = boxY + boxH + border;
   sActive = true;
 }
@@ -51,7 +55,7 @@ void dismiss(GfxRenderer& renderer) {
   sActive = false;
   sBottomY = 0;
   renderer.clearScreen();
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
 }
 
 bool isActive() { return sActive; }
