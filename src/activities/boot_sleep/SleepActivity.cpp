@@ -20,15 +20,30 @@
 #include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
+#ifdef PERSIST_V2
+#include "persist/PersistManager.h"
+#endif
 #if SLEEP_V2
 #include "sleep/WallpaperPlaylist.h"
 #endif
 
 namespace {
+// Sleep rendering runs inside SleepActivity::onEnter, called AFTER
+// enterDeepSleep's persistAppState flushAll and milliseconds before the CPU
+// enters deep sleep. Under PERSIST_V2 saveToFile() is debounced — the next
+// main-loop tick never fires, so any state write would be lost. Force a sync
+// flush so triage state survives the deep-sleep boundary.
+void flushStateSync() {
+  APP_STATE.saveToFile();
+#ifdef PERSIST_V2
+  crosspoint::persist::PersistManager().flushAll();
+#endif
+}
+
 void clearLastSleepWallpaperPath() {
   if (!APP_STATE.lastSleepWallpaperPath.empty()) {
     APP_STATE.lastSleepWallpaperPath.clear();
-    APP_STATE.saveToFile();
+    flushStateSync();
   }
 }
 
@@ -43,7 +58,7 @@ void rememberLastRenderedSleepBitmap(const std::string& path, const std::string&
     changed = true;
   }
   if (changed) {
-    APP_STATE.saveToFile();
+    flushStateSync();
   }
 }
 
