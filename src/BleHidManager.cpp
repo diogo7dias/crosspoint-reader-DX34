@@ -37,6 +37,7 @@ bool BleHidManager::init() {
   // (bonding=true, MITM=false, SC=true) matches what upstream Crosspoint uses
   // and unblocks these devices.
   NimBLEDevice::setSecurityAuth(/*bonding=*/true, /*mitm=*/false, /*sc=*/true);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
   state = State::Idle;
   scanComplete = false;
@@ -204,6 +205,7 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
   // adopts our supervision timeout; some devices ignore the scan-phase
   // params and use their own until we issue an L2CAP update.
   client->updateConnParams(12, 24, 0, 600);
+  client->setDataLen(251);
 
   // Force pairing/encryption now rather than waiting for NimBLE to auto-retry
   // an ATT Insufficient Authentication on the first CCCD write. Explicit is
@@ -257,27 +259,29 @@ bool BleHidManager::subscribeToHid() {
     protoMode->writeValue(&reportMode, 1, /*response=*/false);
   }
 
-  // Subscribe to ALL input Report characteristics that can notify. Gamepads
-  // and combo remotes typically expose multiple input reports (e.g. keyboard
-  // page + consumer page + vendor page); previously we stopped after the
-  // first Report subscribe, so buttons on other reports went unseen even when
-  // the link stayed up. NimBLE 1.x returns a pointer-to-vector (nullable).
+  // Subscribe to ALL input Report characteristics that can notify OR indicate.
+  // Some BLE page turners expose indicate-only input reports; treating notify
+  // as the only valid transport makes pairing appear to work but no usable
+  // input ever arrives on the remap screen. NimBLE 1.x returns a
+  // pointer-to-vector (nullable).
   bool subscribed = false;
   const auto* chars = hidService->getCharacteristics(true);
   if (chars) {
     for (auto* chr : *chars) {
-      if (chr->getUUID() == kHidReportCharUuid && chr->canNotify()) {
+      if (chr->getUUID() == kHidReportCharUuid && (chr->canNotify() || chr->canIndicate())) {
         // Clear stale CCCD state when reusing a client across reconnects —
         // NimBLE-Arduino caches subscription state on the characteristic, and
         // a previous connection's ghost value can make subscribe() think it
         // has nothing to do and return without writing CCCD.
         (void)chr->unsubscribe();
-        const bool ok = chr->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-          onHidReport(data, len, /*isBootKeyboard=*/false);
-        });
+        const bool useNotify = chr->canNotify();
+        const bool ok =
+            chr->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+              onHidReport(data, len, /*isBootKeyboard=*/false);
+            });
         if (ok) {
           subscribed = true;
-          LOG_INF("BLE", "Subscribed to HID Report characteristic");
+          LOG_INF("BLE", "Subscribed to HID Report characteristic via %s", useNotify ? "notify" : "indicate");
         } else {
           LOG_INF("BLE", "HID Report subscribe failed (continuing)");
         }
@@ -290,14 +294,16 @@ bool BleHidManager::subscribeToHid() {
   // peer into Boot Protocol, so a device that supports both will still emit
   // its Report-Protocol stream on the generic chars above.
   NimBLERemoteCharacteristic* bootKbChar = hidService->getCharacteristic(kHidBootKbInputCharUuid);
-  if (bootKbChar && bootKbChar->canNotify()) {
+  if (bootKbChar && (bootKbChar->canNotify() || bootKbChar->canIndicate())) {
     (void)bootKbChar->unsubscribe();
-    const bool ok = bootKbChar->subscribe(true, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-      onHidReport(data, len, /*isBootKeyboard=*/true);
-    });
+    const bool useNotify = bootKbChar->canNotify();
+    const bool ok =
+        bootKbChar->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len, /*isBootKeyboard=*/true);
+        });
     if (ok) {
       subscribed = true;
-      LOG_INF("BLE", "Subscribed to Boot Keyboard Input");
+      LOG_INF("BLE", "Subscribed to Boot Keyboard Input via %s", useNotify ? "notify" : "indicate");
     }
   }
 
