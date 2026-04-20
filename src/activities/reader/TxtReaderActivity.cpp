@@ -22,6 +22,7 @@
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/BackupMirror.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
@@ -1112,6 +1113,13 @@ void TxtReaderActivity::loadProgress() {
   if (!opened && Storage.exists(bakPath.c_str())) {
     LOG_INF("TRS", "progress.bin missing, recovering from progress.bin.bak");
     opened = Storage.openFileForRead("TRS", bakPath, f);
+  }
+  if (!opened) {
+    const std::string flatName = backup::flatNameForCacheFile(txt->getCachePath(), "progress.bin");
+    if (backup::restoreFromMirror(flatName, progPath)) {
+      LOG_INF("TRS", "progress.bin recovered from mirror %s", flatName.c_str());
+      opened = Storage.openFileForRead("TRS", progPath, f);
+    }
   }
   if (opened) {
     uint8_t data[4];

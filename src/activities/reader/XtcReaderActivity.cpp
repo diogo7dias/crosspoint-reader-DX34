@@ -23,6 +23,7 @@
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
+#include "persist/BackupMirror.h"
 #include "fontIds.h"
 
 namespace {
@@ -584,6 +585,13 @@ void XtcReaderActivity::loadProgress() {
   if (!opened && Storage.exists(bakPath.c_str())) {
     LOG_INF("XTR", "progress.bin missing, recovering from progress.bin.bak");
     opened = Storage.openFileForRead("XTR", bakPath, f);
+  }
+  if (!opened) {
+    const std::string flatName = backup::flatNameForCacheFile(xtc->getCachePath(), "progress.bin");
+    if (backup::restoreFromMirror(flatName, progPath)) {
+      LOG_INF("XTR", "progress.bin recovered from mirror %s", flatName.c_str());
+      opened = Storage.openFileForRead("XTR", progPath, f);
+    }
   }
   if (opened) {
     uint8_t data[4];

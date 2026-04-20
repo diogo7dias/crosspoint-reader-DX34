@@ -33,6 +33,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
 #include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
@@ -159,6 +160,14 @@ void EpubReaderActivity::onEnter() {
   if (!opened && Storage.exists(bakPath.c_str())) {
     LOG_INF("ERS", "progress.bin missing, recovering from progress.bin.bak");
     opened = Storage.openFileForRead("ERS", bakPath, f);
+  }
+  if (!opened) {
+    // Last resort: try /.crosspoint/backups/ mirror
+    const std::string flatName = backup::flatNameForCacheFile(epub->getCachePath(), "progress.bin");
+    if (backup::restoreFromMirror(flatName, progPath)) {
+      LOG_INF("ERS", "progress.bin recovered from mirror %s", flatName.c_str());
+      opened = Storage.openFileForRead("ERS", progPath, f);
+    }
   }
   if (opened) {
     uint8_t data[6];

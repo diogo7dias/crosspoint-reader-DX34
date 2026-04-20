@@ -6,8 +6,44 @@
 
 #include <algorithm>
 
+#include "persist/BackupMirror.h"
+
 namespace {
 constexpr char kBookmarksFile[] = "/bookmarks.json";
+}  // namespace
+
+namespace {
+bool parseBookmarksFile(const std::string& path, std::vector<BookmarkStore::Bookmark>& out) {
+  FsFile f;
+  if (!Storage.openFileForRead("BKM", path, f)) return false;
+  const auto sz = static_cast<size_t>(f.size());
+  if (sz == 0 || sz > 8192) {
+    f.close();
+    return false;
+  }
+  std::vector<char> buf(sz + 1);
+  const int rd = f.read(buf.data(), sz);
+  f.close();
+  if (rd != static_cast<int>(sz)) return false;
+  buf[sz] = '\0';
+
+  JsonDocument doc;
+  if (deserializeJson(doc, buf.data()) != DeserializationError::Ok) return false;
+
+  out.clear();
+  JsonArray arr = doc.as<JsonArray>();
+  for (JsonObject obj : arr) {
+    if (static_cast<int>(out.size()) >= BookmarkStore::MAX_BOOKMARKS) break;
+    BookmarkStore::Bookmark bm;
+    bm.spineIndex = obj["s"] | 0;
+    bm.pageNumber = obj["p"] | 0;
+    const char* n = obj["n"] | "";
+    bm.name = n;
+    if (bm.name.size() > BookmarkStore::MAX_NAME_LENGTH) bm.name.resize(BookmarkStore::MAX_NAME_LENGTH);
+    out.push_back(bm);
+  }
+  return true;
+}
 }  // namespace
 
 bool BookmarkStore::load(const std::string& cachePath) {
@@ -18,51 +54,27 @@ bool BookmarkStore::load(const std::string& cachePath) {
   const std::string tmpPath = path + ".tmp";
   const std::string bakPath = path + ".bak";
 
-  // Try primary, then .tmp (save-interrupted), then .bak (2-layer rollback)
+  // Try primary, then .tmp (save-interrupted), then .bak (2-layer rollback).
   const std::string sources[] = {path, tmpPath, bakPath};
   const char* labels[] = {"primary", ".tmp", ".bak"};
-
   for (size_t i = 0; i < 3; i++) {
-    FsFile f;
-    if (!Storage.openFileForRead("BKM", sources[i], f)) continue;
-
-    const auto sz = static_cast<size_t>(f.size());
-    if (sz == 0 || sz > 8192) {
-      f.close();
-      continue;
+    if (parseBookmarksFile(sources[i], bookmarks)) {
+      if (i == 0) {
+        LOG_DBG("BKM", "Loaded %d bookmarks from %s", count(), sources[i].c_str());
+      } else {
+        LOG_INF("BKM", "Loaded %d bookmarks from %s (%s recovery)", count(), sources[i].c_str(), labels[i]);
+      }
+      return true;
     }
+  }
 
-    std::vector<char> buf(sz + 1);
-    const int rd = f.read(buf.data(), sz);
-    f.close();
-    if (rd != static_cast<int>(sz)) continue;
-    buf[sz] = '\0';
-
-    JsonDocument doc;
-    if (deserializeJson(doc, buf.data()) != DeserializationError::Ok) {
-      LOG_ERR("BKM", "Failed to parse bookmarks (%s): %s", labels[i], sources[i].c_str());
-      continue;
+  // Last resort: try /.crosspoint/backups/<hash>_bookmarks.json mirror.
+  const std::string flatName = backup::flatNameForCacheFile(cachePath, "bookmarks.json");
+  if (backup::restoreFromMirror(flatName, path)) {
+    if (parseBookmarksFile(path, bookmarks)) {
+      LOG_INF("BKM", "Recovered %d bookmarks from mirror %s", count(), flatName.c_str());
+      return true;
     }
-
-    JsonArray arr = doc.as<JsonArray>();
-    bookmarks.clear();
-    for (JsonObject obj : arr) {
-      if (static_cast<int>(bookmarks.size()) >= MAX_BOOKMARKS) break;
-      Bookmark bm;
-      bm.spineIndex = obj["s"] | 0;
-      bm.pageNumber = obj["p"] | 0;
-      const char* n = obj["n"] | "";
-      bm.name = n;
-      if (bm.name.size() > MAX_NAME_LENGTH) bm.name.resize(MAX_NAME_LENGTH);
-      bookmarks.push_back(bm);
-    }
-
-    if (i == 0) {
-      LOG_DBG("BKM", "Loaded %d bookmarks from %s", count(), sources[i].c_str());
-    } else {
-      LOG_INF("BKM", "Loaded %d bookmarks from %s (%s recovery)", count(), sources[i].c_str(), labels[i]);
-    }
-    return true;
   }
 
   return false;

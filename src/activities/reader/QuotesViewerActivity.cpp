@@ -12,6 +12,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/BackupMirror.h"
 
 namespace {
 constexpr unsigned long kHoldDeleteMs = 2000;
@@ -28,7 +29,7 @@ constexpr size_t kMaxFileRead = 65536;
 void QuotesViewerActivity::loadQuotes() {
   quotes.clear();
 
-  // Try primary, then .bak (2-layer recovery). Empty file or missing → try next.
+  // Try primary, then .bak (2-layer recovery), then /.crosspoint/backups/ mirror.
   const std::string bakPath = filePath + ".bak";
   const std::string sources[] = {filePath, bakPath};
   const char* labels[] = {"primary", ".bak"};
@@ -47,18 +48,31 @@ void QuotesViewerActivity::loadQuotes() {
       break;
     }
   }
+  if (!opened) {
+    // Last resort: try /.crosspoint/backups/quotes_<sanitized>.txt mirror
+    const std::string flatName = backup::flatNameForQuotesPath(filePath);
+    if (backup::restoreFromMirror(flatName, filePath)) {
+      if (Storage.openFileForRead("QV", filePath, file) && file.size() > 0) {
+        sourceIdx = 2;
+        opened = true;
+        LOG_INF("QV", "Recovered quotes from mirror %s", flatName.c_str());
+      } else if (file) {
+        file.close();
+      }
+    }
+  }
   if (!opened) return;
 
   const size_t fileSize = file.size();
   const size_t readSize = (fileSize < kMaxFileRead) ? fileSize : kMaxFileRead;
   if (fileSize > kMaxFileRead) {
-    LOG_INF("QV", "Quotes file %s is %u bytes, truncating to %u", sources[sourceIdx].c_str(), (unsigned)fileSize,
+    LOG_INF("QV", "Quotes file %s is %u bytes, truncating to %u", filePath.c_str(), (unsigned)fileSize,
             (unsigned)kMaxFileRead);
   }
   std::string buf(readSize, '\0');
   file.read(&buf[0], readSize);
   file.close();
-  if (sourceIdx > 0) {
+  if (sourceIdx == 1) {
     LOG_INF("QV", "Loaded quotes from %s (%s recovery)", sources[sourceIdx].c_str(), labels[sourceIdx]);
   }
 
