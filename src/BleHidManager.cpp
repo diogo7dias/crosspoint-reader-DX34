@@ -284,10 +284,9 @@ bool BleHidManager::subscribeToHid() {
         // has nothing to do and return without writing CCCD.
         (void)chr->unsubscribe();
         const bool useNotify = chr->canNotify();
-        const bool ok =
-            chr->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-              onHidReport(data, len, /*isBootKeyboard=*/false);
-            });
+        const bool ok = chr->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+          onHidReport(data, len, /*isBootKeyboard=*/false);
+        });
         if (ok) {
           subscribed = true;
           LOG_INF("BLE", "Subscribed to HID Report characteristic via %s", useNotify ? "notify" : "indicate");
@@ -306,10 +305,8 @@ bool BleHidManager::subscribeToHid() {
   if (bootKbChar && (bootKbChar->canNotify() || bootKbChar->canIndicate())) {
     (void)bootKbChar->unsubscribe();
     const bool useNotify = bootKbChar->canNotify();
-    const bool ok =
-        bootKbChar->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
-          onHidReport(data, len, /*isBootKeyboard=*/true);
-        });
+    const bool ok = bootKbChar->subscribe(useNotify, [this](NimBLERemoteCharacteristic*, uint8_t* data, size_t len,
+                                                            bool) { onHidReport(data, len, /*isBootKeyboard=*/true); });
     if (ok) {
       subscribed = true;
       LOG_INF("BLE", "Subscribed to Boot Keyboard Input via %s", useNotify ? "notify" : "indicate");
@@ -386,14 +383,12 @@ void BleHidManager::detectGamebrickFromAddressOrName(const std::string& address,
   // Drunkpenguin device table lists MAC prefix 60:4d:ec as a known Gamebrick
   // identity; match either that prefix or the device name. Address string
   // from NimBLE is lowercase hex, e.g. "60:4d:ec:12:34:56".
-  const bool macMatch = address.size() >= 8 &&
-                        (address.rfind("60:4d:ec", 0) == 0 || address.rfind("60:4D:EC", 0) == 0);
+  const bool macMatch = address.size() >= 8 && (address.rfind("60:4d:ec", 0) == 0 || address.rfind("60:4D:EC", 0) == 0);
   const bool nameMatch = containsIgnoreCase(name, "IINE") || containsIgnoreCase(name, "Game Brick") ||
                          containsIgnoreCase(name, "Gamebrick");
   gamebrickMode = macMatch || nameMatch;
   if (gamebrickMode) {
-    LOG_INF("BLE", "Gamebrick device detected (addr=%s name=%s) — using custom decoder",
-            address.c_str(), name.c_str());
+    LOG_INF("BLE", "Gamebrick device detected (addr=%s name=%s) — using custom decoder", address.c_str(), name.c_str());
   }
 }
 
