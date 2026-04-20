@@ -467,6 +467,32 @@ bool ReadingThemeStore::loadBookSettingsIntoCurrent(const std::string& cachePath
   return true;
 }
 
+bool ReadingThemeStore::resetBookSettingsToGlobal(const std::string& cachePath) {
+  const ReadingTheme previousSettings = fromSettings(instance.lastAppliedThemeName, SETTINGS);
+  const std::string settingsPath = bookReaderSettingsPath(cachePath);
+  const bool hasBookSettings = !cachePath.empty() && Storage.exists(settingsPath.c_str());
+
+  if (!SETTINGS.loadFromFile()) {
+    return false;
+  }
+
+  if (hasBookSettings && !Storage.remove(settingsPath.c_str())) {
+    applyThemeToSettings(previousSettings, SETTINGS);
+    instance.lastAppliedThemeName = previousSettings.name;
+    return false;
+  }
+
+  instance.lastAppliedThemeName.clear();
+  const int matchingThemeIndex = instance.findMatchingTheme();
+  if (matchingThemeIndex >= 0) {
+    const ReadingTheme* matchingTheme = instance.getTheme(static_cast<size_t>(matchingThemeIndex));
+    if (matchingTheme != nullptr) {
+      instance.lastAppliedThemeName = matchingTheme->name;
+    }
+  }
+  return true;
+}
+
 ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   ReadingTheme normalized = theme;
   normalized.name = sanitizeName(theme.name);
