@@ -232,6 +232,15 @@ bool BleHidManager::connectToDeviceBlocking(const std::string& address) {
     }
   }
 
+  // Name may be empty on reconnect (bonded device, no scan this session) —
+  // fall back to the persisted device name from settings so the Gamebrick
+  // detector can still match by name on reboot.
+  if ((connectedName == address || connectedName.empty()) && SETTINGS.bleDeviceAddr[0] != '\0' &&
+      address == SETTINGS.bleDeviceAddr) {
+    connectedName = SETTINGS.bleDeviceName;
+  }
+  detectGamebrickFromAddressOrName(address, connectedName);
+
   state = State::Connected;
   reconnectAttempts = 0;
   LOG_INF("BLE", "HID subscription active for %s", connectedName.c_str());
@@ -313,6 +322,7 @@ void BleHidManager::disconnect() {
   }
   state = (state == State::Uninitialized) ? State::Uninitialized : State::Idle;
   connectedName.clear();
+  gamebrickMode = false;
 
   portENTER_CRITICAL(&stateLock);
   for (int i = 0; i < kButtonCount; i++) {
@@ -349,8 +359,106 @@ void BleHidManager::tryAutoReconnect() {
 
 // --- HID Report Parsing ---
 
+// Case-insensitive substring match — names vary in casing across firmware revs
+// of the Gamebrick family, so "IINE Game Brick" and "iine gamebrick" should
+// both trigger the device-specific decoder.
+static bool containsIgnoreCase(const std::string& haystack, const char* needle) {
+  const size_t needleLen = strlen(needle);
+  if (needleLen == 0 || haystack.size() < needleLen) return false;
+  for (size_t i = 0; i + needleLen <= haystack.size(); i++) {
+    size_t j = 0;
+    for (; j < needleLen; j++) {
+      char a = haystack[i + j];
+      char b = needle[j];
+      if (a >= 'A' && a <= 'Z') a = (char)(a + ('a' - 'A'));
+      if (b >= 'A' && b <= 'Z') b = (char)(b + ('a' - 'A'));
+      if (a != b) break;
+    }
+    if (j == needleLen) return true;
+  }
+  return false;
+}
+
+void BleHidManager::detectGamebrickFromAddressOrName(const std::string& address, const std::string& name) {
+  // Drunkpenguin device table lists MAC prefix 60:4d:ec as a known Gamebrick
+  // identity; match either that prefix or the device name. Address string
+  // from NimBLE is lowercase hex, e.g. "60:4d:ec:12:34:56".
+  const bool macMatch = address.size() >= 8 && (address.rfind("60:4d:ec", 0) == 0 || address.rfind("60:4D:EC", 0) == 0);
+  const bool nameMatch = containsIgnoreCase(name, "IINE") || containsIgnoreCase(name, "Game Brick") ||
+                         containsIgnoreCase(name, "Gamebrick");
+  gamebrickMode = macMatch || nameMatch;
+  if (gamebrickMode) {
+    LOG_INF("BLE", "Gamebrick device detected (addr=%s name=%s) — using custom decoder", address.c_str(), name.c_str());
+  }
+}
+
+// Minimal-viable Gamebrick V2 report decoder. Ported (subset) from
+// thedrunkpenguin/crosspoint-reader-ble crosspoint-ble-1.2. Intentionally
+// omits counter-freeze (0x07D0) disambiguation, stale-hold reset, center-
+// press-frame LEFT heuristic, and A/B distinction — those are follow-ups
+// once a volunteer confirms basic D-pad registers on the remap screen.
+//
+// Report layout (5 bytes):
+//   byte[0] : frame status, bit 0 = active/press, clear = release tail
+//   byte[1..2] : 16-bit cycling counter (ignored here)
+//   byte[3] : joystick X, center = 0x98
+//   byte[4] : D-pad / vertical: 0x07=UP, 0x09=DOWN, 0x08=idle/horizontal
+//
+// Emitted keycodes (standard HID Keyboard/Keypad Usage Page):
+//   0x07 UP, 0x09 DOWN, 0x50 LEFT_ARROW, 0x4F RIGHT_ARROW
+void BleHidManager::onGamebrickReport(const uint8_t* data, size_t len) {
+  if (len < 5) return;
+
+  const bool pressed = (data[0] & 0x01) != 0;
+  const uint8_t b4 = data[4];
+  uint16_t keycode = 0;
+
+  if (b4 == 0x07) {
+    keycode = 0x07;  // UP
+  } else if (b4 == 0x09) {
+    keycode = 0x09;  // DOWN
+  } else if (b4 == 0x08) {
+    const int dx = (int)data[3] - 0x98;
+    if (dx < -2) {
+      keycode = 0x4F;  // RIGHT
+    } else if (dx > 0) {
+      keycode = 0x50;  // LEFT
+    }
+  }
+
+  if (keycode != 0) {
+    lastRawKeycode = keycode;
+  }
+
+  if (captureMode) return;
+
+  portENTER_CRITICAL(&stateLock);
+  // Clear all current button state for this device — Gamebrick only ever
+  // reports one logical input at a time (D-pad is mutually exclusive with
+  // joystick-horizontal), so we do not need to OR with previous state.
+  for (int b = 0; b < kButtonCount; b++) {
+    currentPressed[b] = false;
+  }
+  if (pressed && keycode != 0) {
+    for (int b = 0; b < kButtonCount; b++) {
+      if (SETTINGS.bleKeyMap[b] == keycode) currentPressed[b] = true;
+    }
+  }
+  portEXIT_CRITICAL(&stateLock);
+}
+
 void BleHidManager::onHidReport(const uint8_t* data, size_t len, bool isBootKeyboard) {
   if (len == 0) return;
+
+  // Route Gamebrick-family devices through the dedicated decoder before the
+  // generic parsers — the byte-diff path below produces garbage on these
+  // devices because they encode D-pad as byte VALUES (0x07/0x09) rather than
+  // bit flags. Only applies to non-boot-keyboard reports; if the Gamebrick
+  // somehow emits a boot-keyboard frame we still want the standard path.
+  if (gamebrickMode && !isBootKeyboard) {
+    onGamebrickReport(data, len);
+    return;
+  }
 
   // Boot keyboard protocol: [0]=modifiers, [1]=reserved, [2..7]=up to 6 keycodes.
   // Only apply this interpretation to reports that actually came from the boot-
