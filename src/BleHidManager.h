@@ -102,6 +102,16 @@ class BleHidManager {
   // which may use arbitrary bit-field layouts we can't know a priori.
   void onHidReport(const uint8_t* data, size_t len, bool isBootKeyboard);
 
+  // When connected to an IINE Game Brick (name prefix "IINE"/"Game Brick" or
+  // MAC prefix 60:4d:ec), the generic bit-diff parser produces noise because
+  // the device encodes D-pad as byte values (0x07/0x09) in byte[4] rather
+  // than bits. Route those reports through a Gamebrick-specific decoder that
+  // emits standard HID keycodes — ported (minimal subset) from thedrunkpenguin
+  // fork, see project_pending_work Plan B.
+  bool gamebrickMode = false;
+  void detectGamebrickFromAddressOrName(const std::string& address, const std::string& name);
+  void onGamebrickReport(const uint8_t* data, size_t len);
+
   // Raw keycode for remap capture mode.
   volatile uint16_t lastRawKeycode = 0;
   bool captureMode = false;
