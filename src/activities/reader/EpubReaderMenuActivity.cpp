@@ -139,7 +139,9 @@ void EpubReaderMenuActivity::loop() {
 void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
   renderer.clearScreen();
   const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
   const auto orientation = renderer.getOrientation();
+  const auto metrics = BaseMetrics::values;
   // Landscape orientation: button hints are drawn along a vertical edge, so we
   // reserve a horizontal gutter to prevent overlap with menu content.
   const bool isLandscapeCw = orientation == GfxRenderer::Orientation::LandscapeClockwise;
@@ -174,9 +176,13 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
   // Menu Items
   const int startY = 75 + contentY;
   constexpr int lineHeight = 30;
+  const int footerReserve = metrics.buttonHintsHeight + metrics.verticalSpacing;
+  const int contentHeight = std::max(lineHeight, pageHeight - (startY + footerReserve));
+  const int pageItems = std::max(1, contentHeight / lineHeight);
+  const int pageStartIndex = (selectedIndex / pageItems) * pageItems;
 
-  for (size_t i = 0; i < menuItems.size(); ++i) {
-    const int displayY = startY + (i * lineHeight);
+  for (int i = pageStartIndex; i < static_cast<int>(menuItems.size()) && i < pageStartIndex + pageItems; ++i) {
+    const int displayY = startY + ((i - pageStartIndex) * lineHeight);
     const auto& item = menuItems[i];
 
     if (item.isSeparator) {
@@ -213,6 +219,15 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
   // Footer / Hints
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+
+  if (static_cast<int>(menuItems.size()) > pageItems) {
+    const int currentPage = pageStartIndex / pageItems + 1;
+    const int totalPages = (static_cast<int>(menuItems.size()) + pageItems - 1) / pageItems;
+    const std::string pageCounter = std::to_string(currentPage) + "/" + std::to_string(totalPages);
+    const int counterWidth = renderer.getTextWidth(UI_10_FONT_ID, pageCounter.c_str());
+    const int counterY = pageHeight - metrics.buttonHintsHeight - renderer.getLineHeight(UI_10_FONT_ID) - 4;
+    renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 12 - counterWidth, counterY, pageCounter.c_str());
+  }
 
   renderer.displayBuffer();
 }

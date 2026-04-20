@@ -540,18 +540,11 @@ void SettingsActivity::toggleCurrentSetting() {
         enterSubActivity(new ButtonRemapActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::BluetoothHID: {
-        // Always go to connect screen first — it shows paired device,
-        // allows unpair/re-pair, and transitions to remap on success.
-        auto onPaired = [this, onComplete](bool paired) {
-          if (paired) {
-            exitActivity();
-            enterNewActivity(new BleRemapActivity(renderer, mappedInput, onComplete));
-          } else {
-            exitActivity();
-            requestUpdate();
-          }
-        };
-        enterSubActivity(new BleConnectActivity(renderer, mappedInput, onPaired));
+        // Temporarily disabled: BLE HID path is mid-rework for issue #44 and
+        // must not be entered from the UI until the Gamebrick decoder lands
+        // and a volunteer has verified pairing on real hardware. The row is
+        // still visible with a strikethrough so users see the feature is
+        // upcoming; confirm presses are ignored here.
         break;
       }
       case SettingAction::KOReaderSync:
@@ -636,11 +629,24 @@ void SettingsActivity::render(Activity::RenderLock&&) {
     const int chipH = textH + kChipPad * 2;
     const int chipY = rowY + (rowHeight - chipH) / 2;
 
+    const bool isDisabledAction =
+        (setting.type == SettingType::ACTION && setting.action == SettingAction::BluetoothHID);
+
     if (isSelected) {
       const int nameWidth = renderer.getTextWidth(rowFont, settingName);
       renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY, nameWidth + kChipPad * 2, chipH, true);
     }
     renderer.drawText(rowFont, metrics.contentSidePadding, rowY, settingName, !isSelected);
+
+    if (isDisabledAction) {
+      // Strike-through indicates "upcoming but disabled for now". Inverted
+      // foreground color when the row is selected (highlight draws the
+      // background black, so the line must be drawn white to remain visible).
+      const int strikeWidth = renderer.getTextWidth(rowFont, settingName);
+      const int strikeY = rowY + textH / 2;
+      renderer.drawLine(metrics.contentSidePadding, strikeY, metrics.contentSidePadding + strikeWidth, strikeY,
+                        !isSelected);
+    }
 
     std::string valueText;
     if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
