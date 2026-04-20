@@ -136,7 +136,12 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   if (hyphenationEnabled) {
     expandHyphenationBreaks(renderer, fontId, wordWidths, canBreakBefore, wordNeedsHyphenAtBreak);
   }
-  splitOversizedTokens(renderer, fontId, pageWidth, wordWidths, canBreakBefore, wordNeedsHyphenAtBreak);
+  const int firstLineIndent = blockStyle.textIndentDefined && (blockStyle.alignment == CssTextAlign::Justify ||
+                                                               blockStyle.alignment == CssTextAlign::Left)
+                                  ? blockStyle.textIndent
+                                  : 0;
+  splitOversizedTokens(renderer, fontId, pageWidth, pageWidth - firstLineIndent, wordWidths, canBreakBefore,
+                       wordNeedsHyphenAtBreak);
 
   std::vector<size_t> lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, wordWidths,
                                                            wordContinues, canBreakBefore, wordNeedsHyphenAtBreak);
@@ -157,14 +162,15 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
 }
 
 void ParsedText::splitOversizedTokens(const GfxRenderer& renderer, const int fontId, const int maxTokenWidth,
-                                      std::vector<uint16_t>& wordWidths, std::vector<bool>& canBreakBefore,
-                                      std::vector<bool>& wordNeedsHyphenAtBreak) {
-  if (maxTokenWidth <= 0) {
+                                      const int firstLineMaxTokenWidth, std::vector<uint16_t>& wordWidths,
+                                      std::vector<bool>& canBreakBefore, std::vector<bool>& wordNeedsHyphenAtBreak) {
+  if (maxTokenWidth <= 0 && firstLineMaxTokenWidth <= 0) {
     return;
   }
 
   for (size_t i = 0; i < words.size(); ++i) {
-    if (wordWidths[i] <= maxTokenWidth || words[i].size() <= 1) {
+    const int tokenMaxWidth = i == 0 ? firstLineMaxTokenWidth : maxTokenWidth;
+    if (tokenMaxWidth <= 0 || wordWidths[i] <= tokenMaxWidth || words[i].size() <= 1) {
       continue;
     }
 
@@ -187,7 +193,7 @@ void ParsedText::splitOversizedTokens(const GfxRenderer& renderer, const int fon
       const std::string candidate = original.substr(partStart, next - partStart);
       const uint16_t candidateWidth = measureWordWidth(renderer, fontId, candidate, style, blockStyle.letterSpacing);
 
-      if (candidateWidth <= maxTokenWidth) {
+      if (candidateWidth <= tokenMaxWidth) {
         lastFit = next;
         cursor = next;
         continue;
@@ -203,8 +209,7 @@ void ParsedText::splitOversizedTokens(const GfxRenderer& renderer, const int fon
       } else {
         const std::string fitted = original.substr(partStart, lastFit - partStart);
         parts.push_back(fitted);
-        partWidths.push_back(
-            measureWordWidth(renderer, fontId, fitted, style, blockStyle.letterSpacing));
+        partWidths.push_back(measureWordWidth(renderer, fontId, fitted, style, blockStyle.letterSpacing));
         partStart = lastFit;
         cursor = lastFit;
       }
