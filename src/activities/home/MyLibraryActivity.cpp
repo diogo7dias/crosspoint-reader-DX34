@@ -642,6 +642,19 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
     return false;
   }
 
+  // Build QUOTES sidecar paths up front so we can carry it along with a book.
+  std::string quotesOld;
+  std::string quotesNew;
+  if (isBookFile(selectedFilePath)) {
+    const auto dotOld = selectedFilePath.rfind('.');
+    const std::string baseOld =
+        (dotOld != std::string::npos) ? selectedFilePath.substr(0, dotOld) : selectedFilePath;
+    quotesOld = baseOld + "_QUOTES.txt";
+    const auto dotNew = destination.rfind('.');
+    const std::string baseNew = (dotNew != std::string::npos) ? destination.substr(0, dotNew) : destination;
+    quotesNew = baseNew + "_QUOTES.txt";
+  }
+
   // rename is instant on the same filesystem (SD card FAT32).
   // Fall back to copy+delete only if rename fails (shouldn't happen).
   if (!Storage.rename(selectedFilePath.c_str(), destination.c_str())) {
@@ -656,6 +669,14 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
   }
 
   if (isBookFile(selectedFilePath)) {
+    // Carry _QUOTES.txt sidecar along with the book so quotes stay attached.
+    if (!quotesOld.empty() && Storage.exists(quotesOld.c_str())) {
+      if (Storage.rename(quotesOld.c_str(), quotesNew.c_str())) {
+        LOG_DBG("LIB", "Moved QUOTES sidecar: %s -> %s", quotesOld.c_str(), quotesNew.c_str());
+      } else {
+        LOG_ERR("LIB", "Failed to move QUOTES sidecar: %s", quotesOld.c_str());
+      }
+    }
     RECENT_BOOKS.removeBook(selectedFilePath);
   } else if (isBmpFile(selectedFilePath)) {
     FavoriteBmp::replacePathReferences(selectedFilePath, destination);
