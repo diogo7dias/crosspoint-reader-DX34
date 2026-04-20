@@ -63,6 +63,7 @@
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
 #include "persist/SdFatFileIO.h"
+#include "persist/Trash.h"
 #endif
 
 HalDisplay display;
@@ -567,6 +568,8 @@ void setup() {
   if (!ensureCrosspointDataDir()) {
     LOG_ERR("MAIN", "Storage layout error: cannot access /.crosspoint");
   }
+
+  trash::pruneToCap();
 
   SETTINGS.loadFromFile();
   // Retry theme load up to 3 times — a transient SD read failure here would

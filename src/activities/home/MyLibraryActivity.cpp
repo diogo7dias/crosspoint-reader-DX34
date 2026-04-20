@@ -25,6 +25,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "persist/Trash.h"
 #include "util/BookProgress.h"
 #include "util/FavoriteBmp.h"
 #include "util/StatusPopup.h"
@@ -691,29 +692,27 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
 bool MyLibraryActivity::deleteFile(const std::string& path) {
   if (path.empty()) return false;
   esp_task_wdt_reset();
+
   if (isBookFile(path)) {
     RECENT_BOOKS.removeBook(path);
-    if (StringUtils::checkFileExtension(path, ".epub")) {
-      Epub(path, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(path, ".xtc") || StringUtils::checkFileExtension(path, ".xtch")) {
-      Xtc(path, Paths::kDataDir).clearCache();
-    } else if (StringUtils::checkFileExtension(path, ".txt") || StringUtils::checkFileExtension(path, ".md")) {
-      Txt txt(path, Paths::kDataDir);
-      Storage.removeDir(txt.getCachePath().c_str());
-    }
     esp_task_wdt_reset();
   }
 
-  const bool deleted = Storage.remove(path.c_str());
-  LOG_DBG("LIB", "Delete '%s': %s", path.c_str(), deleted ? "ok" : "failed");
-  if (deleted) {
-    if (isBmpFile(path)) {
-      FavoriteBmp::removePathReferences(path);
-      APP_STATE.saveToFile();
-    }
-    if (selectedFilePath == path) selectedFilePath.clear();
+  // Move into /.crosspoint/trash/ instead of hard-deleting so the user has
+  // a window to recover. trash::moveToTrash handles cache dir + QUOTES.txt
+  // for books.
+  const bool moved = trash::moveToTrash(path);
+  if (!moved) {
+    LOG_ERR("LIB", "trash::moveToTrash failed for %s, not hard-deleting", path.c_str());
+    return false;
   }
-  return deleted;
+
+  if (isBmpFile(path)) {
+    FavoriteBmp::removePathReferences(path);
+    APP_STATE.saveToFile();
+  }
+  if (selectedFilePath == path) selectedFilePath.clear();
+  return true;
 }
 
 bool MyLibraryActivity::deleteSelectedFile() { return deleteFile(selectedFilePath); }
