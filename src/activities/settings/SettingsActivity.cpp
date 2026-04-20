@@ -629,8 +629,8 @@ void SettingsActivity::render(Activity::RenderLock&&) {
     const int chipH = textH + kChipPad * 2;
     const int chipY = rowY + (rowHeight - chipH) / 2;
 
-    const bool isDisabledAction = (setting.type == SettingType::ACTION &&
-                                   setting.action == SettingAction::BluetoothHID);
+    const bool isDisabledAction =
+        (setting.type == SettingType::ACTION && setting.action == SettingAction::BluetoothHID);
 
     if (isSelected) {
       const int nameWidth = renderer.getTextWidth(rowFont, settingName);
@@ -644,8 +644,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       // background black, so the line must be drawn white to remain visible).
       const int strikeWidth = renderer.getTextWidth(rowFont, settingName);
       const int strikeY = rowY + textH / 2;
-      renderer.drawLine(metrics.contentSidePadding, strikeY,
-                        metrics.contentSidePadding + strikeWidth, strikeY,
+      renderer.drawLine(metrics.contentSidePadding, strikeY, metrics.contentSidePadding + strikeWidth, strikeY,
                         !isSelected);
     }
 
