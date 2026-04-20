@@ -23,8 +23,8 @@
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
-#include "persist/BackupMirror.h"
 #include "fontIds.h"
+#include "persist/BackupMirror.h"
 
 namespace {
 constexpr unsigned long skipPageMs = 700;

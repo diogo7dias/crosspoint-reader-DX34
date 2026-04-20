@@ -36,8 +36,8 @@ bool endsWithIgnoreCase(const std::string& s, const char* suffix) {
 }
 
 bool isBookPath(const std::string& path) {
-  return endsWithIgnoreCase(path, ".epub") || endsWithIgnoreCase(path, ".xtch") ||
-         endsWithIgnoreCase(path, ".xtc") || endsWithIgnoreCase(path, ".txt") || endsWithIgnoreCase(path, ".md");
+  return endsWithIgnoreCase(path, ".epub") || endsWithIgnoreCase(path, ".xtch") || endsWithIgnoreCase(path, ".xtc") ||
+         endsWithIgnoreCase(path, ".txt") || endsWithIgnoreCase(path, ".md");
 }
 
 std::string basenameOf(const std::string& path) {
@@ -75,9 +75,8 @@ std::vector<std::string> listSlotsSortedAsc() {
     entry.close();
   }
   dir.close();
-  std::sort(slots.begin(), slots.end(), [](const std::string& a, const std::string& b) {
-    return leadingNumber(a) < leadingNumber(b);
-  });
+  std::sort(slots.begin(), slots.end(),
+            [](const std::string& a, const std::string& b) { return leadingNumber(a) < leadingNumber(b); });
   return slots;
 }
 
