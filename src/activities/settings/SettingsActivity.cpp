@@ -637,9 +637,13 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       // Strike-through indicates "upcoming but disabled for now". Inverted
       // foreground color when the row is selected (highlight draws the
       // background black, so the line must be drawn white to remain visible).
+      // 2px thickness — two stacked 1px lines — so the mark reads clearly
+      // against the row font at a glance.
       const int strikeWidth = renderer.getTextWidth(rowFont, settingName);
       const int strikeY = rowY + textH / 2;
       renderer.drawLine(metrics.contentSidePadding, strikeY, metrics.contentSidePadding + strikeWidth, strikeY,
+                        !isSelected);
+      renderer.drawLine(metrics.contentSidePadding, strikeY + 1, metrics.contentSidePadding + strikeWidth, strikeY + 1,
                         !isSelected);
     }
 

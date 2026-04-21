@@ -848,6 +848,11 @@ void TxtReaderActivity::render(Activity::RenderLock&&) {
     return;
   }
 
+  // Fire reassurance repaint before the potentially-slow initializeReader
+  // on first entry (txt pagination scan over a big file), so "Opening book..."
+  // refreshes on the 10s cadence.
+  TransitionFeedback::maybeShowStillWorkingToast(renderer);
+
   // Initialize reader if not done
   if (!initialized) {
     initializeReader();

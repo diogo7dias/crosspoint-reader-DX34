@@ -280,6 +280,11 @@ void XtcReaderActivity::render(Activity::RenderLock&&) {
     return;
   }
 
+  // XTC first-open render spends seconds inside loadPage + pixel copy with
+  // no tick points. Fire the reassurance repaint here so "Opening book..."
+  // refreshes on the 10s cadence on slow opens.
+  TransitionFeedback::maybeShowStillWorkingToast(renderer);
+
   renderPage();
   // renderPage() visually scrubs the "Rendering..." toast via clearScreen+
   // displayBuffer but doesn't call TransitionFeedback::dismiss, so clear the

@@ -277,6 +277,11 @@ std::shared_ptr<Page> EpubReaderActivity::loadAndCachePage(const int pageIndex) 
     return {};
   }
 
+  // refreshPageCacheWindow calls this per page in the prefetch window, so
+  // on long first-opens it fires often enough to let the 2s reassurance
+  // repaint blink the "Opening book..." popup through the wait.
+  TransitionFeedback::maybeShowStillWorkingToast(renderer);
+
   auto page = std::shared_ptr<Page>(section->loadPageFromSectionFile(pageIndex));
   if (!page) {
     return {};
@@ -322,7 +327,16 @@ int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidt
     }
   }
 
-  for (const int tocIndex : tocIndexes) {
+  // Cap the sample size. Books like Pocket Oracle have hundreds of TOC
+  // entries per spine (one per aphorism). Measuring each title against a
+  // cold font cache on first-open costs ~140 ms per entry — on a 300-entry
+  // spine that's 40+ seconds of blocking work while "Opening book..." sits
+  // invisible on screen. The first handful of entries are representative
+  // of the max wrap count for the rest, so cap the iteration and move on.
+  constexpr size_t kMaxTocTitlesMeasured = 8;
+  const size_t toMeasure = std::min(tocIndexes.size(), kMaxTocTitlesMeasured);
+  for (size_t i = 0; i < toMeasure; ++i) {
+    const int tocIndex = tocIndexes[i];
     const std::string title = epub->formatTocDisplayTitle(tocIndex);
     if (title.empty()) {
       continue;
@@ -1237,6 +1251,13 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
     return;
   }
 
+  // Long first-open renders (cached sections on big books) spend seconds
+  // inside loadSectionFile + page draw with no other tick points. Fire the
+  // reassurance repaint here so the "Opening book..." popup gets refreshed
+  // on the 10-second cadence even when createSectionFile's layout ticks
+  // don't run.
+  TransitionFeedback::maybeShowStillWorkingToast(renderer);
+
   // edge case handling for sub-zero spine index
   if (currentSpineIndex < 0) {
     currentSpineIndex = 0;
@@ -1448,6 +1469,10 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       }
       pendingAnchor.clear();
     }
+
+    // One more chance to blink "Opening book..." before section-init
+    // dismiss — catches slow loadSectionFile on big cached sections.
+    TransitionFeedback::maybeShowStillWorkingToast(renderer);
 
     TransitionFeedback::dismiss(renderer);
   }

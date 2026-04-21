@@ -88,11 +88,9 @@ void SleepActivity::onEnter() {
   // later cache-dir wipe or corruption still has a last-resort recovery.
   backup::snapshotAll();
 
-  // Freeze mode keeps the current framebuffer intact — skip the popup
-  // so it doesn't get baked into the frozen screen.
-  if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::FREEZE) {
-    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-  }
+  // Note: no "Entering sleep..." popup here — main.cpp already drew the
+  // "Going to sleep..." banner on the power-button path, and a second
+  // popup on top of it was read as duplicate noise.
 
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
@@ -228,7 +226,6 @@ void SleepActivity::renderDefaultSleepScreen() const {
 
   renderer.clearScreen();
   renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, tr(STR_CROSSPOINT), true, EpdFontFamily::REGULAR);
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 15, tr(STR_SLEEPING));
 
   // Make sleep screen dark unless light is selected in settings
   if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::LIGHT) {
@@ -640,29 +637,9 @@ void SleepActivity::renderQuotesSleepScreen() const {
 void SleepActivity::renderFreezeSleepScreen() const {
   clearLastSleepWallpaperPath();
 
-  const int W = renderer.getScreenWidth();
-  const int H = renderer.getScreenHeight();
-
-  // The framebuffer still contains the last render. Draw a small black
-  // pill at the bottom center with "Sleeping" label so the user knows
-  // the device is locked.
-
-  const int fontId = UI_10_FONT_ID;
-  const char* label = "SLEEPING.";
-  const int textW = renderer.getTextWidth(fontId, label, EpdFontFamily::REGULAR);
-  const int textH = renderer.getLineHeight(fontId);
-  const int padY = 11;
-  const int bannerH = textH + padY * 2;
-  // Extend banner beyond screen edges so offset displays still show full black
-  const int bannerX = -20;
-  const int bannerW = W + 40;
-  const int bannerY = H - bannerH - 10;
-
-  // Full-width black banner
-  renderer.fillRect(bannerX, bannerY, bannerW, bannerH, true);
-  // Centered white text
-  const int textX = (W - textW) / 2;
-  renderer.drawText(fontId, textX, bannerY + padY, label, false, EpdFontFamily::REGULAR);
-
+  // The framebuffer still contains the last render. Leave it untouched —
+  // the "Going to sleep..." toast drawn by main.cpp on power-button sleep
+  // is the user-facing sleep indicator, so no pill/banner is needed here.
+  // Still fire a HALF_REFRESH so the panel latches the final frame cleanly.
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 }

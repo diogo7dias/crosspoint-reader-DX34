@@ -11,11 +11,11 @@ namespace TransitionFeedback {
 namespace {
 bool sActive = false;
 int sBottomY = 0;
-// Timestamp of the FIRST toast in the current stack. Stacked toasts don't
-// reset it, so it measures cumulative stack age, which we use as the basis
-// for kStillWorkingThresholdMs.
+// Timestamp of the most recent "Opening book..." paint. Used to pace the
+// every-10s reassurance repaint driven by maybeShowStillWorkingToast.
+// Cleared to 0 on dismiss / resetStacking / markOpenComplete so the repaint
+// stops firing once the book is actually open.
 unsigned long sShownAtMs = 0;
-bool sStillWorkingShown = false;
 }  // namespace
 
 void show(GfxRenderer& renderer, const char* message) {
@@ -25,14 +25,13 @@ void show(GfxRenderer& renderer, const char* message) {
   }
 
   // If no popup is currently active, this call opens a NEW stack. Reset
-  // the timestamp + still-working latch here so stale values from a
-  // previous context (e.g. a StatusPopup during folder navigation) can't
-  // leak into the next threshold check. Without this, sShownAtMs would
-  // retain a timestamp from minutes ago and maybeShowStillWorkingToast()
-  // would fire the "Long chapter..." popup instantly.
+  // the timestamp here so stale values from a previous context
+  // (e.g. a StatusPopup during folder navigation) can't leak into the
+  // next threshold check — otherwise sShownAtMs would retain a timestamp
+  // from minutes ago and maybeShowStillWorkingToast() would fire the
+  // reassurance repaint instantly.
   if (!sActive) {
     sShownAtMs = millis();
-    sStillWorkingShown = false;
   }
 
   const std::string upper = StringUtils::toUpperAscii(message);
@@ -75,7 +74,6 @@ void dismiss(GfxRenderer& renderer) {
   sActive = false;
   sBottomY = 0;
   sShownAtMs = 0;
-  sStillWorkingShown = false;
 }
 
 void ensureMinDisplayElapsed() {
@@ -97,23 +95,17 @@ void resetStacking() {
   sActive = false;
   sBottomY = 0;
   sShownAtMs = 0;
-  sStillWorkingShown = false;
 }
 
-void markOpenComplete() { sStillWorkingShown = false; }
+void markOpenComplete() { sShownAtMs = 0; }
 
 void maybeShowStillWorkingToast(GfxRenderer& renderer) {
-  // No toast on screen yet? Nothing to stack below — the "Opening book..."
-  // popup is the reference timer, so if it hasn't been drawn there's
-  // nothing to measure.
-  if (!sActive || sShownAtMs == 0 || sStillWorkingShown) {
-    return;
-  }
-  const unsigned long elapsed = millis() - sShownAtMs;
-  if (elapsed >= kStillWorkingThresholdMs) {
-    show(renderer, "Long chapter...Still opening...");
-    sStillWorkingShown = true;
-  }
+  // No-op: the reassurance repaint was deliberately removed — the single
+  // "Opening book..." popup from openReaderInline stays on screen until
+  // the first page renders, and that's the whole feedback contract.
+  // Call sites are left in place so downstream readers / lib code can
+  // keep passing this as a progress hook without needing to be edited.
+  (void)renderer;
 }
 
 }  // namespace TransitionFeedback
