@@ -839,6 +839,7 @@ void loop() {
   }
 
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
+    TransitionFeedback::show(renderer, "Going to sleep...");
     triggerDeepSleep();
     // This should never be hit as enterDeepSleep calls esp_deep_sleep_start
     return;
