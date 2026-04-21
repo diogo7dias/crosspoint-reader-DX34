@@ -8,7 +8,6 @@
 #include <Xtc.h>
 
 #include <algorithm>
-#include <cstring>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -18,14 +17,11 @@
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
 #include "util/FavoriteBmp.h"
-#include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #ifdef PERSIST_V2
 #include "persist/PersistManager.h"
 #endif
-#if SLEEP_V2
 #include "sleep/WallpaperPlaylist.h"
-#endif
 
 namespace {
 // Sleep rendering runs inside SleepActivity::onEnter, called AFTER
@@ -60,167 +56,6 @@ void rememberLastRenderedSleepBitmap(const std::string& path, const std::string&
   if (changed) {
     flushStateSync();
   }
-}
-
-// Returns all .bmp filenames from /sleep in sorted order.
-// Does NOT open/validate each file — invalid BMPs are skipped at render time.
-std::vector<std::string> getValidSleepBitmaps() {
-  std::vector<std::string> files;
-  auto dir = Storage.open("/sleep");
-  if (!dir || !dir.isDirectory()) {
-    if (dir) dir.close();
-    return files;
-  }
-
-  char name[256];
-  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-    if (file.isDirectory()) {
-      file.close();
-      continue;
-    }
-
-    file.getName(name, sizeof(name));
-    std::string filename(name);
-    if (filename.empty() || filename[0] == '.') {
-      file.close();
-      continue;
-    }
-
-    if (filename.size() >= 4 && filename.substr(filename.size() - 4) == ".bmp") {
-      files.emplace_back(std::move(filename));
-    }
-    file.close();
-    if (files.size() >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) break;
-  }
-  dir.close();
-
-  std::sort(files.begin(), files.end());
-  return files;
-}
-
-void shuffleSleepPlaylist(std::vector<std::string>& files) {
-  if (files.size() <= 1) return;
-  for (size_t i = files.size() - 1; i > 0; --i) {
-    const auto j = static_cast<size_t>(random(i + 1));
-    std::swap(files[i], files[j]);
-  }
-}
-
-void syncSleepPlaylistWithFiles(const std::vector<std::string>& files, bool forceReshuffle,
-                                size_t maxEntries = CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-  auto& playlist = APP_STATE.sleepImagePlaylist;
-  bool changed = false;
-
-  if (files.empty()) {
-    if (!playlist.empty()) {
-      playlist.clear();
-      APP_STATE.saveToFile();
-    }
-    return;
-  }
-
-  if (forceReshuffle) {
-    playlist = files;
-    shuffleSleepPlaylist(playlist);
-    APP_STATE.lastSleepImage = 0;
-    APP_STATE.saveToFile();
-    return;
-  }
-
-  if (playlist.empty()) {
-    // Default behavior: follow stable filename order from /sleep directory.
-    playlist = files;
-    APP_STATE.lastSleepImage = 0;
-    APP_STATE.saveToFile();
-    return;
-  }
-
-  // files is already sorted; use binary_search for O(log n) membership checks
-  // without copying any strings.
-
-  // Remove entries that no longer exist on disk.
-  const auto oldSize = playlist.size();
-  playlist.erase(
-      std::remove_if(playlist.begin(), playlist.end(),
-                     [&files](const std::string& e) { return !std::binary_search(files.begin(), files.end(), e); }),
-      playlist.end());
-  if (playlist.size() != oldSize) {
-    changed = true;
-  }
-
-  // Find newly-added files not yet in the playlist.
-  // Sort a temporary copy of playlist pointers for O(log n) lookup without
-  // allocating a separate string_view vector (saves ~1.6 KB for 200 entries).
-  // We sort const char* pointers and compare via strcmp — no string copies.
-  std::vector<const char*> sortedPtrs;
-  sortedPtrs.reserve(playlist.size());
-  for (const auto& e : playlist) sortedPtrs.push_back(e.c_str());
-  std::sort(sortedPtrs.begin(), sortedPtrs.end(), [](const char* a, const char* b) { return strcmp(a, b) < 0; });
-
-  std::vector<std::string> newFiles;
-  std::copy_if(files.begin(), files.end(), std::back_inserter(newFiles), [&sortedPtrs](const std::string& file) {
-    return !std::binary_search(sortedPtrs.begin(), sortedPtrs.end(), file.c_str(),
-                               [](const char* a, const char* b) { return strcmp(a, b) < 0; });
-  });
-
-  // Insert new files right after the current head so they show immediately.
-  // When lastSleepImage == 0 nothing has been shown yet, so insert at 0.
-  // When lastSleepImage == 1 the head (playlist[0]) is the last-shown image
-  // and will be rotated to the back before the next render, so insert at 1.
-  if (!newFiles.empty()) {
-    const size_t insertPos = (APP_STATE.lastSleepImage == 0) ? 0 : std::min<size_t>(1, playlist.size());
-    playlist.insert(playlist.begin() + insertPos, newFiles.begin(), newFiles.end());
-    changed = true;
-  }
-
-  // Final safety: strictly cap playlist size to avoid serialization OOM.
-  if (maxEntries > 0 && playlist.size() > maxEntries) {
-    playlist.erase(playlist.begin() + maxEntries, playlist.end());
-    changed = true;
-  }
-
-  if (playlist.empty()) {
-    playlist = files;
-    APP_STATE.lastSleepImage = 0;
-    changed = true;
-  }
-
-  if (changed) {
-    APP_STATE.saveToFile();
-  }
-}
-
-// For large collections (> SLEEP_PLAYLIST_MAX_PERSIST) we do not maintain the
-// full playlist in memory. Instead we find the next file after the last-shown
-// one using a binary search on the already-sorted files list.
-std::string nextSleepImageLargeCollection(const std::vector<std::string>& files) {
-  if (files.empty()) {
-    return "";
-  }
-
-  const auto& last = APP_STATE.lastShownSleepFilename;
-  std::string next;
-
-  if (last.empty()) {
-    // No prior context: start from the beginning.
-    next = files.front();
-  } else if (APP_STATE.lastSleepImage == 0) {
-    // randomizeSleepImagePlaylist() set a starting file but nothing rendered
-    // yet — show it now without advancing past it.
-    next = last;
-  } else {
-    // Find the last-shown file and advance to the next one, wrapping around.
-    auto it = std::lower_bound(files.begin(), files.end(), last);
-    if (it != files.end() && *it == last) {
-      ++it;
-    }
-    next = (it != files.end()) ? *it : files.front();
-  }
-
-  APP_STATE.lastShownSleepFilename = next;
-  APP_STATE.lastSleepImage = 1;
-  APP_STATE.saveToFile();
-  return next;
 }
 
 void drawSleepFilenameLabel(const GfxRenderer& renderer, const char* filename) {
@@ -325,41 +160,7 @@ void SleepActivity::renderCustomSleepScreen() const {
   std::string selectedImage;
   bool rendered = false;
   for (int attempt = 0; attempt < kMaxParseRetries && !rendered; ++attempt) {
-#if SLEEP_V2
     selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
-#else
-    selectedImage.clear();
-    {
-      const auto files = getValidSleepBitmaps();
-      if (!files.empty()) {
-        if (files.size() > CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-          selectedImage = nextSleepImageLargeCollection(files);
-        } else {
-          syncSleepPlaylistWithFiles(files, false);
-          auto& playlist = APP_STATE.sleepImagePlaylist;
-          if (!playlist.empty()) {
-            bool changed = false;
-            // Rotate head to tail on every pass: first attempt honors the
-            // post-render rotation (lastSleepImage != 0); subsequent attempts
-            // are explicit skips of the bad file we just tried.
-            const bool rotate = (attempt > 0) || (APP_STATE.lastSleepImage != 0 && playlist.size() > 1);
-            if (rotate && playlist.size() > 1) {
-              const auto first = playlist.front();
-              playlist.erase(playlist.begin());
-              playlist.push_back(first);
-              changed = true;
-            }
-            selectedImage = playlist.front();
-            if (APP_STATE.lastSleepImage != 1) {
-              APP_STATE.lastSleepImage = 1;
-              changed = true;
-            }
-            if (changed) APP_STATE.saveToFile();
-          }
-        }
-      }
-    }
-#endif
     if (selectedImage.empty()) break;
     const auto filename = "/sleep/" + selectedImage;
     FsFile file;
@@ -408,183 +209,16 @@ void SleepActivity::renderCustomSleepScreen() const {
 }
 
 bool SleepActivity::randomizeSleepImagePlaylist() {
-#if SLEEP_V2
   return crosspoint::sleep::WallpaperPlaylist::instance().reshuffle();
-#else
-  const auto files = getValidSleepBitmaps();
-  if (files.empty()) {
-    if (!APP_STATE.sleepImagePlaylist.empty()) {
-      APP_STATE.sleepImagePlaylist.clear();
-      APP_STATE.saveToFile();
-    }
-    return false;
-  }
-
-  if (files.size() > CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-    // Large collection: pick a random starting file; sequential advance
-    // resumes from there on the next sleep.
-    const auto idx = static_cast<size_t>(random(static_cast<long>(files.size())));
-    APP_STATE.sleepImagePlaylist.clear();
-    APP_STATE.lastShownSleepFilename = files[idx];
-    APP_STATE.lastSleepImage = 0;
-    APP_STATE.saveToFile();
-    return true;
-  }
-
-  syncSleepPlaylistWithFiles(files, true);
-  return true;
-#endif
 }
 
-static size_t s_cachedSleepFavoriteCount = 0;
-
 size_t SleepActivity::cachedSleepFavoriteCount() {
-#if SLEEP_V2
   return crosspoint::sleep::WallpaperPlaylist::instance().cachedFavoriteCount();
-#else
-  return s_cachedSleepFavoriteCount;
-#endif
 }
 
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
-#if SLEEP_V2
   (void)popupRenderer;  // No caller passes a non-null renderer today.
   crosspoint::sleep::WallpaperPlaylist::instance().trimToLimit();
-  return;
-#else
-  const size_t kLimit = CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
-  const size_t kScanCap = kLimit + 500;  // Hard cap on scanning to avoid OOM
-
-  // Count .bmp files in /sleep first to avoid allocating the vector if not needed.
-  // Also count favorites so callers can use cachedSleepFavoriteCount() without
-  // a separate directory scan.
-  size_t count = 0;
-  size_t scannedFavorites = 0;
-  auto dir = Storage.open("/sleep");
-  if (!dir || !dir.isDirectory()) {
-    if (dir) dir.close();
-    s_cachedSleepFavoriteCount = 0;
-    return;
-  }
-  char name[256];  // Reduced from 500 to save stack
-  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-    if (file.isDirectory()) {
-      file.close();
-      continue;
-    }
-    file.getName(name, sizeof(name));
-    std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' && filename.size() >= 4 &&
-        filename.substr(filename.size() - 4) == ".bmp") {
-      count++;
-      if (FavoriteBmp::isFavoritePath("/sleep/" + filename)) {
-        scannedFavorites++;
-      }
-      if (count > kScanCap) break;  // Optimization: we already know we're over limit
-    }
-    file.close();
-  }
-  dir.rewindDirectory();
-
-  if (count <= kLimit) {
-    s_cachedSleepFavoriteCount = scannedFavorites;
-    dir.close();
-    return;  // Under limit — nothing to do.
-  }
-
-  LOG_INF("SLP", "Trim: /sleep has %zu images (limit %zu), starting prune...", count, kLimit);
-
-  // Now scan and collect files up to cap
-  std::vector<std::string> allFiles;
-  allFiles.reserve(std::min(count, kScanCap));
-  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-    if (file.isDirectory()) {
-      file.close();
-      continue;
-    }
-    file.getName(name, sizeof(name));
-    std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' && filename.size() >= 4 &&
-        filename.substr(filename.size() - 4) == ".bmp") {
-      allFiles.emplace_back(std::move(filename));
-      if (allFiles.size() >= kScanCap) {
-        file.close();
-        break;
-      }
-    }
-    file.close();
-  }
-  dir.close();
-
-  std::sort(allFiles.begin(), allFiles.end());
-
-  // Sync the playlist against on-disk files: new files are inserted at the
-  // front (shown first), deleted files are pruned. Do not cap yet; trim picks
-  // the protected favorites to keep first.
-  syncSleepPlaylistWithFiles(allFiles, false, 0);
-
-  auto& playlist = APP_STATE.sleepImagePlaylist;
-  if (playlist.size() <= kLimit) {
-    return;
-  }
-
-  const size_t favoriteCount = std::count_if(playlist.begin(), playlist.end(), [](const std::string& filename) {
-    return FavoriteBmp::isFavoritePath("/sleep/" + filename);
-  });
-  s_cachedSleepFavoriteCount = favoriteCount;
-  if (favoriteCount > kLimit) {
-    LOG_ERR("SLP", "Trim: %zu favorites in /sleep exceed limit %zu", favoriteCount, kLimit);
-    return;
-  }
-
-  const size_t nonFavoriteBudget = kLimit - favoriteCount;
-  size_t keptNonFavorites = 0;
-  std::vector<std::string> keep;
-  std::vector<std::string> overflow;
-  keep.reserve(kLimit);
-  overflow.reserve(playlist.size() - kLimit);
-
-  for (const std::string& filename : playlist) {
-    const bool isFavorite = FavoriteBmp::isFavoritePath("/sleep/" + filename);
-    if (isFavorite) {
-      keep.push_back(filename);
-      continue;
-    }
-    if (keptNonFavorites < nonFavoriteBudget) {
-      keep.push_back(filename);
-      ++keptNonFavorites;
-    } else {
-      overflow.push_back(filename);
-    }
-  }
-
-  if (overflow.empty()) {
-    if (keep.size() < playlist.size()) {
-      playlist = keep;
-      APP_STATE.saveToFile();
-    }
-    return;
-  }
-
-  playlist = keep;
-
-  if (popupRenderer) {
-    StatusPopup::showBlocking(*popupRenderer, "Moving wallpapers");
-  }
-
-  Storage.mkdir("/sleep pause");
-  for (const auto& filename : overflow) {
-    const std::string src = std::string("/sleep/") + filename;
-    const std::string dst = std::string("/sleep pause/") + filename;
-    if (!Storage.rename(src.c_str(), dst.c_str())) {
-      LOG_ERR("SLP", "Trim: failed to move %s to sleep pause", filename.c_str());
-    } else {
-      FavoriteBmp::replacePathReferences(src, dst);
-      LOG_INF("SLP", "Trim: moved %s to /sleep pause", filename.c_str());
-    }
-  }
-  APP_STATE.saveToFile();
-#endif
 }
 
 void SleepActivity::renderDefaultSleepScreen() const {

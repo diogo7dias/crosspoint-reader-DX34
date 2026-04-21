@@ -54,11 +54,9 @@
 #if LIFECYCLE_V2
 #include "lifecycle/ActivityRouter.h"
 #endif
-#if SLEEP_V2
 #include "sleep/SdFatSleepFs.h"
 #include "sleep/WallpaperPlaylist.h"
 #include "util/FavoriteBmp.h"
-#endif
 #ifdef PERSIST_V2
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
@@ -196,7 +194,7 @@ bool persistAppState(const char* context) {
 #endif
 }
 
-static void trimSleepFolderIfDirty();  // fwd decl — defined with sleepFolderDirty below
+static void trimSleepFolderIfDirty();  // fwd decl — defined below
 
 // Verify power button press duration on wake-up from deep sleep
 // Pre-condition: isWakeupByPowerButton() == true
@@ -276,13 +274,10 @@ void onGoHome();
 void onGoToMyLibraryWithPath(const std::string& path);
 void onGoToRecentBooks();
 
-// When true the /sleep folder may have changed since the last trim, so the
-// Home route policy will re-scan. Set to false after a successful trim and to
-// true before entering activities that can modify /sleep (e.g. file transfer).
-// V2 (SLEEP_V2): state lives in crosspoint::sleep::WallpaperPlaylist — this flag unused.
-static bool sleepFolderDirty = true;
+// Folder-dirty state lives in crosspoint::sleep::WallpaperPlaylist; it is
+// marked dirty before entering activities that can modify /sleep (e.g. file
+// transfer) and reconciled by trimSleepFolderIfDirty() on the Home route.
 
-#if SLEEP_V2
 static crosspoint::sleep::SdFatSleepFs s_sleepFs;
 
 static void wireWallpaperPlaylist() {
@@ -313,18 +308,10 @@ static void wireWallpaperPlaylist() {
   deps.onBeforeTrimMove = []() {};  // no popup in current call sites
   crosspoint::sleep::WallpaperPlaylist::instance().setDeps(deps);
 }
-#endif
 
 static void trimSleepFolderIfDirty() {
-#if SLEEP_V2
   auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
   if (wp.dirty()) wp.reconcile();
-#else
-  if (sleepFolderDirty) {
-    SleepActivity::trimSleepFolderToLimit();
-    sleepFolderDirty = false;
-  }
-#endif
 }
 
 // Inline Reader activity construction. Used by both the V2 factory and the
@@ -347,11 +334,7 @@ void onGoToReader(const std::string& initialEpubPath) {
 
 static void openFileTransferInline() {
   TransitionFeedback::show(renderer, "Starting server...");
-#if SLEEP_V2
   crosspoint::sleep::WallpaperPlaylist::instance().markFolderDirty();
-#else
-  sleepFolderDirty = true;  // Files may be uploaded to /sleep during transfer
-#endif
   exitActivity();
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
 }
@@ -633,12 +616,10 @@ void setup() {
 #endif
   APP_STATE.loadFromFile();
 
-#if SLEEP_V2
   // Wire crosspoint::sleep::WallpaperPlaylist deps now that APP_STATE is populated — all
   // subsequent sleep paths (trimSleepFolderIfDirty, SleepActivity) read through
   // the module.
   wireWallpaperPlaylist();
-#endif
 
   LOG_INF("MAIN", "Booting complete, checking initial activity");
 
@@ -683,14 +664,9 @@ void setup() {
   // Defer sleep cache trimming until home screen is actually needed.
   if (goHome) {
     bootActivity->setProgress(60, "Refreshing sleep cache");
-#if SLEEP_V2
     auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
     wp.markFolderDirty();
     wp.reconcile();
-#else
-    SleepActivity::trimSleepFolderToLimit();
-    sleepFolderDirty = false;
-#endif
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 

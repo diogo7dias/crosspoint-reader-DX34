@@ -6,8 +6,6 @@
  * playlist advance, reshuffle, and trim-to-limit. State lives in APP_STATE
  * (pointers injected via Deps — zero state.json schema change). All SD and
  * persistence calls are injected, enabling host-side unit tests.
- *
- * Call sites migrate under #if SLEEP_V2 (debug env only until soak-tested).
  */
 #pragma once
 
@@ -69,7 +67,7 @@ class WallpaperPlaylist {
   void setDeps(const Deps&);
   const Deps& deps() const { return deps_; }
 
-  // Replaces global sleepFolderDirty flag.
+  // Marks /sleep as needing a reconcile on next policy tick.
   void markFolderDirty() { dirty_ = true; }
   bool dirty() const { return dirty_; }
 
