@@ -221,6 +221,45 @@ StatusBarBudgetResult resolveStatusBarBudget(const GfxRenderer& renderer, const 
   return result;
 }
 
+ReaderMargins resolveBaseReaderMargins(const GfxRenderer& renderer, const int userMarginTop, const int userMarginBottom,
+                                       const int userMarginHorizontal, const int dynamicMargins,
+                                       const int readerFontId) {
+  ReaderMargins m;
+  renderer.getOrientedViewableTRBL(&m.top, &m.right, &m.bottom, &m.left);
+
+  // Normalize pairs to the larger of each so the page stays visually centered even when the
+  // driver reports asymmetric hardware insets. Kept inline (not a call to
+  // ReaderStatusBar::normalizeReaderMargins) to keep this module free of reverse deps.
+  const int vertical = std::max(m.top, m.bottom);
+  const int horizontal = std::max(m.left, m.right);
+  m.top = vertical;
+  m.bottom = vertical;
+  m.left = horizontal;
+  m.right = horizontal;
+
+  m.top += userMarginTop;
+  m.bottom += userMarginBottom;
+  if (dynamicMargins) {
+    // Dynamic horizontal margins: widen toward a target ~62 characters per line using the
+    // current reader font's average glyph width as the yardstick. Pathological fonts with zero
+    // width fall back to 8 px/char to avoid divide-by-zero; the floor/ceiling (10/20 .. 55)
+    // prevents the auto-widen from eating the viewport on narrow orientations.
+    const int sampleWidth = renderer.getTextWidth(readerFontId, "abcdefghijklmnopqrstuvwxyz");
+    const int avgCharWidth = (sampleWidth > 0) ? sampleWidth / 26 : 8;
+    constexpr int targetCPL = 62;
+    const int targetTextWidth = targetCPL * avgCharWidth;
+    const int availableWidth = renderer.getScreenWidth() - m.left - m.right;
+    const int minDynamicMargin = (dynamicMargins >= 2) ? 20 : 10;
+    const int dynamicMargin = std::max(minDynamicMargin, std::min(55, (availableWidth - targetTextWidth) / 2));
+    m.left += dynamicMargin;
+    m.right += dynamicMargin;
+  } else {
+    m.left += userMarginHorizontal;
+    m.right += userMarginHorizontal;
+  }
+  return m;
+}
+
 int clampViewportDimension(const int value, const int minValue, const char* logTag, const char* dimensionName) {
   if (value >= minValue) {
     return value;

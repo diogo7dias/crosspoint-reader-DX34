@@ -1281,29 +1281,16 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
     return;
   }
 
-  // Apply screen viewable areas and additional padding
-  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
-  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
-                                   &orientedMarginLeft);
-  normalizeReaderMargins(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom, &orientedMarginLeft);
-  orientedMarginTop += SETTINGS.screenMarginTop;
-  if (SETTINGS.dynamicMargins) {
-    // Auto-calculate horizontal margins to target ~62 characters per line
-    const int fontId = SETTINGS.getReaderFontId();
-    const int sampleWidth = renderer.getTextWidth(fontId, "abcdefghijklmnopqrstuvwxyz");
-    const int avgCharWidth = (sampleWidth > 0) ? sampleWidth / 26 : 8;
-    constexpr int targetCPL = 62;
-    const int targetTextWidth = targetCPL * avgCharWidth;
-    const int availableWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
-    const int minDynamicMargin = (SETTINGS.dynamicMargins >= 2) ? 20 : 10;
-    const int dynamicMargin = std::max(minDynamicMargin, std::min(55, (availableWidth - targetTextWidth) / 2));
-    orientedMarginLeft += dynamicMargin;
-    orientedMarginRight += dynamicMargin;
-  } else {
-    orientedMarginLeft += SETTINGS.screenMarginHorizontal;
-    orientedMarginRight += SETTINGS.screenMarginHorizontal;
-  }
-  orientedMarginBottom += SETTINGS.screenMarginBottom;
+  // Apply screen viewable areas and additional padding.
+  // Downstream helpers still take the four scalars individually, so we unpack the struct into
+  // locals at this boundary. Status-bar reserve is applied further down after resolveStatusBarBudget.
+  const auto baseMargins = ReaderLayoutSafety::resolveBaseReaderMargins(
+      renderer, SETTINGS.screenMarginTop, SETTINGS.screenMarginBottom, SETTINGS.screenMarginHorizontal,
+      SETTINGS.dynamicMargins, SETTINGS.getReaderFontId());
+  int orientedMarginTop = baseMargins.top;
+  int orientedMarginRight = baseMargins.right;
+  int orientedMarginBottom = baseMargins.bottom;
+  int orientedMarginLeft = baseMargins.left;
   const int minContentHeight =
       std::max(ReaderLayoutSafety::kMinViewportHeight, renderer.getLineHeight(SETTINGS.getReaderFontId()) * 2);
 

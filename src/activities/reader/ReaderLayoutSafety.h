@@ -10,6 +10,30 @@ namespace ReaderLayoutSafety {
 constexpr int kMinViewportWidth = 64;
 constexpr int kMinViewportHeight = 48;
 
+// Oriented page margins (top/right/bottom/left, in device pixels). Bundles the four sides so
+// render() passes one value instead of four positional ints — the order-of-args footgun was a
+// recurring source of bugs during the V2 render stack refactor. Callers that pre-date this struct
+// can still copy the fields into individual locals at the interior boundary.
+struct ReaderMargins {
+  int top = 0;
+  int right = 0;
+  int bottom = 0;
+  int left = 0;
+};
+
+// Computes the base (pre-status-bar) oriented page margins for the reader: takes the hardware
+// viewable TRBL, normalizes top/bottom and left/right pairs to the larger of each (so the page
+// stays visually centered when the driver reports asymmetric insets), adds the user-configured
+// margins, and optionally widens horizontal margins to target ~62 characters per line.
+//
+// WHY separate from status-bar reserve: the caller still has to run resolveStatusBarBudget after
+// this — and that may further push the top/bottom in based on reserved status-bar height. Folding
+// both into one call would couple this helper to the much larger StatusBarBandConfig surface.
+// readerFontId is only consulted when dynamicMargins is non-zero (for the glyph-width sample);
+// callers with dynamicMargins==0 can pass any valid font id.
+ReaderMargins resolveBaseReaderMargins(const GfxRenderer& renderer, int userMarginTop, int userMarginBottom,
+                                       int userMarginHorizontal, int dynamicMargins, int readerFontId);
+
 struct StatusBarBandConfig {
   bool showStatusTextRow = false;
   bool showBookProgressBar = false;
