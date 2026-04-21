@@ -41,6 +41,9 @@ void XtcReaderActivity::onEnter() {
     return;
   }
 
+  // Block 2 (v1.2.0): full refresh on book enter so no list ghost persists.
+  renderer.requestFullRefresh();
+
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
   xtc->setupCacheDir();
 
@@ -354,6 +357,19 @@ void XtcReaderActivity::renderPage() {
     pageBufferSize = ((static_cast<size_t>(pageWidth) * pageHeight + 7) / 8) * 2;
   } else {
     pageBufferSize = ((pageWidth + 7) / 8) * pageHeight;
+  }
+
+  // Sanity cap: largest supported panel (~1200x825) @ 2-bit ≈ 246 KB.
+  // 512 KB provides headroom without risking runaway allocation on a
+  // malformed XTC header reporting garbage dimensions.
+  constexpr size_t XTC_MAX_PAGE_BUF = 512u * 1024;
+  if (pageBufferSize == 0 || pageBufferSize > XTC_MAX_PAGE_BUF) {
+    LOG_ERR("XTR", "Invalid page buffer size %lu (max %u) — corrupt XTC header?",
+            (unsigned long)pageBufferSize, (unsigned)XTC_MAX_PAGE_BUF);
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_PAGE_LOAD_ERROR), true, EpdFontFamily::REGULAR);
+    renderer.displayBuffer();
+    return;
   }
 
   // Allocate page buffer

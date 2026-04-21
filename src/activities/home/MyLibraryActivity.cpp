@@ -517,8 +517,17 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
 }
 
 void MyLibraryActivity::enterBmpView(const std::string& bmpPath) {
+  // Stacking toasts for image-open stages; last one enforces the min-
+  // display floor so fast loads still feel deliberate. Full refresh on
+  // enter scrubs the list ghost.
+  if (!TransitionFeedback::isActive()) {
+    TransitionFeedback::show(renderer, "Opening image...");
+  }
   selectedFilePath = bmpPath;
   mode = Mode::BMP_VIEW;
+  TransitionFeedback::show(renderer, "Loading bitmap...");
+  TransitionFeedback::ensureMinDisplayElapsed();
+  renderer.requestFullRefresh();
   requestCleanRefresh();
   requestUpdate();
 }
@@ -911,19 +920,34 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                StatusPopup::showBlocking(renderer, "Deleting file");
+                // Optimistic UX: snapshot the entry, remove from list
+                // before the rename, re-insert on failure. Gives an
+                // instant visual response regardless of SD speed.
+                TransitionFeedback::show(renderer, "Deleting...");
+                const auto snapIndex = rawFileIndexForPath(pathToDelete);
+                std::string snapEntry;
+                if (snapIndex.has_value()) {
+                  snapEntry = files[*snapIndex];
+                  files.erase(files.begin() + static_cast<long>(*snapIndex));
+                  rebuildFilteredFileIndexes();
+                  clampSelectorIndex();
+                }
+                TransitionFeedback::show(renderer, "Moving to trash...");
                 if (deleteFile(pathToDelete)) {
-                  StatusPopup::showConfirmation(renderer, "Deleted");
-                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete); rawIndex.has_value()) {
-                    files.erase(files.begin() + static_cast<long>(*rawIndex));
+                  TransitionFeedback::show(renderer, "Deleted");
+                } else {
+                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
+                  if (snapIndex.has_value()) {
+                    files.insert(files.begin() + static_cast<long>(*snapIndex), snapEntry);
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
-                } else {
-                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  StatusPopup::showConfirmation(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, "Delete failed");
                 }
+                TransitionFeedback::ensureMinDisplayElapsed();
                 mode = Mode::BROWSE;
+                // Block 2: full refresh on delete completion — no ghost
+                renderer.requestFullRefresh();
                 requestCleanRefresh();
                 // exitActivity() destroys the subActivity (and this lambda's
                 // closure), but `this` points to the parent MyLibraryActivity
@@ -967,20 +991,34 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                StatusPopup::showBlocking(renderer, "Deleting file");
+                // Optimistic UX: snapshot + remove before the rename so the
+                // list reflects the action instantly; re-insert on failure.
+                TransitionFeedback::show(renderer, "Deleting...");
+                const auto snapIndex = rawFileIndexForPath(pathToDelete);
+                std::string snapEntry;
+                if (snapIndex.has_value()) {
+                  snapEntry = files[*snapIndex];
+                  files.erase(files.begin() + static_cast<long>(*snapIndex));
+                  rebuildFilteredFileIndexes();
+                  clampSelectorIndex();
+                }
+                progressPrefixCache.erase(pathToDelete);
+                TransitionFeedback::show(renderer, "Moving to trash...");
                 if (deleteFile(pathToDelete)) {
-                  StatusPopup::showConfirmation(renderer, "Deleted");
-                  progressPrefixCache.erase(pathToDelete);
-                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete); rawIndex.has_value()) {
-                    files.erase(files.begin() + static_cast<long>(*rawIndex));
+                  TransitionFeedback::show(renderer, "Deleted");
+                } else {
+                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
+                  if (snapIndex.has_value()) {
+                    files.insert(files.begin() + static_cast<long>(*snapIndex), snapEntry);
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
-                } else {
-                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  StatusPopup::showConfirmation(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, "Delete failed");
                 }
+                TransitionFeedback::ensureMinDisplayElapsed();
                 mode = Mode::BROWSE;
+                // Block 2: full refresh on delete completion — no ghost
+                renderer.requestFullRefresh();
                 requestCleanRefresh();
                 exitActivity();
                 requestUpdate();

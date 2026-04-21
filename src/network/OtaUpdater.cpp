@@ -71,10 +71,12 @@ esp_err_t event_handler(esp_http_client_event_t* event) {
       }
     }
     copy_len = min(event->data_len, (content_len - output_len));
-    if (copy_len) {
+    // Defensive: local_buf is null-checked above on first alloc, but guard
+    // here too in case a follow-up event fires after an intervening failure.
+    if (copy_len && local_buf != nullptr) {
       memcpy(local_buf + output_len, event->data, copy_len);
+      output_len += copy_len;
     }
-    output_len += copy_len;
   } else {
     /* Code might be hits here, It happened once (for version checking) but I
      * need more logs to handle that */

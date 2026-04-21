@@ -144,6 +144,10 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
+  // Block 2 (v1.2.0): force a full refresh on book enter so no ghost of
+  // the library list or file-actions menu persists under the first page.
+  renderer.requestFullRefresh();
+
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
   applyReaderOrientation(renderer, SETTINGS.orientation);

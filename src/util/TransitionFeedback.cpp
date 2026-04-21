@@ -1,5 +1,6 @@
 #include "TransitionFeedback.h"
 
+#include <Arduino.h>
 #include <GfxRenderer.h>
 #include <HalDisplay.h>
 
@@ -10,6 +11,7 @@ namespace TransitionFeedback {
 namespace {
 bool sActive = false;
 int sBottomY = 0;
+unsigned long sShownAtMs = 0;
 }  // namespace
 
 void show(GfxRenderer& renderer, const char* message) {
@@ -51,18 +53,39 @@ void show(GfxRenderer& renderer, const char* message) {
   renderer.requestHalfRefresh();
   sBottomY = boxY + boxH + border;
   sActive = true;
+  // Record the timestamp of the FIRST popup in a stack so ensureMinDisplay
+  // measures cumulative display time — subsequent stacked popups do not
+  // reset it, otherwise a rapid stage sequence would always wait a full
+  // floor after the last stage instead of treating the whole sequence as
+  // one "work happening" window.
+  if (sShownAtMs == 0) {
+    sShownAtMs = millis();
+  }
 }
 
 void dismiss(GfxRenderer& renderer) {
   if (!sActive) {
     return;
   }
+  ensureMinDisplayElapsed();
   sActive = false;
   sBottomY = 0;
+  sShownAtMs = 0;
   renderer.clearScreen();
   // HALF_REFRESH at dismiss time scrubs any popup ghost in a single pass;
   // we only reach dismiss when no destination render is coming to clean up.
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+}
+
+void ensureMinDisplayElapsed() {
+  if (!sActive || sShownAtMs == 0) {
+    return;
+  }
+  const unsigned long now = millis();
+  const unsigned long elapsed = now - sShownAtMs;
+  if (elapsed < kMinDisplayMs) {
+    delay(kMinDisplayMs - elapsed);
+  }
 }
 
 bool isActive() { return sActive; }
@@ -72,6 +95,7 @@ int bottomY() { return sActive ? sBottomY : 0; }
 void resetStacking() {
   sActive = false;
   sBottomY = 0;
+  sShownAtMs = 0;
 }
 
 }  // namespace TransitionFeedback

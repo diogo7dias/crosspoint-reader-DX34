@@ -80,6 +80,9 @@ void TxtReaderActivity::onEnter() {
     return;
   }
 
+  // Block 2 (v1.2.0): full refresh on book enter so no list ghost persists.
+  renderer.requestFullRefresh();
+
   // Configure screen orientation based on settings
   switch (SETTINGS.orientation) {
     case CrossPointSettings::ORIENTATION::PORTRAIT:
@@ -771,13 +774,19 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<FlowLine>& o
         if (lastGoodSpace > 0) {
           breakPos = lastGoodSpace;
         } else {
-          // No space fits — fall back to character-by-character search
+          // No space fits — fall back to character-by-character search.
+          // Each iteration measures a progressively shorter substring, so
+          // the measurement cost scales with length. Reset the watchdog
+          // every 32 iterations to stay alive on pathological long lines
+          // without spaces (e.g. URL-heavy text or CJK-dense paragraphs).
+          size_t charIter = 0;
           while (breakPos > 0 && measureFlowLineWidth(line.substr(0, breakPos)) > availableWidth) {
             breakPos--;
             // Make sure we don't break in the middle of a UTF-8 sequence
             while (breakPos > 0 && (line[breakPos] & 0xC0) == 0x80) {
               breakPos--;
             }
+            if ((++charIter & 0x1F) == 0) esp_task_wdt_reset();
           }
         }
       }
