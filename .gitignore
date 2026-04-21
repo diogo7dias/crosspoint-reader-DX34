@@ -15,6 +15,7 @@ build
 firmware.bin
 CrossPoint-Mod-DX34-*.bin
 backups/
+releases/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/.DS_Store
