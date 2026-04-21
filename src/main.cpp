@@ -55,12 +55,10 @@
 #include "sleep/SdFatSleepFs.h"
 #include "sleep/WallpaperPlaylist.h"
 #include "util/FavoriteBmp.h"
-#ifdef PERSIST_V2
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
 #include "persist/SdFatFileIO.h"
 #include "persist/Trash.h"
-#endif
 
 HalDisplay display;
 HalGPIO gpio;
@@ -176,20 +174,13 @@ void enterNewActivity(Activity* activity) {
 }
 
 bool persistAppState(const char* context) {
-#ifdef PERSIST_V2
-  // V2: force sync flush of all dirty stores (not just APP_STATE). Activity
-  // transitions are the crash-safety boundary — debounce only coalesces
-  // within an activity, never across one.
+  // Force sync flush of all dirty stores. Activity transitions are the
+  // crash-safety boundary — debounce only coalesces within an activity,
+  // never across one.
+  (void)context;
   const size_t flushed = crosspoint::persist::PersistManager().flushAll();
   (void)flushed;
   return true;
-#else
-  if (!APP_STATE.saveToFile()) {
-    LOG_ERR("MAIN", "Failed to save app state (%s)", context);
-    return false;
-  }
-  return true;
-#endif
 }
 
 static void trimSleepFolderIfDirty();  // fwd decl — defined below
@@ -267,15 +258,13 @@ static void wireWallpaperPlaylist() {
   deps.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
   // WallpaperPlaylist::advance() runs inside SleepActivity::onEnter, AFTER
   // enterDeepSleep's persistAppState flush and milliseconds before the CPU
-  // enters deep sleep. Under PERSIST_V2 saveToFile() is debounced — the
-  // debounce window never fires, so the new lastShownSleepFilename is lost
-  // and the next boot loads the stale value (same wallpaper every wake).
-  // Force a sync flush so rotation survives the deep-sleep boundary.
+  // enters deep sleep. saveToFile() is debounced — the debounce window
+  // never fires, so the new lastShownSleepFilename is lost and the next
+  // boot loads the stale value (same wallpaper every wake). Force a sync
+  // flush so rotation survives the deep-sleep boundary.
   deps.saveState = []() {
     const bool ok = APP_STATE.saveToFile();
-#ifdef PERSIST_V2
     crosspoint::persist::PersistManager().flushAll();
-#endif
     return ok;
   };
   deps.randomFn = [](long mod) -> long { return ::random(mod); };
@@ -540,7 +529,6 @@ void setup() {
   enterNewActivity(bootActivity);
 
   bootActivity->setProgress(32, "Restoring state");
-#ifdef PERSIST_V2
   {
     // Touch the store so it registers with PersistManager before the sidecar
     // backup runs (backup iterates registered store paths).
@@ -550,7 +538,6 @@ void setup() {
       LOG_INF("MAIN", "First boot of %s — SD sidecar backup written", CROSSPOINT_VERSION);
     }
   }
-#endif
   APP_STATE.loadFromFile();
 
   // Wire crosspoint::sleep::WallpaperPlaylist deps now that APP_STATE is populated — all
@@ -671,11 +658,9 @@ void loop() {
 
   gpio.update();
 
-#ifdef PERSIST_V2
   // Drain any coalesced dirty writes. Stores flush only when debounce
   // window has elapsed since the last markDirty; most ticks are no-ops.
   crosspoint::persist::PersistManager().tick(static_cast<uint32_t>(loopStartTime));
-#endif
 
   // Only update fading fix when it changes (avoid calling every loop iteration)
   {

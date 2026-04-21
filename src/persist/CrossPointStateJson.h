@@ -2,10 +2,10 @@
  * @file CrossPointStateJson.h
  * @brief Free toJson/fromJson pair for CrossPointState.
  *
- * Byte-identical to JsonSettingsIO::saveState/loadState. Extracted so
- * PersistentStore<CrossPointState> can own the store without reaching
- * into the 1045-LOC god-marshaller. Under PERSIST_V2 this is the
- * serializer plugged into the template.
+ * PersistentStore<CrossPointState> plugs these into the template as
+ * its serializer pair (RFC #20). Streaming variant writes straight to
+ * a JsonSink so a populated sleep playlist doesn't peak as a ~15 KB
+ * std::string on the heap (see issue #43 postmortem).
  */
 #pragma once
 

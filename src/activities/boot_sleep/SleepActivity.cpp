@@ -16,24 +16,20 @@
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
+#include "persist/PersistManager.h"
+#include "sleep/WallpaperPlaylist.h"
 #include "util/FavoriteBmp.h"
 #include "util/StringUtils.h"
-#ifdef PERSIST_V2
-#include "persist/PersistManager.h"
-#endif
-#include "sleep/WallpaperPlaylist.h"
 
 namespace {
 // Sleep rendering runs inside SleepActivity::onEnter, called AFTER
 // enterDeepSleep's persistAppState flushAll and milliseconds before the CPU
-// enters deep sleep. Under PERSIST_V2 saveToFile() is debounced — the next
-// main-loop tick never fires, so any state write would be lost. Force a sync
-// flush so triage state survives the deep-sleep boundary.
+// enters deep sleep. saveToFile() is debounced — the next main-loop tick
+// never fires, so any state write would be lost. Force a sync flush so
+// triage state survives the deep-sleep boundary.
 void flushStateSync() {
   APP_STATE.saveToFile();
-#ifdef PERSIST_V2
   crosspoint::persist::PersistManager().flushAll();
-#endif
 }
 
 void clearLastSleepWallpaperPath() {
