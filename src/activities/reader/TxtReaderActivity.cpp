@@ -17,6 +17,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "ReaderCommon.h"
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemesActivity.h"
 #include "RecentBooksStore.h"
@@ -85,22 +86,7 @@ void TxtReaderActivity::onEnter() {
   renderer.requestHalfRefresh();
 
   // Configure screen orientation based on settings
-  switch (SETTINGS.orientation) {
-    case CrossPointSettings::ORIENTATION::PORTRAIT:
-      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-      break;
-    case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
-      renderer.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
-      break;
-    case CrossPointSettings::ORIENTATION::INVERTED:
-      renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
-      break;
-    case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
-      renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
-      break;
-    default:
-      break;
-  }
+  ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
 
   txt->setupCacheDir();

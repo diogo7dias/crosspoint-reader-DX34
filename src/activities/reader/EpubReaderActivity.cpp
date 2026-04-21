@@ -25,6 +25,7 @@
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
 #include "QuotesViewerActivity.h"
+#include "ReaderCommon.h"
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
@@ -113,28 +114,6 @@ int resolveCurrentTocIndex(const std::shared_ptr<Epub>& epub, const Section* sec
   return epub->getTocIndexForSpineIndex(currentSpineIndex);
 }
 
-// Apply the logical reader orientation to the renderer.
-// This centralizes orientation mapping so we don't duplicate switch logic
-// elsewhere.
-void applyReaderOrientation(GfxRenderer& renderer, const uint8_t orientation) {
-  switch (orientation) {
-    case CrossPointSettings::ORIENTATION::PORTRAIT:
-      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-      break;
-    case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
-      renderer.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
-      break;
-    case CrossPointSettings::ORIENTATION::INVERTED:
-      renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
-      break;
-    case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
-      renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
-      break;
-    default:
-      break;
-  }
-}
-
 }  // namespace
 
 void EpubReaderActivity::onEnter() {
@@ -152,7 +131,7 @@ void EpubReaderActivity::onEnter() {
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
-  applyReaderOrientation(renderer, SETTINGS.orientation);
+  ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
   ImageBlock::setDitherMode(SETTINGS.imageDither);
 
@@ -1213,7 +1192,7 @@ void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
     SETTINGS.saveToFile();
 
     // Update renderer orientation to match the new logical coordinate system.
-    applyReaderOrientation(renderer, SETTINGS.orientation);
+    ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
 
     invalidateStatusBarCaches();
 
