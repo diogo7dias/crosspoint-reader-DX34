@@ -66,25 +66,6 @@ using ReaderStatusBar::statusBarItemIsTop;
 using ReaderStatusBar::statusTextPositionIsTop;
 using ReaderStatusBar::wrapStatusText;
 
-std::string formatPageCounterText(const uint8_t mode, const int currentPage, const int chapterPageCount,
-                                  const float bookProgressPercent) {
-  (void)bookProgressPercent;
-
-  const int safeChapterPageCount = std::max(chapterPageCount, 0);
-  const int safeCurrentPage = std::max(currentPage, 0);
-  int pagesLeft = safeChapterPageCount - (currentPage + 1);
-  if (pagesLeft < 0) {
-    pagesLeft = 0;
-  }
-
-  switch (mode) {
-    case CrossPointSettings::STATUS_PAGE_LEFT_TEXT:
-      return std::to_string(pagesLeft) + " left";
-    default:
-      return std::to_string(safeCurrentPage + 1) + "/" + std::to_string(safeChapterPageCount);
-  }
-}
-
 int resolveCurrentTocIndex(const std::shared_ptr<Epub>& epub, const Section* section, const int currentSpineIndex) {
   if (!epub) {
     return -1;
@@ -378,8 +359,8 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
       (section->pageCount > 0) ? (static_cast<float>(section->currentPage + 1) / section->pageCount) * 100.0f : 0.0f;
 
   if (SETTINGS.statusBarShowPageCounter) {
-    layout.pageCounterText = formatPageCounterText(SETTINGS.statusBarPageCounterMode, section->currentPage,
-                                                   section->pageCount, layout.bookProgress);
+    layout.pageCounterText = ReaderCommon::formatPageCounterText(
+        SETTINGS.statusBarPageCounterMode, section->currentPage, section->pageCount);
     layout.pageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
   }
   if (SETTINGS.statusBarShowBookPercentage) {

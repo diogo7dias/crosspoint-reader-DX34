@@ -55,22 +55,6 @@ using ReaderStatusBar::normalizeReaderMargins;
 using ReaderStatusBar::statusBarItemIsTop;
 using ReaderStatusBar::statusTextPositionIsTop;
 
-std::string formatPageCounterText(const uint8_t mode, const int currentPage, const int totalPages) {
-  const int safeTotalPages = std::max(totalPages, 0);
-  const int safeCurrentPage = std::max(currentPage, 0);
-  int pagesLeft = safeTotalPages - (currentPage + 1);
-  if (pagesLeft < 0) {
-    pagesLeft = 0;
-  }
-
-  switch (mode) {
-    case CrossPointSettings::STATUS_PAGE_LEFT_TEXT:
-      return std::to_string(pagesLeft) + " left";
-    default:
-      return std::to_string(safeCurrentPage + 1) + "/" + std::to_string(safeTotalPages);
-  }
-}
-
 }  // namespace
 
 void TxtReaderActivity::onEnter() {
@@ -182,7 +166,8 @@ TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(const
   layout.chapterProgress = progress;
 
   if (SETTINGS.statusBarShowPageCounter) {
-    layout.pageCounterText = formatPageCounterText(SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
+    layout.pageCounterText =
+        ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
     layout.pageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
   }
   if (SETTINGS.statusBarShowBookPercentage) {
