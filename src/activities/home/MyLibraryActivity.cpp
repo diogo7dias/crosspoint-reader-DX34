@@ -22,6 +22,7 @@
 #include "Paths.h"
 #include "activities/boot_sleep/SleepActivity.h"
 #include "activities/network/QRShareActivity.h"
+#include "activities/reader/ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -42,13 +43,6 @@ constexpr size_t kDefaultFileLimit = 200;
 constexpr size_t kFilesPerBatch = 200;
 constexpr size_t kFileLoadProgressThreshold = 50;
 constexpr size_t kFileLoadProgressInterval = 100;
-
-std::string rtrimSpaces(std::string text) {
-  while (!text.empty() && text.back() == ' ') {
-    text.pop_back();
-  }
-  return text;
-}
 
 std::string formatLibraryProgressPrefix(const std::optional<int>& percent) {
   if (!percent.has_value() || percent.value() <= 1) {
@@ -122,51 +116,15 @@ void collectMoveDestinationPaths(const std::string& basePath, std::vector<std::s
   }
 }
 
+// Thin adapter over ReaderLayoutSafety::wrapText. The list renderer measures row height from
+// `.size()`, so an empty-text row must still return a single (empty) line — otherwise the row
+// collapses to just its vertical padding. wrapText returns `{}` for empty input, so we normalize.
 std::vector<std::string> wrapTextToWidth(const GfxRenderer& renderer, const int fontId, const std::string& text,
                                          const int maxWidth) {
-  if (text.empty()) return {""};
-
-  std::vector<std::string> lines;
-  size_t pos = 0;
-
-  while (pos < text.size()) {
-    while (pos < text.size() && text[pos] == ' ') pos++;
-    if (pos >= text.size()) break;
-
-    size_t end = pos;
-    size_t lastSpace = std::string::npos;
-
-    while (end < text.size()) {
-      if (text[end] == ' ') lastSpace = end;
-      const std::string candidate = text.substr(pos, end - pos + 1);
-      if (renderer.getTextWidth(fontId, candidate.c_str()) > maxWidth) break;
-      end++;
-    }
-
-    if (end >= text.size()) {
-      lines.push_back(rtrimSpaces(text.substr(pos)));
-      break;
-    }
-
-    if (end == pos) {
-      // Force at least one character so very long unbroken tokens still wrap.
-      size_t forcedEnd = pos + 1;
-      while (forcedEnd < text.size()) {
-        const std::string forcedCandidate = text.substr(pos, forcedEnd - pos + 1);
-        if (renderer.getTextWidth(fontId, forcedCandidate.c_str()) > maxWidth) break;
-        forcedEnd++;
-      }
-      lines.push_back(rtrimSpaces(text.substr(pos, forcedEnd - pos)));
-      pos = forcedEnd;
-      continue;
-    }
-
-    size_t split = (lastSpace != std::string::npos && lastSpace >= pos) ? lastSpace : (end - 1);
-    lines.push_back(rtrimSpaces(text.substr(pos, split - pos + 1)));
-    pos = split + 1;
+  auto lines = ReaderLayoutSafety::wrapText(renderer, fontId, text, maxWidth);
+  if (lines.empty()) {
+    lines.emplace_back();
   }
-
-  if (lines.empty()) lines.push_back("");
   return lines;
 }
 }  // namespace
