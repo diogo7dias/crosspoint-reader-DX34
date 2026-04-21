@@ -90,15 +90,38 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // at a safe point. The direct section.reset() calls in onExit / restoreSavedPosition / goto-href
   // are only safe because those paths are already running on the loop task under a RenderLock.
   bool pendingSectionReset = false;
-  int cachedReserveSpineIndex = -1;
-  int cachedReserveUsableWidth = -1;
-  bool cachedReserveNoTitleTruncation = false;
-  int cachedReserveTitleLineCount = 1;
-  int cachedTitleTocIndex = -2;
-  int cachedTitleUsableWidth = -1;
-  bool cachedTitleNoTitleTruncation = false;
-  int cachedTitleMaxLines = -1;
-  std::vector<std::string> cachedTitleLines;
+  // Memoized status-bar title wrap results. Two sub-caches with distinct keys:
+  //   - reserve: max TOC-title wrap height for the current spine (input to budget resolution).
+  //   - titleLines: wrapped lines for the currently-displayed title (input to the paint step).
+  // Both are invalidated together via clear() from invalidateStatusBarCaches() — bundling
+  // forces every invalidation point through the same method so we can't accidentally reset
+  // one sub-cache but leave the other live (a bug we hit during the status-bar V2 work).
+  // Field naming preserves the original loose-field spelling on purpose: minimizes diff noise
+  // at read/write sites and keeps "grep cachedReserveSpineIndex" working.
+  struct StatusBarTitleCache {
+    int cachedReserveSpineIndex = -1;
+    int cachedReserveUsableWidth = -1;
+    bool cachedReserveNoTitleTruncation = false;
+    int cachedReserveTitleLineCount = 1;
+    int cachedTitleTocIndex = -2;
+    int cachedTitleUsableWidth = -1;
+    bool cachedTitleNoTitleTruncation = false;
+    int cachedTitleMaxLines = -1;
+    std::vector<std::string> cachedTitleLines;
+
+    void clear() {
+      cachedReserveSpineIndex = -1;
+      cachedReserveUsableWidth = -1;
+      cachedReserveNoTitleTruncation = false;
+      cachedReserveTitleLineCount = 1;
+      cachedTitleTocIndex = -2;
+      cachedTitleUsableWidth = -1;
+      cachedTitleNoTitleTruncation = false;
+      cachedTitleMaxLines = -1;
+      cachedTitleLines.clear();
+    }
+  };
+  StatusBarTitleCache statusBarCache_;
   const std::function<void()> onGoBack;
   const std::function<void()> onGoHome;
   const std::function<void(const std::string&)> onOpenBook;

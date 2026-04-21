@@ -254,17 +254,7 @@ void EpubReaderActivity::onExit() {
   invalidateStatusBarCaches();
 }
 
-void EpubReaderActivity::invalidateStatusBarCaches() {
-  cachedReserveSpineIndex = -1;
-  cachedReserveUsableWidth = -1;
-  cachedReserveNoTitleTruncation = false;
-  cachedReserveTitleLineCount = 1;
-  cachedTitleTocIndex = -2;
-  cachedTitleUsableWidth = -1;
-  cachedTitleNoTitleTruncation = false;
-  cachedTitleMaxLines = -1;
-  cachedTitleLines.clear();
-}
+void EpubReaderActivity::invalidateStatusBarCaches() { statusBarCache_.clear(); }
 
 void EpubReaderActivity::clearPageCache() { cache_.detach(); }
 
@@ -319,9 +309,10 @@ int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidt
   //   usableWidth         — orientation flip or margin changes reflow the wrap.
   //   noTitleTruncation   — toggling the setting changes the line-count policy, not the width.
   // Any mismatch forces a re-measure, which is expensive (see kMaxTocTitlesMeasured below).
-  if (cachedReserveSpineIndex == currentSpineIndex && cachedReserveUsableWidth == usableWidth &&
-      cachedReserveNoTitleTruncation == SETTINGS.statusBarNoTitleTruncation) {
-    return cachedReserveTitleLineCount;
+  if (statusBarCache_.cachedReserveSpineIndex == currentSpineIndex &&
+      statusBarCache_.cachedReserveUsableWidth == usableWidth &&
+      statusBarCache_.cachedReserveNoTitleTruncation == SETTINGS.statusBarNoTitleTruncation) {
+    return statusBarCache_.cachedReserveTitleLineCount;
   }
 
   int maxLines = 1;
@@ -354,19 +345,20 @@ int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidt
     }
   }
 
-  cachedReserveSpineIndex = currentSpineIndex;
-  cachedReserveUsableWidth = usableWidth;
-  cachedReserveNoTitleTruncation = SETTINGS.statusBarNoTitleTruncation;
-  cachedReserveTitleLineCount = maxLines;
-  return cachedReserveTitleLineCount;
+  statusBarCache_.cachedReserveSpineIndex = currentSpineIndex;
+  statusBarCache_.cachedReserveUsableWidth = usableWidth;
+  statusBarCache_.cachedReserveNoTitleTruncation = SETTINGS.statusBarNoTitleTruncation;
+  statusBarCache_.cachedReserveTitleLineCount = maxLines;
+  return statusBarCache_.cachedReserveTitleLineCount;
 }
 
 const std::vector<std::string>& EpubReaderActivity::getStatusBarTitleLines(const int tocIndex, const int usableWidth,
                                                                            const bool noTitleTruncation,
                                                                            const int maxTitleLineCount) {
-  if (cachedTitleTocIndex == tocIndex && cachedTitleUsableWidth == usableWidth &&
-      cachedTitleNoTitleTruncation == noTitleTruncation && cachedTitleMaxLines == maxTitleLineCount) {
-    return cachedTitleLines;
+  if (statusBarCache_.cachedTitleTocIndex == tocIndex && statusBarCache_.cachedTitleUsableWidth == usableWidth &&
+      statusBarCache_.cachedTitleNoTitleTruncation == noTitleTruncation &&
+      statusBarCache_.cachedTitleMaxLines == maxTitleLineCount) {
+    return statusBarCache_.cachedTitleLines;
   }
 
   std::string titleText = tr(STR_UNNAMED);
@@ -377,14 +369,14 @@ const std::vector<std::string>& EpubReaderActivity::getStatusBarTitleLines(const
     }
   }
 
-  cachedTitleLines = ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(), titleText,
-                                                         usableWidth, noTitleTruncation, maxTitleLineCount);
+  statusBarCache_.cachedTitleLines = ReaderLayoutSafety::buildTitleLines(
+      renderer, SETTINGS.getStatusBarFontId(), titleText, usableWidth, noTitleTruncation, maxTitleLineCount);
 
-  cachedTitleTocIndex = tocIndex;
-  cachedTitleUsableWidth = usableWidth;
-  cachedTitleNoTitleTruncation = noTitleTruncation;
-  cachedTitleMaxLines = maxTitleLineCount;
-  return cachedTitleLines;
+  statusBarCache_.cachedTitleTocIndex = tocIndex;
+  statusBarCache_.cachedTitleUsableWidth = usableWidth;
+  statusBarCache_.cachedTitleNoTitleTruncation = noTitleTruncation;
+  statusBarCache_.cachedTitleMaxLines = maxTitleLineCount;
+  return statusBarCache_.cachedTitleLines;
 }
 
 EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(const int usableWidth,
