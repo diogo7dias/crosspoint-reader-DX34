@@ -1702,32 +1702,45 @@ void EpubReaderActivity::renderHighlights(const Page& page, const int fontId, co
 
   const int wordCount = static_cast<int>(wordList.size());
   const int textHeight = renderer.getTextHeight(fontId);
-  constexpr int thickness = 2;        // SHOW_UNDERLINE dashed underline thickness
-  constexpr int cursorThickness = 3;  // cursor dashed border thickness (thicker for visibility)
+  constexpr int thickness = 2;  // SHOW_UNDERLINE dashed underline thickness
 
   const int cursorIdx = highlights_.cursorIndex() >= wordCount ? wordCount - 1 : highlights_.cursorIndex();
 
-  // Helper: draw cursor as a dashed border (2px) around the word — same dashed
-  // pattern as the final-selection underline. Keeps word black-on-white; the
-  // continuous underline only appears during the SHOW_UNDERLINE confirmation.
-  const auto drawCursor = [&](const crosspoint::reader::WordPos& cw, const int /*cursorWordIdx*/) {
-    constexpr int pad = 2;  // breathing room between word glyphs and border
+  // Helper: draw cursor as a solid black rectangle with the word text redrawn
+  // in white (inverted). Only used during SELECT_START / SELECT_END — the
+  // dashed underline appears later during SHOW_UNDERLINE confirmation.
+  // `wi` carries text + style for the inverted glyph redraw; `cw` carries the
+  // cached geometry used for the black-fill rect.
+  const auto drawCursor = [&](const crosspoint::reader::WordPos& cw, const WordInfo* wi) {
+    constexpr int pad = 2;  // breathing room between word glyphs and black fill
     const int bx = (cw.x > pad) ? cw.x - pad : 0;
     const int by = (cw.y > pad) ? cw.y - pad : 0;
     const int bw = cw.width + (cw.x - bx) + pad;
     const int bh = textHeight + (cw.y - by) + pad;
-    drawDashedRect(renderer, bx, by, bw, bh, cursorThickness);
+    renderer.fillRect(bx, by, bw, bh, true);
+    if (wi != nullptr && !wi->text.empty()) {
+      renderer.drawTextSpaced(fontId, wi->x, wi->y, wi->text.c_str(), wi->letterSpacing, false, wi->style);
+    }
   };
 
   const auto state = highlights_.state();
+  const bool needsCursorText = (state == HighlightState::SELECT_START || state == HighlightState::SELECT_END);
+  // buildWordList gives us text + style for white-text redraw on the cursor word.
+  std::vector<WordInfo> infoList;
+  if (needsCursorText) infoList = buildWordList(page, xOffset, yOffset, fontId);
+  const auto wordInfoAt = [&](int idx) -> const WordInfo* {
+    if (idx < 0 || idx >= static_cast<int>(infoList.size())) return nullptr;
+    return &infoList[idx];
+  };
+
   if (state == HighlightState::SELECT_START) {
     if (cursorIdx >= 0 && cursorIdx < wordCount) {
-      drawCursor(wordList[cursorIdx], cursorIdx);
+      drawCursor(wordList[cursorIdx], wordInfoAt(cursorIdx));
     }
   } else if (state == HighlightState::SELECT_END) {
     const int endIdx = highlights_.endWordIndex();
     if (section->currentPage == highlights_.endPage() && endIdx >= 0 && endIdx < wordCount) {
-      drawCursor(wordList[endIdx], endIdx);
+      drawCursor(wordList[endIdx], wordInfoAt(endIdx));
     }
   } else if (state == HighlightState::SHOW_UNDERLINE) {
     const int startPage = highlights_.startPage();
@@ -1962,10 +1975,9 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Render highlight overlay and border if in highlight/quote selection mode
   if (highlights_.state() != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
-    // Draw dashed border around text area to indicate highlight mode —
-    // same dashed styling (2px, dash=8, gap=4) as the word cursor.
+    // Draw dashed border around text area to indicate highlight mode.
     constexpr int frameOffset = 6;     // padding from text area to the frame
-    constexpr int frameThickness = 3;  // match cursor border thickness
+    constexpr int frameThickness = 5;  // thicker frame for visibility
     const int bx = orientedMarginLeft - frameOffset;
     const int by = contentY - frameOffset;
     const int bw = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight + 2 * frameOffset;
