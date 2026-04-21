@@ -1250,6 +1250,108 @@ void EpubReaderActivity::reloadCurrentSectionForDisplaySettings() {
   requestUpdate();
 }
 
+bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const uint16_t viewportHeight) {
+  if (section) {
+    return true;
+  }
+
+  const auto filepath = epub->getSpineItem(currentSpineIndex).href;
+  LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
+  auto* sec = new (std::nothrow) Section(epub, currentSpineIndex, renderer);
+  if (!sec) {
+    LOG_ERR("ERS", "OOM: Section allocation");
+    return false;
+  }
+  section = std::unique_ptr<Section>(sec);
+  clearPageCache();
+
+  const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
+
+  if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                                SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
+                                viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
+                                SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
+                                SETTINGS.readerBoldSwap != 0)) {
+    LOG_DBG("ERS", "Cache not found, building...");
+
+    // Free font caches to reclaim contiguous heap for ZIP decompression (needs a 32 KB
+    // dictionary). They rebuild automatically on next render.
+    auto* fcm = renderer.getFontCacheManager();
+    if (fcm) fcm->clearCache();
+
+    // Progress hook: the layout parser emits percentages as it chews the HTML. We only use it
+    // to gate the "Still working on it..." toast, not a real progress bar — keeps UX simple
+    // and consistent with the cached-open path.
+    auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
+    if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                                    SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
+                                    viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
+                                    SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
+                                    SETTINGS.readerBoldSwap != 0, layoutProgressTick)) {
+      LOG_ERR("ERS", "Failed to persist page data to SD");
+      clearPageCache();
+      section.reset();
+      renderer.clearScreen();
+      renderer.drawCenteredText(UI_12_FONT_ID, 350, "Out of memory", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 400, "Press Back to exit", true, EpdFontFamily::REGULAR);
+      renderer.displayBuffer();
+      return false;
+    }
+  } else {
+    LOG_DBG("ERS", "Cache found, skipping build...");
+  }
+
+  // CSS rules are only needed during section creation (layout). Free them now to reclaim
+  // ~100 KB for page rendering and font decompression. They reload from cache automatically
+  // if a new section needs building later.
+  {
+    auto* css = epub->getCssParser();
+    if (css) css->clear();
+  }
+
+  // Apply any pending cross-section navigation now that we know the new page count.
+  if (nextPageNumber == UINT16_MAX) {
+    section->currentPage = section->pageCount - 1;
+  } else {
+    section->currentPage = nextPageNumber;
+  }
+
+  // Reader-settings change (font size, line spacing, etc.) rebuilds page layout, which changes
+  // the page count. Project the old relative position onto the new page grid so the reader
+  // doesn't jump to a random page after a settings change.
+  if (cachedChapterTotalPageCount > 0) {
+    if (currentSpineIndex == cachedSpineIndex && section->pageCount != cachedChapterTotalPageCount) {
+      const float progress =
+          static_cast<float>(section->currentPage) / static_cast<float>(cachedChapterTotalPageCount);
+      section->currentPage = static_cast<int>(progress * section->pageCount);
+    }
+    cachedChapterTotalPageCount = 0;  // One-shot: don't re-apply on subsequent renders.
+  }
+
+  if (pendingPercentJump && section->pageCount > 0) {
+    int newPage = static_cast<int>(pendingSpineProgress * static_cast<float>(section->pageCount));
+    if (newPage >= section->pageCount) {
+      newPage = section->pageCount - 1;
+    }
+    section->currentPage = newPage;
+    pendingPercentJump = false;
+  }
+
+  if (!pendingAnchor.empty()) {
+    const int anchorPage = section->getPageForAnchor(pendingAnchor);
+    if (anchorPage >= 0 && anchorPage < section->pageCount) {
+      section->currentPage = anchorPage;
+    }
+    pendingAnchor.clear();
+  }
+
+  // One more chance to blink "Opening book..." before section-init dismiss — catches slow
+  // loadSectionFile on big cached sections.
+  TransitionFeedback::maybeShowStillWorkingToast(renderer);
+  TransitionFeedback::dismiss(renderer);
+  return true;
+}
+
 void EpubReaderActivity::render(Activity::RenderLock&& lock) {
   if (!epub || pendingSectionReset) {
     return;
@@ -1367,105 +1469,8 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       ReaderLayoutSafety::clampViewportDimension(renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom,
                                                  minContentHeight, "ERS", "viewport height"));
 
-  if (!section) {
-    const auto filepath = epub->getSpineItem(currentSpineIndex).href;
-    LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
-    auto* sec = new (std::nothrow) Section(epub, currentSpineIndex, renderer);
-    if (!sec) {
-      LOG_ERR("ERS", "OOM: Section allocation");
-      return;
-    }
-    section = std::unique_ptr<Section>(sec);
-    bool builtSection = false;
-    clearPageCache();
-
-    const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
-
-    if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                  SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
-                                  viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
-                                  SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                  SETTINGS.readerBoldSwap != 0)) {
-      LOG_DBG("ERS", "Cache not found, building...");
-      builtSection = true;
-
-      // Free font caches to reclaim contiguous heap for ZIP decompression
-      // (needs a 32 KB dictionary). They rebuild automatically on next render.
-      auto* fcm = renderer.getFontCacheManager();
-      if (fcm) fcm->clearCache();
-
-      // Progress hook: parser emits percentages as it chews the HTML. We
-      // only use it to gate the "Still working on it..." toast, not a real
-      // bar — keeps UX simple and consistent with cached-open behaviour.
-      auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
-      if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                      SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
-                                      viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
-                                      SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                      SETTINGS.readerBoldSwap != 0, layoutProgressTick)) {
-        LOG_ERR("ERS", "Failed to persist page data to SD");
-        clearPageCache();
-        section.reset();
-        renderer.clearScreen();
-        renderer.drawCenteredText(UI_12_FONT_ID, 350, "Out of memory", true, EpdFontFamily::REGULAR);
-        renderer.drawCenteredText(UI_12_FONT_ID, 400, "Press Back to exit", true, EpdFontFamily::REGULAR);
-        renderer.displayBuffer();
-        return;
-      }
-    } else {
-      LOG_DBG("ERS", "Cache found, skipping build...");
-    }
-
-    // CSS rules are only needed during section creation (layout).  Free them
-    // now to reclaim ~100 KB for page rendering and font decompression.
-    // They reload from cache automatically if a new section needs building.
-    {
-      auto* css = epub->getCssParser();
-      if (css) css->clear();
-    }
-
-    if (nextPageNumber == UINT16_MAX) {
-      section->currentPage = section->pageCount - 1;
-    } else {
-      section->currentPage = nextPageNumber;
-    }
-
-    // handles changes in reader settings and reset to approximate position
-    // based on cached progress
-    if (cachedChapterTotalPageCount > 0) {
-      // only goes to relative position if spine index matches cached value
-      if (currentSpineIndex == cachedSpineIndex && section->pageCount != cachedChapterTotalPageCount) {
-        float progress = static_cast<float>(section->currentPage) / static_cast<float>(cachedChapterTotalPageCount);
-        int newPage = static_cast<int>(progress * section->pageCount);
-        section->currentPage = newPage;
-      }
-      cachedChapterTotalPageCount = 0;  // resets to 0 to prevent reading cached progress again
-    }
-
-    if (pendingPercentJump && section->pageCount > 0) {
-      // Apply the pending percent jump now that we know the new section's page
-      // count.
-      int newPage = static_cast<int>(pendingSpineProgress * static_cast<float>(section->pageCount));
-      if (newPage >= section->pageCount) {
-        newPage = section->pageCount - 1;
-      }
-      section->currentPage = newPage;
-      pendingPercentJump = false;
-    }
-
-    if (!pendingAnchor.empty()) {
-      const int anchorPage = section->getPageForAnchor(pendingAnchor);
-      if (anchorPage >= 0 && anchorPage < section->pageCount) {
-        section->currentPage = anchorPage;
-      }
-      pendingAnchor.clear();
-    }
-
-    // One more chance to blink "Opening book..." before section-init
-    // dismiss — catches slow loadSectionFile on big cached sections.
-    TransitionFeedback::maybeShowStillWorkingToast(renderer);
-
-    TransitionFeedback::dismiss(renderer);
+  if (!ensureSectionLoaded(viewportWidth, viewportHeight)) {
+    return;
   }
 
   renderer.clearScreen();

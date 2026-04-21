@@ -165,6 +165,15 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // pages-per-byte × total book size) is the densest block in the status-bar pipeline and the
   // only one with non-trivial WHY notes (chapter density variance).
   void populateBookPageCounterText(StatusBarLayout& layout) const;
+  // If `section` is already live, no-op. Otherwise constructs a Section for the current spine
+  // index, loads (or builds-then-loads) its page-layout cache, frees transient memory used only
+  // during layout (font glyph caches + CSS parser) to reclaim heap for the render pass, and
+  // applies any pending cross-section navigation (percent jump / anchor / cachedChapterTotalPageCount
+  // reconciliation) to `section->currentPage`.
+  // Returns false when the caller should bail out of the current render — either OOM during
+  // construction, or createSectionFile failed to persist layout to SD. On false the caller has
+  // already had an error dialog painted by this function and should just return.
+  bool ensureSectionLoaded(uint16_t viewportWidth, uint16_t viewportHeight);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuBack(uint8_t orientation);
