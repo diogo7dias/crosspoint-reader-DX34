@@ -313,6 +313,12 @@ int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidt
   if (!epub || usableWidth <= 0) {
     return 1;
   }
+  // Composite cache key: (spineIndex, usableWidth, noTitleTruncation). All three must match for
+  // the cached reserve-line count to be valid.
+  //   spineIndex          — the TOC title set changes per chapter.
+  //   usableWidth         — orientation flip or margin changes reflow the wrap.
+  //   noTitleTruncation   — toggling the setting changes the line-count policy, not the width.
+  // Any mismatch forces a re-measure, which is expensive (see kMaxTocTitlesMeasured below).
   if (cachedReserveSpineIndex == currentSpineIndex && cachedReserveUsableWidth == usableWidth &&
       cachedReserveNoTitleTruncation == SETTINGS.statusBarNoTitleTruncation) {
     return cachedReserveTitleLineCount;

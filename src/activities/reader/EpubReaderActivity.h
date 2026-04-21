@@ -84,7 +84,12 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::EpubProgressSink progressSink_{"", 0};
   crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int pageLoadFailCount = 0;         // Tracks consecutive page load failures to prevent infinite retry loops
-  bool pendingSectionReset = false;  // Defer section.reset() from render task to loop (avoids race)
+  // Cross-task handoff: render runs on the display task, but tearing down `section` must happen on
+  // the loop task — its destructor closes file handles and frees page-layout storage that the
+  // render task may still be iterating. Setting this flag asks the loop to call section.reset()
+  // at a safe point. The direct section.reset() calls in onExit / restoreSavedPosition / goto-href
+  // are only safe because those paths are already running on the loop task under a RenderLock.
+  bool pendingSectionReset = false;
   int cachedReserveSpineIndex = -1;
   int cachedReserveUsableWidth = -1;
   bool cachedReserveNoTitleTruncation = false;
@@ -104,6 +109,12 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
     int spineIndex;
     int pageNumber;
   };
+  // Footnote back-stack uses a fixed-size array, not std::vector: the UX caps nested footnotes
+  // at depth 3 (deeper jumps collapse to a flat navigation), and fixed storage keeps per-activity
+  // RAM constant — critical on a device with ~180 KB free heap where fragmentation during long
+  // reading sessions has bitten us before. Pop order: decrement `footnoteDepth` FIRST, then index
+  // `savedPositions[footnoteDepth]` — the slot at the new depth is the frame we're returning to,
+  // not the one we just left (see restoreSavedPosition in the .cpp).
   static constexpr int MAX_FOOTNOTE_DEPTH = 3;
   SavedPosition savedPositions[MAX_FOOTNOTE_DEPTH] = {};
   int footnoteDepth = 0;
