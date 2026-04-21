@@ -71,8 +71,7 @@ void ActivityRouter::enterDeepSleep(bool fromReader) {
 // Lambda synthesizers — return std::function callbacks bound to router.request.
 // Activities continue to receive the callbacks they have always received;
 // these let a caller (production main.cpp, or a host test) swap out the source
-// without touching every activity constructor. main.cpp still passes its own
-// free functions for the legacy LIFECYCLE_V2=0 path.
+// without touching every activity constructor.
 std::function<void(const std::string&)> ActivityRouter::makeGoToReader() const {
   return [](const std::string& p) { instance().request({RouteId::Reader, p}); };
 }

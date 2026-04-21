@@ -51,9 +51,7 @@
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/TransitionFeedback.h"
-#if LIFECYCLE_V2
 #include "lifecycle/ActivityRouter.h"
-#endif
 #include "sleep/SdFatSleepFs.h"
 #include "sleep/WallpaperPlaylist.h"
 #include "util/FavoriteBmp.h"
@@ -250,26 +248,6 @@ void waitForPowerRelease() {
   }
 }
 
-// Enter deep sleep mode
-void enterDeepSleep() {
-  // Shut down BLE before sleep to free resources
-  if (BLE_HID.isInitialized()) {
-    BLE_HID.disconnect();
-    BLE_HID.deinit();
-  }
-
-  APP_STATE.lastSleepFromReader = currentActivity && currentActivity->isReaderActivity();
-  persistAppState("enter deep sleep");
-  exitActivity();
-  enterNewActivity(new SleepActivity(renderer, mappedInputManager));
-
-  display.deepSleep();
-  LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);
-  LOG_DBG("MAIN", "Entering deep sleep");
-
-  powerManager.startDeepSleep(gpio);
-}
-
 void onGoHome();
 void onGoToMyLibraryWithPath(const std::string& path);
 void onGoToRecentBooks();
@@ -325,11 +303,7 @@ static void openReaderInline(const std::string& initialEpubPath) {
 }
 
 void onGoToReader(const std::string& initialEpubPath) {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Reader, initialEpubPath});
-#else
-  openReaderInline(initialEpubPath);
-#endif
 }
 
 static void openFileTransferInline() {
@@ -340,26 +314,14 @@ static void openFileTransferInline() {
 }
 
 void onGoToFileTransfer() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::FileTransfer, ""});
-#else
-  openFileTransferInline();
-#endif
 }
 
 void onGoToSettings() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Settings, ""});
-#else
-  TransitionFeedback::show(renderer, "Loading settings...");
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
-#endif
 }
 
-// V2 path: ActivityRouter applies persist policy before calling this factory.
-// Legacy path: the #else branch in onGoToMyLibrary / onGoToMyLibraryWithPath
-// explicitly persists before calling this helper.
+// ActivityRouter applies persist policy before calling this factory (RFC #23).
 static void openMyLibraryInline(const std::string& path) {
   TransitionFeedback::show(renderer, "Loading library...");
   exitActivity();
@@ -371,12 +333,7 @@ static void openMyLibraryInline(const std::string& path) {
 }
 
 void onGoToMyLibrary() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""});
-#else
-  persistAppState("go to library");
-  openMyLibraryInline("");
-#endif
 }
 
 static void openRecentBooksInline() {
@@ -386,21 +343,11 @@ static void openRecentBooksInline() {
 }
 
 void onGoToRecentBooks() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""});
-#else
-  persistAppState("go to recents");
-  openRecentBooksInline();
-#endif
 }
 
 void onGoToMyLibraryWithPath(const std::string& path) {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibraryAt, path});
-#else
-  persistAppState("go to library path");
-  openMyLibraryInline(path);
-#endif
 }
 
 static void openBrowserInline() {
@@ -410,11 +357,7 @@ static void openBrowserInline() {
 }
 
 void onGoToBrowser() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""});
-#else
-  openBrowserInline();
-#endif
 }
 
 static void openHomeInline() {
@@ -425,13 +368,7 @@ static void openHomeInline() {
 }
 
 void onGoHome() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""});
-#else
-  trimSleepFolderIfDirty();
-  persistAppState("go home");
-  openHomeInline();
-#endif
 }
 
 void setupDisplayAndFonts() {
@@ -670,11 +607,10 @@ void setup() {
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
-#if LIFECYCLE_V2
-  // Wire ActivityRouter with Deps + route factories (#23). All transitions on
-  // the V2 path flow through the router: per-route persist/trim policy is
-  // applied before the factory runs, and deep-sleep entry follows the fixed
-  // hook sequence in ActivityRouter::enterDeepSleep.
+  // Wire ActivityRouter with Deps + route factories (RFC #23). All transitions
+  // flow through the router: per-route persist/trim policy is applied before
+  // the factory runs, and deep-sleep entry follows the fixed hook sequence in
+  // ActivityRouter::enterDeepSleep.
   {
     auto& router = lifecycle::ActivityRouter::instance();
 
@@ -715,22 +651,13 @@ void setup() {
     router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) { openBrowserInline(); });
     router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) { openHomeInline(); });
   }
-#endif
 
   if (goHome) {
     bootActivity->setProgress(100, "Opening home");
-#if LIFECYCLE_V2
     lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Home, ""});
-#else
-    onGoHome();
-#endif
   } else {
     bootActivity->setProgress(100, "Opening book");
-#if LIFECYCLE_V2
     lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Reader, readerPath});
-#else
-    onGoToReader(readerPath);
-#endif
   }
 
   // Ensure we're not still holding the power button before leaving setup
@@ -798,12 +725,8 @@ void loop() {
   }
 
   auto triggerDeepSleep = []() {
-#if LIFECYCLE_V2
     const bool fromReader = currentActivity && currentActivity->isReaderActivity();
     lifecycle::ActivityRouter::instance().enterDeepSleep(fromReader);
-#else
-    enterDeepSleep();
-#endif
   };
 
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
@@ -831,11 +754,9 @@ void loop() {
     currentActivity->loop();
   }
 
-#if LIFECYCLE_V2
   // Drain any transition requested during currentActivity->loop() at a safe
   // boundary (after the activity has returned from its tick).
   lifecycle::ActivityRouter::instance().applyIfPending();
-#endif
 
   const unsigned long loopDuration = millis() - loopStartTime;
   if (loopDuration > maxLoopDuration) {
