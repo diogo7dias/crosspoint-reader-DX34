@@ -51,20 +51,14 @@
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/TransitionFeedback.h"
-#if LIFECYCLE_V2
 #include "lifecycle/ActivityRouter.h"
-#endif
-#if SLEEP_V2
 #include "sleep/SdFatSleepFs.h"
 #include "sleep/WallpaperPlaylist.h"
 #include "util/FavoriteBmp.h"
-#endif
-#ifdef PERSIST_V2
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
 #include "persist/SdFatFileIO.h"
 #include "persist/Trash.h"
-#endif
 
 HalDisplay display;
 HalGPIO gpio;
@@ -180,23 +174,16 @@ void enterNewActivity(Activity* activity) {
 }
 
 bool persistAppState(const char* context) {
-#ifdef PERSIST_V2
-  // V2: force sync flush of all dirty stores (not just APP_STATE). Activity
-  // transitions are the crash-safety boundary — debounce only coalesces
-  // within an activity, never across one.
+  // Force sync flush of all dirty stores. Activity transitions are the
+  // crash-safety boundary — debounce only coalesces within an activity,
+  // never across one.
+  (void)context;
   const size_t flushed = crosspoint::persist::PersistManager().flushAll();
   (void)flushed;
   return true;
-#else
-  if (!APP_STATE.saveToFile()) {
-    LOG_ERR("MAIN", "Failed to save app state (%s)", context);
-    return false;
-  }
-  return true;
-#endif
 }
 
-static void trimSleepFolderIfDirty();  // fwd decl — defined with sleepFolderDirty below
+static void trimSleepFolderIfDirty();  // fwd decl — defined below
 
 // Verify power button press duration on wake-up from deep sleep
 // Pre-condition: isWakeupByPowerButton() == true
@@ -252,37 +239,14 @@ void waitForPowerRelease() {
   }
 }
 
-// Enter deep sleep mode
-void enterDeepSleep() {
-  // Shut down BLE before sleep to free resources
-  if (BLE_HID.isInitialized()) {
-    BLE_HID.disconnect();
-    BLE_HID.deinit();
-  }
-
-  APP_STATE.lastSleepFromReader = currentActivity && currentActivity->isReaderActivity();
-  persistAppState("enter deep sleep");
-  exitActivity();
-  enterNewActivity(new SleepActivity(renderer, mappedInputManager));
-
-  display.deepSleep();
-  LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);
-  LOG_DBG("MAIN", "Entering deep sleep");
-
-  powerManager.startDeepSleep(gpio);
-}
-
 void onGoHome();
 void onGoToMyLibraryWithPath(const std::string& path);
 void onGoToRecentBooks();
 
-// When true the /sleep folder may have changed since the last trim, so the
-// Home route policy will re-scan. Set to false after a successful trim and to
-// true before entering activities that can modify /sleep (e.g. file transfer).
-// V2 (SLEEP_V2): state lives in crosspoint::sleep::WallpaperPlaylist — this flag unused.
-static bool sleepFolderDirty = true;
+// Folder-dirty state lives in crosspoint::sleep::WallpaperPlaylist; it is
+// marked dirty before entering activities that can modify /sleep (e.g. file
+// transfer) and reconciled by trimSleepFolderIfDirty() on the Home route.
 
-#if SLEEP_V2
 static crosspoint::sleep::SdFatSleepFs s_sleepFs;
 
 static void wireWallpaperPlaylist() {
@@ -294,15 +258,13 @@ static void wireWallpaperPlaylist() {
   deps.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
   // WallpaperPlaylist::advance() runs inside SleepActivity::onEnter, AFTER
   // enterDeepSleep's persistAppState flush and milliseconds before the CPU
-  // enters deep sleep. Under PERSIST_V2 saveToFile() is debounced — the
-  // debounce window never fires, so the new lastShownSleepFilename is lost
-  // and the next boot loads the stale value (same wallpaper every wake).
-  // Force a sync flush so rotation survives the deep-sleep boundary.
+  // enters deep sleep. saveToFile() is debounced — the debounce window
+  // never fires, so the new lastShownSleepFilename is lost and the next
+  // boot loads the stale value (same wallpaper every wake). Force a sync
+  // flush so rotation survives the deep-sleep boundary.
   deps.saveState = []() {
     const bool ok = APP_STATE.saveToFile();
-#ifdef PERSIST_V2
     crosspoint::persist::PersistManager().flushAll();
-#endif
     return ok;
   };
   deps.randomFn = [](long mod) -> long { return ::random(mod); };
@@ -313,18 +275,10 @@ static void wireWallpaperPlaylist() {
   deps.onBeforeTrimMove = []() {};  // no popup in current call sites
   crosspoint::sleep::WallpaperPlaylist::instance().setDeps(deps);
 }
-#endif
 
 static void trimSleepFolderIfDirty() {
-#if SLEEP_V2
   auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
   if (wp.dirty()) wp.reconcile();
-#else
-  if (sleepFolderDirty) {
-    SleepActivity::trimSleepFolderToLimit();
-    sleepFolderDirty = false;
-  }
-#endif
 }
 
 // Inline Reader activity construction. Used by both the V2 factory and the
@@ -345,45 +299,25 @@ static void openReaderInline(const std::string& initialEpubPath) {
 }
 
 void onGoToReader(const std::string& initialEpubPath) {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Reader, initialEpubPath});
-#else
-  openReaderInline(initialEpubPath);
-#endif
 }
 
 static void openFileTransferInline() {
   TransitionFeedback::show(renderer, "Starting server...");
-#if SLEEP_V2
   crosspoint::sleep::WallpaperPlaylist::instance().markFolderDirty();
-#else
-  sleepFolderDirty = true;  // Files may be uploaded to /sleep during transfer
-#endif
   exitActivity();
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
 }
 
 void onGoToFileTransfer() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::FileTransfer, ""});
-#else
-  openFileTransferInline();
-#endif
 }
 
 void onGoToSettings() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Settings, ""});
-#else
-  TransitionFeedback::show(renderer, "Loading settings...");
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
-#endif
 }
 
-// V2 path: ActivityRouter applies persist policy before calling this factory.
-// Legacy path: the #else branch in onGoToMyLibrary / onGoToMyLibraryWithPath
-// explicitly persists before calling this helper.
+// ActivityRouter applies persist policy before calling this factory (RFC #23).
 static void openMyLibraryInline(const std::string& path) {
   TransitionFeedback::show(renderer, "Loading library...");
   exitActivity();
@@ -395,12 +329,7 @@ static void openMyLibraryInline(const std::string& path) {
 }
 
 void onGoToMyLibrary() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""});
-#else
-  persistAppState("go to library");
-  openMyLibraryInline("");
-#endif
 }
 
 static void openRecentBooksInline() {
@@ -410,21 +339,11 @@ static void openRecentBooksInline() {
 }
 
 void onGoToRecentBooks() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""});
-#else
-  persistAppState("go to recents");
-  openRecentBooksInline();
-#endif
 }
 
 void onGoToMyLibraryWithPath(const std::string& path) {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibraryAt, path});
-#else
-  persistAppState("go to library path");
-  openMyLibraryInline(path);
-#endif
 }
 
 static void openBrowserInline() {
@@ -434,11 +353,7 @@ static void openBrowserInline() {
 }
 
 void onGoToBrowser() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""});
-#else
-  openBrowserInline();
-#endif
 }
 
 static void openHomeInline() {
@@ -449,13 +364,7 @@ static void openHomeInline() {
 }
 
 void onGoHome() {
-#if LIFECYCLE_V2
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""});
-#else
-  trimSleepFolderIfDirty();
-  persistAppState("go home");
-  openHomeInline();
-#endif
 }
 
 void setupDisplayAndFonts() {
@@ -627,7 +536,6 @@ void setup() {
   enterNewActivity(bootActivity);
 
   bootActivity->setProgress(32, "Restoring state");
-#ifdef PERSIST_V2
   {
     // Touch the store so it registers with PersistManager before the sidecar
     // backup runs (backup iterates registered store paths).
@@ -637,15 +545,12 @@ void setup() {
       LOG_INF("MAIN", "First boot of %s — SD sidecar backup written", CROSSPOINT_VERSION);
     }
   }
-#endif
   APP_STATE.loadFromFile();
 
-#if SLEEP_V2
   // Wire crosspoint::sleep::WallpaperPlaylist deps now that APP_STATE is populated — all
   // subsequent sleep paths (trimSleepFolderIfDirty, SleepActivity) read through
   // the module.
   wireWallpaperPlaylist();
-#endif
 
   LOG_INF("MAIN", "Booting complete, checking initial activity");
 
@@ -690,22 +595,16 @@ void setup() {
   // Defer sleep cache trimming until home screen is actually needed.
   if (goHome) {
     bootActivity->setProgress(60, "Refreshing sleep cache");
-#if SLEEP_V2
     auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
     wp.markFolderDirty();
     wp.reconcile();
-#else
-    SleepActivity::trimSleepFolderToLimit();
-    sleepFolderDirty = false;
-#endif
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
-#if LIFECYCLE_V2
-  // Wire ActivityRouter with Deps + route factories (#23). All transitions on
-  // the V2 path flow through the router: per-route persist/trim policy is
-  // applied before the factory runs, and deep-sleep entry follows the fixed
-  // hook sequence in ActivityRouter::enterDeepSleep.
+  // Wire ActivityRouter with Deps + route factories (RFC #23). All transitions
+  // flow through the router: per-route persist/trim policy is applied before
+  // the factory runs, and deep-sleep entry follows the fixed hook sequence in
+  // ActivityRouter::enterDeepSleep.
   {
     auto& router = lifecycle::ActivityRouter::instance();
 
@@ -746,22 +645,13 @@ void setup() {
     router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) { openBrowserInline(); });
     router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) { openHomeInline(); });
   }
-#endif
 
   if (goHome) {
     bootActivity->setProgress(100, "Opening home");
-#if LIFECYCLE_V2
     lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Home, ""});
-#else
-    onGoHome();
-#endif
   } else {
     bootActivity->setProgress(100, "Opening book");
-#if LIFECYCLE_V2
     lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Reader, readerPath});
-#else
-    onGoToReader(readerPath);
-#endif
   }
 
   // Ensure we're not still holding the power button before leaving setup
@@ -775,11 +665,9 @@ void loop() {
 
   gpio.update();
 
-#ifdef PERSIST_V2
   // Drain any coalesced dirty writes. Stores flush only when debounce
   // window has elapsed since the last markDirty; most ticks are no-ops.
   crosspoint::persist::PersistManager().tick(static_cast<uint32_t>(loopStartTime));
-#endif
 
   // Only update fading fix when it changes (avoid calling every loop iteration)
   {
@@ -829,12 +717,8 @@ void loop() {
   }
 
   auto triggerDeepSleep = []() {
-#if LIFECYCLE_V2
     const bool fromReader = currentActivity && currentActivity->isReaderActivity();
     lifecycle::ActivityRouter::instance().enterDeepSleep(fromReader);
-#else
-    enterDeepSleep();
-#endif
   };
 
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
@@ -863,11 +747,9 @@ void loop() {
     currentActivity->loop();
   }
 
-#if LIFECYCLE_V2
   // Drain any transition requested during currentActivity->loop() at a safe
   // boundary (after the activity has returned from its tick).
   lifecycle::ActivityRouter::instance().applyIfPending();
-#endif
 
   const unsigned long loopDuration = millis() - loopStartTime;
   if (loopDuration > maxLoopDuration) {

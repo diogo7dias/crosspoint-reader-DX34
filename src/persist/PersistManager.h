@@ -2,9 +2,9 @@
  * @file PersistManager.h
  * @brief Coordinates multi-store tick/flush and first-boot SD sidecar backup.
  *
- * Under PERSIST_V2 this replaces persistAppState() in main.cpp with a
- * single flushAll() call at activity-transition chokepoints. Stores
- * register themselves via registerStore<T>().
+ * Backs persistAppState() in main.cpp: a single flushAll() call at
+ * activity-transition chokepoints (RFC #20). Stores register themselves
+ * via registerStore<T>().
  */
 #pragma once
 

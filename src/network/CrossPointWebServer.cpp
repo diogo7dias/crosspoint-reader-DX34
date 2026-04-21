@@ -30,10 +30,8 @@
 #include "html/js/jszip_minJs.generated.h"
 #include "util/StringUtils.h"
 
-#if WEBSERVER_V2
 #include "network/SettingsGateway.h"
 #include "network/ws/WsUploadSession.h"
-#endif
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -67,14 +65,11 @@ String wsLastCompleteName;
 size_t wsLastCompleteSize = 0;
 unsigned long wsLastCompleteAt = 0;
 
-#if WEBSERVER_V2
-// V2 globals (RFC #24). Session owns the WS upload state machine; gateway
-// owns the settings POST orchestration. Both created in begin(), destroyed
-// in stop(). Kept at file scope rather than class members so the V1 path
-// stays byte-identical when WEBSERVER_V2 is off.
+// RFC #24 globals. Session owns the WS upload state machine; gateway owns
+// the settings POST orchestration. Both created in begin(), destroyed in
+// stop().
 std::unique_ptr<crosspoint::ws::WsUploadSession> g_wsUploadSession;
 std::unique_ptr<crosspoint::network::SettingsGateway> g_settingsGateway;
-#endif
 
 // Compute the cache directory path for a book file (returns empty if not a book).
 // Uses content-based fingerprint so the path is stable across file moves.
@@ -281,11 +276,9 @@ void CrossPointWebServer::begin() {
   udpActive = udp.begin(LOCAL_UDP_PORT);
   LOG_DBG("WEB", "Discovery UDP %s on port %d", udpActive ? "enabled" : "failed", LOCAL_UDP_PORT);
 
-#if WEBSERVER_V2
-  // WsUploadSession deps bind the existing file-scope upload state so the V1
-  // ownership semantics (wsUploadFile, wsUploadFileName, wsUploadPath,
-  // wsUploadSize, wsLastCompleteName/Size/At) are preserved exactly. V1 code
-  // paths continue to read these for status endpoints.
+  // WsUploadSession deps bind the file-scope upload state (wsUploadFile,
+  // wsUploadFileName, wsUploadPath, wsUploadSize, wsLastCompleteName/Size/At)
+  // so the HTTP status endpoints continue to read them.
   crosspoint::ws::WsUploadDeps wsDeps;
   wsDeps.beginWrite = [](const std::string& path, const std::string& name) {
     wsUploadPath = path.c_str();
@@ -408,7 +401,6 @@ void CrossPointWebServer::begin() {
         return applied;
       },
       [] { return SETTINGS.saveToFile(); }));
-#endif
 
   running = true;
 
@@ -497,24 +489,16 @@ void CrossPointWebServer::stop() {
   LOG_DBG("WEB", "[MEM] Free heap before stop: %d bytes", ESP.getFreeHeap());
 
   // Close any in-progress WebSocket upload and remove partial file
-#if WEBSERVER_V2
   if (g_wsUploadSession) g_wsUploadSession->abort("server stopping");
-#else
-  if (wsUploadInProgress && wsUploadFile) {
-    abortWsUpload("WEB");
-  }
-#endif
   if (wsDownloadInProgress && wsDownloadFile) {
     wsDownloadFile.close();
     wsDownloadInProgress = false;
   }
 
-#if WEBSERVER_V2
-  // Release V2 state before the WS server goes away, so any pending callbacks
-  // have no session to delegate to (checked at dispatch).
+  // Release session + gateway before the WS server goes away, so any pending
+  // callbacks have no session to delegate to (checked at dispatch).
   g_wsUploadSession.reset();
   g_settingsGateway.reset();
-#endif
 
   // Stop WebSocket server
   if (wsServer) {
@@ -577,11 +561,9 @@ void CrossPointWebServer::handleClient() {
 
   pumpWsDownload();
 
-#if WEBSERVER_V2
   // Enforce the idle timeout on WS uploads. If a client dies without sending
   // TCP FIN the session would otherwise wedge until reboot.
   if (g_wsUploadSession) g_wsUploadSession->tick(static_cast<uint32_t>(millis()));
-#endif
 
   // Respond to discovery broadcasts
   if (udpActive) {
@@ -1588,95 +1570,20 @@ void CrossPointWebServer::handlePostSettings() {
     return;
   }
 
-#if WEBSERVER_V2
   if (!g_settingsGateway) {
     server->send(500, "text/plain", "Settings gateway not initialized");
     return;
   }
   const auto r = g_settingsGateway->applyJson(doc);
   if (!r.persisted) {
-    // 500 is the bug fix: V1 returned 200 even on disk error, so the browser
-    // UI reported "saved" while settings reverted on the next boot.
+    // Return 500 on disk error so the browser UI doesn't falsely report
+    // "saved" while settings silently revert on the next boot.
     LOG_ERR("WEB", "Settings save failed: %s", r.error.c_str());
     server->send(500, "text/plain", String("Applied but not saved: ") + r.error.c_str());
     return;
   }
   LOG_DBG("WEB", "Applied %d setting(s)", r.applied);
   server->send(200, "text/plain", String("Applied ") + String(r.applied) + " setting(s)");
-  return;
-#else
-  auto settings = getSettingsList();
-  int applied = 0;
-
-  for (auto& s : settings) {
-    if (!s.key) continue;
-    if (!doc[s.key].is<JsonVariant>()) continue;
-
-    switch (s.type) {
-      case SettingType::TOGGLE: {
-        const int val = doc[s.key].as<int>() ? 1 : 0;
-        if (s.valuePtr) {
-          SETTINGS.*(s.valuePtr) = val;
-        }
-        applied++;
-        break;
-      }
-      case SettingType::ENUM: {
-        const int val = doc[s.key].as<int>();
-        const int maxEnumValue = (s.valuePtr == &CrossPointSettings::fontSize)
-                                     ? static_cast<int>(CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily))
-                                     : static_cast<int>(s.enumValues.size());
-        if (val >= 0 && val < maxEnumValue) {
-          if (s.valuePtr) {
-            if (s.valuePtr == &CrossPointSettings::fontSize) {
-              SETTINGS.fontSize =
-                  CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, static_cast<uint8_t>(val));
-            } else if (s.valuePtr == &CrossPointSettings::fontFamily) {
-              SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(val));
-              SETTINGS.fontSize =
-                  CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-              SETTINGS.lineSpacingPercent = 90;  // Reset to default on font change
-            } else {
-              SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
-            }
-          } else if (s.valueSetter) {
-            s.valueSetter(static_cast<uint8_t>(val));
-          }
-          applied++;
-        }
-        break;
-      }
-      case SettingType::VALUE: {
-        const int val = doc[s.key].as<int>();
-        if (val >= s.valueRange.min && val <= s.valueRange.max) {
-          if (s.valuePtr) {
-            SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
-          }
-          applied++;
-        }
-        break;
-      }
-      case SettingType::STRING: {
-        const std::string val = doc[s.key].as<std::string>();
-        if (s.stringSetter) {
-          s.stringSetter(val);
-        } else if (s.stringPtr && s.stringMaxLen > 0) {
-          strncpy(s.stringPtr, val.c_str(), s.stringMaxLen - 1);
-          s.stringPtr[s.stringMaxLen - 1] = '\0';
-        }
-        applied++;
-        break;
-      }
-      default:
-        break;
-    }
-  }
-
-  SETTINGS.saveToFile();
-
-  LOG_DBG("WEB", "Applied %d setting(s)", applied);
-  server->send(200, "text/plain", String("Applied ") + String(applied) + " setting(s)");
-#endif  // WEBSERVER_V2
 }
 
 // WebSocket callback trampoline — check both pointer and running flag.
@@ -1700,16 +1607,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
   switch (type) {
     case WStype_DISCONNECTED:
       LOG_DBG("WS", "Client %u disconnected", num);
-#if WEBSERVER_V2
       if (g_wsUploadSession) g_wsUploadSession->onDisconnect(num);
-#else
-      // Only clean up if this is the client that owns the active upload.
-      // A new client may have already started a fresh upload before this
-      // DISCONNECTED event fires (race condition on quick cancel + retry).
-      if (num == wsUploadClientNum && wsUploadInProgress && wsUploadFile) {
-        abortWsUpload("WS");
-      }
-#endif
       // Clean up any in-progress download
       if (wsDownloadInProgress && wsDownloadClientNum == num) {
         wsDownloadFile.close();
@@ -1730,21 +1628,13 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
       if (msg.startsWith("DOWNLOAD:")) {
         handleWsDownloadRequest(num, msg);
       } else if (msg.startsWith("START:")) {
-#if WEBSERVER_V2
         if (g_wsUploadSession) g_wsUploadSession->onStart(num, std::string(msg.c_str()));
-#else
-        handleWsUploadStart(num, msg);
-#endif
       }
       break;
     }
 
     case WStype_BIN: {
-#if WEBSERVER_V2
       if (g_wsUploadSession) g_wsUploadSession->onBinary(num, payload, length);
-#else
-      handleWsUploadData(num, payload, length);
-#endif
       break;
     }
 

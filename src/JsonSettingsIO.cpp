@@ -8,7 +8,6 @@
 #include <cstring>
 
 #include "CrossPointSettings.h"
-#include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
 #include "ReadingThemeStore.h"
 #include "RecentBooksStore.h"
@@ -342,79 +341,6 @@ String JsonSettingsIO::safeReadFile(const char* path) {
   }
 
   return "";
-}
-
-// ---- CrossPointState ----
-
-bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
-  JsonDocument doc;
-  doc["openEpubPath"] = s.openEpubPath;
-  doc["lastSleepImage"] = s.lastSleepImage;
-  doc["lastShownSleepFilename"] = s.lastShownSleepFilename;
-  doc["lastSleepWallpaperPath"] = s.lastSleepWallpaperPath;
-  doc["readerActivityLoadCount"] = s.readerActivityLoadCount;
-  doc["sessionPagesRead"] = s.sessionPagesRead;
-  doc["lastSleepFromReader"] = s.lastSleepFromReader;
-  doc["wallpaperRotationPaused"] = s.wallpaperRotationPaused;
-  doc["lastSleepWasQuotes"] = s.lastSleepWasQuotes;
-  // Only persist the playlist for small collections. Large collections track
-  // position by filename alone to avoid heap exhaustion and huge state files.
-  if (s.sleepImagePlaylist.size() <= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-    JsonArray sleepImagePlaylist = doc["sleepImagePlaylist"].to<JsonArray>();
-    for (const auto& entry : s.sleepImagePlaylist) {
-      sleepImagePlaylist.add(entry);
-    }
-  }
-  JsonArray favoriteBmpPaths = doc["favoriteBmpPaths"].to<JsonArray>();
-  for (const auto& entry : s.favoriteBmpPaths) {
-    favoriteBmpPaths.add(entry);
-  }
-
-  String json;
-  serializeJson(doc, json);
-  return safeWriteFile(path, json);
-}
-
-bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
-  JsonDocument doc;
-  auto error = deserializeJson(doc, json);
-  if (error) {
-    LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
-    return false;
-  }
-
-  s.openEpubPath = doc["openEpubPath"] | std::string("");
-  s.lastSleepImage = doc["lastSleepImage"] | (uint8_t)UINT8_MAX;
-  s.lastShownSleepFilename = doc["lastShownSleepFilename"] | std::string("");
-  s.lastSleepWallpaperPath = doc["lastSleepWallpaperPath"] | std::string("");
-  s.readerActivityLoadCount = doc["readerActivityLoadCount"] | (uint8_t)0;
-  s.sessionPagesRead = doc["sessionPagesRead"] | (uint32_t)0;
-  s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
-  s.wallpaperRotationPaused = doc["wallpaperRotationPaused"] | false;
-  s.lastSleepWasQuotes = doc["lastSleepWasQuotes"] | false;
-  s.sleepImagePlaylist.clear();
-  if (doc["sleepImagePlaylist"].is<JsonArray>()) {
-    for (const JsonVariant value : doc["sleepImagePlaylist"].as<JsonArray>()) {
-      const char* entry = value.as<const char*>();
-      if (entry != nullptr && entry[0] != '\0') {
-        s.sleepImagePlaylist.emplace_back(entry);
-        // Cap on load to protect against legacy large playlists causing OOM.
-        if (s.sleepImagePlaylist.size() >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
-          break;
-        }
-      }
-    }
-  }
-  s.favoriteBmpPaths.clear();
-  if (doc["favoriteBmpPaths"].is<JsonArray>()) {
-    for (const JsonVariant value : doc["favoriteBmpPaths"].as<JsonArray>()) {
-      const char* entry = value.as<const char*>();
-      if (entry != nullptr && entry[0] != '\0') {
-        s.favoriteBmpPaths.emplace_back(entry);
-      }
-    }
-  }
-  return true;
 }
 
 // ---- CrossPointSettings ----

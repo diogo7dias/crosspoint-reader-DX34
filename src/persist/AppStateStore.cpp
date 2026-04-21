@@ -1,5 +1,3 @@
-#ifdef PERSIST_V2
-
 #include "AppStateStore.h"
 
 #include "../CrossPointState.h"
@@ -41,5 +39,3 @@ PersistentStore<CrossPointState>& appStateStore() {
 
 }  // namespace persist
 }  // namespace crosspoint
-
-#endif  // PERSIST_V2
