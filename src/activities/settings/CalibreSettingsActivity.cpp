@@ -10,6 +10,7 @@
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "util/StringUtils.h"
 
 namespace {
 constexpr int MENU_ITEMS = 3;
@@ -62,8 +63,7 @@ void CalibreSettingsActivity::handleSelection() {
         127,    // maxLength
         false,  // not password
         [this](const std::string& url) {
-          strncpy(SETTINGS.opdsServerUrl, url.c_str(), sizeof(SETTINGS.opdsServerUrl) - 1);
-          SETTINGS.opdsServerUrl[sizeof(SETTINGS.opdsServerUrl) - 1] = '\0';
+          StringUtils::safeStrncpy(SETTINGS.opdsServerUrl, url.c_str());
           SETTINGS.saveToFile();
           exitActivity();
           requestUpdate();
@@ -80,8 +80,7 @@ void CalibreSettingsActivity::handleSelection() {
         63,     // maxLength
         false,  // not password
         [this](const std::string& username) {
-          strncpy(SETTINGS.opdsUsername, username.c_str(), sizeof(SETTINGS.opdsUsername) - 1);
-          SETTINGS.opdsUsername[sizeof(SETTINGS.opdsUsername) - 1] = '\0';
+          StringUtils::safeStrncpy(SETTINGS.opdsUsername, username.c_str());
           SETTINGS.saveToFile();
           exitActivity();
           requestUpdate();
@@ -98,8 +97,7 @@ void CalibreSettingsActivity::handleSelection() {
         63,     // maxLength
         false,  // not password mode
         [this](const std::string& password) {
-          strncpy(SETTINGS.opdsPassword, password.c_str(), sizeof(SETTINGS.opdsPassword) - 1);
-          SETTINGS.opdsPassword[sizeof(SETTINGS.opdsPassword) - 1] = '\0';
+          StringUtils::safeStrncpy(SETTINGS.opdsPassword, password.c_str());
           SETTINGS.saveToFile();
           exitActivity();
           requestUpdate();

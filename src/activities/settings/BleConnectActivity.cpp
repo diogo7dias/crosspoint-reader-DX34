@@ -8,6 +8,7 @@
 #include "MappedInputManager.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "util/StringUtils.h"
 
 void BleConnectActivity::onEnter() {
   Activity::onEnter();
@@ -112,10 +113,8 @@ void BleConnectActivity::loop() {
         const auto& devices = BLE_HID.getScanResults();
         if (selectedIndex >= 0 && selectedIndex < static_cast<int>(devices.size())) {
           const auto& device = devices[selectedIndex];
-          strncpy(SETTINGS.bleDeviceAddr, device.address.c_str(), sizeof(SETTINGS.bleDeviceAddr) - 1);
-          SETTINGS.bleDeviceAddr[sizeof(SETTINGS.bleDeviceAddr) - 1] = '\0';
-          strncpy(SETTINGS.bleDeviceName, device.name.c_str(), sizeof(SETTINGS.bleDeviceName) - 1);
-          SETTINGS.bleDeviceName[sizeof(SETTINGS.bleDeviceName) - 1] = '\0';
+          StringUtils::safeStrncpy(SETTINGS.bleDeviceAddr, device.address.c_str());
+          StringUtils::safeStrncpy(SETTINGS.bleDeviceName, device.name.c_str());
         }
         SETTINGS.bleEnabled = 1;
         SETTINGS.saveToFile();

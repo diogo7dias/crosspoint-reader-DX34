@@ -12,6 +12,7 @@
 #include "ReadingThemeStore.h"
 #include "RecentBooksStore.h"
 #include "WifiCredentialStore.h"
+#include "util/StringUtils.h"
 
 namespace {
 // migrateLegacyStatusBarMode is now declared in CrossPointSettings.h
@@ -719,13 +720,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   if (s.bleEnabled > 1) s.bleEnabled = 0;
   {
     const char* addr = doc["bleDeviceAddr"] | "";
-    strncpy(s.bleDeviceAddr, addr, sizeof(s.bleDeviceAddr) - 1);
-    s.bleDeviceAddr[sizeof(s.bleDeviceAddr) - 1] = '\0';
+    StringUtils::safeStrncpy(s.bleDeviceAddr, addr);
   }
   {
     const char* name = doc["bleDeviceName"] | "";
-    strncpy(s.bleDeviceName, name, sizeof(s.bleDeviceName) - 1);
-    s.bleDeviceName[sizeof(s.bleDeviceName) - 1] = '\0';
+    StringUtils::safeStrncpy(s.bleDeviceName, name);
   }
   {
     JsonArray bleKeys = doc["bleKeyMap"];
@@ -740,12 +739,10 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   const char* url = doc["opdsServerUrl"] | "";
-  strncpy(s.opdsServerUrl, url, sizeof(s.opdsServerUrl) - 1);
-  s.opdsServerUrl[sizeof(s.opdsServerUrl) - 1] = '\0';
+  StringUtils::safeStrncpy(s.opdsServerUrl, url);
 
   const char* user = doc["opdsUsername"] | "";
-  strncpy(s.opdsUsername, user, sizeof(s.opdsUsername) - 1);
-  s.opdsUsername[sizeof(s.opdsUsername) - 1] = '\0';
+  StringUtils::safeStrncpy(s.opdsUsername, user);
 
   bool passOk = false;
   std::string pass = obfuscation::deobfuscateFromBase64(doc["opdsPassword_obf"] | "", &passOk);
@@ -753,8 +750,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     pass = doc["opdsPassword"] | "";
     if (!pass.empty() && needsResave) *needsResave = true;
   }
-  strncpy(s.opdsPassword, pass.c_str(), sizeof(s.opdsPassword) - 1);
-  s.opdsPassword[sizeof(s.opdsPassword) - 1] = '\0';
+  StringUtils::safeStrncpy(s.opdsPassword, pass.c_str());
   LOG_DBG("CPS", "Settings loaded from file");
   return true;
 }

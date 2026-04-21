@@ -11,6 +11,7 @@
 
 #include "Paths.h"
 #include "fontIds.h"
+#include "util/StringUtils.h"
 
 // Initialize the static instance
 CrossPointSettings CrossPointSettings::instance;
@@ -299,8 +300,7 @@ bool CrossPointSettings::loadFromBinaryFile() {
     {
       std::string urlStr;
       serialization::readString(inputFile, urlStr);
-      strncpy(opdsServerUrl, urlStr.c_str(), sizeof(opdsServerUrl) - 1);
-      opdsServerUrl[sizeof(opdsServerUrl) - 1] = '\0';
+      StringUtils::safeStrncpy(opdsServerUrl, urlStr.c_str());
     }
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, textAntiAliasing);
@@ -314,15 +314,13 @@ bool CrossPointSettings::loadFromBinaryFile() {
     {
       std::string usernameStr;
       serialization::readString(inputFile, usernameStr);
-      strncpy(opdsUsername, usernameStr.c_str(), sizeof(opdsUsername) - 1);
-      opdsUsername[sizeof(opdsUsername) - 1] = '\0';
+      StringUtils::safeStrncpy(opdsUsername, usernameStr.c_str());
     }
     if (++settingsRead >= fileSettingsCount) break;
     {
       std::string passwordStr;
       serialization::readString(inputFile, passwordStr);
-      strncpy(opdsPassword, passwordStr.c_str(), sizeof(opdsPassword) - 1);
-      opdsPassword[sizeof(opdsPassword) - 1] = '\0';
+      StringUtils::safeStrncpy(opdsPassword, passwordStr.c_str());
     }
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, sleepScreenCoverFilter, SLEEP_SCREEN_COVER_FILTER_COUNT);
