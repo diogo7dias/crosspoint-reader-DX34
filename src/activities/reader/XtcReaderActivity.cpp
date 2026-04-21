@@ -20,6 +20,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "ReaderCommon.h"
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -54,9 +55,7 @@ void XtcReaderActivity::onEnter() {
   loadProgress();
 
   // Save current XTC as last opened book and add to recent books
-  APP_STATE.openEpubPath = xtc->getPath();
-  APP_STATE.saveToFile();
-  RECENT_BOOKS.addBook(xtc->getPath(), xtc->getTitle(), xtc->getAuthor(), xtc->getThumbBmpPath());
+  ReaderCommon::registerRecentBook(xtc->getPath(), xtc->getTitle(), xtc->getAuthor(), xtc->getThumbBmpPath());
   // Generate cover thumbnail for home screen cover layouts
   xtc->generateThumbBmp(400);
 

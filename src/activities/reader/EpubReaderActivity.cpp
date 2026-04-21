@@ -175,9 +175,7 @@ void EpubReaderActivity::onEnter() {
   bookmarkStore.load(epub->getCachePath());
 
   // Save current epub as last opened epub and add to recent books
-  APP_STATE.openEpubPath = epub->getPath();
-  APP_STATE.saveToFile();
-  RECENT_BOOKS.addBook(epub->getPath(), epub->getTitle(), epub->getAuthor(), epub->getThumbBmpPath());
+  ReaderCommon::registerRecentBook(epub->getPath(), epub->getTitle(), epub->getAuthor(), epub->getThumbBmpPath());
   // Generate cover thumbnail for home screen cover layouts
   epub->generateThumbBmp(400);
 
