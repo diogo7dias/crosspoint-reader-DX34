@@ -833,6 +833,18 @@ void CrossPointWebServer::handleDownload() const {
 
   const size_t fileSize = file.size();
 
+  // Sanity cap: FAT32 allows up to 4 GB per file, but a garbage directory
+  // entry could report terabytes and we'd advertise that Content-Length to
+  // the client, then loop forever reading zero bytes. Reject anything above
+  // 2 GB — far larger than any legitimate book/image on this device.
+  constexpr size_t DL_MAX_FILE_SIZE = 2ull * 1024 * 1024 * 1024;
+  if (fileSize > DL_MAX_FILE_SIZE) {
+    LOG_ERR("WEB", "Download refused: implausible file size %u bytes", (unsigned)fileSize);
+    file.close();
+    server->send(500, "text/plain", "file size invalid");
+    return;
+  }
+
   // Allocate the copy buffer BEFORE committing to a 200 response. If malloc
   // fails after headers are flushed, the client hangs waiting for bytes and
   // only learns about the failure via TCP timeout. Failing early lets us

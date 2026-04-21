@@ -98,6 +98,10 @@ std::unique_ptr<Txt> ReaderActivity::loadTxt(const std::string& path) {
 }
 
 void ReaderActivity::goToLibrary(const std::string& fromBookPath) {
+  // Block 2 (v1.2.0): half refresh on book exit scrubs the page ghost under
+  // the library list and is ~1 s faster than FULL. Experimental; revert to
+  // requestFullRefresh() if ghost artifacts appear.
+  renderer.requestHalfRefresh();
   // If coming from a book, start in that book's folder; otherwise start from root
   const auto initialPath = fromBookPath.empty() ? "/" : extractFolderPath(fromBookPath);
   onGoToLibrary(initialPath);
@@ -143,15 +147,16 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   // not stale settings from whatever book was open previously.
   SETTINGS.loadFromFile();
 
-  if (!TransitionFeedback::isActive()) {
-    TransitionFeedback::show(renderer, tr(STR_LOADING));
-  }
-
+  // The "Opening book..." toast was already drawn by openReaderInline() in
+  // main.cpp before this activity was entered — don't redraw it here or it
+  // stacks twice. The still-working threshold timer starts automatically
+  // from the first toast's draw time, so no explicit start call is needed.
   currentBookPath = bookPath;
 
   if (isXtcFile(bookPath)) {
     auto xtc = loadXtc(bookPath);
     if (xtc) {
+      TransitionFeedback::maybeShowStillWorkingToast(renderer);
       onGoToXtcReader(std::move(xtc));
     } else {
       exitActivity();
@@ -170,6 +175,7 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   if (isTxtFile(bookPath)) {
     auto txt = loadTxt(bookPath);
     if (txt) {
+      TransitionFeedback::maybeShowStillWorkingToast(renderer);
       onGoToTxtReader(std::move(txt));
     } else {
       exitActivity();
@@ -180,6 +186,7 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
 
   auto epub = loadEpub(bookPath);
   if (epub) {
+    TransitionFeedback::maybeShowStillWorkingToast(renderer);
     onGoToEpubReader(std::move(epub));
   } else {
     exitActivity();

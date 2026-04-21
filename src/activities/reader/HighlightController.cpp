@@ -149,9 +149,21 @@ MoveOutcome HighlightController::moveCursorLine(int direction, PageContext ctx) 
   }
 
   if (targetY < 0) {
-    // No other line exists in that direction — fall through to word-level move,
-    // which handles cross-page transitions.
-    return moveCursor(direction, ctx);
+    // At edge line: wrap to opposite end of the same page. Page crossing is
+    // reserved for left/right word-step — up/down stays intra-page.
+    int wrapY = words_[0].y;
+    if (direction < 0) {
+      // was on top line → wrap to bottom line (max y on page)
+      for (const auto& w : words_) {
+        if (w.y > wrapY) wrapY = w.y;
+      }
+    } else {
+      // was on bottom line → wrap to top line (min y on page)
+      for (const auto& w : words_) {
+        if (w.y < wrapY) wrapY = w.y;
+      }
+    }
+    targetY = wrapY;
   }
 
   int bestIdx = -1;

@@ -44,7 +44,10 @@ size_t SdFatSleepFs::countSleepBmps(size_t scanCap) {
       }
     }
     file.close();
-    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+    }
   }
   dir.close();
   return count;
@@ -73,7 +76,10 @@ std::vector<std::string> SdFatSleepFs::listSleepBmps(size_t maxEntries) {
       }
     }
     file.close();
-    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+    }
   }
   dir.close();
   std::sort(out.begin(), out.end());
@@ -102,7 +108,10 @@ std::string SdFatSleepFs::nextSleepBmpAfter(const std::string& after) {
       }
     }
     file.close();
-    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+    }
   }
   dir.close();
   if (!after.empty() && !nextName.empty()) return nextName;
@@ -143,7 +152,10 @@ NextBmpResult SdFatSleepFs::nextSleepBmpAfterWithCount(const std::string& after,
       }
     }
     file.close();
-    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+    }
   }
   dir.close();
   if (!after.empty() && !nextName.empty()) {
@@ -177,7 +189,10 @@ std::string SdFatSleepFs::nthSleepBmp(size_t n) {
       }
     }
     file.close();
-    if (++iter % kWdtResetInterval == 0) esp_task_wdt_reset();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+    }
   }
   dir.close();
   return result;

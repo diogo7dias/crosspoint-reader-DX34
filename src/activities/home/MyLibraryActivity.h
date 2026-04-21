@@ -43,6 +43,13 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   std::string messagePopupText;
   std::vector<MoveBrowseEntry> moveBrowseEntries;
   HalDisplay::RefreshMode nextRefreshMode = HalDisplay::FAST_REFRESH;
+  // True when FILE_ACTIONS was entered from BMP_VIEW (tap Actions in viewer).
+  // Controls menu layout (no "Open Image") and back-destination (returns to viewer).
+  bool actionsOpenedFromViewer = false;
+  // False until the initial BW + grayscale render of the current image has
+  // completed. While false, renderBmpView hides the bottom button hints so
+  // the user doesn't try to press buttons that aren't yet responsive.
+  bool bmpViewFullyLoaded = false;
 
   // Files state
   std::string basepath = "/";

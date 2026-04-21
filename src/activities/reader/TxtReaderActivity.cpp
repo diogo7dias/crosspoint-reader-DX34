@@ -23,7 +23,6 @@
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
-#include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
 
@@ -79,6 +78,11 @@ void TxtReaderActivity::onEnter() {
   if (!txt) {
     return;
   }
+
+  // Block 2 (v1.2.0): half refresh on book enter scrubs the list ghost and
+  // is ~1 s faster than FULL. Experimental; revert to requestFullRefresh()
+  // if ghost artifacts appear.
+  renderer.requestHalfRefresh();
 
   // Configure screen orientation based on settings
   switch (SETTINGS.orientation) {
@@ -639,8 +643,6 @@ void TxtReaderActivity::buildPageIndex() {
 
   LOG_DBG("TRS", "Building page index for %zu bytes...", fileSize);
 
-  StatusPopup::showBlocking(renderer, tr(STR_INDEXING));
-
   constexpr size_t MAX_PAGE_OFFSETS = 5000;
   while (offset < fileSize) {
     std::vector<FlowLine> tempLines;
@@ -669,6 +671,9 @@ void TxtReaderActivity::buildPageIndex() {
     if (pageOffsets.size() % 20 == 0) {
       esp_task_wdt_reset();
       vTaskDelay(1);
+      // Stack "Still working on it..." if index build drags past the
+      // reassurance threshold (big TXT case).
+      TransitionFeedback::maybeShowStillWorkingToast(renderer);
     }
   }
 
@@ -771,13 +776,19 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<FlowLine>& o
         if (lastGoodSpace > 0) {
           breakPos = lastGoodSpace;
         } else {
-          // No space fits — fall back to character-by-character search
+          // No space fits — fall back to character-by-character search.
+          // Each iteration measures a progressively shorter substring, so
+          // the measurement cost scales with length. Reset the watchdog
+          // every 32 iterations to stay alive on pathological long lines
+          // without spaces (e.g. URL-heavy text or CJK-dense paragraphs).
+          size_t charIter = 0;
           while (breakPos > 0 && measureFlowLineWidth(line.substr(0, breakPos)) > availableWidth) {
             breakPos--;
             // Make sure we don't break in the middle of a UTF-8 sequence
             while (breakPos > 0 && (line[breakPos] & 0xC0) == 0x80) {
               breakPos--;
             }
+            if ((++charIter & 0x1F) == 0) esp_task_wdt_reset();
           }
         }
       }
