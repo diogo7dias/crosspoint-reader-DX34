@@ -517,8 +517,17 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
 }
 
 void MyLibraryActivity::enterBmpView(const std::string& bmpPath) {
+  // Stacking toasts for image-open stages. Natural FAST_REFRESH pacing
+  // (~400 ms each) keeps each toast visible briefly; no artificial stall.
+  // Full refresh on enter scrubs the list ghost.
+  if (!TransitionFeedback::isActive()) {
+    TransitionFeedback::show(renderer, "Opening image...");
+  }
   selectedFilePath = bmpPath;
   mode = Mode::BMP_VIEW;
+  bmpViewFullyLoaded = false;
+  TransitionFeedback::show(renderer, "Loading bitmap...");
+  renderer.requestFullRefresh();
   requestCleanRefresh();
   requestUpdate();
 }
@@ -538,22 +547,28 @@ void MyLibraryActivity::enterFileMoveBrowser() {
   mode = Mode::FILE_MOVE_BROWSER;
 }
 
-int MyLibraryActivity::getFileActionCount() const { return isBmpFile(selectedFilePath) ? 7 : 5; }
+int MyLibraryActivity::getFileActionCount() const {
+  if (!isBmpFile(selectedFilePath)) return 5;
+  return actionsOpenedFromViewer ? 6 : 7;
+}
 
 std::string MyLibraryActivity::getFileActionLabel(const int index) const {
   if (isBmpFile(selectedFilePath)) {
-    switch (index) {
+    int i = index;
+    if (!actionsOpenedFromViewer) {
+      if (i == 0) return "Open Image";
+      i -= 1;
+    }
+    switch (i) {
       case 0:
-        return "Open Image";
-      case 1:
-        return "Move File";
-      case 2:
         return "Move to Sleep";
-      case 3:
+      case 1:
         return FavoriteBmp::isFavoritePath(selectedFilePath) ? "Unfavorite" : "Favorite";
-      case 4:
+      case 2:
+        return "Move File";
+      case 3:
         return tr(STR_DOWNLOAD_IMAGE_VIA_QR);
-      case 5:
+      case 4:
         return "Delete File";
       default:
         return "Cancel";
@@ -809,18 +824,23 @@ void MyLibraryActivity::loopBmpView() {
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && !selectedFilePath.empty()) {
+    actionsOpenedFromViewer = true;
     enterFileActions(selectedFilePath);
-    // Opening the Actions popup directly over a freshly rendered bitmap:
-    // FAST_REFRESH shows the popup in ~300ms vs ~1.7s for HALF_REFRESH.
-    // Minor ghosting of the bitmap under the popup edges is acceptable
-    // since the popup is transient.
+    // FAST_REFRESH (~300ms) — user prefers a snappy menu over the cleaner
+    // but slower HALF_REFRESH open. Minor ghost under the popup is the
+    // tradeoff.
     nextRefreshMode = HalDisplay::FAST_REFRESH;
   }
 }
 
 void MyLibraryActivity::loopFileActions() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    mode = Mode::BROWSE;
+    if (actionsOpenedFromViewer) {
+      actionsOpenedFromViewer = false;
+      mode = Mode::BMP_VIEW;
+    } else {
+      mode = Mode::BROWSE;
+    }
     requestCleanRefresh();
     requestUpdate();
     return;
@@ -837,14 +857,18 @@ void MyLibraryActivity::loopFileActions() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (isBmpFile(selectedFilePath)) {
-      switch (fileActionIndex) {
-        case 0:
-          mode = Mode::BMP_VIEW;
-          break;
-        case 1:
-          enterFileMoveBrowser();
-          break;
-        case 2: {
+      // When menu opened from library browser, index 0 is "Open Image" and
+      // the remaining actions start at 1. When opened from the viewer,
+      // "Open Image" is hidden and actions start at 0. Shift to a unified
+      // action index so the switch below stays simple.
+      if (!actionsOpenedFromViewer && fileActionIndex == 0) {
+        mode = Mode::BMP_VIEW;
+        requestUpdateAndWait();
+        return;
+      }
+      const int actionIndex = fileActionIndex - (actionsOpenedFromViewer ? 0 : 1);
+      switch (actionIndex) {
+        case 0: {
           if (!FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
             showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
             return;
@@ -854,6 +878,7 @@ void MyLibraryActivity::loopFileActions() {
           if (moveSelectedFileTo("/sleep", &destinationPath)) {
             SleepActivity::trimSleepFolderToLimit();
             StatusPopup::showConfirmation(renderer, "Moved");
+            actionsOpenedFromViewer = false;
             mode = Mode::BROWSE;
             if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
               files.erase(files.begin() + static_cast<long>(*rawIndex));
@@ -864,7 +889,7 @@ void MyLibraryActivity::loopFileActions() {
           requestCleanRefresh();
           break;
         }
-        case 3: {
+        case 1: {
           const bool makeFavorite = !FavoriteBmp::isFavoritePath(selectedFilePath);
           StatusPopup::showBlocking(renderer, makeFavorite ? "Favoriting" : "Unfavoriting");
           std::string updatedPath;
@@ -895,7 +920,12 @@ void MyLibraryActivity::loopFileActions() {
           requestCleanRefresh();
           break;
         }
-        case 4:
+        case 2:
+          actionsOpenedFromViewer = false;
+          enterFileMoveBrowser();
+          break;
+        case 3:
+          actionsOpenedFromViewer = false;
           exitActivity();
           enterNewActivity(new QRShareActivity(
               renderer, mappedInput,
@@ -905,25 +935,41 @@ void MyLibraryActivity::loopFileActions() {
               },
               selectedFilePath));
           return;
-        case 5: {
+        case 4: {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                StatusPopup::showBlocking(renderer, "Deleting file");
+                // Optimistic UX: snapshot the entry, remove from list
+                // before the rename, re-insert on failure. Gives an
+                // instant visual response regardless of SD speed.
+                TransitionFeedback::show(renderer, "Deleting...");
+                const auto snapIndex = rawFileIndexForPath(pathToDelete);
+                std::string snapEntry;
+                if (snapIndex.has_value()) {
+                  snapEntry = files[*snapIndex];
+                  files.erase(files.begin() + static_cast<long>(*snapIndex));
+                  rebuildFilteredFileIndexes();
+                  clampSelectorIndex();
+                }
+                TransitionFeedback::show(renderer, "Moving to trash...");
                 if (deleteFile(pathToDelete)) {
-                  StatusPopup::showConfirmation(renderer, "Deleted");
-                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete); rawIndex.has_value()) {
-                    files.erase(files.begin() + static_cast<long>(*rawIndex));
+                  TransitionFeedback::show(renderer, "Deleted");
+                } else {
+                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
+                  if (snapIndex.has_value()) {
+                    files.insert(files.begin() + static_cast<long>(*snapIndex), snapEntry);
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
-                } else {
-                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  StatusPopup::showConfirmation(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, "Delete failed");
                 }
+                TransitionFeedback::ensureMinDisplayElapsed();
+                actionsOpenedFromViewer = false;
                 mode = Mode::BROWSE;
+                // Block 2: full refresh on delete completion — no ghost
+                renderer.requestFullRefresh();
                 requestCleanRefresh();
                 // exitActivity() destroys the subActivity (and this lambda's
                 // closure), but `this` points to the parent MyLibraryActivity
@@ -940,7 +986,14 @@ void MyLibraryActivity::loopFileActions() {
           return;
         }
         default:
-          mode = Mode::BROWSE;
+          // Cancel — mirror the Back button: return to viewer if that's
+          // where the menu came from, otherwise to the file list.
+          if (actionsOpenedFromViewer) {
+            actionsOpenedFromViewer = false;
+            mode = Mode::BMP_VIEW;
+          } else {
+            mode = Mode::BROWSE;
+          }
           break;
       }
     } else {
@@ -967,20 +1020,34 @@ void MyLibraryActivity::loopFileActions() {
           enterNewActivity(new ConfirmDialogActivity(
               renderer, mappedInput, "Delete file?\n" + fileName,
               [this, pathToDelete]() {
-                StatusPopup::showBlocking(renderer, "Deleting file");
+                // Optimistic UX: snapshot + remove before the rename so the
+                // list reflects the action instantly; re-insert on failure.
+                TransitionFeedback::show(renderer, "Deleting...");
+                const auto snapIndex = rawFileIndexForPath(pathToDelete);
+                std::string snapEntry;
+                if (snapIndex.has_value()) {
+                  snapEntry = files[*snapIndex];
+                  files.erase(files.begin() + static_cast<long>(*snapIndex));
+                  rebuildFilteredFileIndexes();
+                  clampSelectorIndex();
+                }
+                progressPrefixCache.erase(pathToDelete);
+                TransitionFeedback::show(renderer, "Moving to trash...");
                 if (deleteFile(pathToDelete)) {
-                  StatusPopup::showConfirmation(renderer, "Deleted");
-                  progressPrefixCache.erase(pathToDelete);
-                  if (const auto rawIndex = rawFileIndexForPath(pathToDelete); rawIndex.has_value()) {
-                    files.erase(files.begin() + static_cast<long>(*rawIndex));
+                  TransitionFeedback::show(renderer, "Deleted");
+                } else {
+                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
+                  if (snapIndex.has_value()) {
+                    files.insert(files.begin() + static_cast<long>(*snapIndex), snapEntry);
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
-                } else {
-                  LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
-                  StatusPopup::showConfirmation(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, "Delete failed");
                 }
+                TransitionFeedback::ensureMinDisplayElapsed();
                 mode = Mode::BROWSE;
+                // Block 2: full refresh on delete completion — no ghost
+                renderer.requestFullRefresh();
                 requestCleanRefresh();
                 exitActivity();
                 requestUpdate();
@@ -1346,24 +1413,41 @@ void MyLibraryActivity::renderBmpView() {
 
   renderer.drawBitmap(bitmap, x, y, screenW, screenH, 0.0f, 0.0f);
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Actions", "", "");
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  // Post-load render (returning from menu, popup toggle, etc.): draw
+  // buttons and refresh fast. Image was already loaded once, so skip the
+  // slow HALF_REFRESH + grayscale pipeline.
+  if (bmpViewFullyLoaded) {
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Actions", "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    if (messagePopupOpen) {
+      GUI.drawPopup(renderer, messagePopupText.c_str());
+    }
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    nextRefreshMode = HalDisplay::FAST_REFRESH;
+    return;
+  }
+
+  // Initial load: hide button hints until the image is fully rendered —
+  // the HALF_REFRESH below blocks for ~1.7s during which button presses
+  // wouldn't be processed. Showing hints now would invite taps that go
+  // nowhere.
   if (messagePopupOpen) {
     GUI.drawPopup(renderer, messagePopupText.c_str());
   }
 
-  // Full refresh for all images — clears previous screen artifacts from
-  // white/light areas that HALF_REFRESH and FAST_REFRESH leave behind.
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  // HALF_REFRESH (~1.7s) for BW pass — faster than FULL_REFRESH (~3s);
+  // residual ghost cleaned by the grayscale pass below (when present).
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   nextRefreshMode = HalDisplay::FAST_REFRESH;
 
   if (hasGreyscale) {
-    // Poll input between the (now-complete) BW pass and the expensive
-    // grayscale pass. If the user is already reaching for a button, skip
-    // the grayscale refinement so the next action (Actions popup, Back)
-    // feels responsive instead of waiting ~1.5s for gray to finish.
+    // Allow abort before the ~1.5s grayscale pass if the user is already
+    // pressing a button. Mark the image as loaded so the next render draws
+    // the button hints via the fast post-load path.
     gpio.update();
     if (gpio.wasAnyPressed()) {
+      bmpViewFullyLoaded = true;
+      requestUpdate();
       return;
     }
 
@@ -1382,6 +1466,11 @@ void MyLibraryActivity::renderBmpView() {
     renderer.displayGrayBuffer();
     renderer.setRenderMode(GfxRenderer::BW);
   }
+
+  // Image fully loaded — mark so next frame renders button hints via the
+  // fast post-load path above.
+  bmpViewFullyLoaded = true;
+  requestUpdate();
 }
 
 void MyLibraryActivity::renderFileActions() {

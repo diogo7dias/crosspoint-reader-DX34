@@ -25,6 +25,7 @@
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
+#include "util/TransitionFeedback.h"
 
 namespace {
 constexpr unsigned long skipPageMs = 700;
@@ -40,6 +41,11 @@ void XtcReaderActivity::onEnter() {
   if (!xtc) {
     return;
   }
+
+  // Block 2 (v1.2.0): half refresh on book enter scrubs the list ghost and
+  // is ~1 s faster than FULL. Experimental; revert to requestFullRefresh()
+  // if ghost artifacts appear.
+  renderer.requestHalfRefresh();
 
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
   xtc->setupCacheDir();
@@ -275,6 +281,11 @@ void XtcReaderActivity::render(Activity::RenderLock&&) {
   }
 
   renderPage();
+  // renderPage() visually scrubs the "Rendering..." toast via clearScreen+
+  // displayBuffer but doesn't call TransitionFeedback::dismiss, so clear the
+  // long-load timer here to prevent stale "BIG BOOK" toasts on later page
+  // turns once cumulative elapsed crosses a threshold.
+  TransitionFeedback::markOpenComplete();
   if (lastObservedPage != static_cast<int32_t>(currentPage)) {
     lastObservedPage = static_cast<int32_t>(currentPage);
     if (lastSavedPage != static_cast<int32_t>(currentPage)) {
@@ -354,6 +365,19 @@ void XtcReaderActivity::renderPage() {
     pageBufferSize = ((static_cast<size_t>(pageWidth) * pageHeight + 7) / 8) * 2;
   } else {
     pageBufferSize = ((pageWidth + 7) / 8) * pageHeight;
+  }
+
+  // Sanity cap: largest supported panel (~1200x825) @ 2-bit ≈ 246 KB.
+  // 512 KB provides headroom without risking runaway allocation on a
+  // malformed XTC header reporting garbage dimensions.
+  constexpr size_t XTC_MAX_PAGE_BUF = 512u * 1024;
+  if (pageBufferSize == 0 || pageBufferSize > XTC_MAX_PAGE_BUF) {
+    LOG_ERR("XTR", "Invalid page buffer size %lu (max %u) — corrupt XTC header?",
+            (unsigned long)pageBufferSize, (unsigned)XTC_MAX_PAGE_BUF);
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_PAGE_LOAD_ERROR), true, EpdFontFamily::REGULAR);
+    renderer.displayBuffer();
+    return;
   }
 
   // Allocate page buffer
