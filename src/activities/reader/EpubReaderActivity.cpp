@@ -144,9 +144,11 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
-  // Block 2 (v1.2.0): force a full refresh on book enter so no ghost of
-  // the library list or file-actions menu persists under the first page.
-  renderer.requestFullRefresh();
+  // Block 2 (v1.2.0): half refresh on book enter is enough to scrub the
+  // library list or file-actions menu ghost and is ~1 s faster than FULL.
+  // Downgrade is experimental — revert to requestFullRefresh() if ghost
+  // artifacts appear under the first page.
+  renderer.requestHalfRefresh();
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
@@ -1374,18 +1376,21 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
                                   SETTINGS.readerBoldSwap != 0)) {
       LOG_DBG("ERS", "Cache not found, building...");
       builtSection = true;
-      TransitionFeedback::show(renderer, tr(STR_LOADING));
 
       // Free font caches to reclaim contiguous heap for ZIP decompression
       // (needs a 32 KB dictionary). They rebuild automatically on next render.
       auto* fcm = renderer.getFontCacheManager();
       if (fcm) fcm->clearCache();
 
+      // Progress hook: parser emits percentages as it chews the HTML. We
+      // only use it to gate the "Still working on it..." toast, not a real
+      // bar — keeps UX simple and consistent with cached-open behaviour.
+      auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
       if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                       SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                       viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                       SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                      SETTINGS.readerBoldSwap != 0, nullptr)) {
+                                      SETTINGS.readerBoldSwap != 0, layoutProgressTick)) {
         LOG_ERR("ERS", "Failed to persist page data to SD");
         clearPageCache();
         section.reset();

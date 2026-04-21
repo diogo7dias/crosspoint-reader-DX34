@@ -98,9 +98,10 @@ std::unique_ptr<Txt> ReaderActivity::loadTxt(const std::string& path) {
 }
 
 void ReaderActivity::goToLibrary(const std::string& fromBookPath) {
-  // Block 2 (v1.2.0): full refresh on book exit so no page ghost persists
-  // under the library list.
-  renderer.requestFullRefresh();
+  // Block 2 (v1.2.0): half refresh on book exit scrubs the page ghost under
+  // the library list and is ~1 s faster than FULL. Experimental; revert to
+  // requestFullRefresh() if ghost artifacts appear.
+  renderer.requestHalfRefresh();
   // If coming from a book, start in that book's folder; otherwise start from root
   const auto initialPath = fromBookPath.empty() ? "/" : extractFolderPath(fromBookPath);
   onGoToLibrary(initialPath);
@@ -146,21 +147,16 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   // not stale settings from whatever book was open previously.
   SETTINGS.loadFromFile();
 
-  // Always show a loading popup on book open so fast paths still feel
-  // intentional. Subsequent stage calls stack new popups below the first
-  // — each stage is visible as its own toast, like the pre-v1.2.0 UX.
-  if (!TransitionFeedback::isActive()) {
-    TransitionFeedback::show(renderer, tr(STR_LOADING));
-  }
-
+  // The "Opening book..." toast was already drawn by openReaderInline() in
+  // main.cpp before this activity was entered — don't redraw it here or it
+  // stacks twice. The still-working threshold timer starts automatically
+  // from the first toast's draw time, so no explicit start call is needed.
   currentBookPath = bookPath;
 
   if (isXtcFile(bookPath)) {
-    TransitionFeedback::show(renderer, "Reading index...");
     auto xtc = loadXtc(bookPath);
     if (xtc) {
-      TransitionFeedback::show(renderer, "Rendering...");
-      TransitionFeedback::ensureMinDisplayElapsed();
+      TransitionFeedback::maybeShowStillWorkingToast(renderer);
       onGoToXtcReader(std::move(xtc));
     } else {
       exitActivity();
@@ -170,8 +166,6 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   }
 
   if (isQuotesFile(bookPath)) {
-    TransitionFeedback::show(renderer, "Opening quotes...");
-    TransitionFeedback::ensureMinDisplayElapsed();
     exitActivity();
     enterNewActivity(
         new QuotesViewerActivity(renderer, mappedInput, bookPath, [this, bookPath] { goToLibrary(bookPath); }));
@@ -179,11 +173,9 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   }
 
   if (isTxtFile(bookPath)) {
-    TransitionFeedback::show(renderer, "Reading text...");
     auto txt = loadTxt(bookPath);
     if (txt) {
-      TransitionFeedback::show(renderer, "Rendering...");
-      TransitionFeedback::ensureMinDisplayElapsed();
+      TransitionFeedback::maybeShowStillWorkingToast(renderer);
       onGoToTxtReader(std::move(txt));
     } else {
       exitActivity();
@@ -192,12 +184,9 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
     return;
   }
 
-  TransitionFeedback::show(renderer, "Reading index...");
   auto epub = loadEpub(bookPath);
   if (epub) {
-    TransitionFeedback::show(renderer, "Loading text...");
-    TransitionFeedback::show(renderer, "Rendering...");
-    TransitionFeedback::ensureMinDisplayElapsed();
+    TransitionFeedback::maybeShowStillWorkingToast(renderer);
     onGoToEpubReader(std::move(epub));
   } else {
     exitActivity();

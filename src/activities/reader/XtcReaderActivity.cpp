@@ -25,6 +25,7 @@
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
+#include "util/TransitionFeedback.h"
 
 namespace {
 constexpr unsigned long skipPageMs = 700;
@@ -41,8 +42,10 @@ void XtcReaderActivity::onEnter() {
     return;
   }
 
-  // Block 2 (v1.2.0): full refresh on book enter so no list ghost persists.
-  renderer.requestFullRefresh();
+  // Block 2 (v1.2.0): half refresh on book enter scrubs the list ghost and
+  // is ~1 s faster than FULL. Experimental; revert to requestFullRefresh()
+  // if ghost artifacts appear.
+  renderer.requestHalfRefresh();
 
   EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
   xtc->setupCacheDir();
@@ -278,6 +281,11 @@ void XtcReaderActivity::render(Activity::RenderLock&&) {
   }
 
   renderPage();
+  // renderPage() visually scrubs the "Rendering..." toast via clearScreen+
+  // displayBuffer but doesn't call TransitionFeedback::dismiss, so clear the
+  // long-load timer here to prevent stale "BIG BOOK" toasts on later page
+  // turns once cumulative elapsed crosses a threshold.
+  TransitionFeedback::markOpenComplete();
   if (lastObservedPage != static_cast<int32_t>(currentPage)) {
     lastObservedPage = static_cast<int32_t>(currentPage);
     if (lastSavedPage != static_cast<int32_t>(currentPage)) {

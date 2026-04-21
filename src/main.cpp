@@ -332,6 +332,13 @@ static void trimSleepFolderIfDirty() {
 // loop has not yet started draining pending transitions).
 static void openReaderInline(const std::string& initialEpubPath) {
   const std::string bookPath = initialEpubPath;  // Copy before exitActivity() invalidates the reference
+  // Explicit reset ensures the "Opening book..." toast starts a fresh
+  // stack with a fresh sShownAtMs timestamp — otherwise leftover state
+  // from a prior StatusPopup or unclosed toast would leave sActive==true,
+  // causing show() to skip its first-in-stack timer reset and
+  // maybeShowStillWorkingToast() to fire the "Long chapter..." popup
+  // instantly against a stale timestamp.
+  TransitionFeedback::resetStacking();
   TransitionFeedback::show(renderer, "Opening book...");
   exitActivity();
   enterNewActivity(new ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
@@ -839,6 +846,7 @@ void loop() {
   }
 
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
+    TransitionFeedback::show(renderer, "Going to sleep...");
     triggerDeepSleep();
     // This should never be hit as enterDeepSleep calls esp_deep_sleep_start
     return;

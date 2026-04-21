@@ -11,13 +11,28 @@ namespace TransitionFeedback {
 namespace {
 bool sActive = false;
 int sBottomY = 0;
+// Timestamp of the FIRST toast in the current stack. Stacked toasts don't
+// reset it, so it measures cumulative stack age, which we use as the basis
+// for kStillWorkingThresholdMs.
 unsigned long sShownAtMs = 0;
+bool sStillWorkingShown = false;
 }  // namespace
 
 void show(GfxRenderer& renderer, const char* message) {
   if (!message || message[0] == '\0') {
     sActive = false;
     return;
+  }
+
+  // If no popup is currently active, this call opens a NEW stack. Reset
+  // the timestamp + still-working latch here so stale values from a
+  // previous context (e.g. a StatusPopup during folder navigation) can't
+  // leak into the next threshold check. Without this, sShownAtMs would
+  // retain a timestamp from minutes ago and maybeShowStillWorkingToast()
+  // would fire the "Long chapter..." popup instantly.
+  if (!sActive) {
+    sShownAtMs = millis();
+    sStillWorkingShown = false;
   }
 
   const std::string upper = StringUtils::toUpperAscii(message);
@@ -53,28 +68,14 @@ void show(GfxRenderer& renderer, const char* message) {
   renderer.requestHalfRefresh();
   sBottomY = boxY + boxH + border;
   sActive = true;
-  // Record the timestamp of the FIRST popup in a stack so ensureMinDisplay
-  // measures cumulative display time — subsequent stacked popups do not
-  // reset it, otherwise a rapid stage sequence would always wait a full
-  // floor after the last stage instead of treating the whole sequence as
-  // one "work happening" window.
-  if (sShownAtMs == 0) {
-    sShownAtMs = millis();
-  }
 }
 
 void dismiss(GfxRenderer& renderer) {
-  if (!sActive) {
-    return;
-  }
-  ensureMinDisplayElapsed();
+  (void)renderer;
   sActive = false;
   sBottomY = 0;
   sShownAtMs = 0;
-  renderer.clearScreen();
-  // HALF_REFRESH at dismiss time scrubs any popup ghost in a single pass;
-  // we only reach dismiss when no destination render is coming to clean up.
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  sStillWorkingShown = false;
 }
 
 void ensureMinDisplayElapsed() {
@@ -96,6 +97,23 @@ void resetStacking() {
   sActive = false;
   sBottomY = 0;
   sShownAtMs = 0;
+  sStillWorkingShown = false;
+}
+
+void markOpenComplete() { sStillWorkingShown = false; }
+
+void maybeShowStillWorkingToast(GfxRenderer& renderer) {
+  // No toast on screen yet? Nothing to stack below — the "Opening book..."
+  // popup is the reference timer, so if it hasn't been drawn there's
+  // nothing to measure.
+  if (!sActive || sShownAtMs == 0 || sStillWorkingShown) {
+    return;
+  }
+  const unsigned long elapsed = millis() - sShownAtMs;
+  if (elapsed >= kStillWorkingThresholdMs) {
+    show(renderer, "Long chapter...Still opening...");
+    sStillWorkingShown = true;
+  }
 }
 
 }  // namespace TransitionFeedback

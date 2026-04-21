@@ -23,7 +23,6 @@
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
-#include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
 
@@ -80,8 +79,10 @@ void TxtReaderActivity::onEnter() {
     return;
   }
 
-  // Block 2 (v1.2.0): full refresh on book enter so no list ghost persists.
-  renderer.requestFullRefresh();
+  // Block 2 (v1.2.0): half refresh on book enter scrubs the list ghost and
+  // is ~1 s faster than FULL. Experimental; revert to requestFullRefresh()
+  // if ghost artifacts appear.
+  renderer.requestHalfRefresh();
 
   // Configure screen orientation based on settings
   switch (SETTINGS.orientation) {
@@ -642,8 +643,6 @@ void TxtReaderActivity::buildPageIndex() {
 
   LOG_DBG("TRS", "Building page index for %zu bytes...", fileSize);
 
-  StatusPopup::showBlocking(renderer, tr(STR_INDEXING));
-
   constexpr size_t MAX_PAGE_OFFSETS = 5000;
   while (offset < fileSize) {
     std::vector<FlowLine> tempLines;
@@ -672,6 +671,9 @@ void TxtReaderActivity::buildPageIndex() {
     if (pageOffsets.size() % 20 == 0) {
       esp_task_wdt_reset();
       vTaskDelay(1);
+      // Stack "Still working on it..." if index build drags past the
+      // reassurance threshold (big TXT case).
+      TransitionFeedback::maybeShowStillWorkingToast(renderer);
     }
   }
 
