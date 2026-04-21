@@ -18,6 +18,11 @@ namespace {
 // migrateLegacyStatusBarMode is now declared in CrossPointSettings.h
 // and defined in CrossPointSettings.cpp (single source of truth).
 
+// Clamp a persisted enum-valued byte: if val is out of range, fall back to def.
+// Used by both readReadingThemeObject() and loadSettings() to validate enums
+// read from the settings JSON.
+inline uint8_t clampEnum(uint8_t val, uint8_t maxVal, uint8_t def) { return val < maxVal ? val : def; }
+
 void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["name"] = theme.name;
   obj["fontFamily"] = theme.fontFamily;
@@ -66,14 +71,10 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
 
 void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.name = ReadingThemeStore::sanitizeName(obj["name"] | "Theme");
-  {
-    const uint8_t raw = obj["fontFamily"] | (uint8_t)CrossPointSettings::CHAREINK;
-    theme.fontFamily = (raw < CrossPointSettings::FONT_FAMILY_COUNT) ? raw : (uint8_t)CrossPointSettings::CHAREINK;
-  }
-  {
-    const uint8_t raw = obj["fontSize"] | (uint8_t)CrossPointSettings::SIZE_16;
-    theme.fontSize = (raw < CrossPointSettings::FONT_SIZE_COUNT) ? raw : (uint8_t)CrossPointSettings::SIZE_16;
-  }
+  theme.fontFamily = clampEnum(obj["fontFamily"] | (uint8_t)CrossPointSettings::CHAREINK,
+                               CrossPointSettings::FONT_FAMILY_COUNT, CrossPointSettings::CHAREINK);
+  theme.fontSize = clampEnum(obj["fontSize"] | (uint8_t)CrossPointSettings::SIZE_16,
+                             CrossPointSettings::FONT_SIZE_COUNT, CrossPointSettings::SIZE_16);
   theme.lineSpacingPercent = obj["lineSpacingPercent"] | (uint8_t)110;
   theme.uniformMargins = obj["uniformMargins"] | (uint8_t)0;
   if (theme.uniformMargins > 1) theme.uniformMargins = 0;
@@ -82,26 +83,17 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.screenMarginHorizontal = obj["screenMarginHorizontal"] | (uint8_t)20;
   theme.screenMarginTop = obj["screenMarginTop"] | (uint8_t)20;
   theme.screenMarginBottom = obj["screenMarginBottom"] | (uint8_t)20;
-  {
-    const uint8_t raw = obj["paragraphAlignment"] | (uint8_t)CrossPointSettings::JUSTIFIED;
-    theme.paragraphAlignment =
-        (raw < CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT) ? raw : (uint8_t)CrossPointSettings::JUSTIFIED;
-  }
-  {
-    const uint8_t raw = obj["extraParagraphSpacingLevel"] | (uint8_t)CrossPointSettings::EXTRA_SPACING_M;
-    theme.extraParagraphSpacingLevel =
-        (raw < CrossPointSettings::EXTRA_PARAGRAPH_SPACING_COUNT) ? raw : (uint8_t)CrossPointSettings::EXTRA_SPACING_M;
-  }
-  {
-    const uint8_t raw = obj["wordSpacingPercent"] | (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
-    theme.wordSpacingPercent =
-        (raw < CrossPointSettings::WORD_SPACING_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
-  }
-  {
-    const uint8_t raw = obj["firstLineIndentMode"] | (uint8_t)CrossPointSettings::INDENT_BOOK;
-    theme.firstLineIndentMode =
-        (raw < CrossPointSettings::FIRST_LINE_INDENT_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::INDENT_BOOK;
-  }
+  theme.paragraphAlignment = clampEnum(obj["paragraphAlignment"] | (uint8_t)CrossPointSettings::JUSTIFIED,
+                                       CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT, CrossPointSettings::JUSTIFIED);
+  theme.extraParagraphSpacingLevel =
+      clampEnum(obj["extraParagraphSpacingLevel"] | (uint8_t)CrossPointSettings::EXTRA_SPACING_M,
+                CrossPointSettings::EXTRA_PARAGRAPH_SPACING_COUNT, CrossPointSettings::EXTRA_SPACING_M);
+  theme.wordSpacingPercent = clampEnum(obj["wordSpacingPercent"] | (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL,
+                                       CrossPointSettings::WORD_SPACING_MODE_COUNT,
+                                       CrossPointSettings::WORD_SPACING_NORMAL);
+  theme.firstLineIndentMode = clampEnum(obj["firstLineIndentMode"] | (uint8_t)CrossPointSettings::INDENT_BOOK,
+                                        CrossPointSettings::FIRST_LINE_INDENT_MODE_COUNT,
+                                        CrossPointSettings::INDENT_BOOK);
   {
     const uint8_t raw = obj["readerStyleMode"] |
                         (obj["embeddedStyle"].isNull()
@@ -450,17 +442,16 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   using S = CrossPointSettings;
-  auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
 
   s.homeLayout =
-      clamp(doc["homeLayout"] | (uint8_t)S::HOME_LAYOUT_CLASSIC, S::HOME_LAYOUT_COUNT, S::HOME_LAYOUT_CLASSIC);
-  s.sleepScreen = clamp(doc["sleepScreen"] | (uint8_t)S::DARK, S::SLEEP_SCREEN_MODE_COUNT, S::DARK);
+      clampEnum(doc["homeLayout"] | (uint8_t)S::HOME_LAYOUT_CLASSIC, S::HOME_LAYOUT_COUNT, S::HOME_LAYOUT_CLASSIC);
+  s.sleepScreen = clampEnum(doc["sleepScreen"] | (uint8_t)S::DARK, S::SLEEP_SCREEN_MODE_COUNT, S::DARK);
   s.sleepScreenCoverMode =
-      clamp(doc["sleepScreenCoverMode"] | (uint8_t)S::FIT, S::SLEEP_SCREEN_COVER_MODE_COUNT, S::FIT);
-  s.sleepScreenCoverFilter =
-      clamp(doc["sleepScreenCoverFilter"] | (uint8_t)S::NO_FILTER, S::SLEEP_SCREEN_COVER_FILTER_COUNT, S::NO_FILTER);
+      clampEnum(doc["sleepScreenCoverMode"] | (uint8_t)S::FIT, S::SLEEP_SCREEN_COVER_MODE_COUNT, S::FIT);
+  s.sleepScreenCoverFilter = clampEnum(doc["sleepScreenCoverFilter"] | (uint8_t)S::NO_FILTER,
+                                       S::SLEEP_SCREEN_COVER_FILTER_COUNT, S::NO_FILTER);
   s.showSleepImageFilename = doc["showSleepImageFilename"] | (uint8_t)0;
-  s.statusBar = clamp(doc["statusBar"] | (uint8_t)S::FULL, S::STATUS_BAR_MODE_COUNT, S::FULL);
+  s.statusBar = clampEnum(doc["statusBar"] | (uint8_t)S::FULL, S::STATUS_BAR_MODE_COUNT, S::FULL);
   const bool hasGranularStatusBar = !doc["statusBarEnabled"].isNull() && !doc["statusBarShowBattery"].isNull() &&
                                     !doc["statusBarShowPageCounter"].isNull() &&
                                     !doc["statusBarShowBookPercentage"].isNull() &&
@@ -497,7 +488,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         *needsResave = true;
       }
     } else {
-      s.statusBarBatteryPosition = clamp(doc["statusBarBatteryPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT,
+      s.statusBarBatteryPosition = clampEnum(doc["statusBarBatteryPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT,
                                          S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_LEFT);
     }
     if (doc["statusBarProgressTextPosition"].isNull()) {
@@ -506,7 +497,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         *needsResave = true;
       }
     } else {
-      s.statusBarProgressTextPosition = clamp(doc["statusBarProgressTextPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+      s.statusBarProgressTextPosition = clampEnum(doc["statusBarProgressTextPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
                                               S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
     const uint8_t fallbackProgressTextPosition = s.statusBarProgressTextPosition == S::STATUS_AT_TOP
@@ -519,7 +510,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       }
     } else {
       s.statusBarPageCounterPosition =
-          clamp(doc["statusBarPageCounterPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+          clampEnum(doc["statusBarPageCounterPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
                 S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     }
     if (doc["statusBarBookPercentagePosition"].isNull()) {
@@ -529,7 +520,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       }
     } else {
       s.statusBarBookPercentagePosition =
-          clamp(doc["statusBarBookPercentagePosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+          clampEnum(doc["statusBarBookPercentagePosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
                 S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     }
     if (doc["statusBarChapterPercentagePosition"].isNull()) {
@@ -539,7 +530,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       }
     } else {
       s.statusBarChapterPercentagePosition =
-          clamp(doc["statusBarChapterPercentagePosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+          clampEnum(doc["statusBarChapterPercentagePosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
                 S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     }
     if (doc["statusBarBookBarPosition"].isNull()) {
@@ -548,7 +539,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         *needsResave = true;
       }
     } else {
-      s.statusBarBookBarPosition = clamp(doc["statusBarBookBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+      s.statusBarBookBarPosition = clampEnum(doc["statusBarBookBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
                                          S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
     if (doc["statusBarChapterBarPosition"].isNull()) {
@@ -557,7 +548,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         *needsResave = true;
       }
     } else {
-      s.statusBarChapterBarPosition = clamp(doc["statusBarChapterBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+      s.statusBarChapterBarPosition = clampEnum(doc["statusBarChapterBarPosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
                                             S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
     if (doc["statusBarTitlePosition"].isNull()) {
@@ -566,23 +557,23 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         *needsResave = true;
       }
     } else {
-      s.statusBarTitlePosition = clamp(doc["statusBarTitlePosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
+      s.statusBarTitlePosition = clampEnum(doc["statusBarTitlePosition"] | (uint8_t)S::STATUS_AT_BOTTOM,
                                        S::STATUS_BAR_ITEM_POSITION_COUNT, S::STATUS_AT_BOTTOM);
     }
-    s.statusBarTextAlignment = clamp(doc["statusBarTextAlignment"] | (uint8_t)S::STATUS_TEXT_RIGHT,
+    s.statusBarTextAlignment = clampEnum(doc["statusBarTextAlignment"] | (uint8_t)S::STATUS_TEXT_RIGHT,
                                      S::STATUS_TEXT_ALIGNMENT_COUNT, S::STATUS_TEXT_RIGHT);
-    s.statusBarProgressStyle = clamp(doc["statusBarProgressStyle"] | (uint8_t)S::STATUS_BAR_THICK,
+    s.statusBarProgressStyle = clampEnum(doc["statusBarProgressStyle"] | (uint8_t)S::STATUS_BAR_THICK,
                                      S::STATUS_BAR_PROGRESS_STYLE_COUNT, S::STATUS_BAR_THICK);
-    s.statusBarFontSize = clamp(doc["statusBarFontSize"] | (uint8_t)S::STATUS_FONT_SMALL, S::STATUS_BAR_FONT_SIZE_COUNT,
+    s.statusBarFontSize = clampEnum(doc["statusBarFontSize"] | (uint8_t)S::STATUS_FONT_SMALL, S::STATUS_BAR_FONT_SIZE_COUNT,
                                 S::STATUS_FONT_SMALL);
-    s.statusBarBarThickness = clamp(doc["statusBarBarThickness"] | (uint8_t)S::STATUS_BAR_THICKNESS_NORMAL,
+    s.statusBarBarThickness = clampEnum(doc["statusBarBarThickness"] | (uint8_t)S::STATUS_BAR_THICKNESS_NORMAL,
                                     S::STATUS_BAR_BAR_THICKNESS_COUNT, S::STATUS_BAR_THICKNESS_NORMAL);
   } else {
     migrateLegacyStatusBarMode(s);
     if (needsResave) *needsResave = true;
   }
   if (!doc["extraParagraphSpacingLevel"].isNull()) {
-    s.extraParagraphSpacingLevel = clamp(doc["extraParagraphSpacingLevel"] | (uint8_t)S::EXTRA_SPACING_M,
+    s.extraParagraphSpacingLevel = clampEnum(doc["extraParagraphSpacingLevel"] | (uint8_t)S::EXTRA_SPACING_M,
                                          S::EXTRA_PARAGRAPH_SPACING_COUNT, S::EXTRA_SPACING_M);
   } else {
     const uint8_t legacyExtraSpacing = doc["extraParagraphSpacing"] | (uint8_t)1;
@@ -599,7 +590,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
   s.firstLineIndentMode =
-      clamp(doc["firstLineIndentMode"] | (uint8_t)S::INDENT_BOOK, S::FIRST_LINE_INDENT_MODE_COUNT, S::INDENT_BOOK);
+      clampEnum(doc["firstLineIndentMode"] | (uint8_t)S::INDENT_BOOK, S::FIRST_LINE_INDENT_MODE_COUNT, S::INDENT_BOOK);
   if (doc["readerStyleMode"].isNull()) {
     s.readerStyleMode =
         doc["embeddedStyle"].isNull()
@@ -610,7 +601,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   } else {
     s.readerStyleMode =
-        clamp(doc["readerStyleMode"] | (uint8_t)S::READER_STYLE_USER, S::READER_STYLE_MODE_COUNT, S::READER_STYLE_USER);
+        clampEnum(doc["readerStyleMode"] | (uint8_t)S::READER_STYLE_USER, S::READER_STYLE_MODE_COUNT, S::READER_STYLE_USER);
   }
   if (doc["textRenderMode"].isNull()) {
     s.textRenderMode = (uint8_t)S::TEXT_RENDER_CRISP;
@@ -633,24 +624,24 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
   s.textAntiAliasing = 0;
-  s.shortPwrBtn = clamp(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
-  s.orientation = clamp(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
+  s.shortPwrBtn = clampEnum(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
+  s.orientation = clampEnum(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
   s.sideButtonLayout =
-      clamp(doc["sideButtonLayout"] | (uint8_t)S::PREV_NEXT, S::SIDE_BUTTON_LAYOUT_COUNT, S::PREV_NEXT);
+      clampEnum(doc["sideButtonLayout"] | (uint8_t)S::PREV_NEXT, S::SIDE_BUTTON_LAYOUT_COUNT, S::PREV_NEXT);
   s.frontButtonBack =
-      clamp(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
-  s.frontButtonConfirm = clamp(doc["frontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM, S::FRONT_BUTTON_HARDWARE_COUNT,
+      clampEnum(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
+  s.frontButtonConfirm = clampEnum(doc["frontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM, S::FRONT_BUTTON_HARDWARE_COUNT,
                                S::FRONT_HW_CONFIRM);
   s.frontButtonLeft =
-      clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
+      clampEnum(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
   s.frontButtonRight =
-      clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
+      clampEnum(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
-  s.fontFamily = clamp(doc["fontFamily"] | (uint8_t)S::CHAREINK, S::FONT_FAMILY_COUNT, S::CHAREINK);
+  s.fontFamily = clampEnum(doc["fontFamily"] | (uint8_t)S::CHAREINK, S::FONT_FAMILY_COUNT, S::CHAREINK);
   s.fontFamily = S::normalizeFontFamily(s.fontFamily);
-  s.fontSize = clamp(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT, S::SIZE_16);
+  s.fontSize = clampEnum(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT, S::SIZE_16);
   s.fontSize = S::normalizeFontSizeForFamily(s.fontFamily, s.fontSize);
-  s.lineSpacing = clamp(doc["lineSpacing"] | (uint8_t)S::NORMAL, S::LINE_COMPRESSION_COUNT, S::NORMAL);
+  s.lineSpacing = clampEnum(doc["lineSpacing"] | (uint8_t)S::NORMAL, S::LINE_COMPRESSION_COUNT, S::NORMAL);
   if (!doc["lineSpacingPercent"].isNull()) {
     const uint8_t parsed = doc["lineSpacingPercent"] | (uint8_t)110;
     if (parsed < 35) {
@@ -678,12 +669,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
   s.paragraphAlignment =
-      clamp(doc["paragraphAlignment"] | (uint8_t)S::JUSTIFIED, S::PARAGRAPH_ALIGNMENT_COUNT, S::JUSTIFIED);
-  s.sleepTimeout = clamp(doc["sleepTimeout"] | (uint8_t)S::SLEEP_10_MIN, S::SLEEP_TIMEOUT_COUNT, S::SLEEP_10_MIN);
+      clampEnum(doc["paragraphAlignment"] | (uint8_t)S::JUSTIFIED, S::PARAGRAPH_ALIGNMENT_COUNT, S::JUSTIFIED);
+  s.sleepTimeout = clampEnum(doc["sleepTimeout"] | (uint8_t)S::SLEEP_10_MIN, S::SLEEP_TIMEOUT_COUNT, S::SLEEP_10_MIN);
   s.showHiddenFiles = doc["showHiddenFiles"] | (uint8_t)0;
   s.randomBookOnBoot = doc["randomBookOnBoot"] | (uint8_t)0;
   s.refreshFrequency =
-      clamp(doc["refreshFrequency"] | (uint8_t)S::REFRESH_15, S::REFRESH_FREQUENCY_COUNT, S::REFRESH_15);
+      clampEnum(doc["refreshFrequency"] | (uint8_t)S::REFRESH_15, S::REFRESH_FREQUENCY_COUNT, S::REFRESH_15);
   s.screenMargin = doc["screenMargin"] | (uint8_t)5;
   s.uniformMargins = doc["uniformMargins"] | (uint8_t)0;
   if (s.uniformMargins > 1) s.uniformMargins = 0;
@@ -700,20 +691,20 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     if (needsResave) *needsResave = true;
   }
   s.hideBatteryPercentage =
-      clamp(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER, S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
+      clampEnum(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER, S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
   s.longPressChapterSkip = doc["longPressChapterSkip"] | (uint8_t)1;
   s.hyphenationEnabled = doc["hyphenationEnabled"] | (uint8_t)0;
   s.readerBoldSwap = doc["readerBoldSwap"] | (uint8_t)0;
   s.fadingFix = doc["fadingFix"] | (uint8_t)0;
   s.embeddedStyle = s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
   s.debugBorders = doc["debugBorders"] | (uint8_t)0;
-  s.highlightMode = clamp(doc["highlightMode"] | (uint8_t)0, S::HIGHLIGHT_MODE_COUNT, 0);
+  s.highlightMode = clampEnum(doc["highlightMode"] | (uint8_t)0, S::HIGHLIGHT_MODE_COUNT, 0);
   s.darkMode = doc["darkMode"] | (uint8_t)0;
   if (s.darkMode > 1) s.darkMode = 0;
   s.booksFolderOrder = doc["booksFolderOrder"] | (uint8_t)0;
   if (s.booksFolderOrder > 1) s.booksFolderOrder = 0;
-  s.xtcContrast = clamp(doc["xtcContrast"] | (uint8_t)0, S::XTC_CONTRAST_COUNT, 0);
-  s.imageDither = clamp(doc["imageDither"] | (uint8_t)0, S::IMAGE_DITHER_COUNT, 0);
+  s.xtcContrast = clampEnum(doc["xtcContrast"] | (uint8_t)0, S::XTC_CONTRAST_COUNT, 0);
+  s.imageDither = clampEnum(doc["imageDither"] | (uint8_t)0, S::IMAGE_DITHER_COUNT, 0);
 
   // BLE HID controller
   s.bleEnabled = doc["bleEnabled"] | (uint8_t)0;
