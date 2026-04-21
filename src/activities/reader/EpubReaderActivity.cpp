@@ -418,27 +418,7 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
         renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
   }
 
-  if (SETTINGS.statusBarShowBookPageCounter && section->pageCount > 0) {
-    // Estimate total book pages by extrapolating the current chapter's
-    // pages-per-byte ratio to the entire book. This is approximate —
-    // chapters with images or code have different density than prose,
-    // so the total may fluctuate when navigating between chapter types.
-    const size_t bookSize = epub->getBookSize();
-    const size_t prevChapterSize =
-        (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
-    const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
-    if (curChapterSize > 0 && bookSize > 0) {
-      const float pagesPerByte = static_cast<float>(section->pageCount) / static_cast<float>(curChapterSize);
-      const int totalEstimatedPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
-      const int currentAbsPage = std::max(
-          1, std::min(totalEstimatedPages,
-                      static_cast<int>(layout.bookProgress / 100.0f * static_cast<float>(totalEstimatedPages) + 0.5f)));
-      char buf[32];
-      snprintf(buf, sizeof(buf), "%d/%d", currentAbsPage, totalEstimatedPages);
-      layout.bookPageCounterText = buf;
-      layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-    }
-  }
+  populateBookPageCounterText(layout);
 
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
@@ -453,6 +433,32 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
   }
 
   return layout;
+}
+
+void EpubReaderActivity::populateBookPageCounterText(StatusBarLayout& layout) const {
+  if (!SETTINGS.statusBarShowBookPageCounter || !section || !epub || section->pageCount <= 0) {
+    return;
+  }
+  // Estimate total book pages by extrapolating the current chapter's pages-per-byte ratio to
+  // the whole book. Approximate by design: chapters with images or code have different density
+  // than prose, so the estimated total can fluctuate as the reader moves between chapter types.
+  // We accept that drift rather than pre-indexing every chapter (which would block first-open).
+  const size_t bookSize = epub->getBookSize();
+  const size_t prevChapterSize =
+      (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+  const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
+  if (curChapterSize == 0 || bookSize == 0) {
+    return;
+  }
+  const float pagesPerByte = static_cast<float>(section->pageCount) / static_cast<float>(curChapterSize);
+  const int totalEstimatedPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
+  const int currentAbsPage = std::max(
+      1, std::min(totalEstimatedPages,
+                  static_cast<int>(layout.bookProgress / 100.0f * static_cast<float>(totalEstimatedPages) + 0.5f)));
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d/%d", currentAbsPage, totalEstimatedPages);
+  layout.bookPageCounterText = buf;
+  layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
 }
 
 void EpubReaderActivity::loop() {

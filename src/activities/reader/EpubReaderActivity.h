@@ -159,6 +159,12 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
                                                          int maxTitleLineCount);
   StatusBarLayout buildStatusBarLayout(int usableWidth, int topReservedHeight, int bottomReservedHeight,
                                        int maxTitleLineCount);
+  // Writes StatusBarLayout::bookPageCounterText + width when the setting is enabled AND we have
+  // enough chapter-size data to extrapolate. Left empty otherwise (the renderer treats empty as
+  // "don't draw"). Isolated from buildStatusBarLayout because the extrapolation math (21 lines,
+  // pages-per-byte × total book size) is the densest block in the status-bar pipeline and the
+  // only one with non-trivial WHY notes (chapter density variance).
+  void populateBookPageCounterText(StatusBarLayout& layout) const;
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuBack(uint8_t orientation);
