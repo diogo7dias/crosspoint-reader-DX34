@@ -117,6 +117,7 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name, const Cros
   theme.firstLineIndentMode = settings.firstLineIndentMode;
   theme.readerStyleMode = settings.readerStyleMode;
   theme.textRenderMode = settings.textRenderMode;
+  theme.orientation = settings.orientation;
   theme.hyphenationEnabled = settings.hyphenationEnabled;
   theme.statusBarEnabled = settings.statusBarEnabled;
   theme.statusBarShowBattery = settings.statusBarShowBattery;
@@ -170,6 +171,8 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
                                         CrossPointSettings::READER_STYLE_USER);
   settings.textRenderMode = clampRange(theme.textRenderMode, 0, CrossPointSettings::TEXT_RENDER_MODE_COUNT - 1,
                                        CrossPointSettings::TEXT_RENDER_CRISP);
+  settings.orientation =
+      clampRange(theme.orientation, 0, CrossPointSettings::ORIENTATION_COUNT - 1, CrossPointSettings::PORTRAIT);
   settings.embeddedStyle = settings.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID ? 1 : 0;
   settings.textAntiAliasing = 0;
   settings.hyphenationEnabled = theme.hyphenationEnabled ? 1 : 0;
@@ -237,7 +240,8 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.extraParagraphSpacingLevel == theme.extraParagraphSpacingLevel &&
          current.wordSpacingPercent == theme.wordSpacingPercent &&
          current.firstLineIndentMode == theme.firstLineIndentMode && current.readerStyleMode == theme.readerStyleMode &&
-         current.textRenderMode == theme.textRenderMode && current.hyphenationEnabled == theme.hyphenationEnabled &&
+         current.textRenderMode == theme.textRenderMode && current.orientation == theme.orientation &&
+         current.hyphenationEnabled == theme.hyphenationEnabled &&
          current.statusBarEnabled == theme.statusBarEnabled &&
          current.statusBarShowBattery == theme.statusBarShowBattery &&
          current.statusBarShowPageCounter == theme.statusBarShowPageCounter &&
@@ -500,7 +504,7 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.fontSize = CrossPointSettings::normalizeFontSizeForFamily(normalized.fontFamily, theme.fontSize);
   normalized.lineSpacingPercent = clampRange(theme.lineSpacingPercent, 35, 150, 110);
   normalized.uniformMargins = theme.uniformMargins ? 1 : 0;
-  normalized.dynamicMargins = theme.dynamicMargins ? 1 : 0;
+  normalized.dynamicMargins = (theme.dynamicMargins > 2) ? 0 : theme.dynamicMargins;
   normalized.screenMarginHorizontal = clampRange(theme.screenMarginHorizontal, 0, 55, 20);
   normalized.screenMarginTop = clampRange(theme.screenMarginTop, 0, 55, 20);
   normalized.screenMarginBottom = clampRange(theme.screenMarginBottom, 0, 55, 20);
@@ -519,6 +523,8 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
                                           CrossPointSettings::READER_STYLE_USER);
   normalized.textRenderMode = clampRange(theme.textRenderMode, 0, CrossPointSettings::TEXT_RENDER_MODE_COUNT - 1,
                                          CrossPointSettings::TEXT_RENDER_CRISP);
+  normalized.orientation =
+      clampRange(theme.orientation, 0, CrossPointSettings::ORIENTATION_COUNT - 1, CrossPointSettings::PORTRAIT);
   normalized.hyphenationEnabled = theme.hyphenationEnabled ? 1 : 0;
   normalized.statusBarEnabled = theme.statusBarEnabled ? 1 : 0;
   normalized.statusBarShowBattery = theme.statusBarShowBattery ? 1 : 0;

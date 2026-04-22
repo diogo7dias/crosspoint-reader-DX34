@@ -40,6 +40,7 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["readerStyleMode"] = theme.readerStyleMode;
   obj["textRenderMode"] = theme.textRenderMode;
   obj["textRenderModeV2"] = true;
+  obj["orientation"] = theme.orientation;
   obj["embeddedStyle"] = theme.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   obj["hyphenationEnabled"] = theme.hyphenationEnabled;
   obj["statusBarEnabled"] = theme.statusBarEnabled;
@@ -119,6 +120,8 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
     }
   }
   theme.hyphenationEnabled = obj["hyphenationEnabled"] | (uint8_t)0;
+  theme.orientation = clampEnum(obj["orientation"] | (uint8_t)CrossPointSettings::PORTRAIT,
+                                CrossPointSettings::ORIENTATION_COUNT, CrossPointSettings::PORTRAIT);
   theme.statusBarEnabled = obj["statusBarEnabled"] | (uint8_t)1;
   theme.statusBarShowBattery = obj["statusBarShowBattery"] | (uint8_t)1;
   theme.statusBarShowPageCounter = obj["statusBarShowPageCounter"] | (uint8_t)0;
@@ -397,6 +400,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["refreshFrequency"] = s.refreshFrequency;
   doc["screenMargin"] = s.screenMargin;
   doc["uniformMargins"] = s.uniformMargins;
+  doc["dynamicMargins"] = s.dynamicMargins;
   doc["screenMarginHorizontal"] = s.screenMarginHorizontal;
   doc["screenMarginTop"] = s.screenMarginTop;
   doc["screenMarginBottom"] = s.screenMarginBottom;
@@ -678,6 +682,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.screenMargin = doc["screenMargin"] | (uint8_t)5;
   s.uniformMargins = doc["uniformMargins"] | (uint8_t)0;
   if (s.uniformMargins > 1) s.uniformMargins = 0;
+  s.dynamicMargins = doc["dynamicMargins"] | (uint8_t)0;
+  if (s.dynamicMargins > 2) s.dynamicMargins = 0;
   const bool hasSplitMargins = !doc["screenMarginHorizontal"].isNull() && !doc["screenMarginTop"].isNull() &&
                                !doc["screenMarginBottom"].isNull();
   if (hasSplitMargins) {
