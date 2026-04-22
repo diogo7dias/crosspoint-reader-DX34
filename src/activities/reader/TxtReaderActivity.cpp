@@ -71,7 +71,7 @@ void TxtReaderActivity::onEnter() {
 
   // Configure screen orientation based on settings
   ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
-  EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
+  EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(txt->getPath()));
 
   txt->setupCacheDir();
 

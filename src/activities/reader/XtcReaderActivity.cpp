@@ -48,7 +48,7 @@ void XtcReaderActivity::onEnter() {
   // if ghost artifacts appear.
   renderer.requestHalfRefresh();
 
-  EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
+  EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(xtc->getPath()));
   xtc->setupCacheDir();
 
   // Load saved progress

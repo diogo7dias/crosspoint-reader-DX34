@@ -113,7 +113,7 @@ void EpubReaderActivity::onEnter() {
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
   ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
-  EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
+  EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
   ImageBlock::setDitherMode(SETTINGS.imageDither);
 
   epub->setupCacheDir();
@@ -648,11 +648,11 @@ void EpubReaderActivity::openReaderMenu() {
   const int bmCount = bookmarkStore.count();
   const std::string quotesPath = getQuotesFilePath();
   const bool hasQuotes = !quotesPath.empty() && Storage.exists(quotesPath.c_str());
-  boldSwapAtMenuOpen = SETTINGS.readerBoldSwap != 0;
+  boldSwapAtMenuOpen = RECENT_BOOKS.getBoldSwap(epub->getPath());
   exitActivity();
   enterNewActivity(new EpubReaderMenuActivity(
-      this->renderer, this->mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
-      SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount, hasQuotes,
+      this->renderer, this->mappedInput, epub->getTitle(), epub->getPath(), currentPage, totalPages,
+      bookProgressPercent, SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount, hasQuotes,
       [this](const uint8_t orientation) { onReaderMenuBack(orientation); },
       [this](EpubReaderMenuActivity::MenuAction action) { onReaderMenuConfirm(action); }));
 }
@@ -706,7 +706,7 @@ void EpubReaderActivity::onReaderMenuBack(const uint8_t orientation) {
   // cached layout no longer matches the new glyph advances (Regular and
   // Bold have different widths). Re-lay out the page with the same flow
   // used for theme changes.
-  const bool boldSwapNow = SETTINGS.readerBoldSwap != 0;
+  const bool boldSwapNow = RECENT_BOOKS.getBoldSwap(epub->getPath());
   if (boldSwapNow != boldSwapAtMenuOpen) {
     boldSwapAtMenuOpen = boldSwapNow;
     reloadCurrentSectionForDisplaySettings();
@@ -1235,12 +1235,13 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   clearPageCache();
 
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
+  const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());
 
   if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                 SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                 viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                 SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                SETTINGS.readerBoldSwap != 0)) {
+                                boldSwapEnabled)) {
     LOG_DBG("ERS", "Cache not found, building...");
 
     // Free font caches to reclaim contiguous heap for ZIP decompression (needs a 32 KB
@@ -1256,7 +1257,7 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                     SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                     viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                     SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                    SETTINGS.readerBoldSwap != 0, layoutProgressTick)) {
+                                    boldSwapEnabled, layoutProgressTick)) {
       LOG_ERR("ERS", "Failed to persist page data to SD");
       clearPageCache();
       section.reset();
@@ -1515,13 +1516,14 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
   }
 
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
+  const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());
 
   Section nextSection(epub, nextSpineIndex, renderer);
   if (nextSection.loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                   SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                   viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                   SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                  SETTINGS.readerBoldSwap != 0)) {
+                                  boldSwapEnabled)) {
     return;  // Already cached
   }
 
@@ -1530,7 +1532,7 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
                                      SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                      viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                      SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                     SETTINGS.readerBoldSwap != 0)) {
+                                     boldSwapEnabled)) {
     LOG_ERR("ERS", "Failed silent indexing for chapter: %d", nextSpineIndex);
   }
 }

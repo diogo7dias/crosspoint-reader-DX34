@@ -373,7 +373,13 @@ bool CrossPointSettings::loadFromBinaryFile() {
     }
     statusBarGranularRead = true;
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPod(inputFile, readerBoldSwap);
+    {
+      // Legacy global readerBoldSwap: the preference is now stored per book in
+      // RecentBooksStore, so read and discard to keep binary offsets aligned
+      // for any remaining fields below.
+      uint8_t legacyReaderBoldSwap = 0;
+      serialization::readPod(inputFile, legacyReaderBoldSwap);
+    }
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, debugBorders);
     if (++settingsRead >= fileSettingsCount) break;

@@ -9,12 +9,14 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "util/FavoriteBmp.h"
 
 EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                               const std::string& title, const int currentPage, const int totalPages,
+                                               const std::string& title, const std::string& bookPath,
+                                               const int currentPage, const int totalPages,
                                                const int bookProgressPercent, const uint8_t currentOrientation,
                                                const bool hasFootnotes, const bool isPageBookmarked,
                                                const int bookmarkCount, const bool hasQuotes,
@@ -23,6 +25,7 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
     : ActivityWithSubactivity("EpubReaderMenu", renderer, mappedInput),
       menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount, hasQuotes)),
       title(title),
+      bookPath(bookPath),
       pendingOrientation(currentOrientation),
       currentPage(currentPage),
       totalPages(totalPages),
@@ -124,14 +127,15 @@ void EpubReaderMenuActivity::loop() {
       return;
     }
     if (selectedAction == MenuAction::TOGGLE_BOLD_SWAP) {
-      // Flip the swap setting, persist, and update the global EpdFontFamily
-      // state so any subsequent draws (including this menu's own labels)
-      // reflect the new mapping. The reader picks up the change on menu
-      // exit via EpubReaderActivity::onReaderMenuBack, which re-lays out
-      // the current page if the value changed while the menu was open.
-      SETTINGS.readerBoldSwap = SETTINGS.readerBoldSwap ? 0 : 1;
-      SETTINGS.saveToFile();
-      EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
+      // Flip the per-book swap preference, persist it to RecentBooksStore,
+      // and update the global EpdFontFamily state so any subsequent draws
+      // (including this menu's own labels) reflect the new mapping. The
+      // reader picks up the change on menu exit via
+      // EpubReaderActivity::onReaderMenuBack, which re-lays out the current
+      // page if the value changed while the menu was open.
+      const bool newEnabled = !RECENT_BOOKS.getBoldSwap(bookPath);
+      RECENT_BOOKS.setBoldSwap(bookPath, newEnabled);
+      EpdFontFamily::setReaderBoldSwapEnabled(newEnabled);
       requestUpdate();
       return;
     }
@@ -229,7 +233,8 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
       const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
       renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
     } else if (item.action == MenuAction::TOGGLE_BOLD_SWAP) {
-      const char* value = SETTINGS.readerBoldSwap ? I18N.get(StrId::STR_STATE_ON) : I18N.get(StrId::STR_STATE_OFF);
+      const char* value =
+          RECENT_BOOKS.getBoldSwap(bookPath) ? I18N.get(StrId::STR_STATE_ON) : I18N.get(StrId::STR_STATE_OFF);
       const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
       renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
     }
