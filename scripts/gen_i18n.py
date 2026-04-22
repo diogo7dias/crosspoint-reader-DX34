@@ -407,13 +407,12 @@ def generate_keys_header(
     lines.append("}  // namespace i18n_strings")
     lines.append("")
 
-    # Language enum
+    # Language enum — emit single-line form to match clang-format output
+    # (clang-format 21+ collapses short enums; multi-line output would be
+    # reformatted every CI run and dirty the working tree after each build).
+    enum_entries = [f"{lang} = {i}" for i, lang in enumerate(languages)] + ["_COUNT"]
     lines.append("// Language enum")
-    lines.append("enum class Language : uint8_t {")
-    for i, lang in enumerate(languages):
-        lines.append(f"  {lang} = {i},")
-    lines.append("  _COUNT")
-    lines.append("};")
+    lines.append(f"enum class Language : uint8_t {{ {', '.join(enum_entries)} }};")
     lines.append("")
 
     # Extern declarations
