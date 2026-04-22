@@ -40,6 +40,7 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["readerStyleMode"] = theme.readerStyleMode;
   obj["textRenderMode"] = theme.textRenderMode;
   obj["textRenderModeV2"] = true;
+  obj["orientation"] = theme.orientation;
   obj["embeddedStyle"] = theme.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   obj["hyphenationEnabled"] = theme.hyphenationEnabled;
   obj["statusBarEnabled"] = theme.statusBarEnabled;
@@ -119,6 +120,8 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
     }
   }
   theme.hyphenationEnabled = obj["hyphenationEnabled"] | (uint8_t)0;
+  theme.orientation = clampEnum(obj["orientation"] | (uint8_t)CrossPointSettings::PORTRAIT,
+                                CrossPointSettings::ORIENTATION_COUNT, CrossPointSettings::PORTRAIT);
   theme.statusBarEnabled = obj["statusBarEnabled"] | (uint8_t)1;
   theme.statusBarShowBattery = obj["statusBarShowBattery"] | (uint8_t)1;
   theme.statusBarShowPageCounter = obj["statusBarShowPageCounter"] | (uint8_t)0;
