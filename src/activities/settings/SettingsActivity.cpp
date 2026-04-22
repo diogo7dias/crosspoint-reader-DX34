@@ -604,12 +604,210 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   const int contentY = metrics.topPadding + metrics.headerHeight;
   const int contentHeight = pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
   const int rowHeight = metrics.listRowHeight;
-  const int pageItems = std::max(1, contentHeight / rowHeight);
-  const int pageStartIndex = (selectedRowIndex / pageItems) * pageItems;
+  const int rowFont = UI_10_FONT_ID;
+  constexpr int kChipPad = 1;
 
-  for (int i = pageStartIndex; i < static_cast<int>(flatRows.size()) && i < pageStartIndex + pageItems; i++) {
-    const int rowY = contentY + (i - pageStartIndex) * rowHeight;
+  // Compute a row's value text (empty string if the row has no value column).
+  auto computeValueText = [&](const FlatSettingRow& row) -> std::string {
+    if (row.isHeader) {
+      return std::string();
+    }
+    const auto* settings = settingsForCategory(row.categoryIndex);
+    const auto& setting = (*settings)[row.settingIndex];
+    if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
+      return (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
+    }
+    if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
+      if (setting.valuePtr == &CrossPointSettings::fontSize) {
+        return fontSizeValueLabel(SETTINGS.fontFamily, SETTINGS.fontSize);
+      }
+      if (setting.valuePtr == &CrossPointSettings::fontFamily) {
+        return I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
+      }
+      if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
+        // Language names are self-descriptive ("English", "Español",
+        // "Slovenščina") — render directly from the generated table rather
+        // than translating a StrId.
+        const uint8_t idx = SETTINGS.uiLanguage < getLanguageCount() ? SETTINGS.uiLanguage : 0;
+        return LANGUAGE_NAMES[idx];
+      }
+      return I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
+    }
+    if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
+      const uint8_t valueToShow =
+          (valueEditMode && row.categoryIndex == valueEditCategoryIndex && row.settingIndex == valueEditSettingIndex)
+              ? valueEditDraft
+              : SETTINGS.*(setting.valuePtr);
+      std::string valueText = std::to_string(valueToShow);
+      if (setting.valuePtr == &CrossPointSettings::lineSpacingPercent) {
+        valueText += "%";
+      }
+      return valueText;
+    }
+    return std::string();
+  };
+
+  const int availableWidth = pageWidth - metrics.contentSidePadding * 2;
+  const int wrapGap = metrics.contentSidePadding;
+
+  // Take the longest UTF-8-safe prefix of `word` that still fits in `maxW`.
+  // Returns the prefix and the remainder.
+  auto takePrefixFit = [&](const std::string& word, int maxW) -> std::pair<std::string, std::string> {
+    int bestEnd = 0;
+    for (int end = 1; end <= static_cast<int>(word.size()); end++) {
+      // Skip UTF-8 continuation bytes so we never split a codepoint.
+      if (end < static_cast<int>(word.size()) && (static_cast<uint8_t>(word[end]) & 0xC0) == 0x80) {
+        continue;
+      }
+      const std::string candidate = word.substr(0, end);
+      if (renderer.getTextWidth(rowFont, candidate.c_str()) <= maxW) {
+        bestEnd = end;
+      } else {
+        break;
+      }
+    }
+    if (bestEnd == 0) {
+      // availableWidth too small to fit even one codepoint — draw nothing
+      // rather than spin forever. Should be impossible on real screens.
+      return {std::string(), word};
+    }
+    return {word.substr(0, bestEnd), word.substr(bestEnd)};
+  };
+
+  // Split a label into up to two lines, greedy-pack by word. If a single
+  // word exceeds availableWidth, force-break it mid-codepoint.
+  auto splitLabel = [&](const char* label) -> std::pair<std::string, std::string> {
+    std::string s(label);
+    if (renderer.getTextWidth(rowFont, s.c_str()) <= availableWidth) {
+      return {s, std::string()};
+    }
+    std::vector<std::string> words;
+    {
+      std::string cur;
+      for (char c : s) {
+        if (c == ' ') {
+          if (!cur.empty()) {
+            words.push_back(std::move(cur));
+            cur.clear();
+          }
+        } else {
+          cur += c;
+        }
+      }
+      if (!cur.empty()) {
+        words.push_back(std::move(cur));
+      }
+    }
+
+    std::string line1;
+    size_t wi = 0;
+    while (wi < words.size()) {
+      const std::string candidate = line1.empty() ? words[wi] : (line1 + " " + words[wi]);
+      if (renderer.getTextWidth(rowFont, candidate.c_str()) <= availableWidth) {
+        line1 = candidate;
+        wi++;
+      } else {
+        break;
+      }
+    }
+    if (line1.empty() && wi < words.size()) {
+      auto split = takePrefixFit(words[wi], availableWidth);
+      line1 = split.first;
+      if (!split.second.empty()) {
+        words[wi] = split.second;
+      } else {
+        wi++;
+      }
+    }
+
+    std::string line2;
+    while (wi < words.size()) {
+      const std::string candidate = line2.empty() ? words[wi] : (line2 + " " + words[wi]);
+      if (renderer.getTextWidth(rowFont, candidate.c_str()) <= availableWidth) {
+        line2 = candidate;
+        wi++;
+      } else {
+        if (line2.empty()) {
+          auto split = takePrefixFit(words[wi], availableWidth);
+          line2 = split.first;
+        }
+        break;
+      }
+    }
+    return {line1, line2};
+  };
+
+  // Pre-scan rows: compute value text, decide how label wraps, and pack
+  // each entry into 1/2/3-row slots so later pagination never clips text.
+  const int rowCount = static_cast<int>(flatRows.size());
+  std::vector<std::string> valueTexts(rowCount);
+  std::vector<std::string> labelLine1s(rowCount);
+  std::vector<std::string> labelLine2s(rowCount);
+  std::vector<uint8_t> valueLineOffset(rowCount, 0);
+  std::vector<int> rowHeights(rowCount, rowHeight);
+
+  for (int i = 0; i < rowCount; i++) {
     const auto& row = flatRows[i];
+    if (row.isHeader) {
+      continue;
+    }
+    const auto* settings = settingsForCategory(row.categoryIndex);
+    const auto& setting = (*settings)[row.settingIndex];
+    const char* settingName = I18N.get(setting.nameId);
+    auto labelSplit = splitLabel(settingName);
+    labelLine1s[i] = std::move(labelSplit.first);
+    labelLine2s[i] = std::move(labelSplit.second);
+    const int labelLineCount = labelLine2s[i].empty() ? 1 : 2;
+
+    std::string v = computeValueText(row);
+    if (v.empty()) {
+      rowHeights[i] = labelLineCount * rowHeight;
+      continue;
+    }
+
+    const int valueW = renderer.getTextWidth(rowFont, v.c_str());
+    const int line1W = renderer.getTextWidth(rowFont, labelLine1s[i].c_str());
+    const bool canInline = (labelLineCount == 1) && (line1W + wrapGap + valueW <= availableWidth);
+    if (canInline) {
+      rowHeights[i] = rowHeight;
+      valueLineOffset[i] = 0;
+    } else {
+      rowHeights[i] = (labelLineCount + 1) * rowHeight;
+      valueLineOffset[i] = static_cast<uint8_t>(labelLineCount);
+    }
+    valueTexts[i] = std::move(v);
+  }
+
+  // Greedy page packing: each page holds as many rows as fit in contentHeight.
+  std::vector<int> pageOfRow(rowCount, 0);
+  {
+    int curPage = 0;
+    int usedH = 0;
+    for (int i = 0; i < rowCount; i++) {
+      if (usedH > 0 && usedH + rowHeights[i] > contentHeight) {
+        curPage++;
+        usedH = 0;
+      }
+      pageOfRow[i] = curPage;
+      usedH += rowHeights[i];
+    }
+  }
+
+  int pageStartIndex = 0;
+  if (rowCount > 0) {
+    const int clampedSel = std::min(std::max(selectedRowIndex, 0), rowCount - 1);
+    const int targetPage = pageOfRow[clampedSel];
+    while (pageStartIndex < rowCount && pageOfRow[pageStartIndex] != targetPage) {
+      pageStartIndex++;
+    }
+  }
+
+  const int renderPage = (rowCount > 0) ? pageOfRow[pageStartIndex] : 0;
+  int rowYOffset = 0;
+  for (int i = pageStartIndex; i < rowCount && pageOfRow[i] == renderPage; i++) {
+    const int rowY = contentY + rowYOffset;
+    const auto& row = flatRows[i];
+    const int thisRowHeight = rowHeights[i];
 
     if (row.isHeader) {
       renderer.fillRect(0, rowY, pageWidth, rowHeight, true);
@@ -617,27 +815,42 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
       const int textX = (pageWidth - textW) / 2;
       renderer.drawText(UI_10_FONT_ID, textX, rowY, label, false, EpdFontFamily::REGULAR);
+      rowYOffset += thisRowHeight;
       continue;
     }
 
     const auto* settings = settingsForCategory(row.categoryIndex);
     const auto& setting = (*settings)[row.settingIndex];
-    const int rowFont = UI_10_FONT_ID;
     const bool isSelected = (i == selectedRowIndex);
-    const char* settingName = I18N.get(setting.nameId);
-    constexpr int kChipPad = 1;
     const int textH = renderer.getTextHeight(rowFont);
     const int chipH = textH + kChipPad * 2;
-    const int chipY = rowY + (rowHeight - chipH) / 2;
+
+    const std::string& labelL1 = labelLine1s[i];
+    const std::string& labelL2 = labelLine2s[i];
+    const bool hasLabelL2 = !labelL2.empty();
+    const int labelL1Y = rowY;
+    const int labelL2Y = rowY + rowHeight;
+    const int valueY = rowY + valueLineOffset[i] * rowHeight;
+    const int labelL1ChipY = labelL1Y + (rowHeight - chipH) / 2;
+    const int labelL2ChipY = labelL2Y + (rowHeight - chipH) / 2;
+    const int valueChipY = valueY + (rowHeight - chipH) / 2;
 
     const bool isDisabledAction =
         (setting.type == SettingType::ACTION && setting.action == SettingAction::BluetoothHID);
 
+    const int labelL1W = renderer.getTextWidth(rowFont, labelL1.c_str());
     if (isSelected) {
-      const int nameWidth = renderer.getTextWidth(rowFont, settingName);
-      renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY, nameWidth + kChipPad * 2, chipH, true);
+      renderer.fillRect(metrics.contentSidePadding - kChipPad, labelL1ChipY, labelL1W + kChipPad * 2, chipH, true);
     }
-    renderer.drawText(rowFont, metrics.contentSidePadding, rowY, settingName, !isSelected);
+    renderer.drawText(rowFont, metrics.contentSidePadding, labelL1Y, labelL1.c_str(), !isSelected);
+
+    if (hasLabelL2) {
+      const int labelL2W = renderer.getTextWidth(rowFont, labelL2.c_str());
+      if (isSelected) {
+        renderer.fillRect(metrics.contentSidePadding - kChipPad, labelL2ChipY, labelL2W + kChipPad * 2, chipH, true);
+      }
+      renderer.drawText(rowFont, metrics.contentSidePadding, labelL2Y, labelL2.c_str(), !isSelected);
+    }
 
     if (isDisabledAction) {
       // Strike-through indicates "upcoming but disabled for now". Inverted
@@ -645,50 +858,24 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       // background black, so the line must be drawn white to remain visible).
       // 2px thickness — two stacked 1px lines — so the mark reads clearly
       // against the row font at a glance.
-      const int strikeWidth = renderer.getTextWidth(rowFont, settingName);
-      const int strikeY = rowY + textH / 2;
-      renderer.drawLine(metrics.contentSidePadding, strikeY, metrics.contentSidePadding + strikeWidth, strikeY,
+      const int strikeY = labelL1Y + textH / 2;
+      renderer.drawLine(metrics.contentSidePadding, strikeY, metrics.contentSidePadding + labelL1W, strikeY,
                         !isSelected);
-      renderer.drawLine(metrics.contentSidePadding, strikeY + 1, metrics.contentSidePadding + strikeWidth, strikeY + 1,
+      renderer.drawLine(metrics.contentSidePadding, strikeY + 1, metrics.contentSidePadding + labelL1W, strikeY + 1,
                         !isSelected);
     }
 
-    std::string valueText;
-    if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
-      valueText = (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
-    } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
-      if (setting.valuePtr == &CrossPointSettings::fontSize) {
-        valueText = fontSizeValueLabel(SETTINGS.fontFamily, SETTINGS.fontSize);
-      } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-        valueText = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
-      } else if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
-        // Language names are self-descriptive ("English", "Español",
-        // "Slovenščina") — render directly from the generated table rather
-        // than translating a StrId.
-        const uint8_t idx = SETTINGS.uiLanguage < getLanguageCount() ? SETTINGS.uiLanguage : 0;
-        valueText = LANGUAGE_NAMES[idx];
-      } else {
-        valueText = I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
-      }
-    } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
-      const uint8_t valueToShow =
-          (valueEditMode && row.categoryIndex == valueEditCategoryIndex && row.settingIndex == valueEditSettingIndex)
-              ? valueEditDraft
-              : SETTINGS.*(setting.valuePtr);
-      valueText = std::to_string(valueToShow);
-      if (setting.valuePtr == &CrossPointSettings::lineSpacingPercent) {
-        valueText += "%";
-      }
-    }
-
+    const std::string& valueText = valueTexts[i];
     if (!valueText.empty()) {
       const int valueW = renderer.getTextWidth(rowFont, valueText.c_str());
       const int valueX = pageWidth - metrics.contentSidePadding - valueW;
       if (isSelected) {
-        renderer.fillRect(valueX - kChipPad, chipY, valueW + kChipPad * 2, chipH, true);
+        renderer.fillRect(valueX - kChipPad, valueChipY, valueW + kChipPad * 2, chipH, true);
       }
-      renderer.drawText(rowFont, valueX, rowY, valueText.c_str(), !isSelected);
+      renderer.drawText(rowFont, valueX, valueY, valueText.c_str(), !isSelected);
     }
+
+    rowYOffset += thisRowHeight;
   }
 
   // Draw help text
