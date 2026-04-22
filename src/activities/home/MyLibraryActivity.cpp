@@ -24,6 +24,7 @@
 #include "activities/network/QRShareActivity.h"
 #include "activities/reader/ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/Trash.h"
@@ -505,9 +506,109 @@ void MyLibraryActivity::enterFileMoveBrowser() {
   mode = Mode::FILE_MOVE_BROWSER;
 }
 
+void MyLibraryActivity::openKeyboardForRenameBmp() {
+  if (!isBmpFile(selectedFilePath)) return;
+
+  pendingRenameBase.clear();
+  pendingRenameSubmit = false;
+  pendingRenameCancel = false;
+  enterNewActivity(new KeyboardEntryActivity(
+      renderer, mappedInput, "Rename image", "", 10, 200, false,
+      [this](const std::string& newBase) {
+        pendingRenameBase = newBase;
+        pendingRenameSubmit = true;
+      },
+      [this]() { pendingRenameCancel = true; }));
+}
+
+void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
+  std::string base = newBase;
+  // Trim whitespace.
+  while (!base.empty() && (base.front() == ' ' || base.front() == '\t')) base.erase(base.begin());
+  while (!base.empty() && (base.back() == ' ' || base.back() == '\t')) base.pop_back();
+
+  // Strip user-typed trailing .bmp (any case) and _F — we control both.
+  if (base.size() >= 4) {
+    std::string tail = base.substr(base.size() - 4);
+    std::transform(tail.begin(), tail.end(), tail.begin(), ::tolower);
+    if (tail == ".bmp") base = base.substr(0, base.size() - 4);
+  }
+  if (base.size() >= 2 && base.substr(base.size() - 2) == "_F") {
+    base = base.substr(0, base.size() - 2);
+  }
+
+  if (base.empty()) {
+    showMessagePopup("Invalid name");
+    return;
+  }
+  for (char c : base) {
+    if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' ||
+        static_cast<unsigned char>(c) < 0x20) {
+      showMessagePopup("Invalid name");
+      return;
+    }
+  }
+
+  const bool wasFav = FavoriteBmp::isFavoritePath(selectedFilePath);
+  const std::string parent = basepath.empty() ? "/" : basepath;
+  const std::string parentSlash = (parent.back() == '/') ? parent : parent + "/";
+  const std::string suffix = std::string(wasFav ? "_F" : "") + ".bmp";
+
+  auto buildPath = [&](const std::string& b) { return parentSlash + b + suffix; };
+
+  std::string targetPath = buildPath(base);
+  if (targetPath == selectedFilePath) {
+    mode = actionsOpenedFromViewer ? Mode::BMP_VIEW : Mode::FILE_ACTIONS;
+    requestUpdate();
+    return;
+  }
+
+  // Auto-suffix collision: _1, _2, ...
+  if (Storage.exists(targetPath.c_str())) {
+    bool found = false;
+    for (int n = 1; n <= 999; ++n) {
+      const std::string candidate = buildPath(base + "_" + std::to_string(n));
+      if (!Storage.exists(candidate.c_str())) {
+        targetPath = candidate;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      showMessagePopup("Too many similar names");
+      return;
+    }
+  }
+
+  StatusPopup::showBlocking(renderer, "Renaming");
+  if (!Storage.rename(selectedFilePath.c_str(), targetPath.c_str())) {
+    showMessagePopup("Rename failed");
+    return;
+  }
+
+  FavoriteBmp::replacePathReferences(selectedFilePath, targetPath);
+  APP_STATE.saveToFile();
+
+  const std::string newName = getBasename(targetPath);
+  if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
+    files[*rawIndex] = newName;
+    sortFileList(files);
+    rebuildFilteredFileIndexes();
+    selectorIndex = listIndexForRawFileIndex(findEntry(newName));
+  }
+  selectedFilePath = targetPath;
+  StatusPopup::showConfirmation(renderer, "Renamed");
+
+  // Close the actions menu and return to the file list after rename.
+  actionsOpenedFromViewer = false;
+  mode = Mode::BROWSE;
+  requestCleanRefresh();
+  requestUpdateAndWait();
+}
+
 int MyLibraryActivity::getFileActionCount() const {
   if (!isBmpFile(selectedFilePath)) return 5;
-  return actionsOpenedFromViewer ? 6 : 7;
+  return actionsOpenedFromViewer ? 7 : 8;
 }
 
 std::string MyLibraryActivity::getFileActionLabel(const int index) const {
@@ -523,10 +624,12 @@ std::string MyLibraryActivity::getFileActionLabel(const int index) const {
       case 1:
         return FavoriteBmp::isFavoritePath(selectedFilePath) ? "Unfavorite" : "Favorite";
       case 2:
-        return "Move File";
+        return "Rename";
       case 3:
-        return tr(STR_DOWNLOAD_IMAGE_VIA_QR);
+        return "Move File";
       case 4:
+        return tr(STR_DOWNLOAD_IMAGE_VIA_QR);
+      case 5:
         return "Delete File";
       default:
         return "Cancel";
@@ -757,6 +860,19 @@ void MyLibraryActivity::loopSubActivity() {
     }
     requestUpdate();
   }
+  if (pendingRenameSubmit || pendingRenameCancel) {
+    const bool shouldApplyRename = pendingRenameSubmit;
+    const std::string typed = pendingRenameBase;
+    pendingRenameSubmit = false;
+    pendingRenameCancel = false;
+    pendingRenameBase.clear();
+    exitActivity();
+    if (shouldApplyRename) {
+      renameSelectedBmp(typed);
+    } else {
+      requestUpdate();
+    }
+  }
 }
 
 void MyLibraryActivity::loopMessagePopup() {
@@ -879,10 +995,13 @@ void MyLibraryActivity::loopFileActions() {
           break;
         }
         case 2:
+          openKeyboardForRenameBmp();
+          return;
+        case 3:
           actionsOpenedFromViewer = false;
           enterFileMoveBrowser();
           break;
-        case 3:
+        case 4:
           actionsOpenedFromViewer = false;
           exitActivity();
           enterNewActivity(new QRShareActivity(
@@ -893,7 +1012,7 @@ void MyLibraryActivity::loopFileActions() {
               },
               selectedFilePath));
           return;
-        case 4: {
+        case 5: {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
           enterNewActivity(new ConfirmDialogActivity(

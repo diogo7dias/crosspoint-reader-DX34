@@ -59,6 +59,9 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   std::string pendingSearchQuery;
   bool pendingSearchSubmit = false;
   bool pendingSearchCancel = false;
+  std::string pendingRenameBase;
+  bool pendingRenameSubmit = false;
+  bool pendingRenameCancel = false;
   std::unordered_map<std::string, std::string> progressPrefixCache;
   size_t fileLoadLimit = 200;
   bool hasMoreFiles = false;
@@ -97,6 +100,8 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   void enterBmpView(const std::string& bmpPath);
   void enterFileActions(const std::string& filePath);
   void enterFileMoveBrowser();
+  void openKeyboardForRenameBmp();
+  void renameSelectedBmp(const std::string& newBase);
   void loadMoveBrowseEntries();
   int getFileActionCount() const;
   std::string getFileActionLabel(int index) const;

@@ -26,9 +26,13 @@ void KeyboardEntryActivity::loop() {
     requestUpdate();
   }
 
-  // Cancel
+  // Back: submits as OK when text has been edited (quick-save), cancels when unchanged.
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    if (onCancel) onCancel();
+    if (text != initialText) {
+      if (onComplete) onComplete(text);
+    } else {
+      if (onCancel) onCancel();
+    }
     requestUpdate();
   }
 }
@@ -76,12 +80,16 @@ void KeyboardEntryActivity::render(Activity::RenderLock&&) {
   renderer.drawText(UI_10_FONT_ID, 10, inputStartY, "[");
 
   std::string displayText;
+  const bool showingPlaceholder = text.empty() && !placeholder.empty();
   if (isPassword) {
     displayText = std::string(text.length(), '*');
+    displayText += "_";
+  } else if (showingPlaceholder) {
+    // Placeholder has no trailing cursor so it's visually distinct from real input.
+    displayText = placeholder;
   } else {
-    displayText = text;
+    displayText = text + "_";
   }
-  displayText += "_";
 
   // Render input text across multiple lines
   int lineStartIdx = 0;
@@ -106,8 +114,9 @@ void KeyboardEntryActivity::render(Activity::RenderLock&&) {
   const int keyboardStartY = inputEndY + 20;
   keyboard.render(renderer, keyboardStartY);
 
-  // Draw help text
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+  // Draw help text. When text differs from initial, Back submits as OK — reflect that in the hint.
+  const char* backLabel = (text != initialText) ? tr(STR_OK_BUTTON) : tr(STR_BACK);
+  const auto labels = mappedInput.mapLabels(backLabel, tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   GUI.drawSideButtonHints(renderer, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
 

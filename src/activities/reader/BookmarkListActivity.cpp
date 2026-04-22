@@ -80,12 +80,15 @@ void BookmarkListActivity::openActionPopup(int bookmarkIndex) {
 
 void BookmarkListActivity::openKeyboardForRename(int bookmarkIndex) {
   if (bookmarkIndex < 0 || bookmarkIndex >= store.count()) return;
-  const auto& bm = store.getAll()[bookmarkIndex];
-  const std::string initial = bm.name.empty() ? formatBookmark(bm) : bm.name;
   actionPopupOpen = false;
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, tr(STR_BOOKMARK_NAME), initial, 10, BookmarkStore::MAX_NAME_LENGTH, false,
+      renderer, mappedInput, tr(STR_BOOKMARK_NAME), "", 10, BookmarkStore::MAX_NAME_LENGTH, false,
       [this, bookmarkIndex](const std::string& name) {
+        if (name.empty()) {
+          exitActivity();
+          requestUpdate();
+          return;
+        }
         store.rename(bookmarkIndex, name);
         store.save(cachePath);
         exitActivity();

@@ -74,9 +74,10 @@ void ReadingThemesActivity::openKeyboardForNewTheme() {
   const std::string suggestedName = READING_THEMES.makeUniqueName(tr(STR_THEME));
   exitActivity();
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, tr(STR_THEME_NAME), suggestedName, 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
-      [this](const std::string& name) {
-        const bool ok = READING_THEMES.addTheme(name);
+      renderer, mappedInput, tr(STR_THEME_NAME), "", 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
+      [this, suggestedName](const std::string& name) {
+        const std::string effective = name.empty() ? suggestedName : name;
+        const bool ok = READING_THEMES.addTheme(effective);
         pendingSubactivityExit = true;
         if (!ok) {
           pendingPostExitAction = [this]() { showMessage(tr(STR_SAVE_THEME_FAILED)); };
@@ -84,7 +85,7 @@ void ReadingThemesActivity::openKeyboardForNewTheme() {
         }
         pendingPostExitAction = [this]() { selectedRowIndex = rowCount() - 1; };
       },
-      [this]() { pendingSubactivityExit = true; }));
+      [this]() { pendingSubactivityExit = true; }, suggestedName));
 }
 
 void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
@@ -96,8 +97,12 @@ void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
 
   exitActivity();
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, tr(STR_RENAME_THEME), theme->name, 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
+      renderer, mappedInput, tr(STR_RENAME_THEME), "", 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
       [this, themeIndex](const std::string& name) {
+        if (name.empty()) {
+          pendingSubactivityExit = true;
+          return;
+        }
         const bool ok = READING_THEMES.renameTheme(themeIndex, name);
         pendingSubactivityExit = true;
         pendingPostExitAction = [this, themeIndex, ok]() {

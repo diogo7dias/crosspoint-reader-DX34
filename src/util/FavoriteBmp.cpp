@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <string>
 
 #include "CrossPointState.h"
@@ -12,8 +13,6 @@ namespace FavoriteBmp {
 namespace {
 
 constexpr const char* kFavoriteSuffix = "_F";
-constexpr const char* kFavoriteLimitPopupMessage = "Sleep favorites full (200/200)";
-constexpr const char* kFavoriteLimitHomeMessage = "Sleep favorites full: 200/200";
 
 bool isBmpPathInternal(const std::string& path) { return StringUtils::checkFileExtension(path, ".bmp"); }
 
@@ -51,29 +50,6 @@ void addUnique(std::vector<std::string>& values, const std::string& value) {
 
 void removeValue(std::vector<std::string>& values, const std::string& value) {
   values.erase(std::remove(values.begin(), values.end(), value), values.end());
-}
-
-bool hasFavoriteSuffix(const std::string& filename) {
-  if (!isBmpPathInternal(filename) || filename.size() <= 6) {
-    return false;
-  }
-  const size_t extPos = filename.size() - 4;
-  return filename.substr(extPos - 2, 2) == "_F";
-}
-
-std::string addFavoriteSuffix(const std::string& filename) {
-  if (!isBmpPathInternal(filename) || hasFavoriteSuffix(filename)) {
-    return filename;
-  }
-  return filename.substr(0, filename.size() - 4) + kFavoriteSuffix + filename.substr(filename.size() - 4);
-}
-
-std::string stripFavoriteSuffix(const std::string& filename) {
-  if (!hasFavoriteSuffix(filename)) {
-    return filename;
-  }
-  const size_t extPos = filename.size() - 4;
-  return filename.substr(0, extPos - 2) + filename.substr(extPos);
 }
 
 bool isInSleepFolder(const std::string& path) { return startsWith(path, "/sleep/"); }
@@ -120,6 +96,29 @@ void removeSleepReferencesForPath(const std::string& path) {
 }
 
 }  // namespace
+
+bool hasFavoriteSuffix(const std::string& filename) {
+  if (!isBmpPathInternal(filename) || filename.size() <= 6) {
+    return false;
+  }
+  const size_t extPos = filename.size() - 4;
+  return filename.substr(extPos - 2, 2) == "_F";
+}
+
+std::string addFavoriteSuffix(const std::string& filename) {
+  if (!isBmpPathInternal(filename) || hasFavoriteSuffix(filename)) {
+    return filename;
+  }
+  return filename.substr(0, filename.size() - 4) + kFavoriteSuffix + filename.substr(filename.size() - 4);
+}
+
+std::string stripFavoriteSuffix(const std::string& filename) {
+  if (!hasFavoriteSuffix(filename)) {
+    return filename;
+  }
+  const size_t extPos = filename.size() - 4;
+  return filename.substr(0, extPos - 2) + filename.substr(extPos);
+}
 
 bool isFavoritePath(const std::string& path) {
   return vectorContains(APP_STATE.favoriteBmpPaths, path) || hasFavoriteSuffix(getBasename(path));
@@ -171,9 +170,27 @@ std::string displayNameForPath(const std::string& path) {
   return std::string("[F] ") + stripFavoriteSuffix(filename);
 }
 
-const char* limitReachedPopupMessage() { return kFavoriteLimitPopupMessage; }
+const char* limitReachedPopupMessage() {
+  static char buf[48];
+  static bool initialized = false;
+  if (!initialized) {
+    snprintf(buf, sizeof(buf), "Sleep favorites full (%zu/%zu)", CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST,
+             CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST);
+    initialized = true;
+  }
+  return buf;
+}
 
-const char* limitReachedHomeMessage() { return kFavoriteLimitHomeMessage; }
+const char* limitReachedHomeMessage() {
+  static char buf[48];
+  static bool initialized = false;
+  if (!initialized) {
+    snprintf(buf, sizeof(buf), "Sleep favorites full: %zu/%zu", CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST,
+             CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST);
+    initialized = true;
+  }
+  return buf;
+}
 
 SetFavoriteResult setFavorite(const std::string& path, const bool favorite, std::string* updatedPath) {
   if (!isBmpPathInternal(path)) {
