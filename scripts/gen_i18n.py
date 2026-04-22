@@ -603,9 +603,10 @@ def main(translations_dir=None, output_dir=None) -> None:
     print(f"Output directory: {output_dir}")
     print()
 
-    # English-only by default to keep firmware size low.
-    # Set CROSSPOINT_I18N_LANGS=ALL to include every language.
-    langs_env = os.environ.get("CROSSPOINT_I18N_LANGS", "ENGLISH").strip()
+    # All languages are compiled in by default so the in-device picker
+    # can switch between them. Override with CROSSPOINT_I18N_LANGS=ENGLISH
+    # (or a comma list) to produce a smaller binary.
+    langs_env = os.environ.get("CROSSPOINT_I18N_LANGS", "ALL").strip()
     include_language_codes = None
     if langs_env and langs_env.upper() != "ALL":
         include_language_codes = [x.strip().upper() for x in langs_env.split(",") if x.strip()]

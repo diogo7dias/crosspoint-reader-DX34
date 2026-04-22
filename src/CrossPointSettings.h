@@ -318,6 +318,9 @@ class CrossPointSettings {
   // E-ink refresh frequency (default 15 pages)
   uint8_t refreshFrequency = REFRESH_15;
   uint8_t hyphenationEnabled = 0;
+  // UI language. Stored as the uint8_t value of i18n `Language` enum
+  // (0 = ENGLISH). Validated against getLanguageCount() on load.
+  uint8_t uiLanguage = 0;
 
   // Legacy uniform reader margin (kept for backward compatibility in settings
   // migration)

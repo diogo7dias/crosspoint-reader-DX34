@@ -487,6 +487,12 @@ void SettingsActivity::toggleCurrentSetting() {
       const uint8_t currentIndex = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
       SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(
           (currentIndex + 1) % static_cast<uint8_t>(setting.enumValues.size()));
+    } else if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
+      const uint8_t count = getLanguageCount();
+      SETTINGS.uiLanguage = count > 0 ? static_cast<uint8_t>((currentValue + 1) % count) : 0;
+      I18N.setLanguage(static_cast<Language>(SETTINGS.uiLanguage));
+      buildSettingsList();
+      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {
       SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
     }
@@ -655,6 +661,12 @@ void SettingsActivity::render(Activity::RenderLock&&) {
         valueText = fontSizeValueLabel(SETTINGS.fontFamily, SETTINGS.fontSize);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
         valueText = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
+      } else if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
+        // Language names are self-descriptive ("English", "Español",
+        // "Slovenščina") — render directly from the generated table rather
+        // than translating a StrId.
+        const uint8_t idx = SETTINGS.uiLanguage < getLanguageCount() ? SETTINGS.uiLanguage : 0;
+        valueText = LANGUAGE_NAMES[idx];
       } else {
         valueText = I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
       }

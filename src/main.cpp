@@ -530,6 +530,7 @@ void setup() {
   trash::pruneToCap();
 
   SETTINGS.loadFromFile();
+  I18N.setLanguage(static_cast<Language>(SETTINGS.uiLanguage));
   // Retry theme load up to 3 times — a transient SD read failure here would
   // leave the theme list empty, and any later save could overwrite the file.
   for (int attempt = 0; attempt < 3; attempt++) {

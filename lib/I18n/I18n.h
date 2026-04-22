@@ -24,8 +24,13 @@ class I18n {
   // Returns a sorted string of unique characters
   static const char* getCharacterSet(Language lang);
 
+  // Current UI language (clamped to a valid value if out of range).
+  void setLanguage(Language lang);
+  Language getLanguage() const { return currentLanguage_; }
+
  private:
   I18n() = default;
+  Language currentLanguage_ = Language::ENGLISH;
 };
 
 // Convenience macros
