@@ -99,6 +99,11 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
   if (!SETTINGS.statusBarEnabled) {
     return;
   }
+
+  // Status bar chrome always renders crisp, regardless of the book's textRenderMode.
+  const uint8_t previousTextRenderStyle = renderer.getTextRenderStyle();
+  renderer.setTextRenderStyle(0);
+
   const bool showBattery = SETTINGS.statusBarShowBattery;
   const bool showBatteryPercentage =
       SETTINGS.hideBatteryPercentage == CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_NEVER;
@@ -326,6 +331,8 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
   renderBand(statusTopInset, statusBarLayout.topReservedHeight, true);
   renderBand(screenHeight - statusBottomInset - statusBarLayout.bottomReservedHeight,
              statusBarLayout.bottomReservedHeight, false);
+
+  renderer.setTextRenderStyle(previousTextRenderStyle);
 }
 
 }  // namespace ReaderStatusBar
