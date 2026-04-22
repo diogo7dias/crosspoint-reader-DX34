@@ -376,8 +376,8 @@ void XtcReaderActivity::renderPage() {
   // malformed XTC header reporting garbage dimensions.
   constexpr size_t XTC_MAX_PAGE_BUF = 512u * 1024;
   if (pageBufferSize == 0 || pageBufferSize > XTC_MAX_PAGE_BUF) {
-    LOG_ERR("XTR", "Invalid page buffer size %lu (max %u) — corrupt XTC header?",
-            (unsigned long)pageBufferSize, (unsigned)XTC_MAX_PAGE_BUF);
+    LOG_ERR("XTR", "Invalid page buffer size %lu (max %u) — corrupt XTC header?", (unsigned long)pageBufferSize,
+            (unsigned)XTC_MAX_PAGE_BUF);
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_PAGE_LOAD_ERROR), true, EpdFontFamily::REGULAR);
     renderer.displayBuffer();

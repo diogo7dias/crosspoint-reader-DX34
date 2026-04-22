@@ -1,10 +1,9 @@
 #include "EpubReaderMenuActivity.h"
 
+#include <EpdFontFamily.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
-
-#include <EpdFontFamily.h>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -14,14 +13,11 @@
 #include "fontIds.h"
 #include "util/FavoriteBmp.h"
 
-EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                               const std::string& title, const std::string& bookPath,
-                                               const int currentPage, const int totalPages,
-                                               const int bookProgressPercent, const uint8_t currentOrientation,
-                                               const bool hasFootnotes, const bool isPageBookmarked,
-                                               const int bookmarkCount, const bool hasQuotes,
-                                               const std::function<void(uint8_t)>& onBack,
-                                               const std::function<void(MenuAction)>& onAction)
+EpubReaderMenuActivity::EpubReaderMenuActivity(
+    GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title, const std::string& bookPath,
+    const int currentPage, const int totalPages, const int bookProgressPercent, const uint8_t currentOrientation,
+    const bool hasFootnotes, const bool isPageBookmarked, const int bookmarkCount, const bool hasQuotes,
+    const std::function<void(uint8_t)>& onBack, const std::function<void(MenuAction)>& onAction)
     : ActivityWithSubactivity("EpubReaderMenu", renderer, mappedInput),
       menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount, hasQuotes)),
       title(title),

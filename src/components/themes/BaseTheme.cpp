@@ -1099,8 +1099,7 @@ void BaseTheme::drawHomeInfoStatsPopup(const GfxRenderer& renderer) const {
   };
 
   const uint64_t usedBytes = stats.totalBytes > stats.freeBytes ? stats.totalBytes - stats.freeBytes : 0;
-  const uint32_t usedPct =
-      stats.totalBytes > 0 ? static_cast<uint32_t>((usedBytes * 100ull) / stats.totalBytes) : 0;
+  const uint32_t usedPct = stats.totalBytes > 0 ? static_cast<uint32_t>((usedBytes * 100ull) / stats.totalBytes) : 0;
 
   // Right-aligned value layout so numbers line up in a column.
   auto drawRow = [&](const int y, const char* labelText, const std::string& valueText) {
