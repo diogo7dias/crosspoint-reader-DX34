@@ -500,7 +500,7 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.fontSize = CrossPointSettings::normalizeFontSizeForFamily(normalized.fontFamily, theme.fontSize);
   normalized.lineSpacingPercent = clampRange(theme.lineSpacingPercent, 35, 150, 110);
   normalized.uniformMargins = theme.uniformMargins ? 1 : 0;
-  normalized.dynamicMargins = theme.dynamicMargins ? 1 : 0;
+  normalized.dynamicMargins = (theme.dynamicMargins > 2) ? 0 : theme.dynamicMargins;
   normalized.screenMarginHorizontal = clampRange(theme.screenMarginHorizontal, 0, 55, 20);
   normalized.screenMarginTop = clampRange(theme.screenMarginTop, 0, 55, 20);
   normalized.screenMarginBottom = clampRange(theme.screenMarginBottom, 0, 55, 20);
