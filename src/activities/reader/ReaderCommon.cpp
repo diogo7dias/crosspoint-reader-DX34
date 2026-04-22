@@ -8,7 +8,6 @@
 
 namespace ReaderCommon {
 
-
 std::string formatPageCounterText(const uint8_t mode, const int currentPage, const int totalPages) {
   const int safeTotalPages = std::max(totalPages, 0);
   const int safeCurrentPage = std::max(currentPage, 0);

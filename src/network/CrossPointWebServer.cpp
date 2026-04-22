@@ -28,10 +28,9 @@
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
-#include "util/StringUtils.h"
-
 #include "network/SettingsGateway.h"
 #include "network/ws/WsUploadSession.h"
+#include "util/StringUtils.h"
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -365,7 +364,7 @@ void CrossPointWebServer::begin() {
                     SETTINGS.fontSize =
                         CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
                     SETTINGS.lineSpacingPercent =
-                        CrossPointSettings::defaultLineSpacingPercentForFamily(SETTINGS.fontFamily);
+                        CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
                   } else {
                     SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
                   }

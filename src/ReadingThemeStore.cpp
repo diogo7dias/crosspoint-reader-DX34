@@ -241,8 +241,7 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.wordSpacingPercent == theme.wordSpacingPercent &&
          current.firstLineIndentMode == theme.firstLineIndentMode && current.readerStyleMode == theme.readerStyleMode &&
          current.textRenderMode == theme.textRenderMode && current.orientation == theme.orientation &&
-         current.hyphenationEnabled == theme.hyphenationEnabled &&
-         current.statusBarEnabled == theme.statusBarEnabled &&
+         current.hyphenationEnabled == theme.hyphenationEnabled && current.statusBarEnabled == theme.statusBarEnabled &&
          current.statusBarShowBattery == theme.statusBarShowBattery &&
          current.statusBarShowPageCounter == theme.statusBarShowPageCounter &&
          current.statusBarPageCounterMode == theme.statusBarPageCounterMode &&

@@ -357,8 +357,8 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
       (section->pageCount > 0) ? (static_cast<float>(section->currentPage + 1) / section->pageCount) * 100.0f : 0.0f;
 
   if (SETTINGS.statusBarShowPageCounter) {
-    layout.pageCounterText = ReaderCommon::formatPageCounterText(
-        SETTINGS.statusBarPageCounterMode, section->currentPage, section->pageCount);
+    layout.pageCounterText = ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode,
+                                                                 section->currentPage, section->pageCount);
     layout.pageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
   }
   if (SETTINGS.statusBarShowBookPercentage) {
@@ -402,8 +402,7 @@ void EpubReaderActivity::populateBookPageCounterText(StatusBarLayout& layout) co
   // than prose, so the estimated total can fluctuate as the reader moves between chapter types.
   // We accept that drift rather than pre-indexing every chapter (which would block first-open).
   const size_t bookSize = epub->getBookSize();
-  const size_t prevChapterSize =
-      (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+  const size_t prevChapterSize = (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
   const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
   if (curChapterSize == 0 || bookSize == 0) {
     return;
@@ -1291,8 +1290,7 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   // doesn't jump to a random page after a settings change.
   if (cachedChapterTotalPageCount > 0) {
     if (currentSpineIndex == cachedSpineIndex && section->pageCount != cachedChapterTotalPageCount) {
-      const float progress =
-          static_cast<float>(section->currentPage) / static_cast<float>(cachedChapterTotalPageCount);
+      const float progress = static_cast<float>(section->currentPage) / static_cast<float>(cachedChapterTotalPageCount);
       section->currentPage = static_cast<int>(progress * section->pageCount);
     }
     cachedChapterTotalPageCount = 0;  // One-shot: don't re-apply on subsequent renders.

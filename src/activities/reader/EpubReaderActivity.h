@@ -87,7 +87,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool confirmLongPressHandled = false;
   crosspoint::reader::EpubProgressSink progressSink_{"", 0};
   crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
-  int pageLoadFailCount = 0;         // Tracks consecutive page load failures to prevent infinite retry loops
+  int pageLoadFailCount = 0;  // Tracks consecutive page load failures to prevent infinite retry loops
   // Cross-task handoff: render runs on the display task, but tearing down `section` must happen on
   // the loop task — its destructor closes file handles and frees page-layout storage that the
   // render task may still be iterating. Setting this flag asks the loop to call section.reset()
