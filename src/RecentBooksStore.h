@@ -60,8 +60,9 @@ class RecentBooksStore {
 
   // Per-book Bold Swap preference. Lookup is by book path; unknown paths
   // return false so first-time opens always start with bold swap OFF.
-  // setBoldSwap creates the entry if missing (title/author/cover empty) so the
-  // preference can still be persisted before the book's metadata is registered.
+  // setBoldSwap is a no-op on unknown paths (logs an error) — callers must
+  // register the book via addBook() first, which the reader always does on
+  // open before the menu that exposes this toggle is reachable.
   bool getBoldSwap(const std::string& path) const;
   void setBoldSwap(const std::string& path, bool enabled);
 

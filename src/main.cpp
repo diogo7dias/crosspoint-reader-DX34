@@ -49,16 +49,16 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "util/ButtonNavigator.h"
-#include "util/TransitionFeedback.h"
 #include "lifecycle/ActivityRouter.h"
-#include "sleep/SdFatSleepFs.h"
-#include "sleep/WallpaperPlaylist.h"
-#include "util/FavoriteBmp.h"
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
 #include "persist/SdFatFileIO.h"
 #include "persist/Trash.h"
+#include "sleep/SdFatSleepFs.h"
+#include "sleep/WallpaperPlaylist.h"
+#include "util/ButtonNavigator.h"
+#include "util/FavoriteBmp.h"
+#include "util/TransitionFeedback.h"
 
 HalDisplay display;
 HalGPIO gpio;
@@ -355,13 +355,9 @@ static void openFileTransferInline() {
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
 }
 
-void onGoToFileTransfer() {
-  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::FileTransfer, ""});
-}
+void onGoToFileTransfer() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::FileTransfer, ""}); }
 
-void onGoToSettings() {
-  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Settings, ""});
-}
+void onGoToSettings() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Settings, ""}); }
 
 // ActivityRouter applies persist policy before calling this factory (RFC #23).
 static void openMyLibraryInline(const std::string& path) {
@@ -374,9 +370,7 @@ static void openMyLibraryInline(const std::string& path) {
   }
 }
 
-void onGoToMyLibrary() {
-  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""});
-}
+void onGoToMyLibrary() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""}); }
 
 static void openRecentBooksInline() {
   TransitionFeedback::show(renderer, "Loading recents...");
@@ -384,9 +378,7 @@ static void openRecentBooksInline() {
   enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
 }
 
-void onGoToRecentBooks() {
-  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""});
-}
+void onGoToRecentBooks() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""}); }
 
 void onGoToMyLibraryWithPath(const std::string& path) {
   lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibraryAt, path});
@@ -398,9 +390,7 @@ static void openBrowserInline() {
   enterNewActivity(new OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
 }
 
-void onGoToBrowser() {
-  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""});
-}
+void onGoToBrowser() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""}); }
 
 static void openHomeInline() {
   TransitionFeedback::show(renderer, "Loading home...");
@@ -409,9 +399,7 @@ static void openHomeInline() {
                                     onGoToSettings, onGoToFileTransfer, onGoToBrowser));
 }
 
-void onGoHome() {
-  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""});
-}
+void onGoHome() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""}); }
 
 void setupDisplayAndFonts() {
   display.begin();
@@ -771,6 +759,9 @@ void loop() {
   }
 
   auto triggerDeepSleep = []() {
+    // Shown on both auto-sleep (inactivity timeout) and power-button-hold paths
+    // so the device never blanks silently. renderer is a file-scope global.
+    TransitionFeedback::show(renderer, "Going to sleep...");
     const bool fromReader = currentActivity && currentActivity->isReaderActivity();
     lifecycle::ActivityRouter::instance().enterDeepSleep(fromReader);
   };
@@ -784,7 +775,6 @@ void loop() {
   }
 
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
-    TransitionFeedback::show(renderer, "Going to sleep...");
     triggerDeepSleep();
     // This should never be hit as enterDeepSleep calls esp_deep_sleep_start
     return;

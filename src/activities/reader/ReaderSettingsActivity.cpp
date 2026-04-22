@@ -292,8 +292,8 @@ void ReaderSettingsActivity::buildSettingsList() {
 
   // --- Build reader settings directly (no intermediate vector) ---
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN,
-                                      StrId::STR_GALMURI, StrId::STR_TT2020, StrId::STR_BITTER}));
+                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN, StrId::STR_GALMURI,
+                                      StrId::STR_TT2020, StrId::STR_BITTER}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));
@@ -453,7 +453,7 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
           (currentIndex + 1) % static_cast<uint8_t>(setting.enumValues.size()));
       SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
       SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-      SETTINGS.lineSpacingPercent = CrossPointSettings::defaultLineSpacingPercentForFamily(SETTINGS.fontFamily);
+      SETTINGS.lineSpacingPercent = CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {

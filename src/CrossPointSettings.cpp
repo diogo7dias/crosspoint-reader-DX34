@@ -516,10 +516,12 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
   }
 }
 
-uint8_t CrossPointSettings::defaultLineSpacingPercentForFamily(const uint8_t family) {
-  // TT2020 is a monospaced typewriter font whose glyphs sit tight vertically;
-  // it reads better with extra leading.
-  return normalizeFontFamily(family) == TT2020 ? 120 : 100;
+uint8_t CrossPointSettings::resetLineSpacingPercentForFamily(const uint8_t family) {
+  // Value to snap lineSpacingPercent to when the user switches font family.
+  // TT2020 is a monospaced typewriter font whose glyphs sit tight vertically
+  // and needs extra leading. All other families use the historical 90 so
+  // upgrades don't change layout for users who never touch spacing.
+  return normalizeFontFamily(family) == TT2020 ? 120 : 90;
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {

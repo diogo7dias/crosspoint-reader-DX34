@@ -493,7 +493,7 @@ void SettingsActivity::toggleCurrentSetting() {
     if (setting.valuePtr == &CrossPointSettings::fontFamily) {
       SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
       SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-      SETTINGS.lineSpacingPercent = CrossPointSettings::defaultLineSpacingPercentForFamily(SETTINGS.fontFamily);
+      SETTINGS.lineSpacingPercent = CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     }

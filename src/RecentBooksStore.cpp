@@ -253,14 +253,11 @@ void RecentBooksStore::setBoldSwap(const std::string& path, bool enabled) {
     }
   }
 
-  // Book not yet registered: create a minimal entry so the preference
-  // persists. Titles/author/cover fill in when the reader calls addBook().
-  RecentBook entry;
-  entry.path = normalizedPath;
-  entry.boldSwap = newValue;
-  recentBooks.insert(recentBooks.begin(), entry);
-  dedupeRecentBooks(recentBooks);
-  saveToFile();
+  // In normal flow the reader always calls addBook() before the user can
+  // reach the toggle, so setBoldSwap on an unknown path indicates a caller
+  // bug. Refuse rather than spawning a ghost recents entry with empty
+  // title/author/cover that would leak into the library list.
+  LOG_ERR("RBS", "setBoldSwap on unregistered book, ignoring: %s", normalizedPath.c_str());
 }
 
 RecentBook RecentBooksStore::getDataFromBook(std::string path) const {
