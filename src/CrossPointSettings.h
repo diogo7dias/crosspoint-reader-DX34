@@ -129,8 +129,17 @@ class CrossPointSettings {
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
   // Font family options. Values 3-8 are legacy (removed families) and
-  // normalize to CHAREINK via normalizeFontFamily().
-  enum FONT_FAMILY { CHAREINK = 0, BOOKERLY = 1, VOLLKORN = 2, FONT_FAMILY_COUNT };
+  // normalize to CHAREINK via normalizeFontFamily(). GALMURI uses value 9
+  // (first slot after the legacy-removed range).
+  enum FONT_FAMILY {
+    CHAREINK = 0,
+    BOOKERLY = 1,
+    VOLLKORN = 2,
+    GALMURI = 9,
+    TT2020 = 10,
+    BITTER = 11,
+    FONT_FAMILY_COUNT
+  };
   enum FONT_SIZE {
     MEDIUM = 0,   // legacy 15pt -> normalize to SIZE_14
     LARGE = 1,    // 17pt
@@ -140,8 +149,13 @@ class CrossPointSettings {
     SIZE_18 = 5,  // legacy -> normalize to LARGE (17)
     SIZE_13 = 6,
     SIZE_12 = 7,
-    SIZE_10 = 8,  // legacy -> normalize to SIZE_12
+    // SIZE_10 was previously a legacy-only value (normalized to SIZE_12). With
+    // the experimental Galmuri pixel font it becomes a real selectable size
+    // when fontFamily == GALMURI. For all other families it still normalizes
+    // to SIZE_12.
+    SIZE_10 = 8,
     SIZE_15 = 9,
+    SIZE_11 = 10,  // Galmuri-only selectable size; normalizes to SIZE_12 for others.
     FONT_SIZE_COUNT
   };
   // Legacy line spacing enum (kept for settings migration compatibility)

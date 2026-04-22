@@ -37,8 +37,43 @@ echo "#define VOLLKORN_15_FONT_ID ($(font_id ./vollkorn_15_regular.h ./vollkorn_
 echo "#define VOLLKORN_16_FONT_ID ($(font_id ./vollkorn_16_regular.h ./vollkorn_16_bold.h ./vollkorn_16_italic.h $(reader_shared vollkorn)))"
 echo "#define VOLLKORN_17_FONT_ID ($(font_id ./vollkorn_17_regular.h ./vollkorn_17_bold.h ./vollkorn_17_italic.h $(reader_shared vollkorn)))"
 echo ""
+# Bitter: experimental slab-serif reader font (debug env only). Three
+# weight-specific shared-tables headers like the other reader families.
+for size in 12 13 14 15 16 17; do
+  if [[ -f "./bitter_${size}_regular.h" ]]; then
+    echo "#define BITTER_${size}_FONT_ID ($(font_id ./bitter_${size}_regular.h ./bitter_${size}_bold.h ./bitter_${size}_italic.h $(reader_shared bitter)))"
+  fi
+done
+echo ""
 echo "#define UNIFONT_14_FONT_ID ($(font_id ./unifont_14_regular.h))"
 echo "#define UNIFONT_18_FONT_ID ($(font_id ./unifont_18_regular.h))"
+echo ""
+# Galmuri: experimental Korean pixel font (debug env only). Regular-only
+# headers; italic/bold are synthesized at draw time by EpdFontFamily. Hash
+# includes the shared tables header so any Intervals / kerning change
+# invalidates the on-SD font cache.
+galmuri_shared() {
+  echo "./shared/galmuri_regular_tables.h"
+}
+for size in 10 11 12 13 14 15 16 17; do
+  if [[ -f "./galmuri_${size}_regular.h" ]]; then
+    echo "#define GALMURI_${size}_FONT_ID ($(font_id ./galmuri_${size}_regular.h $(galmuri_shared)))"
+  fi
+done
+echo ""
+
+# TT2020: experimental typewriter-emulation font (debug env only). Single
+# size (15) with four faces. Base supplies Regular + Italic; Style E (the
+# "worn" variant) stands in for Bold + BoldItalic. No shared tables.
+for size in 12 13 14 15 16 17; do
+  if [[ -f "./tt2020_${size}_regular.h" ]]; then
+    echo "#define TT2020_${size}_FONT_ID ($(font_id \
+      ./tt2020_${size}_regular.h \
+      ./tt2020_${size}_bold.h \
+      ./tt2020_${size}_italic.h \
+      ./tt2020_${size}_bolditalic.h))"
+  fi
+done
 echo ""
 echo "#define UI_10_FONT_ID ($(font_id ./ui_10_regular.h))"
 echo "#define UI_12_FONT_ID ($(font_id ./ui_12_regular.h))"

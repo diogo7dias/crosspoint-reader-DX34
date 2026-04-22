@@ -28,11 +28,14 @@ FONTS_DIR = SCRIPT_DIR.parent / "builtinFonts"
 SHARED_DIR = FONTS_DIR / "shared"
 
 FAMILIES = [
-    ("bookerly", ["regular", "bold", "italic"]),
-    ("chareink", ["regular", "bold", "italic"]),
-    ("vollkorn", ["regular", "bold", "italic"]),
+    ("bookerly", ["regular", "bold", "italic"], [12, 13, 14, 15, 16, 17]),
+    ("chareink", ["regular", "bold", "italic"], [12, 13, 14, 15, 16, 17]),
+    ("vollkorn", ["regular", "bold", "italic"], [12, 13, 14, 15, 16, 17]),
+    ("bitter", ["regular", "bold", "italic"], [12, 14, 16]),
+    # Galmuri is Regular-only (italic/bold synthesized at draw time) and
+    # covers the small pixel-font sizes.
+    ("galmuri", ["regular"], [11, 12, 14]),
 ]
-SIZES = [12, 13, 14, 15, 16, 17]
 
 # Array-name suffix -> (C type, shared symbol suffix).  The first entry of each
 # tuple is the substring that follows the per-size symbol prefix in the source.
@@ -101,10 +104,13 @@ def rewrite_per_size(path: Path, family: str, weight: str, shared_array_names: l
     return True
 
 
-def process_family_weight(family: str, weight: str):
+def process_family_weight(family: str, weight: str, sizes: list):
     size_contents = {}
-    for size in SIZES:
+    for size in sizes:
         path = FONTS_DIR / f"{family}_{size}_{weight}.h"
+        if not path.exists():
+            print(f"{family} {weight}: missing {path.name}; skipping family", file=sys.stderr)
+            return 0
         size_contents[size] = (path, path.read_text())
 
     shared_arrays = []  # (arr_suffix, full_definition_text, c_type)
@@ -177,16 +183,16 @@ def process_family_weight(family: str, weight: str):
     print(
         f"{family} {weight}: shared {len(shared_arrays)} arrays "
         f"({', '.join(n for n, _, _ in shared_arrays)}), "
-        f"rewrote {rewritten}/6 per-size headers",
+        f"rewrote {rewritten}/{len(size_contents)} per-size headers",
         file=sys.stderr,
     )
     return rewritten
 
 
 def main():
-    for family, weights in FAMILIES:
+    for family, weights, sizes in FAMILIES:
         for weight in weights:
-            process_family_weight(family, weight)
+            process_family_weight(family, weight, sizes)
     print("\ndedup-shared-tables: done.", file=sys.stderr)
 
 

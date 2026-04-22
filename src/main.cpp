@@ -146,6 +146,52 @@ EpdFontFamily unifont14FontFamily(&unifont14RegularFont, nullptr, nullptr, nullp
 EpdFont unifont18RegularFont(&unifont_18_regular);
 EpdFontFamily unifont18FontFamily(&unifont18RegularFont, nullptr, nullptr, nullptr, 1, 0, false);
 
+// Bitter: slab-serif reader font. Regular, Bold, Italic (no BoldItalic
+// source TTF -- slot nullptr, Vollkorn pattern). Exposed at sizes 12, 14,
+// 16 only (odd sizes and 17 dropped to save flash).
+EpdFont bitter12RegularFont(&bitter_12_regular);
+EpdFont bitter12BoldFont(&bitter_12_bold);
+EpdFont bitter12ItalicFont(&bitter_12_italic);
+EpdFontFamily bitter12FontFamily(&bitter12RegularFont, &bitter12BoldFont, &bitter12ItalicFont, nullptr);
+EpdFont bitter14RegularFont(&bitter_14_regular);
+EpdFont bitter14BoldFont(&bitter_14_bold);
+EpdFont bitter14ItalicFont(&bitter_14_italic);
+EpdFontFamily bitter14FontFamily(&bitter14RegularFont, &bitter14BoldFont, &bitter14ItalicFont, nullptr);
+EpdFont bitter16RegularFont(&bitter_16_regular);
+EpdFont bitter16BoldFont(&bitter_16_bold);
+EpdFont bitter16ItalicFont(&bitter_16_italic);
+EpdFontFamily bitter16FontFamily(&bitter16RegularFont, &bitter16BoldFont, &bitter16ItalicFont, nullptr);
+
+// Galmuri: Korean pixel font. Regular-only headers -- italic synthesized
+// via slant, bold via multi-pass redraw (1 base + 2 extra for visible
+// weight). Sizes 11, 12, 14. Size 10 dropped (too small on screen).
+EpdFont galmuri11RegularFont(&galmuri_11_regular);
+EpdFontFamily galmuri11FontFamily(&galmuri11RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
+EpdFont galmuri12RegularFont(&galmuri_12_regular);
+EpdFontFamily galmuri12FontFamily(&galmuri12RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
+EpdFont galmuri14RegularFont(&galmuri_14_regular);
+EpdFontFamily galmuri14FontFamily(&galmuri14RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
+
+// TT2020: typewriter-emulation font. Sizes 15 and 17, each with four real
+// faces:
+//   Regular    <- TT2020 Base Regular
+//   Italic     <- TT2020 Base Italic
+//   Bold       <- TT2020 Style E Regular  (worn "heavy" variant)
+//   BoldItalic <- TT2020 Style E Italic
+// No synthetic slant or bold-pass; each face is a distinct source TTF.
+EpdFont tt2020_15_regularFont(&tt2020_15_regular);
+EpdFont tt2020_15_italicFont(&tt2020_15_italic);
+EpdFont tt2020_15_boldFont(&tt2020_15_bold);
+EpdFont tt2020_15_boldItalicFont(&tt2020_15_bolditalic);
+EpdFontFamily tt2020_15_FontFamily(&tt2020_15_regularFont, &tt2020_15_boldFont, &tt2020_15_italicFont,
+                                   &tt2020_15_boldItalicFont);
+EpdFont tt2020_17_regularFont(&tt2020_17_regular);
+EpdFont tt2020_17_italicFont(&tt2020_17_italic);
+EpdFont tt2020_17_boldFont(&tt2020_17_bold);
+EpdFont tt2020_17_boldItalicFont(&tt2020_17_bolditalic);
+EpdFontFamily tt2020_17_FontFamily(&tt2020_17_regularFont, &tt2020_17_boldFont, &tt2020_17_italicFont,
+                                   &tt2020_17_boldItalicFont);
+
 EpdFont smallFont(&ui_8_regular);
 EpdFontFamily smallFontFamily(&smallFont, nullptr, nullptr, nullptr, 0, 0, false);
 EpdFont ui10RegularFont(&ui_10_regular);
@@ -391,6 +437,14 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn17FontFamily);
   renderer.insertFont(UNIFONT_14_FONT_ID, unifont14FontFamily);
   renderer.insertFont(UNIFONT_18_FONT_ID, unifont18FontFamily);
+  renderer.insertFont(BITTER_12_FONT_ID, bitter12FontFamily);
+  renderer.insertFont(BITTER_14_FONT_ID, bitter14FontFamily);
+  renderer.insertFont(BITTER_16_FONT_ID, bitter16FontFamily);
+  renderer.insertFont(GALMURI_11_FONT_ID, galmuri11FontFamily);
+  renderer.insertFont(GALMURI_12_FONT_ID, galmuri12FontFamily);
+  renderer.insertFont(GALMURI_14_FONT_ID, galmuri14FontFamily);
+  renderer.insertFont(TT2020_15_FONT_ID, tt2020_15_FontFamily);
+  renderer.insertFont(TT2020_17_FONT_ID, tt2020_17_FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);

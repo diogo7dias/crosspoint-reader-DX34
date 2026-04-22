@@ -60,6 +60,37 @@ int readerFontIdFor(const uint8_t family, const uint8_t fontSize) {
         return VOLLKORN_17_FONT_ID;
     }
   }
+  if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::GALMURI) {
+    switch (normalizedFontSize) {
+      case CrossPointSettings::SIZE_11:
+        return GALMURI_11_FONT_ID;
+      case CrossPointSettings::SIZE_14:
+        return GALMURI_14_FONT_ID;
+      case CrossPointSettings::SIZE_12:
+      default:
+        return GALMURI_12_FONT_ID;
+    }
+  }
+  if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::TT2020) {
+    switch (normalizedFontSize) {
+      case CrossPointSettings::LARGE:
+        return TT2020_17_FONT_ID;
+      case CrossPointSettings::SIZE_15:
+      default:
+        return TT2020_15_FONT_ID;
+    }
+  }
+  if (CrossPointSettings::normalizeFontFamily(family) == CrossPointSettings::BITTER) {
+    switch (normalizedFontSize) {
+      case CrossPointSettings::SIZE_12:
+        return BITTER_12_FONT_ID;
+      case CrossPointSettings::SIZE_14:
+        return BITTER_14_FONT_ID;
+      case CrossPointSettings::SIZE_16:
+      default:
+        return BITTER_16_FONT_ID;
+    }
+  }
   switch (normalizedFontSize) {
     case CrossPointSettings::SIZE_12:
       return CHAREINK_12_FONT_ID;
@@ -261,7 +292,8 @@ void ReaderSettingsActivity::buildSettingsList() {
 
   // --- Build reader settings directly (no intermediate vector) ---
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN}));
+                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN,
+                                      StrId::STR_GALMURI, StrId::STR_TT2020, StrId::STR_BITTER}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));
