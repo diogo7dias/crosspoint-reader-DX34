@@ -377,6 +377,7 @@ class CrossPointSettings {
   static uint8_t fontFamilyToDisplayIndex(uint8_t family);
   static uint8_t displayIndexToFontFamily(uint8_t displayIndex);
   static uint8_t normalizeFontSizeForFamily(uint8_t family, uint8_t fontSize);
+  static uint8_t defaultLineSpacingPercentForFamily(uint8_t family);
   static uint8_t nextFontSize(uint8_t family, uint8_t fontSize);
   static uint8_t fontSizeToPointSize(uint8_t family, uint8_t fontSize);
   static uint8_t fontSizeOptionCount(uint8_t family);
