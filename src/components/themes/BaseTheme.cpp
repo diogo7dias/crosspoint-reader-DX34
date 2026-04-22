@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -264,17 +265,19 @@ std::vector<std::string> wrapText(const GfxRenderer& renderer, const std::string
   return lines;
 }
 
-// Draw a centered "N more above/below" indicator badge
-void drawMoreIndicator(const GfxRenderer& renderer, int count, const char* direction, int centerX, int centerW, int y,
+// Draw a centered "N more above/below" indicator badge. formatKey must be a
+// translation key whose value contains a single "%d" (e.g. "%d more above").
+void drawMoreIndicator(const GfxRenderer& renderer, int count, StrId formatKey, int centerX, int centerW, int y,
                        int rowLineHeight) {
-  const std::string text = std::to_string(count) + " more " + direction;
-  const int textW = renderer.getTextWidth(UI_10_FONT_ID, text.c_str());
+  char buf[64];
+  std::snprintf(buf, sizeof(buf), I18N.get(formatKey), count);
+  const int textW = renderer.getTextWidth(UI_10_FONT_ID, buf);
   const int badgeW = textW + 24;
   const int badgeH = rowLineHeight + 6;
   const int badgeX = centerX + (centerW - badgeW) / 2;
   renderer.fillRect(badgeX, y, badgeW, badgeH);
   const int textX = badgeX + (badgeW - textW) / 2;
-  renderer.drawText(UI_10_FONT_ID, textX, y + 3, text.c_str(), false);
+  renderer.drawText(UI_10_FONT_ID, textX, y + 3, buf, false);
 }
 
 struct HomeInfoStats {
@@ -891,7 +894,7 @@ BookListVisibility BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect re
 
   // Draw "N more above" indicator
   if (hasMoreAbove) {
-    drawMoreIndicator(renderer, firstVisible, "above", rowX, rowW, rowsTopMinY, rowLineHeight);
+    drawMoreIndicator(renderer, firstVisible, StrId::STR_MORE_ABOVE, rowX, rowW, rowsTopMinY, rowLineHeight);
   }
 
   // Draw visible books
@@ -914,7 +917,8 @@ BookListVisibility BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect re
 
   // Draw "N more below" indicator
   if (hasMoreBelow) {
-    drawMoreIndicator(renderer, count - lastVisible - 1, "below", rowX, rowW, effectiveBottomY + 2, rowLineHeight);
+    drawMoreIndicator(renderer, count - lastVisible - 1, StrId::STR_MORE_BELOW, rowX, rowW, effectiveBottomY + 2,
+                      rowLineHeight);
   }
 
   return {firstVisible, lastVisible, count};
@@ -1060,14 +1064,15 @@ void BaseTheme::drawRecentBookSingleCover(GfxRenderer& renderer, Rect rect, cons
 
   // "N more above" indicator
   if (hasMoreAbove) {
-    drawMoreIndicator(renderer, clampedIdx, "above", rect.x, rect.width, rect.y + 2, rowLineHeight);
+    drawMoreIndicator(renderer, clampedIdx, StrId::STR_MORE_ABOVE, rect.x, rect.width, rect.y + 2, rowLineHeight);
   }
 
   // "N more below" indicator
   if (hasMoreBelow) {
     const int belowBarH = rowLineHeight + 6;
     const int belowY = rect.y + rect.height - belowBarH - 2;
-    drawMoreIndicator(renderer, count - clampedIdx - 1, "below", rect.x, rect.width, belowY, rowLineHeight);
+    drawMoreIndicator(renderer, count - clampedIdx - 1, StrId::STR_MORE_BELOW, rect.x, rect.width, belowY,
+                      rowLineHeight);
   }
 }
 

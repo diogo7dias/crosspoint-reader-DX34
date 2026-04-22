@@ -252,7 +252,7 @@ void QuotesViewerActivity::loop() {
       preview.resize(37);
       preview += "...";
     }
-    const std::string msg = "Delete quote?\n" + preview;
+    const std::string msg = std::string(tr(STR_DELETE_QUOTE_CONFIRM)) + "\n" + preview;
     enterNewActivity(new ConfirmDialogActivity(
         renderer, mappedInput, msg,
         [this, deleteIdx] {

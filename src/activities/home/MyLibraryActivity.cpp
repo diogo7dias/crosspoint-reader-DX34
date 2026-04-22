@@ -480,12 +480,12 @@ void MyLibraryActivity::enterBmpView(const std::string& bmpPath) {
   // (~400 ms each) keeps each toast visible briefly; no artificial stall.
   // Full refresh on enter scrubs the list ghost.
   if (!TransitionFeedback::isActive()) {
-    TransitionFeedback::show(renderer, "Opening image...");
+    TransitionFeedback::show(renderer, tr(STR_OPENING_IMAGE));
   }
   selectedFilePath = bmpPath;
   mode = Mode::BMP_VIEW;
   bmpViewFullyLoaded = false;
-  TransitionFeedback::show(renderer, "Loading bitmap...");
+  TransitionFeedback::show(renderer, tr(STR_LOADING_BITMAP));
   renderer.requestFullRefresh();
   requestCleanRefresh();
   requestUpdate();
@@ -513,7 +513,7 @@ void MyLibraryActivity::openKeyboardForRenameBmp() {
   pendingRenameSubmit = false;
   pendingRenameCancel = false;
   enterNewActivity(new KeyboardEntryActivity(
-      renderer, mappedInput, "Rename image", "", 10, 200, false,
+      renderer, mappedInput, tr(STR_RENAME_IMAGE_TITLE), "", 10, 200, false,
       [this](const std::string& newBase) {
         pendingRenameBase = newBase;
         pendingRenameSubmit = true;
@@ -538,13 +538,13 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
   }
 
   if (base.empty()) {
-    showMessagePopup("Invalid name");
+    showMessagePopup(tr(STR_INVALID_NAME));
     return;
   }
   for (char c : base) {
     if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|' ||
         static_cast<unsigned char>(c) < 0x20) {
-      showMessagePopup("Invalid name");
+      showMessagePopup(tr(STR_INVALID_NAME));
       return;
     }
   }
@@ -575,14 +575,14 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
       }
     }
     if (!found) {
-      showMessagePopup("Too many similar names");
+      showMessagePopup(tr(STR_TOO_MANY_SIMILAR_NAMES));
       return;
     }
   }
 
-  StatusPopup::showBlocking(renderer, "Renaming");
+  StatusPopup::showBlocking(renderer, tr(STR_RENAMING));
   if (!Storage.rename(selectedFilePath.c_str(), targetPath.c_str())) {
-    showMessagePopup("Rename failed");
+    showMessagePopup(tr(STR_RENAME_FAILED));
     return;
   }
 
@@ -597,7 +597,7 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
     selectorIndex = listIndexForRawFileIndex(findEntry(newName));
   }
   selectedFilePath = targetPath;
-  StatusPopup::showConfirmation(renderer, "Renamed");
+  StatusPopup::showConfirmation(renderer, tr(STR_RENAMED));
 
   // Close the actions menu and return to the file list after rename.
   actionsOpenedFromViewer = false;
@@ -615,38 +615,38 @@ std::string MyLibraryActivity::getFileActionLabel(const int index) const {
   if (isBmpFile(selectedFilePath)) {
     int i = index;
     if (!actionsOpenedFromViewer) {
-      if (i == 0) return "Open Image";
+      if (i == 0) return tr(STR_OPEN_IMAGE);
       i -= 1;
     }
     switch (i) {
       case 0:
-        return "Move to Sleep";
+        return tr(STR_MOVE_TO_SLEEP_ACTION);
       case 1:
-        return FavoriteBmp::isFavoritePath(selectedFilePath) ? "Unfavorite" : "Favorite";
+        return FavoriteBmp::isFavoritePath(selectedFilePath) ? tr(STR_UNFAVORITE) : tr(STR_FAVORITE);
       case 2:
-        return "Rename";
+        return tr(STR_RENAME_ACTION);
       case 3:
-        return "Move File";
+        return tr(STR_MOVE_FILE_ACTION);
       case 4:
         return tr(STR_DOWNLOAD_IMAGE_VIA_QR);
       case 5:
-        return "Delete File";
+        return tr(STR_DELETE_FILE_ACTION);
       default:
-        return "Cancel";
+        return tr(STR_CANCEL);
     }
   }
 
   switch (index) {
     case 0:
-      return "Open Book";
+      return tr(STR_OPEN_BOOK);
     case 1:
-      return "Move File";
+      return tr(STR_MOVE_FILE_ACTION);
     case 2:
       return tr(STR_DOWNLOAD_BOOK_VIA_QR);
     case 3:
-      return "Delete File";
+      return tr(STR_DELETE_FILE_ACTION);
     default:
-      return "Cancel";
+      return tr(STR_CANCEL);
   }
 }
 
@@ -947,11 +947,11 @@ void MyLibraryActivity::loopFileActions() {
             showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
             return;
           }
-          StatusPopup::showBlocking(renderer, "Moving to sleep");
+          StatusPopup::showBlocking(renderer, tr(STR_MOVING_TO_SLEEP));
           std::string destinationPath;
           if (moveSelectedFileTo("/sleep", &destinationPath)) {
             SleepActivity::trimSleepFolderToLimit();
-            StatusPopup::showConfirmation(renderer, "Moved");
+            StatusPopup::showConfirmation(renderer, tr(STR_MOVED));
             actionsOpenedFromViewer = false;
             mode = Mode::BROWSE;
             if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
@@ -965,7 +965,7 @@ void MyLibraryActivity::loopFileActions() {
         }
         case 1: {
           const bool makeFavorite = !FavoriteBmp::isFavoritePath(selectedFilePath);
-          StatusPopup::showBlocking(renderer, makeFavorite ? "Favoriting" : "Unfavoriting");
+          StatusPopup::showBlocking(renderer, makeFavorite ? tr(STR_FAVORITING) : tr(STR_UNFAVORITING));
           std::string updatedPath;
           const auto result = FavoriteBmp::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
           if (result == FavoriteBmp::SetFavoriteResult::Success) {
@@ -977,18 +977,18 @@ void MyLibraryActivity::loopFileActions() {
               selectorIndex = listIndexForRawFileIndex(findEntry(newName));
             }
             selectedFilePath = updatedPath;
-            StatusPopup::showConfirmation(renderer, makeFavorite ? "Favorited" : "Unfavorited");
+            StatusPopup::showConfirmation(renderer, makeFavorite ? tr(STR_FAVORITED) : tr(STR_UNFAVORITED));
           } else if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
             showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
             return;
           } else if (result == FavoriteBmp::SetFavoriteResult::RenameConflict) {
-            showMessagePopup("Favorite name already exists");
+            showMessagePopup(tr(STR_FAVORITE_NAME_EXISTS));
             return;
           } else if (result == FavoriteBmp::SetFavoriteResult::RenameFailed) {
-            showMessagePopup("Failed to rename image");
+            showMessagePopup(tr(STR_FAILED_RENAME_IMAGE));
             return;
           } else {
-            showMessagePopup("Favorite failed");
+            showMessagePopup(tr(STR_FAVORITE_FAILED));
             return;
           }
           requestCleanRefresh();
@@ -1016,12 +1016,12 @@ void MyLibraryActivity::loopFileActions() {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
           enterNewActivity(new ConfirmDialogActivity(
-              renderer, mappedInput, "Delete file?\n" + fileName,
+              renderer, mappedInput, std::string(tr(STR_DELETE_FILE_CONFIRM)) + "\n" + fileName,
               [this, pathToDelete]() {
                 // Optimistic UX: snapshot the entry, remove from list
                 // before the rename, re-insert on failure. Gives an
                 // instant visual response regardless of SD speed.
-                TransitionFeedback::show(renderer, "Deleting...");
+                TransitionFeedback::show(renderer, tr(STR_DELETING));
                 const auto snapIndex = rawFileIndexForPath(pathToDelete);
                 std::string snapEntry;
                 if (snapIndex.has_value()) {
@@ -1030,9 +1030,9 @@ void MyLibraryActivity::loopFileActions() {
                   rebuildFilteredFileIndexes();
                   clampSelectorIndex();
                 }
-                TransitionFeedback::show(renderer, "Moving to trash...");
+                TransitionFeedback::show(renderer, tr(STR_MOVING_TO_TRASH));
                 if (deleteFile(pathToDelete)) {
-                  TransitionFeedback::show(renderer, "Deleted");
+                  TransitionFeedback::show(renderer, tr(STR_DELETED));
                 } else {
                   LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
                   if (snapIndex.has_value()) {
@@ -1040,7 +1040,7 @@ void MyLibraryActivity::loopFileActions() {
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
-                  TransitionFeedback::show(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, tr(STR_DELETE_FAILED));
                 }
                 TransitionFeedback::ensureMinDisplayElapsed();
                 actionsOpenedFromViewer = false;
@@ -1095,11 +1095,11 @@ void MyLibraryActivity::loopFileActions() {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
           enterNewActivity(new ConfirmDialogActivity(
-              renderer, mappedInput, "Delete file?\n" + fileName,
+              renderer, mappedInput, std::string(tr(STR_DELETE_FILE_CONFIRM)) + "\n" + fileName,
               [this, pathToDelete]() {
                 // Optimistic UX: snapshot + remove before the rename so the
                 // list reflects the action instantly; re-insert on failure.
-                TransitionFeedback::show(renderer, "Deleting...");
+                TransitionFeedback::show(renderer, tr(STR_DELETING));
                 const auto snapIndex = rawFileIndexForPath(pathToDelete);
                 std::string snapEntry;
                 if (snapIndex.has_value()) {
@@ -1109,9 +1109,9 @@ void MyLibraryActivity::loopFileActions() {
                   clampSelectorIndex();
                 }
                 progressPrefixCache.erase(pathToDelete);
-                TransitionFeedback::show(renderer, "Moving to trash...");
+                TransitionFeedback::show(renderer, tr(STR_MOVING_TO_TRASH));
                 if (deleteFile(pathToDelete)) {
-                  TransitionFeedback::show(renderer, "Deleted");
+                  TransitionFeedback::show(renderer, tr(STR_DELETED));
                 } else {
                   LOG_ERR("LIB", "Failed to delete: %s", pathToDelete.c_str());
                   if (snapIndex.has_value()) {
@@ -1119,7 +1119,7 @@ void MyLibraryActivity::loopFileActions() {
                     rebuildFilteredFileIndexes();
                     clampSelectorIndex();
                   }
-                  TransitionFeedback::show(renderer, "Delete failed");
+                  TransitionFeedback::show(renderer, tr(STR_DELETE_FAILED));
                 }
                 TransitionFeedback::ensureMinDisplayElapsed();
                 mode = Mode::BROWSE;
@@ -1175,13 +1175,13 @@ void MyLibraryActivity::loopFileMoveBrowser() {
       showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
       return;
     }
-    StatusPopup::showBlocking(renderer, "Moving file");
+    StatusPopup::showBlocking(renderer, tr(STR_MOVING_FILE));
     std::string destinationPath;
     if (moveSelectedFileTo(entry.path, &destinationPath)) {
       if (entry.path == "/sleep") {
         SleepActivity::trimSleepFolderToLimit();
       }
-      StatusPopup::showConfirmation(renderer, "Moved");
+      StatusPopup::showConfirmation(renderer, tr(STR_MOVED));
       mode = Mode::BROWSE;
       progressPrefixCache.erase(selectedFilePath);
       if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
@@ -1204,7 +1204,7 @@ void MyLibraryActivity::loopBrowse() {
       basepath != "/") {
     mappedInput.suppressUntilAllReleased();
     basepath = "/";
-    StatusPopup::showBlocking(renderer, "Opening...");
+    StatusPopup::showBlocking(renderer, tr(STR_OPENING));
     loadFiles();
     clearSearch();
     selectorIndex = 0;
@@ -1256,7 +1256,7 @@ void MyLibraryActivity::loopBrowse() {
     if (selectedEntry.back() == '/') {
       clearSearch();
       basepath = selectedPath.substr(0, selectedPath.length() - 1);
-      StatusPopup::showBlocking(renderer, "Opening...");
+      StatusPopup::showBlocking(renderer, tr(STR_OPENING));
       loadFiles();
       selectorIndex = 0;
       requestCleanRefresh();
@@ -1281,7 +1281,7 @@ void MyLibraryActivity::loopBrowse() {
       const auto lastSlash = basepath.find_last_of('/');
       if (lastSlash != std::string::npos) basepath.replace(lastSlash, std::string::npos, "");
       if (basepath.empty()) basepath = "/";
-      StatusPopup::showBlocking(renderer, "Opening...");
+      StatusPopup::showBlocking(renderer, tr(STR_OPENING));
       loadFiles();
       clearSearch();
 
@@ -1430,13 +1430,13 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   const bool hasSelectedBmp = selectedRawIndex.has_value() && isBmpFile(files[*selectedRawIndex]);
   const char* confirmLabel = tr(STR_OPEN);
   if (isSearchActionRow(selectorIndex)) {
-    confirmLabel = "Search";
+    confirmLabel = tr(STR_SEARCH_BUTTON);
   } else if (isClearSearchRow(selectorIndex)) {
-    confirmLabel = "Clear";
+    confirmLabel = tr(STR_CLEAR_BUTTON);
   } else if (hasSelectedFile) {
-    confirmLabel = hasSelectedBmp ? "View\n/hold" : "Open\n/hold";
+    confirmLabel = hasSelectedBmp ? tr(STR_VIEW_HOLD) : tr(STR_OPEN_HOLD);
   }
-  const char* backLabel = basepath == "/" ? tr(STR_HOME) : "Back\n/hold";
+  const char* backLabel = basepath == "/" ? tr(STR_HOME) : tr(STR_BACK_HOLD);
   const auto labels = mappedInput.mapLabels(backLabel, confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
@@ -1452,7 +1452,7 @@ void MyLibraryActivity::renderBmpView() {
 
   FsFile file;
   if (!Storage.openFileForRead("LIB", selectedFilePath, file)) {
-    renderer.drawCenteredText(UI_12_FONT_ID, 80, "Failed to open BMP");
+    renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_FAILED_OPEN_BMP));
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     displayFrame();
@@ -1461,7 +1461,7 @@ void MyLibraryActivity::renderBmpView() {
 
   Bitmap bitmap(file, true);
   if (bitmap.parseHeaders() != BmpReaderError::Ok) {
-    renderer.drawCenteredText(UI_12_FONT_ID, 80, "Invalid BMP");
+    renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_INVALID_BMP));
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     displayFrame();
@@ -1494,7 +1494,7 @@ void MyLibraryActivity::renderBmpView() {
   // buttons and refresh fast. Image was already loaded once, so skip the
   // slow HALF_REFRESH + grayscale pipeline.
   if (bmpViewFullyLoaded) {
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "Actions", "", "");
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     if (messagePopupOpen) {
       GUI.drawPopup(renderer, messagePopupText.c_str());
@@ -1560,7 +1560,7 @@ void MyLibraryActivity::renderFileActions() {
   const int popupH = screenH - popupY * 2;
 
   renderer.drawRect(popupX, popupY, popupW, popupH, true);
-  renderer.drawCenteredText(UI_12_FONT_ID, popupY + 10, "File Actions", true, EpdFontFamily::REGULAR);
+  renderer.drawCenteredText(UI_12_FONT_ID, popupY + 10, tr(STR_FILE_ACTIONS_TITLE), true, EpdFontFamily::REGULAR);
 
   const int rowStartY = popupY + 44;
   const int rowH = 26;

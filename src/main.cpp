@@ -339,7 +339,7 @@ static void openReaderInline(const std::string& initialEpubPath) {
   // maybeShowStillWorkingToast() to fire the "Long chapter..." popup
   // instantly against a stale timestamp.
   TransitionFeedback::resetStacking();
-  TransitionFeedback::show(renderer, "Opening book...");
+  TransitionFeedback::show(renderer, tr(STR_OPENING_BOOK));
   exitActivity();
   enterNewActivity(new ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
 }
@@ -349,7 +349,7 @@ void onGoToReader(const std::string& initialEpubPath) {
 }
 
 static void openFileTransferInline() {
-  TransitionFeedback::show(renderer, "Starting server...");
+  TransitionFeedback::show(renderer, tr(STR_STARTING_SERVER));
   crosspoint::sleep::WallpaperPlaylist::instance().markFolderDirty();
   exitActivity();
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
@@ -361,7 +361,7 @@ void onGoToSettings() { lifecycle::ActivityRouter::instance().request({lifecycle
 
 // ActivityRouter applies persist policy before calling this factory (RFC #23).
 static void openMyLibraryInline(const std::string& path) {
-  TransitionFeedback::show(renderer, "Loading library...");
+  TransitionFeedback::show(renderer, tr(STR_LOADING_LIBRARY));
   exitActivity();
   if (path.empty()) {
     enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
@@ -373,7 +373,7 @@ static void openMyLibraryInline(const std::string& path) {
 void onGoToMyLibrary() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::MyLibrary, ""}); }
 
 static void openRecentBooksInline() {
-  TransitionFeedback::show(renderer, "Loading recents...");
+  TransitionFeedback::show(renderer, tr(STR_LOADING_RECENTS));
   exitActivity();
   enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
 }
@@ -385,7 +385,7 @@ void onGoToMyLibraryWithPath(const std::string& path) {
 }
 
 static void openBrowserInline() {
-  TransitionFeedback::show(renderer, "Loading browser...");
+  TransitionFeedback::show(renderer, tr(STR_LOADING_BROWSER));
   exitActivity();
   enterNewActivity(new OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
 }
@@ -393,7 +393,7 @@ static void openBrowserInline() {
 void onGoToBrowser() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""}); }
 
 static void openHomeInline() {
-  TransitionFeedback::show(renderer, "Loading home...");
+  TransitionFeedback::show(renderer, tr(STR_LOADING_HOME));
   exitActivity();
   enterNewActivity(new HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
                                     onGoToSettings, onGoToFileTransfer, onGoToBrowser));
@@ -672,7 +672,7 @@ void setup() {
     router.setDeps(std::move(deps));
 
     router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
-      TransitionFeedback::show(renderer, "Loading settings...");
+      TransitionFeedback::show(renderer, tr(STR_LOADING_SETTINGS));
       exitActivity();
       enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
     });
@@ -762,7 +762,7 @@ void loop() {
   auto triggerDeepSleep = []() {
     // Shown on both auto-sleep (inactivity timeout) and power-button-hold paths
     // so the device never blanks silently. renderer is a file-scope global.
-    TransitionFeedback::show(renderer, "Going to sleep...");
+    TransitionFeedback::show(renderer, tr(STR_GOING_TO_SLEEP));
     const bool fromReader = currentActivity && currentActivity->isReaderActivity();
     lifecycle::ActivityRouter::instance().enterDeepSleep(fromReader);
   };

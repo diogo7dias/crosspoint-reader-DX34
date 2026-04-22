@@ -884,7 +884,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (homeStatsScanning) {
-    GUI.drawPopup(renderer, "Scanning SD card...");
+    GUI.drawPopup(renderer, tr(STR_SCANNING_SD_CARD));
   }
 
   if (homeStatsPopupOpen) {

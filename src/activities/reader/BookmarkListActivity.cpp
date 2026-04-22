@@ -103,7 +103,7 @@ void BookmarkListActivity::openKeyboardForRename(int bookmarkIndex) {
 void BookmarkListActivity::openDeleteConfirm(int bookmarkIndex) {
   if (bookmarkIndex < 0 || bookmarkIndex >= store.count()) return;
   const std::string label = formatBookmark(store.getAll()[bookmarkIndex]);
-  const std::string msg = "Delete bookmark?\n" + label;
+  const std::string msg = std::string(tr(STR_DELETE_BOOKMARK_CONFIRM)) + "\n" + label;
   actionPopupOpen = false;
   enterNewActivity(new ConfirmDialogActivity(
       renderer, mappedInput, msg,
