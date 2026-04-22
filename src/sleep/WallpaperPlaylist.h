@@ -20,10 +20,10 @@ namespace sleep {
 
 class ISleepFs;
 
-// State size at which strategy switches. Hysteresis prevents flap near 200.
-constexpr size_t kPlaylistMaxPersist = 200;
-constexpr size_t kSmallToLargeThreshold = 210;  // cross up
-constexpr size_t kLargeToSmallThreshold = 190;  // cross down
+// State size at which strategy switches. Hysteresis prevents flap near the cap.
+constexpr size_t kPlaylistMaxPersist = 500;
+constexpr size_t kSmallToLargeThreshold = 525;  // cross up
+constexpr size_t kLargeToSmallThreshold = 475;  // cross down
 
 enum class StrategyKind : uint8_t { Small, Large };
 
