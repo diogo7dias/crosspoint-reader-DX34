@@ -453,7 +453,7 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
           (currentIndex + 1) % static_cast<uint8_t>(setting.enumValues.size()));
       SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
       SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-      SETTINGS.lineSpacingPercent = 90;  // Reset to default on font change
+      SETTINGS.lineSpacingPercent = CrossPointSettings::defaultLineSpacingPercentForFamily(SETTINGS.fontFamily);
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {

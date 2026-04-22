@@ -510,6 +510,12 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
   }
 }
 
+uint8_t CrossPointSettings::defaultLineSpacingPercentForFamily(const uint8_t family) {
+  // TT2020 is a monospaced typewriter font whose glyphs sit tight vertically;
+  // it reads better with extra leading.
+  return normalizeFontFamily(family) == TT2020 ? 120 : 100;
+}
+
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
   // Galmuri is a pixel font exposed at sizes 11, 12, 14. Size 10 was
   // dropped as too small; any SIZE_10 still stored in a user's
