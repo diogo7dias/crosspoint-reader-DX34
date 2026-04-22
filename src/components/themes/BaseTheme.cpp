@@ -91,7 +91,7 @@ bool endsWithIgnoreCase(const char* text, const char* suffix) {
 
 bool isBookFile(const char* name) {
   return endsWithIgnoreCase(name, ".epub") || endsWithIgnoreCase(name, ".xtc") || endsWithIgnoreCase(name, ".xtch") ||
-         endsWithIgnoreCase(name, ".txt");
+         endsWithIgnoreCase(name, ".txt") || endsWithIgnoreCase(name, ".md");
 }
 
 bool isBmpFile(const char* name) { return endsWithIgnoreCase(name, ".bmp"); }
@@ -283,6 +283,7 @@ struct HomeInfoStats {
   uint32_t sleepFavoriteCount = 0;
   uint32_t sleepPauseCount = 0;
   uint64_t freeBytes = 0;
+  uint64_t totalBytes = 0;
   bool valid = false;
 };
 
@@ -294,6 +295,7 @@ void scanHomeInfoStats(HomeInfoStats& stats) {
   stats.sleepFavoriteCount = 0;
   stats.sleepPauseCount = 0;
   stats.freeBytes = Storage.freeBytes();
+  stats.totalBytes = Storage.totalBytes();
 
   // Count books recursively from root (skip hidden dirs)
   auto root = Storage.open("/");
@@ -1073,47 +1075,66 @@ void BaseTheme::drawHomeInfoStatsPopup(const GfxRenderer& renderer) const {
   const auto& stats = getHomeInfoStats();
 
   const int popupW = std::min(renderer.getScreenWidth() - 20, 460);
-  constexpr int textPadY = 10;
+  constexpr int textPadY = 12;
   constexpr int lineGap = 6;
+  constexpr int sectionGap = 10;
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const int titleHeight = renderer.getLineHeight(UI_12_FONT_ID);
   const int lineStep = lineHeight + lineGap;
-  constexpr int statLines = 5;
-  const int popupH = textPadY * 2 + lineStep * statLines;
+  // Title + divider + 3 storage lines + section gap + 4 content lines.
+  const int popupH = textPadY * 2 + titleHeight + 8 + lineStep * 3 + sectionGap + lineStep * 4;
   const int popupX = (renderer.getScreenWidth() - popupW) / 2;
   const int popupY = (renderer.getScreenHeight() - popupH) / 2;
-  const int textX = popupX + 12;
-  const int textMaxWidth = popupW - 24;
+  const int textX = popupX + 14;
+  const int textMaxWidth = popupW - 28;
 
   renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);
   renderer.fillRect(popupX, popupY, popupW, popupH, false);
   drawDashedRect(renderer, popupX, popupY, popupW, popupH);
 
-  const uint64_t gbScale = 1024ull * 1024ull * 1024ull;
-  const uint64_t freeTenthsGb = (stats.freeBytes * 10ull) / gbScale;
-
-  auto drawStatLine = [&](const int y, const char* labelText, const std::string& valueRegular) {
-    const std::string labelWithSeparator = std::string(labelText) + "   ";
-    const std::string label =
-        renderer.truncatedText(UI_12_FONT_ID, labelWithSeparator.c_str(), textMaxWidth, EpdFontFamily::REGULAR);
-    const int labelWidth = renderer.getTextWidth(UI_12_FONT_ID, label.c_str(), EpdFontFamily::REGULAR);
-
-    renderer.drawText(UI_12_FONT_ID, textX, y, label.c_str(), true, EpdFontFamily::REGULAR);
-
-    const int remaining = textMaxWidth - labelWidth;
-    if (remaining <= 0) return;
-
-    const std::string valueBracketed = "[" + valueRegular + "]";
-    const std::string value = renderer.truncatedText(UI_12_FONT_ID, valueBracketed.c_str(), remaining);
-    renderer.drawText(UI_12_FONT_ID, textX + labelWidth, y, value.c_str(), true, EpdFontFamily::REGULAR);
+  auto formatGb = [](uint64_t bytes) {
+    const uint64_t gbScale = 1024ull * 1024ull * 1024ull;
+    const uint64_t tenths = (bytes * 10ull) / gbScale;
+    return std::to_string(tenths / 10ull) + "." + std::to_string(tenths % 10ull) + " GB";
   };
 
-  const int textY = popupY + textPadY;
-  drawStatLine(textY, "BOOKS", std::to_string(stats.bookCount));
-  drawStatLine(textY + lineStep, "SLEEP IMAGES", std::to_string(stats.sleepBmpCount));
-  drawStatLine(textY + lineStep * 2, "SLEEP FAVORITES", std::to_string(stats.sleepFavoriteCount));
-  drawStatLine(textY + lineStep * 3, "SLEEP PAUSE IMAGES", std::to_string(stats.sleepPauseCount));
-  drawStatLine(textY + lineStep * 4, "FREE SD SPACE",
-               std::to_string(freeTenthsGb / 10ull) + "." + std::to_string(freeTenthsGb % 10ull) + " GB");
+  const uint64_t usedBytes = stats.totalBytes > stats.freeBytes ? stats.totalBytes - stats.freeBytes : 0;
+  const uint32_t usedPct =
+      stats.totalBytes > 0 ? static_cast<uint32_t>((usedBytes * 100ull) / stats.totalBytes) : 0;
+
+  // Right-aligned value layout so numbers line up in a column.
+  auto drawRow = [&](const int y, const char* labelText, const std::string& valueText) {
+    renderer.drawText(UI_12_FONT_ID, textX, y, labelText, true, EpdFontFamily::REGULAR);
+    const int valueWidth = renderer.getTextWidth(UI_12_FONT_ID, valueText.c_str(), EpdFontFamily::REGULAR);
+    const int valueX = popupX + popupW - 14 - valueWidth;
+    renderer.drawText(UI_12_FONT_ID, valueX, y, valueText.c_str(), true, EpdFontFamily::REGULAR);
+  };
+
+  // Title row.
+  int y = popupY + textPadY;
+  const char* titleText = "SD CARD DETAILS";
+  const int titleWidth = renderer.getTextWidth(UI_12_FONT_ID, titleText, EpdFontFamily::REGULAR);
+  renderer.drawText(UI_12_FONT_ID, popupX + (popupW - titleWidth) / 2, y, titleText, true, EpdFontFamily::REGULAR);
+  y += titleHeight + 4;
+  drawDashedHLine(renderer, textX, y, textMaxWidth, 1);
+  y += 4;
+
+  // Storage block.
+  drawRow(y, "Total", formatGb(stats.totalBytes));
+  y += lineStep;
+  drawRow(y, "Used", formatGb(usedBytes) + " (" + std::to_string(usedPct) + "%)");
+  y += lineStep;
+  drawRow(y, "Free", formatGb(stats.freeBytes));
+  y += lineStep + sectionGap;
+
+  // Content block.
+  drawRow(y, "Books", std::to_string(stats.bookCount));
+  y += lineStep;
+  drawRow(y, "Sleep images", std::to_string(stats.sleepBmpCount));
+  y += lineStep;
+  drawRow(y, "Sleep favorites", std::to_string(stats.sleepFavoriteCount));
+  y += lineStep;
+  drawRow(y, "Sleep pause", std::to_string(stats.sleepPauseCount));
 }
 
 void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
