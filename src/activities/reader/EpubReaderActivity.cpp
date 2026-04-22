@@ -648,6 +648,7 @@ void EpubReaderActivity::openReaderMenu() {
   const int bmCount = bookmarkStore.count();
   const std::string quotesPath = getQuotesFilePath();
   const bool hasQuotes = !quotesPath.empty() && Storage.exists(quotesPath.c_str());
+  boldSwapAtMenuOpen = SETTINGS.readerBoldSwap != 0;
   exitActivity();
   enterNewActivity(new EpubReaderMenuActivity(
       this->renderer, this->mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
@@ -701,6 +702,16 @@ void EpubReaderActivity::onReaderMenuBack(const uint8_t orientation) {
   // This ensures the menu can be navigated without immediately rotating the
   // screen.
   applyOrientation(orientation);
+  // If the user toggled Bold Swap while in the menu, the current page's
+  // cached layout no longer matches the new glyph advances (Regular and
+  // Bold have different widths). Re-lay out the page with the same flow
+  // used for theme changes.
+  const bool boldSwapNow = SETTINGS.readerBoldSwap != 0;
+  if (boldSwapNow != boldSwapAtMenuOpen) {
+    boldSwapAtMenuOpen = boldSwapNow;
+    reloadCurrentSectionForDisplaySettings();
+    return;
+  }
   requestUpdate();
 }
 

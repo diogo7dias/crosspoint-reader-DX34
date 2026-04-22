@@ -236,6 +236,7 @@ enum class StrId : uint16_t {
   STR_GALMURI,
   STR_TT2020,
   STR_BITTER,
+  STR_BOLD_SWAP,
   STR_SMALL,
   STR_MEDIUM,
   STR_LARGE,

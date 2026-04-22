@@ -33,6 +33,7 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
     TRIAGE_MOVE_PAUSE,
     TRIAGE_DELETE,
     TOGGLE_RANDOM_BOOK_ON_BOOT,
+    TOGGLE_BOLD_SWAP,
     SHARE_QR,
   };
 

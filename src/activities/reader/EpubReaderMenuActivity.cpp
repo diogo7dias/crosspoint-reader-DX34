@@ -4,6 +4,8 @@
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <EpdFontFamily.h>
+
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
@@ -35,6 +37,7 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   std::vector<MenuItem> items;
   items.reserve(19);
   items.push_back({MenuAction::THEMES_MENU, StrId::STR_READING_THEMES});
+  items.push_back({MenuAction::TOGGLE_BOLD_SWAP, StrId::STR_BOLD_SWAP});
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   items.push_back({MenuAction::HIGHLIGHT_QUOTE, StrId::STR_GRAB_QUOTE});
   if (hasQuotes) {
@@ -117,6 +120,18 @@ void EpubReaderMenuActivity::loop() {
     if (selectedAction == MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT) {
       SETTINGS.randomBookOnBoot = !SETTINGS.randomBookOnBoot;
       SETTINGS.saveToFile();
+      requestUpdate();
+      return;
+    }
+    if (selectedAction == MenuAction::TOGGLE_BOLD_SWAP) {
+      // Flip the swap setting, persist, and update the global EpdFontFamily
+      // state so any subsequent draws (including this menu's own labels)
+      // reflect the new mapping. The reader picks up the change on menu
+      // exit via EpubReaderActivity::onReaderMenuBack, which re-lays out
+      // the current page if the value changed while the menu was open.
+      SETTINGS.readerBoldSwap = SETTINGS.readerBoldSwap ? 0 : 1;
+      SETTINGS.saveToFile();
+      EpdFontFamily::setReaderBoldSwapEnabled(SETTINGS.readerBoldSwap != 0);
       requestUpdate();
       return;
     }
@@ -211,6 +226,10 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
       renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
     } else if (item.action == MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT) {
       const char* value = SETTINGS.randomBookOnBoot ? I18N.get(StrId::STR_STATE_ON) : I18N.get(StrId::STR_STATE_OFF);
+      const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
+      renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
+    } else if (item.action == MenuAction::TOGGLE_BOLD_SWAP) {
+      const char* value = SETTINGS.readerBoldSwap ? I18N.get(StrId::STR_STATE_ON) : I18N.get(StrId::STR_STATE_OFF);
       const auto width = renderer.getTextWidth(UI_10_FONT_ID, value);
       renderer.drawText(UI_10_FONT_ID, contentX + contentWidth - 20 - width, displayY, value, !isSelected);
     }
