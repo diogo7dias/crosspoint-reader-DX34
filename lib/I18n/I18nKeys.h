@@ -17,7 +17,18 @@ extern const char* const STRINGS_SL[];
 }  // namespace i18n_strings
 
 // Language enum
-enum class Language : uint8_t { ENGLISH = 0, SPANISH = 1, FRENCH = 2, GERMAN = 3, CZECH = 4, PORTUGUESE = 5, RUSSIAN = 6, SWEDISH = 7, SLOVENIAN = 8, _COUNT };
+enum class Language : uint8_t {
+  ENGLISH = 0,
+  SPANISH = 1,
+  FRENCH = 2,
+  GERMAN = 3,
+  CZECH = 4,
+  PORTUGUESE = 5,
+  RUSSIAN = 6,
+  SWEDISH = 7,
+  SLOVENIAN = 8,
+  _COUNT
+};
 
 // Language display names (defined in I18nStrings.cpp)
 extern const char* const LANGUAGE_NAMES[];
