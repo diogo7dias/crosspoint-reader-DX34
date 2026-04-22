@@ -6,10 +6,29 @@
 // Forward declaration for string arrays
 namespace i18n_strings {
 extern const char* const STRINGS_EN[];
+extern const char* const STRINGS_ES[];
+extern const char* const STRINGS_FR[];
+extern const char* const STRINGS_DE[];
+extern const char* const STRINGS_CZ[];
+extern const char* const STRINGS_PO[];
+extern const char* const STRINGS_RU[];
+extern const char* const STRINGS_SV[];
+extern const char* const STRINGS_SL[];
 }  // namespace i18n_strings
 
 // Language enum
-enum class Language : uint8_t { ENGLISH = 0, _COUNT };
+enum class Language : uint8_t {
+  ENGLISH = 0,
+  SPANISH = 1,
+  FRENCH = 2,
+  GERMAN = 3,
+  CZECH = 4,
+  PORTUGUESE = 5,
+  RUSSIAN = 6,
+  SWEDISH = 7,
+  SLOVENIAN = 8,
+  _COUNT
+};
 
 // Language display names (defined in I18nStrings.cpp)
 extern const char* const LANGUAGE_NAMES[];
@@ -470,6 +489,7 @@ enum class StrId : uint16_t {
   STR_STATUS_BOOK_PAGE_COUNTER,
   STR_STATUS_BOOK_PAGE_COUNTER_POSITION,
   STR_DARK_MODE,
+  STR_UI_LANGUAGE,
   STR_ADD_BOOKMARK,
   STR_REMOVE_BOOKMARK,
   STR_BOOKMARKS,
@@ -507,6 +527,76 @@ enum class StrId : uint16_t {
   STR_IMAGE_DITHER,
   STR_IMAGE_DITHER_FAST,
   STR_IMAGE_DITHER_QUALITY,
+  STR_REMOVE_BUTTON,
+  STR_QUOTE_SAVED,
+  STR_BOOKMARKS_FULL,
+  STR_FAVORITE_NAME_EXISTS,
+  STR_FAVORITE_FAILED,
+  STR_FAVORITED,
+  STR_UNFAVORITED,
+  STR_ROTATION_PAUSED,
+  STR_ROTATION_UNPAUSED,
+  STR_ALREADY_IN_SLEEP_PAUSE,
+  STR_MOVED_TO_SLEEP_PAUSE,
+  STR_MOVE_FAILED,
+  STR_WALLPAPER_DELETED,
+  STR_DELETE_FAILED,
+  STR_CLEARING_BOOK_CACHE,
+  STR_DELETING_BOOK,
+  STR_RENAMING,
+  STR_RENAMED,
+  STR_RENAME_FAILED,
+  STR_INVALID_NAME,
+  STR_TOO_MANY_SIMILAR_NAMES,
+  STR_FAILED_RENAME_IMAGE,
+  STR_MOVING_TO_SLEEP,
+  STR_MOVED,
+  STR_FAVORITING,
+  STR_UNFAVORITING,
+  STR_MOVING_FILE,
+  STR_OPENING,
+  STR_SCANNING_SD_CARD,
+  STR_SCAN_WITH_PHONE,
+  STR_CLEAR_CACHE_CONFIRM,
+  STR_DELETE_FROM_DEVICE,
+  STR_OPENING_BOOK,
+  STR_STARTING_SERVER,
+  STR_LOADING_LIBRARY,
+  STR_LOADING_RECENTS,
+  STR_LOADING_BROWSER,
+  STR_LOADING_HOME,
+  STR_LOADING_SETTINGS,
+  STR_GOING_TO_SLEEP,
+  STR_OPENING_IMAGE,
+  STR_LOADING_BITMAP,
+  STR_DELETING,
+  STR_MOVING_TO_TRASH,
+  STR_DELETED,
+  STR_DELETE_FILE_CONFIRM,
+  STR_REMOVE_FROM_RECENTS_CONFIRM,
+  STR_DELETE_THEME_CONFIRM,
+  STR_RESET_GLOBAL_STYLE_CONFIRM,
+  STR_FAILED_RESET_GLOBAL,
+  STR_FOLLOWING_GLOBAL_STYLE,
+  STR_DELETE_BOOKMARK_CONFIRM,
+  STR_DELETE_QUOTE_CONFIRM,
+  STR_ACTIONS_BUTTON,
+  STR_FILE_ACTIONS_TITLE,
+  STR_OPEN_IMAGE,
+  STR_OPEN_BOOK,
+  STR_MOVE_TO_SLEEP_ACTION,
+  STR_MOVE_FILE_ACTION,
+  STR_DELETE_FILE_ACTION,
+  STR_RENAME_ACTION,
+  STR_RENAME_IMAGE_TITLE,
+  STR_MORE_ABOVE,
+  STR_MORE_BELOW,
+  STR_SEARCH_BUTTON,
+  STR_VIEW_HOLD,
+  STR_OPEN_HOLD,
+  STR_BACK_HOLD,
+  STR_FAILED_OPEN_BMP,
+  STR_INVALID_BMP,
   // Sentinel - must be last
   _COUNT
 };
@@ -516,6 +606,22 @@ inline const char* const* getStringArray(Language lang) {
   switch (lang) {
     case Language::ENGLISH:
       return i18n_strings::STRINGS_EN;
+    case Language::SPANISH:
+      return i18n_strings::STRINGS_ES;
+    case Language::FRENCH:
+      return i18n_strings::STRINGS_FR;
+    case Language::GERMAN:
+      return i18n_strings::STRINGS_DE;
+    case Language::CZECH:
+      return i18n_strings::STRINGS_CZ;
+    case Language::PORTUGUESE:
+      return i18n_strings::STRINGS_PO;
+    case Language::RUSSIAN:
+      return i18n_strings::STRINGS_RU;
+    case Language::SWEDISH:
+      return i18n_strings::STRINGS_SV;
+    case Language::SLOVENIAN:
+      return i18n_strings::STRINGS_SL;
     default:
       return i18n_strings::STRINGS_EN;
   }

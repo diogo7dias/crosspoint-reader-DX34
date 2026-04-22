@@ -1,6 +1,7 @@
 #include "QRShareActivity.h"
 
 #include <HalStorage.h>
+#include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
@@ -154,13 +155,13 @@ void QRShareActivity::render(Activity::RenderLock&&) {
     drawQRCode(renderer, qrX, y, serverUrl);
     y += qrSize + 16;
 
-    renderer.drawCenteredText(SMALL_FONT_ID, y, "Scan with your phone to download");
+    renderer.drawCenteredText(SMALL_FONT_ID, y, tr(STR_SCAN_WITH_PHONE));
     y += LINE_SPACING;
 
     renderer.drawCenteredText(UI_10_FONT_ID, y, serverUrl.c_str(), true, EpdFontFamily::REGULAR);
   }
 
-  const auto labels = mappedInput.mapLabels("Back", "", "", "");
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }

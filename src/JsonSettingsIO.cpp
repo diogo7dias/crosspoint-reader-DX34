@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 #include <HalStorage.h>
+#include <I18n.h>
 #include <Logging.h>
 #include <ObfuscationUtils.h>
 
@@ -412,6 +413,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["hideBatteryPercentage"] = s.hideBatteryPercentage;
   doc["longPressChapterSkip"] = s.longPressChapterSkip;
   doc["hyphenationEnabled"] = s.hyphenationEnabled;
+  doc["uiLanguage"] = s.uiLanguage;
   doc["fadingFix"] = s.fadingFix;
   doc["embeddedStyle"] = s.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   doc["debugBorders"] = s.debugBorders;
@@ -701,6 +703,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       clampEnum(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER, S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
   s.longPressChapterSkip = doc["longPressChapterSkip"] | (uint8_t)1;
   s.hyphenationEnabled = doc["hyphenationEnabled"] | (uint8_t)0;
+  s.uiLanguage = clampEnum(doc["uiLanguage"] | (uint8_t)0, getLanguageCount(), 0);
   s.fadingFix = doc["fadingFix"] | (uint8_t)0;
   s.embeddedStyle = s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
   s.debugBorders = doc["debugBorders"] | (uint8_t)0;

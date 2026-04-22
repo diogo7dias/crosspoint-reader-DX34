@@ -157,7 +157,7 @@ void ReadingThemesActivity::executeThemeAction() {
       const std::string themeName = delTheme ? delTheme->name : "theme";
       const int delIndex = actionPopupThemeIndex;
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, "Delete theme?\n" + themeName,
+          renderer, mappedInput, std::string(tr(STR_DELETE_THEME_CONFIRM)) + "\n" + themeName,
           [this, delIndex]() {
             exitActivity();
             if (!READING_THEMES.deleteTheme(delIndex)) {
@@ -256,15 +256,15 @@ void ReadingThemesActivity::loop() {
     }
     if (selectedRowIndex == 2) {
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, "Reset current book style to global settings?",
+          renderer, mappedInput, tr(STR_RESET_GLOBAL_STYLE_CONFIRM),
           [this]() {
             exitActivity();
             if (!READING_THEMES.resetBookSettingsToGlobal(bookCachePath)) {
-              showMessage("Failed to reset to global settings");
+              showMessage(tr(STR_FAILED_RESET_GLOBAL));
               return;
             }
             settingsDirty = true;
-            showMessage("Now following global reader style");
+            showMessage(tr(STR_FOLLOWING_GLOBAL_STYLE));
           },
           [this]() {
             exitActivity();

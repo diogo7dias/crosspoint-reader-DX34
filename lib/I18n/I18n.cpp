@@ -15,8 +15,15 @@ const char* I18n::get(StrId id) const {
     return "???";
   }
 
-  const char* const* strings = getStringArray(Language::ENGLISH);
+  const char* const* strings = getStringArray(currentLanguage_);
   return strings[index];
+}
+
+void I18n::setLanguage(Language lang) {
+  if (static_cast<size_t>(lang) >= static_cast<size_t>(Language::_COUNT)) {
+    lang = Language::ENGLISH;
+  }
+  currentLanguage_ = lang;
 }
 
 // Generate character set for a specific language

@@ -541,7 +541,7 @@ void EpubReaderActivity::loopHighlightMode() {
       std::string quote = extractQuoteText();
       if (!quote.empty()) {
         saveQuoteToFile(quote);
-        StatusPopup::showConfirmation(renderer, "Quote saved!");
+        StatusPopup::showConfirmation(renderer, tr(STR_QUOTE_SAVED));
       }
       exitHighlightMode();
     }
@@ -856,7 +856,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const bool alreadyExists = bookmarkStore.has(currentSpineIndex, pageNum);
       if (!alreadyExists && bookmarkStore.count() >= BookmarkStore::MAX_BOOKMARKS) {
         // Full — show brief feedback then return to menu
-        StatusPopup::showConfirmation(renderer, "Bookmarks full (20 max)");
+        StatusPopup::showConfirmation(renderer, tr(STR_BOOKMARKS_FULL));
         exitActivity();
         requestUpdate();
         break;
@@ -934,11 +934,11 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
         StatusPopup::showConfirmation(renderer, FavoriteBmp::limitReachedPopupMessage());
       } else if (result == FavoriteBmp::SetFavoriteResult::RenameConflict) {
-        StatusPopup::showConfirmation(renderer, "Favorite name already exists");
+        StatusPopup::showConfirmation(renderer, tr(STR_FAVORITE_NAME_EXISTS));
       } else if (result != FavoriteBmp::SetFavoriteResult::Success) {
-        StatusPopup::showConfirmation(renderer, "Favorite failed");
+        StatusPopup::showConfirmation(renderer, tr(STR_FAVORITE_FAILED));
       } else {
-        StatusPopup::showConfirmation(renderer, makeFavorite ? "Favorited" : "Unfavorited");
+        StatusPopup::showConfirmation(renderer, makeFavorite ? tr(STR_FAVORITED) : tr(STR_UNFAVORITED));
       }
       exitActivity();
       pendingMenuOpen = false;
@@ -949,8 +949,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::TRIAGE_PAUSE_ROTATION: {
       APP_STATE.wallpaperRotationPaused = !APP_STATE.wallpaperRotationPaused;
       APP_STATE.saveToFile();
-      StatusPopup::showConfirmation(renderer,
-                                    APP_STATE.wallpaperRotationPaused ? "Rotation paused" : "Rotation unpaused");
+      StatusPopup::showConfirmation(
+          renderer, APP_STATE.wallpaperRotationPaused ? tr(STR_ROTATION_PAUSED) : tr(STR_ROTATION_UNPAUSED));
       exitActivity();
       pendingMenuOpen = false;
       requestUpdate();
@@ -960,7 +960,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const std::string lastPath = APP_STATE.lastSleepWallpaperPath;
       if (lastPath.empty()) break;
       if (lastPath.rfind("/sleep pause/", 0) == 0) {
-        StatusPopup::showConfirmation(renderer, "Already in sleep pause");
+        StatusPopup::showConfirmation(renderer, tr(STR_ALREADY_IN_SLEEP_PAUSE));
         exitActivity();
         pendingMenuOpen = false;
         // Input suppression handled by exitActivity()
@@ -999,7 +999,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         if (src) src.close();
         if (dst) dst.close();
       }
-      StatusPopup::showConfirmation(renderer, ok ? "Moved to sleep pause" : "Move failed");
+      StatusPopup::showConfirmation(renderer, ok ? tr(STR_MOVED_TO_SLEEP_PAUSE) : tr(STR_MOVE_FAILED));
       exitActivity();
       pendingMenuOpen = false;
       // Input suppression handled by exitActivity()
@@ -1015,7 +1015,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         APP_STATE.wallpaperRotationPaused = false;
         APP_STATE.saveToFile();
       }
-      StatusPopup::showConfirmation(renderer, removed ? "Wallpaper deleted" : "Delete failed");
+      StatusPopup::showConfirmation(renderer, removed ? tr(STR_WALLPAPER_DELETED) : tr(STR_DELETE_FAILED));
       exitActivity();
       pendingMenuOpen = false;
       // Input suppression handled by exitActivity()
@@ -1025,11 +1025,11 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
       exitActivity();
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, "Clear cached pages and reset reading progress to page 1?",
+          renderer, mappedInput, tr(STR_CLEAR_CACHE_CONFIRM),
           [this]() {
             // Confirmed — clear cache and reset progress.
             exitActivity();
-            StatusPopup::showBlocking(renderer, "Clearing book cache");
+            StatusPopup::showBlocking(renderer, tr(STR_CLEARING_BOOK_CACHE));
             {
               RenderLock lock(*this);
               if (epub) {
@@ -1087,11 +1087,11 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const std::string bookTitle = epub ? epub->getTitle() : "";
       exitActivity();
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, "Delete from device?\n" + bookTitle,
+          renderer, mappedInput, std::string(tr(STR_DELETE_FROM_DEVICE)) + "\n" + bookTitle,
           [this]() {
             exitActivity();
             std::string deletingPath;
-            StatusPopup::showBlocking(renderer, "Deleting book");
+            StatusPopup::showBlocking(renderer, tr(STR_DELETING_BOOK));
             {
               RenderLock lock(*this);
               if (epub) {
@@ -1122,7 +1122,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const std::string bookTitle = epub ? epub->getTitle() : "";
       exitActivity();
       enterNewActivity(new ConfirmDialogActivity(
-          renderer, mappedInput, "Remove from recents?\n" + bookTitle,
+          renderer, mappedInput, std::string(tr(STR_REMOVE_FROM_RECENTS_CONFIRM)) + "\n" + bookTitle,
           [this]() {
             exitActivity();
             if (epub) {

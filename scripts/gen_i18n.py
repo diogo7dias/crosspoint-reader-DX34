@@ -407,12 +407,15 @@ def generate_keys_header(
     lines.append("}  // namespace i18n_strings")
     lines.append("")
 
-    # Language enum — emit single-line form to match clang-format output
-    # (clang-format 21+ collapses short enums; multi-line output would be
-    # reformatted every CI run and dirty the working tree after each build).
-    enum_entries = [f"{lang} = {i}" for i, lang in enumerate(languages)] + ["_COUNT"]
+    # Language enum — emit multi-line form. Past ~3 languages the single-line
+    # form exceeds the 120-column limit and clang-format (v21+) expands it,
+    # which would dirty the working tree on every CI run.
     lines.append("// Language enum")
-    lines.append(f"enum class Language : uint8_t {{ {', '.join(enum_entries)} }};")
+    lines.append("enum class Language : uint8_t {")
+    for i, lang in enumerate(languages):
+        lines.append(f"  {lang} = {i},")
+    lines.append("  _COUNT")
+    lines.append("};")
     lines.append("")
 
     # Extern declarations
@@ -603,9 +606,10 @@ def main(translations_dir=None, output_dir=None) -> None:
     print(f"Output directory: {output_dir}")
     print()
 
-    # English-only by default to keep firmware size low.
-    # Set CROSSPOINT_I18N_LANGS=ALL to include every language.
-    langs_env = os.environ.get("CROSSPOINT_I18N_LANGS", "ENGLISH").strip()
+    # All languages are compiled in by default so the in-device picker
+    # can switch between them. Override with CROSSPOINT_I18N_LANGS=ENGLISH
+    # (or a comma list) to produce a smaller binary.
+    langs_env = os.environ.get("CROSSPOINT_I18N_LANGS", "ALL").strip()
     include_language_codes = None
     if langs_env and langs_env.upper() != "ALL":
         include_language_codes = [x.strip().upper() for x in langs_env.split(",") if x.strip()]
