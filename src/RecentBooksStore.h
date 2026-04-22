@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -7,6 +8,10 @@ struct RecentBook {
   std::string title;
   std::string author;
   std::string coverBmpPath;
+  // Per-book reader Bold Swap preference (0 = off, 1 = on). Persisted alongside
+  // the rest of the recent-books record so it survives reboots and only
+  // affects the book it was toggled on.
+  uint8_t boldSwap = 0;
 
   bool operator==(const RecentBook& other) const { return path == other.path; }
 };
@@ -52,6 +57,13 @@ class RecentBooksStore {
   int getCount() const { return static_cast<int>(recentBooks.size()); }
 
   bool saveToFile() const;
+
+  // Per-book Bold Swap preference. Lookup is by book path; unknown paths
+  // return false so first-time opens always start with bold swap OFF.
+  // setBoldSwap creates the entry if missing (title/author/cover empty) so the
+  // preference can still be persisted before the book's metadata is registered.
+  bool getBoldSwap(const std::string& path) const;
+  void setBoldSwap(const std::string& path, bool enabled);
 
   bool loadFromFile();
   RecentBook getDataFromBook(std::string path) const;

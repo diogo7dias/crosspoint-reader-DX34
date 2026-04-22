@@ -410,7 +410,6 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["hideBatteryPercentage"] = s.hideBatteryPercentage;
   doc["longPressChapterSkip"] = s.longPressChapterSkip;
   doc["hyphenationEnabled"] = s.hyphenationEnabled;
-  doc["readerBoldSwap"] = s.readerBoldSwap;
   doc["fadingFix"] = s.fadingFix;
   doc["embeddedStyle"] = s.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   doc["debugBorders"] = s.debugBorders;
@@ -700,7 +699,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       clampEnum(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER, S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
   s.longPressChapterSkip = doc["longPressChapterSkip"] | (uint8_t)1;
   s.hyphenationEnabled = doc["hyphenationEnabled"] | (uint8_t)0;
-  s.readerBoldSwap = doc["readerBoldSwap"] | (uint8_t)0;
   s.fadingFix = doc["fadingFix"] | (uint8_t)0;
   s.embeddedStyle = s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
   s.debugBorders = doc["debugBorders"] | (uint8_t)0;
@@ -849,6 +847,7 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
     obj["title"] = book.title;
     obj["author"] = book.author;
     obj["coverBmpPath"] = book.coverBmpPath;
+    obj["boldSwap"] = book.boldSwap;
   }
 
   String json;
@@ -873,6 +872,8 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
     book.title = obj["title"] | std::string("");
     book.author = obj["author"] | std::string("");
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
+    // Missing field (older recent.json) -> default OFF.
+    book.boldSwap = (obj["boldSwap"] | (uint8_t)0) != 0 ? 1 : 0;
     store.recentBooks.push_back(book);
   }
 

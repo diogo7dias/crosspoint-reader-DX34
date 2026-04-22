@@ -85,9 +85,15 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
     return;
   }
 
+  // Preserve per-book preferences (e.g. Bold Swap) when the book is re-added:
+  // addBook is called every time a book is opened, and erasing-then-reinserting
+  // would otherwise reset any per-book toggles the user set earlier.
+  uint8_t preservedBoldSwap = 0;
+
   // Remove existing entry if present
   for (auto it = recentBooks.begin(); it != recentBooks.end();) {
     if (makeRecentPathKey(it->path) == normalizedKey) {
+      preservedBoldSwap = it->boldSwap;
       it = recentBooks.erase(it);
     } else {
       ++it;
@@ -95,7 +101,9 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
   }
 
   // Add to front
-  recentBooks.insert(recentBooks.begin(), {normalizedPath, title, author, coverBmpPath});
+  RecentBook entry{normalizedPath, title, author, coverBmpPath};
+  entry.boldSwap = preservedBoldSwap;
+  recentBooks.insert(recentBooks.begin(), entry);
 
   dedupeRecentBooks(recentBooks);
 
@@ -212,6 +220,47 @@ bool RecentBooksStore::saveToFile() const {
     LOG_ERR("RBS", "Failed to save recent books to %s", RECENT_BOOKS_FILE_JSON);
   }
   return ok;
+}
+
+bool RecentBooksStore::getBoldSwap(const std::string& path) const {
+  const std::string normalizedKey = makeRecentPathKey(normalizeRecentPath(path));
+  if (normalizedKey.empty()) {
+    return false;
+  }
+  for (const auto& book : recentBooks) {
+    if (makeRecentPathKey(book.path) == normalizedKey) {
+      return book.boldSwap != 0;
+    }
+  }
+  return false;
+}
+
+void RecentBooksStore::setBoldSwap(const std::string& path, bool enabled) {
+  const std::string normalizedPath = normalizeRecentPath(path);
+  const std::string normalizedKey = makeRecentPathKey(normalizedPath);
+  if (normalizedPath.empty()) {
+    return;
+  }
+  const uint8_t newValue = enabled ? 1 : 0;
+  for (auto& book : recentBooks) {
+    if (makeRecentPathKey(book.path) == normalizedKey) {
+      if (book.boldSwap == newValue) {
+        return;
+      }
+      book.boldSwap = newValue;
+      saveToFile();
+      return;
+    }
+  }
+
+  // Book not yet registered: create a minimal entry so the preference
+  // persists. Titles/author/cover fill in when the reader calls addBook().
+  RecentBook entry;
+  entry.path = normalizedPath;
+  entry.boldSwap = newValue;
+  recentBooks.insert(recentBooks.begin(), entry);
+  dedupeRecentBooks(recentBooks);
+  saveToFile();
 }
 
 RecentBook RecentBooksStore::getDataFromBook(std::string path) const {

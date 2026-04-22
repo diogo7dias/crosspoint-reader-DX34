@@ -79,9 +79,9 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool pendingGoLibrary = false;        // Defer go library after destructive actions
   bool pendingMenuOpen = false;
   bool pendingThemeReload = false;  // Defer settings reload after ReadingThemesActivity exits
-  // Snapshot of SETTINGS.readerBoldSwap at the moment the reader menu was
-  // opened. Compared on menu exit; if the user toggled the in-menu Bold
-  // Swap item, the current page is re-laid out to apply the change.
+  // Snapshot of the per-book Bold Swap preference at the moment the reader
+  // menu was opened. Compared on menu exit; if the user toggled the in-menu
+  // Bold Swap item, the current page is re-laid out to apply the change.
   bool boldSwapAtMenuOpen = false;
   unsigned long lastConfirmReleaseMs = 0;
   bool confirmLongPressHandled = false;

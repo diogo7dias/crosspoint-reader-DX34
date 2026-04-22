@@ -309,8 +309,6 @@ class CrossPointSettings {
   // Reader line spacing percentage (35..150)
   uint8_t lineSpacingPercent = 110;
   uint8_t paragraphAlignment = JUSTIFIED;
-  // Reader-only style swap: Regular <-> Bold (italics unchanged)
-  uint8_t readerBoldSwap = 0;
   // Auto-sleep timeout setting (default 10 minutes)
   uint8_t sleepTimeout = SLEEP_10_MIN;
   // Show hidden files/directories (starting with '.') in file browser
