@@ -74,15 +74,6 @@
 #include <builtinFonts/galmuri_12_regular.h>
 #include <builtinFonts/galmuri_14_regular.h>
 
-#include <builtinFonts/tt2020_15_regular.h>
-#include <builtinFonts/tt2020_15_italic.h>
-#include <builtinFonts/tt2020_15_bold.h>
-#include <builtinFonts/tt2020_15_bolditalic.h>
-#include <builtinFonts/tt2020_17_regular.h>
-#include <builtinFonts/tt2020_17_italic.h>
-#include <builtinFonts/tt2020_17_bold.h>
-#include <builtinFonts/tt2020_17_bolditalic.h>
-
 #include <builtinFonts/ui_8_regular.h>
 #include <builtinFonts/ui_10_regular.h>
 #include <builtinFonts/ui_12_regular.h>

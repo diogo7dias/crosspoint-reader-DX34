@@ -26,6 +26,43 @@ int stripBdfExtension(const char* basename) {
   return static_cast<int>(extStart);
 }
 
+// Case-insensitive suffix test on [base, base+len). Returns true when the
+// trailing characters equal `suffix` (preceded by '-') — e.g. suffixMatches
+// ("unifont-bold", 12, "bold") returns true, suffixMatches("foobold", 7,
+// "bold") returns false because there is no '-' before "bold".
+bool suffixMatches(const char* base, int len, const char* suffix) {
+  const int sufLen = static_cast<int>(std::strlen(suffix));
+  // Need at least one name char + '-' + suffix chars.
+  if (len < sufLen + 2) return false;
+  if (base[len - sufLen - 1] != '-') return false;
+  for (int i = 0; i < sufLen; ++i) {
+    const char c = static_cast<char>(std::tolower(static_cast<unsigned char>(base[len - sufLen + i])));
+    if (c != suffix[i]) return false;
+  }
+  return true;
+}
+
+// Strips a trailing variant tag from a name span. Accepts plural-s and
+// "-regular" aliases so the tool user's naming (-italics, -Regular, etc)
+// still parses. On match, updates `nameLen` to the new (shorter) length and
+// sets `variant` to the corresponding tag. On miss, leaves both untouched.
+// Check bolditalic(s) BEFORE bold/italic so "unifont-bolditalic" doesn't get
+// greedy-matched against -italic (which would leave "unifont-bold").
+void stripVariantSuffix(const char* base, int& nameLen, BdfVariant& variant) {
+  auto tryStrip = [&](const char* suffix, BdfVariant v) -> bool {
+    if (!suffixMatches(base, nameLen, suffix)) return false;
+    variant = v;
+    nameLen -= static_cast<int>(std::strlen(suffix)) + 1;  // +1 for '-'
+    return true;
+  };
+  if (tryStrip("bolditalics", BdfVariant::BoldItalic)) return;
+  if (tryStrip("bolditalic", BdfVariant::BoldItalic)) return;
+  if (tryStrip("bold", BdfVariant::Bold)) return;
+  if (tryStrip("italics", BdfVariant::Italic)) return;
+  if (tryStrip("italic", BdfVariant::Italic)) return;
+  if (tryStrip("regular", BdfVariant::Regular)) return;
+}
+
 }  // namespace
 
 std::optional<BdfFilenameInfo> parseBdfFilename(const char* basename) {
@@ -60,9 +97,16 @@ std::optional<BdfFilenameInfo> parseBdfFilename(const char* basename) {
   }
   if (size < 4) return std::nullopt;
 
+  // Peel off optional variant tag from the tail of the family-name span.
+  int nameLen = underscorePos;
+  BdfVariant variant = BdfVariant::Regular;
+  stripVariantSuffix(basename, nameLen, variant);
+  if (nameLen <= 0) return std::nullopt;  // "-bold_16.bdf" — no family name left
+
   BdfFilenameInfo info;
-  info.name.assign(basename, static_cast<size_t>(underscorePos));
+  info.name.assign(basename, static_cast<size_t>(nameLen));
   info.sizePt = static_cast<uint16_t>(size);
+  info.variant = variant;
   return info;
 }
 

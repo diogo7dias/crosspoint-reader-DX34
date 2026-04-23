@@ -4,8 +4,14 @@
 #include <HalDisplay.h>
 
 class FontCacheManager;
+namespace crosspoint {
+namespace bdf {
+class CustomFont;
+}
+}  // namespace crosspoint
 
 #include <map>
+#include <memory>
 
 #include "Bitmap.h"
 
@@ -44,6 +50,13 @@ class GfxRenderer {
   uint8_t* frameBuffer = nullptr;
   uint8_t* bwBufferChunks[BW_BUFFER_NUM_CHUNKS] = {nullptr};
   std::map<int, EpdFontFamily> fontMap;
+  // SD-backed BDF fonts (Phase 2b). Kept in a parallel map so built-in font
+  // lookups stay on the const-data fast path. Raw pointers (owned; freed
+  // in ~GfxRenderer) rather than unique_ptr, because unique_ptr would
+  // force CustomFont's full type into every translation unit that includes
+  // this header (via map destructor instantiation). Forward declaration is
+  // sufficient for raw pointers.
+  std::map<int, crosspoint::bdf::CustomFont*> customFontMap;
 
   // Mutable because drawText() is const but needs to delegate scan-mode
   // recording to the (non-const) FontCacheManager.
@@ -67,7 +80,7 @@ class GfxRenderer {
         pendingFullRefresh(false),
         pendingHalfRefresh(false),
         textRenderStyle(0) {}
-  ~GfxRenderer() { freeBwBufferChunks(); }
+  ~GfxRenderer();
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;
   static constexpr int VIEWABLE_MARGIN_RIGHT = 3;
@@ -77,6 +90,18 @@ class GfxRenderer {
   // Setup
   void begin();  // must be called right after display.begin()
   void insertFont(int fontId, EpdFontFamily font);
+  // Registers a user-dropped BDF font under `fontId`. Takes ownership; the
+  // renderer deletes the pointer in its destructor. The text-path methods
+  // (getTextWidth, drawText, ...) dispatch to this font when the ID is
+  // present here; otherwise they fall through to the built-in EpdFontFamily
+  // path. If `fontId` already has a custom font registered, the previous
+  // one is freed and replaced.
+  void insertCustomFont(int fontId, crosspoint::bdf::CustomFont* font);
+  // Frees and removes the custom font registered under `fontId`. No-op if
+  // not present.
+  void removeCustomFont(int fontId);
+  // Returns nullptr if `fontId` is not registered as a custom font.
+  crosspoint::bdf::CustomFont* findCustomFont(int fontId) const;
 
   // Orientation control (affects logical width/height and coordinate
   // transforms)

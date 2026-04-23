@@ -28,6 +28,8 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["name"] = theme.name;
   obj["fontFamily"] = theme.fontFamily;
   obj["fontSize"] = theme.fontSize;
+  obj["customFontName"] = theme.customFontName;
+  obj["customFontSizePt"] = theme.customFontSizePt;
   obj["lineSpacingPercent"] = theme.lineSpacingPercent;
   obj["uniformMargins"] = theme.uniformMargins;
   obj["dynamicMargins"] = theme.dynamicMargins;
@@ -77,6 +79,8 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
                                CrossPointSettings::FONT_FAMILY_COUNT, CrossPointSettings::CHAREINK);
   theme.fontSize = clampEnum(obj["fontSize"] | (uint8_t)CrossPointSettings::SIZE_16,
                              CrossPointSettings::FONT_SIZE_COUNT, CrossPointSettings::SIZE_16);
+  theme.customFontName = std::string(obj["customFontName"] | "");
+  theme.customFontSizePt = obj["customFontSizePt"] | (uint8_t)0;
   theme.lineSpacingPercent = obj["lineSpacingPercent"] | (uint8_t)110;
   theme.uniformMargins = obj["uniformMargins"] | (uint8_t)0;
   if (theme.uniformMargins > 1) theme.uniformMargins = 0;
@@ -392,6 +396,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["frontButtonRight"] = s.frontButtonRight;
   doc["fontFamily"] = s.fontFamily;
   doc["fontSize"] = s.fontSize;
+  doc["customFontName"] = s.customFontName;
+  doc["customFontSizePt"] = s.customFontSizePt;
   doc["lineSpacing"] = s.lineSpacing;
   doc["lineSpacingPercent"] = s.lineSpacingPercent;
   doc["paragraphAlignment"] = s.paragraphAlignment;
@@ -648,6 +654,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.fontFamily = S::normalizeFontFamily(s.fontFamily);
   s.fontSize = clampEnum(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT, S::SIZE_16);
   s.fontSize = S::normalizeFontSizeForFamily(s.fontFamily, s.fontSize);
+  // customFontName is optional; absent → empty (old settings.json migrates
+  // cleanly). No clamp/validation here — ReaderSettingsActivity and
+  // getReaderFontId deal with stale/missing names at use time.
+  s.customFontName = std::string(doc["customFontName"] | "");
+  s.customFontSizePt = doc["customFontSizePt"] | (uint8_t)0;
   s.lineSpacing = clampEnum(doc["lineSpacing"] | (uint8_t)S::NORMAL, S::LINE_COMPRESSION_COUNT, S::NORMAL);
   if (!doc["lineSpacingPercent"].isNull()) {
     const uint8_t parsed = doc["lineSpacingPercent"] | (uint8_t)110;

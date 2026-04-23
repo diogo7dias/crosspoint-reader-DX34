@@ -11,6 +11,7 @@
 
 #include "Paths.h"
 #include "fontIds.h"
+#include "fonts/CustomFontIds.h"
 #include "util/StringUtils.h"
 
 // Initialize the static instance
@@ -470,10 +471,12 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return VOLLKORN;
     case GALMURI:
       return GALMURI;
-    case TT2020:
-      return TT2020;
     case BITTER:
       return BITTER;
+    case CUSTOM_FAMILY:
+      return CUSTOM_FAMILY;
+    // Legacy TT2020 (value 10) collapses to CHAREINK so old settings.json
+    // migrates cleanly after the font was removed.
     case CHAREINK:
     default:
       return CHAREINK;
@@ -488,9 +491,9 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 2;
     case GALMURI:
       return 3;
-    case TT2020:
-      return 4;
     case BITTER:
+      return 4;
+    case CUSTOM_FAMILY:
       return 5;
     case CHAREINK:
     default:
@@ -507,9 +510,9 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
     case 3:
       return GALMURI;
     case 4:
-      return TT2020;
-    case 5:
       return BITTER;
+    case 5:
+      return CUSTOM_FAMILY;
     case 0:
     default:
       return CHAREINK;
@@ -521,10 +524,20 @@ uint8_t CrossPointSettings::resetLineSpacingPercentForFamily(const uint8_t famil
   // TT2020 is a monospaced typewriter font whose glyphs sit tight vertically
   // and needs extra leading. All other families use the historical 90 so
   // upgrades don't change layout for users who never touch spacing.
-  return normalizeFontFamily(family) == TT2020 ? 120 : 90;
+  // Previously TT2020 (removed) needed 120 % for legibility. All remaining
+  // families use the historical 90 %.
+  (void)family;
+  return 90;
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
+  // Custom BDF: whichever size the user dropped as unifont_<size>.bdf is
+  // rendered natively. The fontSize enum is meaningless here (the picker
+  // pins to a single option); keep a stable value.
+  if (family == CUSTOM_FAMILY) {
+    (void)fontSize;
+    return SIZE_16;
+  }
   // Galmuri is a pixel font exposed at sizes 11, 12, 14. Size 10 was
   // dropped as too small; any SIZE_10 still stored in a user's
   // settings.json falls back to SIZE_11.
@@ -538,16 +551,6 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
       case SIZE_12:
       default:
         return SIZE_12;
-    }
-  }
-  // TT2020 ships sizes 15 and 17 (LARGE). Anything else clamps to SIZE_15.
-  if (family == TT2020) {
-    switch (fontSize) {
-      case LARGE:
-        return LARGE;
-      case SIZE_15:
-      default:
-        return SIZE_15;
     }
   }
   // Bitter ships sizes 12, 14, 16 only. Nearest-fallback mapping: 13->14,
@@ -621,11 +624,11 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 }
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
+  if (family == CUSTOM_FAMILY) {
+    return 1;  // native size of the installed BDF
+  }
   if (family == GALMURI) {
     return 3;  // 11, 12, 14
-  }
-  if (family == TT2020) {
-    return 2;  // 15, 17
   }
   if (family == BITTER) {
     return 3;  // 12, 14, 16
@@ -634,6 +637,10 @@ uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
+  if (family == CUSTOM_FAMILY) {
+    (void)fontSize;
+    return 0;  // single option
+  }
   if (family == GALMURI) {
     switch (normalizeFontSizeForFamily(family, fontSize)) {
       case SIZE_11:
@@ -643,15 +650,6 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
       case SIZE_14:
       default:
         return 2;
-    }
-  }
-  if (family == TT2020) {
-    switch (normalizeFontSizeForFamily(family, fontSize)) {
-      case SIZE_15:
-        return 0;
-      case LARGE:
-      default:
-        return 1;
     }
   }
   if (family == BITTER) {
@@ -683,6 +681,10 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
 }
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
+  if (family == CUSTOM_FAMILY) {
+    (void)displayIndex;
+    return SIZE_16;  // only option
+  }
   if (family == GALMURI) {
     switch (displayIndex) {
       case 0:
@@ -692,15 +694,6 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
       case 2:
       default:
         return SIZE_14;
-    }
-  }
-  if (family == TT2020) {
-    switch (displayIndex) {
-      case 0:
-        return SIZE_15;
-      case 1:
-      default:
-        return LARGE;  // 17pt
     }
   }
   if (family == BITTER) {
@@ -750,6 +743,19 @@ int CrossPointSettings::wordSpacingSettingToPixelDelta(const uint8_t mode, const
 int CrossPointSettings::getReaderFontId() const {
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
+  if (normalizedFamily == CUSTOM_FAMILY) {
+    // Custom family resolves to the family the user has selected by name.
+    // Empty name (new user who has never picked a custom font) falls
+    // through to CHAREINK so the reader doesn't crash on a bogus id. If
+    // the named family isn't currently registered in GfxRenderer the
+    // text path will log a "Font not found" and render nothing; the
+    // manage-fonts screen is the place to recover from that.
+    if (customFontName.empty()) {
+      // fall through to the CHAREINK switch below.
+    } else {
+      return crosspoint::fonts::idForFamily(customFontName, customFontSizePt);
+    }
+  }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {
       case SIZE_12:
@@ -793,15 +799,6 @@ int CrossPointSettings::getReaderFontId() const {
       case SIZE_12:
       default:
         return GALMURI_12_FONT_ID;
-    }
-  }
-  if (normalizedFamily == TT2020) {
-    switch (normalizedFontSize) {
-      case LARGE:
-        return TT2020_17_FONT_ID;
-      case SIZE_15:
-      default:
-        return TT2020_15_FONT_ID;
     }
   }
   if (normalizedFamily == BITTER) {

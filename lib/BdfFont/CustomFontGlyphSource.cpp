@@ -65,7 +65,8 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
   }
 
   idxOpen_ = true;
-  cacheValid_ = false;
+  cacheList_.clear();
+  cacheMap_.clear();
   return true;
 }
 
@@ -75,8 +76,18 @@ void CustomFontGlyphSource::close() {
     bdfFile_.close();
     idxOpen_ = false;
   }
-  cacheValid_ = false;
-  bitmapBuf_.clear();
+  cacheList_.clear();
+  cacheMap_.clear();
+}
+
+void CustomFontGlyphSource::setCacheCap(size_t slots) {
+  if (slots == 0) slots = 1;
+  cacheCap_ = slots;
+  while (cacheList_.size() > cacheCap_) {
+    auto& slot = cacheList_.back();
+    cacheMap_.erase(slot.glyph.codepoint);
+    cacheList_.pop_back();
+  }
 }
 
 bool CustomFontGlyphSource::readIndexEntry(uint32_t indexPos, IndexEntry& out) {
@@ -88,8 +99,16 @@ bool CustomFontGlyphSource::readIndexEntry(uint32_t indexPos, IndexEntry& out) {
 const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codepoint) {
   if (!idxOpen_ || glyphCount_ == 0) return nullptr;
 
-  if (cacheValid_ && cachedGlyph_.codepoint == codepoint) {
-    return &cachedGlyph_;
+  // Cache hit: promote to MRU and return borrowed pointer into the slot.
+  const auto mapIt = cacheMap_.find(codepoint);
+  if (mapIt != cacheMap_.end()) {
+    if (mapIt->second != cacheList_.begin()) {
+      cacheList_.splice(cacheList_.begin(), cacheList_, mapIt->second);
+    }
+    auto& slot = cacheList_.front();
+    slot.glyph.bitmap = slot.bitmap.data();
+    slot.glyph.bitmapBytes = slot.bitmap.size();
+    return &slot.glyph;
   }
 
   // Binary search the .idx by codepoint.
@@ -112,36 +131,41 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
       hi = mid;
     }
   }
-  if (!found) {
-    cacheValid_ = false;
-    return nullptr;
+  if (!found) return nullptr;
+
+  std::vector<uint8_t> bitmap;
+  if (!decodeBitmap(hit, bitmap)) return nullptr;
+
+  // Evict oldest if at cap (check BEFORE insert to keep map iters stable).
+  if (cacheList_.size() >= cacheCap_) {
+    auto& evict = cacheList_.back();
+    cacheMap_.erase(evict.glyph.codepoint);
+    cacheList_.pop_back();
   }
 
-  if (!decodeBitmap(hit)) {
-    cacheValid_ = false;
-    return nullptr;
-  }
-
-  cachedGlyph_.codepoint = hit.codepoint;
-  cachedGlyph_.bbxW = hit.bitmapW;
-  cachedGlyph_.bbxH = hit.bitmapH;
-  cachedGlyph_.bbxOffX = hit.bbxOffX;
-  cachedGlyph_.bbxOffY = hit.bbxOffY;
-  cachedGlyph_.advance = hit.advance;
-  cachedGlyph_.bitmap = bitmapBuf_.data();
-  cachedGlyph_.bitmapBytes = bitmapBuf_.size();
-  cacheValid_ = true;
-  return &cachedGlyph_;
+  cacheList_.emplace_front();
+  auto& inserted = cacheList_.front();
+  inserted.bitmap = std::move(bitmap);
+  inserted.glyph.codepoint = hit.codepoint;
+  inserted.glyph.bbxW = hit.bitmapW;
+  inserted.glyph.bbxH = hit.bitmapH;
+  inserted.glyph.bbxOffX = hit.bbxOffX;
+  inserted.glyph.bbxOffY = hit.bbxOffY;
+  inserted.glyph.advance = hit.advance;
+  inserted.glyph.bitmap = inserted.bitmap.data();
+  inserted.glyph.bitmapBytes = inserted.bitmap.size();
+  cacheMap_[codepoint] = cacheList_.begin();
+  return &inserted.glyph;
 }
 
-bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e) {
+bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, std::vector<uint8_t>& out) {
   // Seek to the STARTCHAR line for this glyph. Then walk lines until BITMAP,
-  // then collect H rows of hex into bitmapBuf_.
+  // then collect H rows of hex into out.
   if (!bdfFile_.seekSet(e.bdfOffset)) return false;
 
   const size_t bytesPerRow = (e.bitmapW + 7) / 8;
   const size_t totalBytes = bytesPerRow * e.bitmapH;
-  bitmapBuf_.assign(totalBytes, 0);
+  out.assign(totalBytes, 0);
   if (totalBytes == 0) return true;  // zero-size glyph (e.g. SPACE) — empty bitmap is valid
 
   char line[kBitmapLineBuf];
@@ -167,7 +191,7 @@ bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e) {
       const int hi = hexNibble(static_cast<unsigned char>(line[b * 2]));
       const int lo = hexNibble(static_cast<unsigned char>(line[b * 2 + 1]));
       if (hi < 0 || lo < 0) return false;
-      bitmapBuf_[row * bytesPerRow + b] = static_cast<uint8_t>((hi << 4) | lo);
+      out[row * bytesPerRow + b] = static_cast<uint8_t>((hi << 4) | lo);
     }
   }
   return true;

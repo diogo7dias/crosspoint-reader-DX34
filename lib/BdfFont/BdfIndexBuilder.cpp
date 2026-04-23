@@ -3,7 +3,9 @@
 #include <Arduino.h>
 #include <HalStorage.h>
 
+#include <algorithm>
 #include <cstring>
+#include <vector>
 
 #include "BdfIndex.h"
 #include "BdfParser.h"
@@ -24,7 +26,8 @@ void buildTmpPath(const char* finalPath, char* out, size_t outSize) {
 
 }  // namespace
 
-BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* idxPath) {
+BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* idxPath,
+                                             BuildProgressCallback progress, uint32_t progressEveryN) {
   BuildIndexResult result;
   if (!bdfPath || !idxPath) {
     result.error = "null path";
@@ -91,49 +94,106 @@ BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* id
     return result;
   }
 
-  // Enumeration callback: write one IndexEntry per glyph. Reject out-of-order
-  // codepoints (binary search in the runtime requires sorted entries).
+  // Two paths based on glyph count:
+  //   - Small fonts (≤ kInMemorySortCap): collect into a vector, sort, then
+  //     write. Tolerates BDFs that emit glyphs in non-ascending codepoint
+  //     order (e.g. user-built BDFs that interleave Latin with punctuation).
+  //   - Huge fonts (e.g. Unifont, 57 K glyphs): can't fit 16 B × N in heap,
+  //     so we stream and require the input to be pre-sorted.
+  static constexpr uint32_t kInMemorySortCap = 3000;  // 3000 × 16 B ≈ 48 KB
+
   uint32_t glyphsWritten = 0;
-  uint32_t lastCp = 0;
-  bool first = true;
   const char* writeErr = nullptr;
+  const uint32_t totalEstimate = header.glyphCount;
+  const bool progressEnabled = progress && progressEveryN > 0;
 
-  auto cb = [&](const BdfGlyphMeta& g) -> bool {
-    if (!first && g.codepoint <= lastCp) {
-      writeErr = "BDF glyphs not sorted by codepoint";
-      return false;  // abort enumeration
-    }
-    IndexEntry e{};
-    e.codepoint = g.codepoint;
-    e.bdfOffset = g.bdfOffset;
-    e.bitmapW = g.bbxW;
-    e.bitmapH = g.bbxH;
-    e.advance = g.advance;
-    e.bbxOffX = g.bbxOffX;
-    e.bbxOffY = g.bbxOffY;
-    if (!writePod(idxFile, &e, sizeof(e))) {
-      writeErr = "write entry failed";
-      return false;
-    }
-    ++glyphsWritten;
-    lastCp = g.codepoint;
-    first = false;
-    return true;
-  };
+  if (progressEnabled) progress(0, totalEstimate);
 
-  const BdfEnumResult enumRes = BdfParser::readAllGlyphs(bdfFile, cb);
-  bdfFile.close();
+  BdfEnumResult enumRes;
+  if (totalEstimate <= kInMemorySortCap) {
+    // Collect-and-sort path.
+    std::vector<IndexEntry> entries;
+    entries.reserve(totalEstimate);
+    auto cb = [&](const BdfGlyphMeta& g) -> bool {
+      IndexEntry e{};
+      e.codepoint = g.codepoint;
+      e.bdfOffset = g.bdfOffset;
+      e.bitmapW = g.bbxW;
+      e.bitmapH = g.bbxH;
+      e.advance = g.advance;
+      e.bbxOffX = g.bbxOffX;
+      e.bbxOffY = g.bbxOffY;
+      entries.push_back(e);
+      if (progressEnabled && (entries.size() % progressEveryN) == 0) {
+        progress(static_cast<uint32_t>(entries.size()), totalEstimate);
+      }
+      return true;
+    };
+    enumRes = BdfParser::readAllGlyphs(bdfFile, cb);
+    bdfFile.close();
+    if (!enumRes.ok) {
+      idxFile.close();
+      Storage.remove(tmpPath);
+      result.error = enumRes.error ? enumRes.error : "glyph enum failed";
+      return result;
+    }
+    std::sort(entries.begin(), entries.end(),
+              [](const IndexEntry& a, const IndexEntry& b) { return a.codepoint < b.codepoint; });
+    // Drop duplicate codepoints (keep first occurrence) — binary search assumes
+    // strictly ascending. BDFs with redundant glyphs still produce a valid idx.
+    auto newEnd = std::unique(entries.begin(), entries.end(),
+                              [](const IndexEntry& a, const IndexEntry& b) { return a.codepoint == b.codepoint; });
+    entries.erase(newEnd, entries.end());
+    for (const auto& e : entries) {
+      if (!writePod(idxFile, &e, sizeof(e))) {
+        writeErr = "write entry failed";
+        break;
+      }
+      ++glyphsWritten;
+    }
+  } else {
+    // Streaming path — must be pre-sorted.
+    uint32_t lastCp = 0;
+    bool first = true;
+    auto cb = [&](const BdfGlyphMeta& g) -> bool {
+      if (!first && g.codepoint <= lastCp) {
+        writeErr = "BDF glyphs not sorted (too many glyphs to sort in RAM)";
+        return false;
+      }
+      IndexEntry e{};
+      e.codepoint = g.codepoint;
+      e.bdfOffset = g.bdfOffset;
+      e.bitmapW = g.bbxW;
+      e.bitmapH = g.bbxH;
+      e.advance = g.advance;
+      e.bbxOffX = g.bbxOffX;
+      e.bbxOffY = g.bbxOffY;
+      if (!writePod(idxFile, &e, sizeof(e))) {
+        writeErr = "write entry failed";
+        return false;
+      }
+      ++glyphsWritten;
+      lastCp = g.codepoint;
+      first = false;
+      if (progressEnabled && (glyphsWritten % progressEveryN) == 0) {
+        progress(glyphsWritten, totalEstimate);
+      }
+      return true;
+    };
+    enumRes = BdfParser::readAllGlyphs(bdfFile, cb);
+    bdfFile.close();
+    if (!enumRes.ok) {
+      idxFile.close();
+      Storage.remove(tmpPath);
+      result.error = enumRes.error ? enumRes.error : "glyph enum failed";
+      return result;
+    }
+  }
 
   if (writeErr) {
     idxFile.close();
     Storage.remove(tmpPath);
     result.error = writeErr;
-    return result;
-  }
-  if (!enumRes.ok) {
-    idxFile.close();
-    Storage.remove(tmpPath);
-    result.error = enumRes.error ? enumRes.error : "glyph enum failed";
     return result;
   }
 
@@ -164,6 +224,9 @@ BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* id
   result.glyphsSkipped = enumRes.glyphsSkipped;
   result.parseTimeMs = millis() - startMs;
   result.ok = true;
+  // Final 100 % tick so UI can flip to the "installed" state before the
+  // caller tears down the progress activity.
+  if (progressEnabled) progress(glyphsWritten, totalEstimate);
   return result;
 }
 

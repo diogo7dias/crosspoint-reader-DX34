@@ -3,7 +3,9 @@
 #include <BdfFilename.h>
 #include <BdfIndexBuilder.h>
 #include <BdfParser.h>
+#include <CustomFont.h>
 #include <CustomFontGlyphSource.h>
+#include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <esp_task_wdt.h>
@@ -11,15 +13,22 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <utility>
 
+#include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "activities/util/CustomFontInstallProgressActivity.h"
 #include "activities/util/CustomFontPromptActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
+#include "fonts/CustomFontIds.h"
 
-// Defined in main.cpp; replaces the current activity slot.
+// Defined in main.cpp. enterNewActivity only swaps the pointer — callers must
+// call exitActivity() first to delete the previous activity, otherwise every
+// prompt/skip/install chain leaks the outgoing activity and the heap collapses.
 class Activity;
 void enterNewActivity(Activity* activity);
+void exitActivity();
 
 namespace crosspoint {
 namespace fonts {
@@ -30,6 +39,11 @@ constexpr const char* kModule = "CFONT";
 constexpr const char* kCustomFontDir = "/custom-font";
 constexpr size_t kScanCap = 50;          // hard limit on .bdf files scanned per boot
 constexpr size_t kWdtResetInterval = 32; // reset watchdog every N dir entries
+
+// Phase 2b LRU cache budget. Unifont-16 glyphs are 32 bytes each, so 384
+// slots ≈ 12 KB of bitmap + ~6 KB of std::list/unordered_map overhead on
+// top. Sits comfortably in the ~180 KB free heap.
+constexpr size_t kCustomFontCacheSlots = 384;
 
 bool isBdfName(const char* name) {
   if (!name || name[0] == '\0' || name[0] == '.') return false;
@@ -49,8 +63,166 @@ CustomFontManager& CustomFontManager::instance() {
   return inst;
 }
 
+namespace {
+
+// Build "<dir>/<stem>.idx" from "<stem>.bdf" filename.
+std::string idxPathFor(const std::string& filename) {
+  std::string out = std::string("/custom-font/") + filename;
+  if (out.size() >= 4) {
+    out.resize(out.size() - 4);
+    out += ".idx";
+  }
+  return out;
+}
+
+}  // namespace
+
+std::vector<std::string> CustomFontManager::uniqueFamilyNames() const {
+  std::vector<std::string> out;
+  for (const auto& g : families_) {
+    if (g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR] < 0) continue;
+    bool seen = false;
+    for (const auto& n : out) {
+      if (n == g.fontName) { seen = true; break; }
+    }
+    if (!seen) out.push_back(g.fontName);
+  }
+  return out;
+}
+
+std::vector<uint8_t> CustomFontManager::sizesForFamily(const std::string& name) const {
+  std::vector<uint8_t> out;
+  for (const auto& g : families_) {
+    if (g.fontName != name) continue;
+    if (g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR] < 0) continue;
+    const auto sz = static_cast<uint8_t>(g.sizePt);
+    bool seen = false;
+    for (auto s : out) {
+      if (s == sz) { seen = true; break; }
+    }
+    if (!seen) out.push_back(sz);
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+size_t CustomFontManager::deleteFamily(const std::string& fontName, GfxRenderer& renderer) {
+  if (fontName.empty()) return 0;
+  // Collect filenames first so erasing from entries_ under iteration is safe.
+  std::vector<std::string> toRemove;
+  for (const auto& e : entries_) {
+    if (e.fontName == fontName) toRemove.push_back(e.filename);
+  }
+
+  size_t removed = 0;
+  for (const auto& filename : toRemove) {
+    char bdfPath[320];
+    snprintf(bdfPath, sizeof(bdfPath), "%s/%s", kCustomFontDir, filename.c_str());
+    const std::string idx = idxPathFor(filename);
+    const bool bdfOk = Storage.remove(bdfPath);
+    const bool idxOk = Storage.exists(idx.c_str()) ? Storage.remove(idx.c_str()) : true;
+    if (bdfOk) ++removed;
+    LOG_INF(kModule, "delete %s: bdf=%d idx=%d", filename.c_str(), bdfOk ? 1 : 0, idxOk ? 1 : 0);
+
+    // Prune persisted seen/skipped state so future re-adds re-prompt.
+    APP_STATE.seenCustomFonts.erase(
+        std::remove(APP_STATE.seenCustomFonts.begin(), APP_STATE.seenCustomFonts.end(), filename),
+        APP_STATE.seenCustomFonts.end());
+    APP_STATE.skippedCustomFonts.erase(
+        std::remove(APP_STATE.skippedCustomFonts.begin(), APP_STATE.skippedCustomFonts.end(), filename),
+        APP_STATE.skippedCustomFonts.end());
+  }
+  if (!toRemove.empty()) APP_STATE.saveToFile();
+
+  // Drop any renderer dispatch pointing at the deleted family so the reader
+  // path doesn't try to lookup glyphs from a closed CustomFontGlyphSource.
+  // Walk families_ (still reflecting pre-delete state) to find every size
+  // we registered for this name and remove each id.
+  for (const auto& g : families_) {
+    if (g.fontName == fontName) {
+      renderer.removeCustomFont(idForFamily(g.fontName, g.sizePt));
+    }
+  }
+
+  // Clear active selection if it was this family and revert to safe defaults
+  // (CHAREINK 12, crisp render mode) so reader stays readable.
+  if (SETTINGS.customFontName == fontName) {
+    SETTINGS.customFontName.clear();
+    SETTINGS.customFontSizePt = 0;
+    if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
+      SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
+      SETTINGS.fontSize = CrossPointSettings::SIZE_12;
+      SETTINGS.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
+    }
+    SETTINGS.saveToFile();
+  }
+
+  // Rebuild entries_/families_ from SD and re-register remaining families.
+  scanAndQueuePrompts();
+  registerWithRenderer(renderer);
+  return removed;
+}
+
+void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
+  // Register every (name, sizePt) family group that has a regular variant
+  // + .idx on disk. Each group binds to its own hashed fontId so that
+  // users with multiple sizes of the same family (e.g. fontA_17 +
+  // fontA_20) can switch between them via the reader Font Size picker
+  // without re-scanning SD.
+  static constexpr const char* kSlotNames[4] = {"regular", "bold", "italic", "bolditalic"};
+
+  for (const auto& g : families_) {
+    if (g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR] < 0) continue;
+
+    const int regIdx = g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR];
+    const auto& regEntry = entries_[regIdx];
+    char bdfPath[320];
+    snprintf(bdfPath, sizeof(bdfPath), "%s/%s", kCustomFontDir, regEntry.filename.c_str());
+    const std::string regIdxPath = idxPathFor(regEntry.filename);
+    if (!Storage.exists(regIdxPath.c_str())) {
+      LOG_INF(kModule, "skip register: regular .idx missing for %s", regEntry.filename.c_str());
+      continue;
+    }
+
+    auto* font = new bdf::CustomFont();
+    if (!font->open(bdfPath, regIdxPath.c_str(), regEntry.sizePt, kCustomFontCacheSlots)) {
+      LOG_INF(kModule, "open failed for %s", regEntry.filename.c_str());
+      delete font;
+      continue;
+    }
+
+    for (size_t slot = bdf::CustomFont::SLOT_BOLD; slot < 4; ++slot) {
+      const int idx = g.variantEntryIdx[slot];
+      if (idx < 0) continue;
+      const auto& ve = entries_[idx];
+      char vBdfPath[320];
+      snprintf(vBdfPath, sizeof(vBdfPath), "%s/%s", kCustomFontDir, ve.filename.c_str());
+      const std::string vIdxPath = idxPathFor(ve.filename);
+      if (!Storage.exists(vIdxPath.c_str())) {
+        LOG_INF(kModule, "variant %s present but .idx missing: %s", kSlotNames[slot], ve.filename.c_str());
+        continue;
+      }
+      if (!font->openVariant(slot, vBdfPath, vIdxPath.c_str(), kCustomFontCacheSlots)) {
+        LOG_INF(kModule, "variant %s open failed: %s", kSlotNames[slot], ve.filename.c_str());
+        continue;
+      }
+      LOG_INF(kModule, "variant %s loaded: %s", kSlotNames[slot], ve.filename.c_str());
+    }
+
+    const int fontId = idForFamily(g.fontName, g.sizePt);
+    LOG_INF(kModule, "registered custom font '%s' @ id=0x%08X (size=%upt, variants=%s%s%s%s)", g.fontName.c_str(),
+            static_cast<unsigned>(fontId), static_cast<unsigned>(g.sizePt),
+            font->hasVariant(bdf::CustomFont::SLOT_REGULAR) ? "R" : "-",
+            font->hasVariant(bdf::CustomFont::SLOT_BOLD) ? "B" : "-",
+            font->hasVariant(bdf::CustomFont::SLOT_ITALIC) ? "I" : "-",
+            font->hasVariant(bdf::CustomFont::SLOT_BOLD_ITALIC) ? "Z" : "-");
+    renderer.insertCustomFont(fontId, font);
+  }
+}
+
 void CustomFontManager::scanAndQueuePrompts() {
   entries_.clear();
+  families_.clear();
   pendingPromptIdx_.clear();
 
   auto dir = Storage.open(kCustomFontDir);
@@ -131,11 +303,13 @@ void CustomFontManager::scanAndQueuePrompts() {
     entry.sizePt = fname->sizePt;
     entry.glyphCount = header.glyphCount;
     entry.headerOk = true;
+    entry.variant = fname->variant;
     entries_.push_back(std::move(entry));
     ++valid;
 
-    LOG_INF(kModule, "%s header OK glyphs=%u bbx=%dx%d ascent=%d descent=%d", name,
-            static_cast<unsigned>(header.glyphCount), header.bbxW, header.bbxH, header.ascent, header.descent);
+    LOG_INF(kModule, "%s header OK glyphs=%u bbx=%dx%d ascent=%d descent=%d variant=%u", name,
+            static_cast<unsigned>(header.glyphCount), header.bbxW, header.bbxH, header.ascent, header.descent,
+            static_cast<unsigned>(fname->variant));
 
     if (++iter % kWdtResetInterval == 0) {
       esp_task_wdt_reset();
@@ -168,6 +342,42 @@ void CustomFontManager::scanAndQueuePrompts() {
 
   LOG_INF(kModule, "scanned %u files, %u valid, %u queued", static_cast<unsigned>(scanned),
           static_cast<unsigned>(valid), static_cast<unsigned>(pendingPromptIdx_.size()));
+
+  rebuildFamilyGroups();
+}
+
+void CustomFontManager::rebuildFamilyGroups() {
+  families_.clear();
+  // Linear scan; entries_ is capped at 50 so N^2 is fine. Group key is
+  // (fontName, sizePt); within a group each variant gets its own slot.
+  for (size_t i = 0; i < entries_.size(); ++i) {
+    const auto& e = entries_[i];
+    if (!e.headerOk) continue;
+    CustomFontFamilyGroup* group = nullptr;
+    for (auto& g : families_) {
+      if (g.fontName == e.fontName && g.sizePt == e.sizePt) {
+        group = &g;
+        break;
+      }
+    }
+    if (group == nullptr) {
+      families_.push_back({});
+      group = &families_.back();
+      group->fontName = e.fontName;
+      group->sizePt = e.sizePt;
+    }
+    const auto slot = static_cast<size_t>(e.variant);
+    if (slot < 4) {
+      if (group->variantEntryIdx[slot] >= 0) {
+        LOG_INF(kModule, "duplicate variant %u for %s %upt — keeping first (%s)", static_cast<unsigned>(slot),
+                e.fontName.c_str(), static_cast<unsigned>(e.sizePt),
+                entries_[group->variantEntryIdx[slot]].filename.c_str());
+      } else {
+        group->variantEntryIdx[slot] = static_cast<int>(i);
+      }
+    }
+  }
+  LOG_INF(kModule, "family groups: %u", static_cast<unsigned>(families_.size()));
 }
 
 void CustomFontManager::showNextPromptIfAny(GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -211,24 +421,26 @@ void CustomFontManager::showNextPromptIfAny(GfxRenderer& renderer, MappedInputMa
     }
     snprintf(idxPath, sizeof(idxPath), "%s", idxStr.c_str());
 
-    // Visual feedback — without this the device sits silent for 30+ seconds
-    // while buildIndex walks Unifont. Push a full-screen "Building..." page,
-    // force its first frame onto the e-ink, then run the build synchronously.
-    {
-      std::string msg = "Building font index\n\n";
-      msg += filename;
-      msg += "\n\nThis may take 1-3 min\nDo not reboot";
-      auto* progressActivity = new FullScreenMessageActivity(renderer, mappedInput, msg);
-      enterNewActivity(progressActivity);
-      progressActivity->requestUpdateAndWait();
-    }
+    // Live progress screen. Activity render task picks up setProgress +
+    // requestUpdate from the build callback; the e-ink refresh tick
+    // (~200 ms) naturally rate-limits the updates.
+    auto* progressActivity = new CustomFontInstallProgressActivity(renderer, mappedInput, filename);
+    exitActivity();
+    enterNewActivity(progressActivity);
+    progressActivity->requestUpdateAndWait();
 
     LOG_INF(kModule, "building index: %s -> %s", bdfPath, idxPath);
+    // Progress callback dropped in favour of a static "Installing..." screen
+    // (e-ink ghosting swallowed the progress bar). Builder runs with its
+    // default no-op progress.
     const auto build = bdf::BdfIndexBuilder::buildIndex(bdfPath, idxPath);
     if (!build.ok) {
       LOG_INF(kModule, "index build FAILED for %s: %s", filename.c_str(),
               build.error ? build.error : "unknown");
     } else {
+      // Register with the renderer right away so the user can pick the
+      // font immediately after install without rebooting.
+      registerWithRenderer(renderer);
       LOG_INF(kModule, "index built OK: %u glyphs (skipped %u) in %u ms",
               static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.glyphsSkipped),
               static_cast<unsigned>(build.parseTimeMs));
@@ -266,6 +478,7 @@ void CustomFontManager::showNextPromptIfAny(GfxRenderer& renderer, MappedInputMa
         snprintf(doneMsg, sizeof(doneMsg), "Install failed\n\n%s", build.error ? build.error : "unknown");
       }
       auto* doneActivity = new FullScreenMessageActivity(renderer, mappedInput, doneMsg);
+      exitActivity();
       enterNewActivity(doneActivity);
       doneActivity->requestUpdateAndWait();
       delay(2500);
@@ -287,6 +500,7 @@ void CustomFontManager::showNextPromptIfAny(GfxRenderer& renderer, MappedInputMa
     showNextPromptIfAny(renderer, mappedInput, onAllDismissed);
   };
 
+  exitActivity();
   enterNewActivity(new CustomFontPromptActivity(renderer, mappedInput, body, std::move(onInstall), std::move(onSkip),
                                                 std::move(onSkipForever)));
 }

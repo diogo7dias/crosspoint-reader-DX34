@@ -4,6 +4,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <list>
+#include <unordered_map>
 #include <vector>
 
 #include "BdfIndex.h"
@@ -16,9 +18,11 @@ namespace bdf {
 // .idx files open. lookup(cp) does a binary search in the .idx (via SD seek)
 // and lazy-decodes the bitmap from the BDF on cache miss.
 //
-// Cache: single most-recent glyph. Sufficient for Slice 2a verification (one
-// codepoint dumped at a time). Phase 2b will replace this with a real LRU
-// once GfxRenderer is dispatching multiple glyphs per page.
+// Cache: bounded LRU of decoded glyphs. Default cap (1 slot) preserves the
+// Phase 2a verification path; callers that need real render throughput should
+// bump via setCacheCap(). Each slot owns its bitmap bytes, so pointers
+// returned by lookup() are stable until that slot is evicted or the source is
+// closed.
 class CustomFontGlyphSource {
  public:
   CustomFontGlyphSource() = default;
@@ -32,6 +36,11 @@ class CustomFontGlyphSource {
   bool open(const char* bdfPath, const char* idxPath);
   void close();
   bool isOpen() const { return idxOpen_; }
+
+  // Configure max cached glyphs. Must be >=1. Can be called at any time;
+  // shrinks/evicts synchronously.
+  void setCacheCap(size_t slots);
+  size_t cacheCap() const { return cacheCap_; }
 
   uint32_t glyphCount() const { return glyphCount_; }
   int8_t fontBbxW() const { return hdr_.fontBbxW; }
@@ -47,19 +56,27 @@ class CustomFontGlyphSource {
     int8_t bbxOffY;
     uint8_t advance;
     // ceil(bbxW / 8) * bbxH bytes, MSB-first per row, padded to byte
-    // boundary at the end of each row. Borrowed pointer; valid until the
-    // next lookup() call.
+    // boundary at the end of each row. Borrowed pointer owned by an LRU
+    // slot; valid until that slot is evicted or the source is closed.
     const uint8_t* bitmap;
     size_t bitmapBytes;
   };
 
   // O(log N) binary search in .idx + bitmap decode. Returns nullptr if the
-  // codepoint is not in the index.
+  // codepoint is not in the index. On cache hit the slot is promoted to
+  // most-recently-used; on miss a new slot is materialized and the oldest
+  // slot is evicted if the cache is full.
   const Glyph* lookup(uint32_t codepoint);
 
  private:
+  struct CacheSlot {
+    Glyph glyph{};
+    std::vector<uint8_t> bitmap;
+  };
+  using SlotList = std::list<CacheSlot>;
+
   bool readIndexEntry(uint32_t indexPos, IndexEntry& out);
-  bool decodeBitmap(const IndexEntry& e);
+  bool decodeBitmap(const IndexEntry& e, std::vector<uint8_t>& out);
 
   HalFile bdfFile_;
   HalFile idxFile_;
@@ -68,10 +85,9 @@ class CustomFontGlyphSource {
   IndexHeader hdr_{};
   uint32_t glyphCount_ = 0;
 
-  // 1-slot cache.
-  bool cacheValid_ = false;
-  Glyph cachedGlyph_{};
-  std::vector<uint8_t> bitmapBuf_;
+  size_t cacheCap_ = 1;
+  SlotList cacheList_;  // front = most recently used
+  std::unordered_map<uint32_t, SlotList::iterator> cacheMap_;
 };
 
 }  // namespace bdf

@@ -11,6 +11,10 @@ struct ReadingTheme {
   std::string name;
   uint8_t fontFamily = CrossPointSettings::CHAREINK;
   uint8_t fontSize = CrossPointSettings::SIZE_16;
+  // Paired with fontFamily == CUSTOM_FAMILY. Empty string when theme
+  // uses a built-in family (equivalent to omitting the JSON field).
+  std::string customFontName;
+  uint8_t customFontSizePt = 0;  // 0 = unspecified; reader picks smallest available
   uint8_t lineSpacingPercent = 110;
   uint8_t uniformMargins = 0;
   uint8_t dynamicMargins = 0;

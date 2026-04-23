@@ -49,6 +49,7 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "fonts/CustomFontIds.h"
 #include "fonts/CustomFontManager.h"
 #include "lifecycle/ActivityRouter.h"
 #include "persist/AppStateStore.h"
@@ -172,26 +173,6 @@ EpdFont galmuri12RegularFont(&galmuri_12_regular);
 EpdFontFamily galmuri12FontFamily(&galmuri12RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
 EpdFont galmuri14RegularFont(&galmuri_14_regular);
 EpdFontFamily galmuri14FontFamily(&galmuri14RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
-
-// TT2020: typewriter-emulation font. Sizes 15 and 17, each with four real
-// faces:
-//   Regular    <- TT2020 Base Regular
-//   Italic     <- TT2020 Base Italic
-//   Bold       <- TT2020 Style E Regular  (worn "heavy" variant)
-//   BoldItalic <- TT2020 Style E Italic
-// No synthetic slant or bold-pass; each face is a distinct source TTF.
-EpdFont tt2020_15_regularFont(&tt2020_15_regular);
-EpdFont tt2020_15_italicFont(&tt2020_15_italic);
-EpdFont tt2020_15_boldFont(&tt2020_15_bold);
-EpdFont tt2020_15_boldItalicFont(&tt2020_15_bolditalic);
-EpdFontFamily tt2020_15_FontFamily(&tt2020_15_regularFont, &tt2020_15_boldFont, &tt2020_15_italicFont,
-                                   &tt2020_15_boldItalicFont);
-EpdFont tt2020_17_regularFont(&tt2020_17_regular);
-EpdFont tt2020_17_italicFont(&tt2020_17_italic);
-EpdFont tt2020_17_boldFont(&tt2020_17_bold);
-EpdFont tt2020_17_boldItalicFont(&tt2020_17_bolditalic);
-EpdFontFamily tt2020_17_FontFamily(&tt2020_17_regularFont, &tt2020_17_boldFont, &tt2020_17_italicFont,
-                                   &tt2020_17_boldItalicFont);
 
 EpdFont smallFont(&ui_8_regular);
 EpdFontFamily smallFontFamily(&smallFont, nullptr, nullptr, nullptr, 0, 0, false);
@@ -432,8 +413,6 @@ void setupDisplayAndFonts() {
   renderer.insertFont(GALMURI_11_FONT_ID, galmuri11FontFamily);
   renderer.insertFont(GALMURI_12_FONT_ID, galmuri12FontFamily);
   renderer.insertFont(GALMURI_14_FONT_ID, galmuri14FontFamily);
-  renderer.insertFont(TT2020_15_FONT_ID, tt2020_15_FontFamily);
-  renderer.insertFont(TT2020_17_FONT_ID, tt2020_17_FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
@@ -711,6 +690,32 @@ void setup() {
 
   auto& customFonts = crosspoint::fonts::CustomFontManager::instance();
   customFonts.scanAndQueuePrompts();
+  // Register any BDF whose .idx is already on SD so the reader text path can
+  // dispatch to it. Runs BEFORE showing the install prompt so that if the
+  // user chose "Skip (this boot)" on a previously-installed font they can
+  // still read with it today.
+  customFonts.registerWithRenderer(renderer);
+
+  // Safety net: if SETTINGS picks a custom family whose named BDF is not
+  // actually registered (e.g. user deleted the file off SD externally),
+  // fall back to the default built-in family so the reader doesn't
+  // silently render empty text. A log-only warning would leave the user
+  // with an invisible page and no obvious cause.
+  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
+    const int id = SETTINGS.customFontName.empty()
+                       ? 0
+                       : crosspoint::fonts::idForFamily(SETTINGS.customFontName, SETTINGS.customFontSizePt);
+    if (id == 0 || renderer.findCustomFont(id) == nullptr) {
+      LOG_INF("CFONT", "active custom font '%s' size=%u missing at boot; reverting to CHAREINK 12 crisp",
+              SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt));
+      SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
+      SETTINGS.fontSize = CrossPointSettings::SIZE_12;
+      SETTINGS.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
+      SETTINGS.customFontName.clear();
+      SETTINGS.customFontSizePt = 0;
+      SETTINGS.saveToFile();
+    }
+  }
   if (customFonts.hasPendingPrompt()) {
     customFonts.showNextPromptIfAny(renderer, mappedInputManager, launchBootDestination);
   } else {
