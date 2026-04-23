@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <iosfwd>
+#include <string>
 
 class CrossPointSettings {
  private:
@@ -136,8 +137,15 @@ class CrossPointSettings {
     BOOKERLY = 1,
     VOLLKORN = 2,
     GALMURI = 9,
-    TT2020 = 10,
+    // TT2020 (was 10) removed in 2026-04 to reclaim flash. Legacy value 10
+    // normalizes to CHAREINK via normalizeFontFamily().
     BITTER = 11,
+    // Phase 2b: single custom-font slot bound to unifont_16. When no custom
+    // font is registered at runtime the reader falls back to CHAREINK.
+    // Named CUSTOM_FAMILY (not CUSTOM) because the SLEEP_SCREEN_MODE enum
+    // in this same class already uses CUSTOM — C++ unscoped enums share
+    // a single name space per containing class.
+    CUSTOM_FAMILY = 12,
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
@@ -304,6 +312,16 @@ class CrossPointSettings {
   // Reader font settings
   uint8_t fontFamily = CHAREINK;
   uint8_t fontSize = SIZE_16;
+  // When fontFamily == CUSTOM_FAMILY, this names the user-dropped family
+  // to dispatch to (filename stem, e.g. "unifont"). Empty string falls
+  // back to CHAREINK at reader-font-id resolution time.
+  std::string customFontName;
+  // Selected pixel size for the active custom family. Paired with
+  // customFontName so a family dropped at multiple sizes (e.g.
+  // fontA_17.bdf + fontA_20.bdf) can be switched via the reader Font
+  // Size picker. 0 = "not yet picked"; picker first-opens defaults to
+  // the smallest available size.
+  uint8_t customFontSizePt = 0;
   // Legacy line spacing setting (kept for migration from old settings files)
   uint8_t lineSpacing = NORMAL;
   // Reader line spacing percentage (35..150)

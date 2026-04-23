@@ -105,6 +105,8 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name, const Cros
   theme.name = sanitizeName(name);
   theme.fontFamily = settings.fontFamily;
   theme.fontSize = settings.fontSize;
+  theme.customFontName = settings.customFontName;
+  theme.customFontSizePt = settings.customFontSizePt;
   theme.lineSpacingPercent = settings.lineSpacingPercent;
   theme.uniformMargins = settings.uniformMargins;
   theme.dynamicMargins = settings.dynamicMargins;
@@ -151,6 +153,8 @@ ReadingTheme ReadingThemeStore::captureCurrent(const std::string& name) const { 
 void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPointSettings& settings) {
   settings.fontFamily = CrossPointSettings::normalizeFontFamily(theme.fontFamily);
   settings.fontSize = CrossPointSettings::normalizeFontSizeForFamily(settings.fontFamily, theme.fontSize);
+  settings.customFontName = theme.customFontName;
+  settings.customFontSizePt = theme.customFontSizePt;
   settings.lineSpacingPercent = clampRange(theme.lineSpacingPercent, 35, 150, 110);
   settings.uniformMargins = theme.uniformMargins ? 1 : 0;
   settings.dynamicMargins = (theme.dynamicMargins > 2) ? 0 : theme.dynamicMargins;
@@ -232,6 +236,7 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
 bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
   ReadingTheme current = fromSettings("", SETTINGS);
   return current.fontFamily == theme.fontFamily && current.fontSize == theme.fontSize &&
+         current.customFontName == theme.customFontName && current.customFontSizePt == theme.customFontSizePt &&
          current.lineSpacingPercent == theme.lineSpacingPercent && current.uniformMargins == theme.uniformMargins &&
          current.dynamicMargins == theme.dynamicMargins &&
          current.screenMarginHorizontal == theme.screenMarginHorizontal &&

@@ -1,9 +1,18 @@
 #include "GfxRenderer.h"
 
+#include <CustomFont.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <Logging.h>
 #include <Utf8.h>
+
+GfxRenderer::~GfxRenderer() {
+  for (auto& kv : customFontMap) {
+    delete kv.second;
+  }
+  customFontMap.clear();
+  freeBwBufferChunks();
+}
 
 void GfxRenderer::begin() {
   frameBuffer = display.getFrameBuffer();
@@ -14,6 +23,30 @@ void GfxRenderer::begin() {
 }
 
 void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) { fontMap.insert({fontId, font}); }
+
+void GfxRenderer::insertCustomFont(const int fontId, crosspoint::bdf::CustomFont* font) {
+  if (!font) return;
+  const auto it = customFontMap.find(fontId);
+  if (it != customFontMap.end()) {
+    delete it->second;
+    it->second = font;
+    return;
+  }
+  customFontMap.emplace(fontId, font);
+}
+
+void GfxRenderer::removeCustomFont(const int fontId) {
+  const auto it = customFontMap.find(fontId);
+  if (it == customFontMap.end()) return;
+  delete it->second;
+  customFontMap.erase(it);
+}
+
+crosspoint::bdf::CustomFont* GfxRenderer::findCustomFont(const int fontId) const {
+  const auto it = customFontMap.find(fontId);
+  if (it == customFontMap.end()) return nullptr;
+  return it->second;
+}
 
 // Translate logical (x,y) coordinates to physical panel coordinates based on
 // current orientation This should always be inlined for better performance
@@ -78,6 +111,14 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   const uint8_t height = glyph->height;
   const int left = glyph->left;
   const int top = glyph->top;
+  // Synthetic italic shear. Active when the family has no real italic face
+  // and the caller asks for ITALIC (or BOLD_ITALIC). Only applied to the
+  // non-rotated path — side-button labels (the only rotated callers) would
+  // read wrong with a sheared glyph. Divisor 4 ≈ 14° slant, close to the
+  // standard 15° italic convention.
+  const bool shearItalic =
+      rotation == TextRotation::None && fontFamily.shouldSynthesizeItalic(style);
+  constexpr int kShearDivisor = 4;
 
   const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
 
@@ -98,13 +139,14 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
       int pixelPosition = 0;
       for (int glyphY = 0; glyphY < height; glyphY++) {
         const int outerCoord = outerBase + glyphY;
+        const int shearDx = shearItalic ? ((height - glyphY) / kShearDivisor) : 0;
         for (int glyphX = 0; glyphX < width; glyphX++, pixelPosition++) {
           int screenX, screenY;
           if constexpr (rotation == TextRotation::Rotated90CW) {
             screenX = outerCoord;
             screenY = innerBase - glyphX;
           } else {
-            screenX = innerBase + glyphX;
+            screenX = innerBase + glyphX + shearDx;
             screenY = outerCoord;
           }
 
@@ -140,13 +182,14 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
       int pixelPosition = 0;
       for (int glyphY = 0; glyphY < height; glyphY++) {
         const int outerCoord = outerBase + glyphY;
+        const int shearDx = shearItalic ? ((height - glyphY) / kShearDivisor) : 0;
         for (int glyphX = 0; glyphX < width; glyphX++, pixelPosition++) {
           int screenX, screenY;
           if constexpr (rotation == TextRotation::Rotated90CW) {
             screenX = outerCoord;
             screenY = innerBase - glyphX;
           } else {
-            screenX = innerBase + glyphX;
+            screenX = innerBase + glyphX + shearDx;
             screenY = outerCoord;
           }
 
@@ -202,6 +245,9 @@ void GfxRenderer::drawPixel(const int x, const int y, const bool state) const {
 }
 
 int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontFamily::Style style) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->getTextWidth(text, static_cast<crosspoint::bdf::CustomFont::StyleBits>(style));
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     LOG_ERR("GFX", "Font %d not found", fontId);
@@ -234,6 +280,62 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
 
 void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, const char* text, const int letterSpacing,
                                  const bool black, const EpdFontFamily::Style style) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    // Custom fonts skip the FontCacheManager scan-pass (no compressed-group
+    // prewarming applies; the LRU fills on first real render). Walk the
+    // UTF-8 text via CustomFont::visitGlyphs and stamp each bitmap onto
+    // the framebuffer with drawPixel. BDF origin sits on the baseline at
+    // character start; pixel (col,row) in the glyph bitmap maps to
+    //   screenX = cursorX + bbxOffX + col
+    //   screenY = baselineY - bbxOffY - bbxH + row
+    // (BDF stores bitmap rows top-to-bottom, and bbxOffY is the Y offset
+    // from the baseline to the bitmap's lower-left.)
+    if (text == nullptr || *text == '\0') return;
+    const auto styleBits = static_cast<crosspoint::bdf::CustomFont::StyleBits>(style);
+    const int baselineY = y + cf->ascender(styleBits);
+    const uint8_t boldPasses = cf->getSyntheticBoldPasses(styleBits);
+    // Dark render mode (textRenderStyle == 1) mirrors the built-in path in
+    // renderCharImpl: each set pixel drops a +1-right, +1-down shadow,
+    // thickening strokes diagonally.
+    const bool dark = renderMode == BW && textRenderStyle == 1;
+    // Italic shear: when the family has no real italic variant, shift each
+    // bitmap row rightward by (bbxH - row) / SHEAR_DIVISOR. The divisor of
+    // 4 yields ~14° slant — close to the standard 15° italic.
+    const bool shear = cf->shouldSynthesizeItalic(styleBits);
+    constexpr int kShearDivisor = 4;
+    cf->visitGlyphs(text, letterSpacing, styleBits,
+                    [this, baselineY, x, black, boldPasses, dark, shear](int cursorX, const crosspoint::bdf::CustomFontGlyphSource::Glyph& g) {
+                      if (g.bitmap == nullptr || g.bbxW == 0 || g.bbxH == 0) return true;
+                      const int topLeftX = x + cursorX + g.bbxOffX;
+                      const int topLeftY = baselineY - g.bbxOffY - g.bbxH;
+                      const size_t bytesPerRow = (g.bbxW + 7) / 8;
+                      for (uint8_t row = 0; row < g.bbxH; ++row) {
+                        const uint8_t* rowPtr = g.bitmap + row * bytesPerRow;
+                        const int shearDx = shear ? ((g.bbxH - row) / kShearDivisor) : 0;
+                        for (uint8_t col = 0; col < g.bbxW; ++col) {
+                          const uint8_t byte = rowPtr[col >> 3];
+                          const uint8_t bit = 7 - (col & 7);
+                          if ((byte & (1 << bit)) == 0) continue;
+                          const int px = topLeftX + col + shearDx;
+                          const int py = topLeftY + row;
+                          drawPixel(px, py, black);
+                          if (dark) {
+                            drawPixel(px + 1, py, black);
+                            drawPixel(px, py + 1, black);
+                          }
+                          // Synthetic bold: stamp N extra right-offset pixels
+                          // so strokes thicken horizontally. Matches the
+                          // built-in `extraBoldPasses` pattern in renderCharImpl.
+                          for (uint8_t k = 1; k <= boldPasses; ++k) {
+                            drawPixel(px + k, py, black);
+                          }
+                        }
+                      }
+                      return true;
+                    });
+    return;
+  }
+
   // Scan mode: record text for font cache prewarming, skip rendering
   if (fontCacheManager_ && fontCacheManager_->isScanning()) {
     if (text && *text) fontCacheManager_->recordText(text, fontId, style);
@@ -845,6 +947,9 @@ void GfxRenderer::displayBuffer(HalDisplay::RefreshMode refreshMode) {
 
 std::string GfxRenderer::truncatedText(const int fontId, const char* text, const int maxWidth,
                                        const EpdFontFamily::Style style) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->truncatedText(text, maxWidth, static_cast<crosspoint::bdf::CustomFont::StyleBits>(style));
+  }
   if (!text || maxWidth <= 0) return "";
 
   std::string item = text;
@@ -893,6 +998,9 @@ int GfxRenderer::getScreenHeight() const {
 }
 
 int GfxRenderer::getSpaceWidth(const int fontId, const EpdFontFamily::Style style) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->getSpaceWidth(static_cast<crosspoint::bdf::CustomFont::StyleBits>(style));
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     LOG_ERR("GFX", "Font %d not found", fontId);
@@ -909,6 +1017,9 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, const EpdFo
 
 int GfxRenderer::getTextAdvanceXSpaced(const int fontId, const char* text, const int letterSpacing,
                                        const EpdFontFamily::Style style) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->getTextAdvanceX(text, letterSpacing, static_cast<crosspoint::bdf::CustomFont::StyleBits>(style));
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     LOG_ERR("GFX", "Font %d not found", fontId);
@@ -933,6 +1044,9 @@ int GfxRenderer::getTextAdvanceXSpaced(const int fontId, const char* text, const
 }
 
 int GfxRenderer::getFontAscenderSize(const int fontId) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->ascender();
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     LOG_ERR("GFX", "Font %d not found", fontId);
@@ -943,6 +1057,9 @@ int GfxRenderer::getFontAscenderSize(const int fontId) const {
 }
 
 int GfxRenderer::getLineHeight(const int fontId) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->lineHeight();
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     LOG_ERR("GFX", "Font %d not found", fontId);
@@ -953,6 +1070,9 @@ int GfxRenderer::getLineHeight(const int fontId) const {
 }
 
 bool GfxRenderer::hasGlyph(const int fontId, const uint32_t cp, const EpdFontFamily::Style style) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->hasGlyph(cp);
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     return false;
@@ -961,6 +1081,9 @@ bool GfxRenderer::hasGlyph(const int fontId, const uint32_t cp, const EpdFontFam
 }
 
 int GfxRenderer::getTextHeight(const int fontId) const {
+  if (auto* cf = findCustomFont(fontId)) {
+    return cf->ascender();
+  }
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {
     LOG_ERR("GFX", "Font %d not found", fontId);
@@ -973,6 +1096,13 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
                                       const EpdFontFamily::Style style) const {
   // Cannot draw a NULL / empty string
   if (text == nullptr || *text == '\0') {
+    return;
+  }
+
+  if (findCustomFont(fontId) != nullptr) {
+    // Not used in Phase 2b: custom fonts are reader-text only. UI side-button
+    // labels (the only callers of drawTextRotated90CW) always route a
+    // built-in font ID. Silently no-op rather than grow rotation math.
     return;
   }
 

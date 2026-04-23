@@ -18,6 +18,13 @@ struct ReaderSettingInfo {
   SettingType type;
   uint8_t CrossPointSettings::* valuePtr = nullptr;
   std::vector<StrId> enumValues;
+  // Optional dynamic tail appended after enumValues. When non-empty, the
+  // indices [enumValues.size() .. enumValues.size() + dynamicLabels.size())
+  // render with the raw std::string label rather than an I18N lookup. Used
+  // for values that come from user data (e.g. installed custom font names
+  // — "Custom: unifont", "Custom: iosevka") which cannot be precompiled
+  // into StrId constants.
+  std::vector<std::string> dynamicLabels;
 
   struct ValueRange {
     uint8_t min;
@@ -25,6 +32,8 @@ struct ReaderSettingInfo {
     uint8_t step;
   };
   ValueRange valueRange = {};
+
+  size_t totalOptionCount() const { return enumValues.size() + dynamicLabels.size(); }
 
   static ReaderSettingInfo Toggle(StrId nameId, uint8_t CrossPointSettings::* ptr) {
     ReaderSettingInfo s;

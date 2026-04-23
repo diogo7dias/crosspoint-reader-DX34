@@ -13,7 +13,7 @@
 // ACTION-type entries and entries without a key are device-only.
 inline std::vector<SettingInfo> getSettingsList() {
   std::vector<SettingInfo> s;
-  s.reserve(55);
+  s.reserve(80);
 
   // --- Display ---
   s.push_back(
@@ -57,7 +57,7 @@ inline std::vector<SettingInfo> getSettingsList() {
   // --- Reader ---
   s.push_back(SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                                 {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN, StrId::STR_GALMURI,
-                                 StrId::STR_TT2020, StrId::STR_BITTER},
+                                 StrId::STR_BITTER},
                                 "fontFamily", StrId::STR_CAT_READER));
   s.push_back(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                 {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}, "fontSize",
