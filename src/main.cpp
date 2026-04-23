@@ -49,6 +49,7 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "fonts/CustomFontManager.h"
 #include "lifecycle/ActivityRouter.h"
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
@@ -689,12 +690,31 @@ void setup() {
     router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) { openHomeInline(); });
   }
 
-  if (goHome) {
-    bootActivity->setProgress(100, "Opening home");
-    lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Home, ""});
+  bootActivity->setProgress(100, goHome ? "Opening home" : "Opening book");
+
+  // Phase 1 BDF custom-font scan. Runs after APP_STATE is loaded so the
+  // seen/skipped vectors are populated. If any new BDF is queued, the popup
+  // replaces BootActivity; the final dismiss callback transitions to the
+  // boot destination via ActivityRouter::begin (synchronous dispatch).
+  auto launchBootDestination = [goHome, readerPath]() {
+    if (goHome) {
+      lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Home, ""});
+    } else {
+      lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Reader, readerPath});
+    }
+  };
+
+  // Ensure /custom-font/ exists so the user can drop BDF files via the web
+  // server / file transfer without first creating the directory by hand.
+  // mkdir is idempotent; harmless when the dir already exists.
+  Storage.mkdir("/custom-font");
+
+  auto& customFonts = crosspoint::fonts::CustomFontManager::instance();
+  customFonts.scanAndQueuePrompts();
+  if (customFonts.hasPendingPrompt()) {
+    customFonts.showNextPromptIfAny(renderer, mappedInputManager, launchBootDestination);
   } else {
-    bootActivity->setProgress(100, "Opening book");
-    lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Reader, readerPath});
+    launchBootDestination();
   }
 
   // Ensure we're not still holding the power button before leaving setup

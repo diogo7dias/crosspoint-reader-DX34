@@ -30,6 +30,10 @@ void populateDoc(const CrossPointState& s, JsonDocument& doc) {
   }
   JsonArray favs = doc["favoriteBmpPaths"].to<JsonArray>();
   for (const auto& entry : s.favoriteBmpPaths) favs.add(entry);
+  JsonArray seenFonts = doc["seenCustomFonts"].to<JsonArray>();
+  for (const auto& entry : s.seenCustomFonts) seenFonts.add(entry);
+  JsonArray skippedFonts = doc["skippedCustomFonts"].to<JsonArray>();
+  for (const auto& entry : s.skippedCustomFonts) skippedFonts.add(entry);
 }
 }  // namespace
 
@@ -83,6 +87,22 @@ bool deserializeCrossPointState(const std::string& json, CrossPointState& s) {
     for (const JsonVariant value : doc["favoriteBmpPaths"].as<JsonArray>()) {
       const char* entry = value.as<const char*>();
       if (entry && entry[0] != '\0') s.favoriteBmpPaths.emplace_back(entry);
+    }
+  }
+
+  s.seenCustomFonts.clear();
+  if (doc["seenCustomFonts"].is<JsonArray>()) {
+    for (const JsonVariant value : doc["seenCustomFonts"].as<JsonArray>()) {
+      const char* entry = value.as<const char*>();
+      if (entry && entry[0] != '\0') s.seenCustomFonts.emplace_back(entry);
+    }
+  }
+
+  s.skippedCustomFonts.clear();
+  if (doc["skippedCustomFonts"].is<JsonArray>()) {
+    for (const JsonVariant value : doc["skippedCustomFonts"].as<JsonArray>()) {
+      const char* entry = value.as<const char*>();
+      if (entry && entry[0] != '\0') s.skippedCustomFonts.emplace_back(entry);
     }
   }
   return true;
