@@ -64,9 +64,16 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
     return false;
   }
 
+  // Upper-bound bitmap size from the font's bounding box. Per-glyph BBX may
+  // be smaller; decodeBitmap writes only the bytes actually used and the
+  // unused tail of the slot is never read (bitmapBytes bounds the consumer).
+  const int8_t bbxW = hdr_.fontBbxW > 0 ? hdr_.fontBbxW : 1;
+  const int8_t bbxH = hdr_.fontBbxH > 0 ? hdr_.fontBbxH : 1;
+  maxBitmapBytes_ = static_cast<size_t>((bbxW + 7) / 8) * static_cast<size_t>(bbxH);
+  if (maxBitmapBytes_ == 0) maxBitmapBytes_ = 1;
+
   idxOpen_ = true;
-  cacheList_.clear();
-  cacheMap_.clear();
+  allocSlab_();
   return true;
 }
 
@@ -76,18 +83,96 @@ void CustomFontGlyphSource::close() {
     bdfFile_.close();
     idxOpen_ = false;
   }
-  cacheList_.clear();
-  cacheMap_.clear();
+  clearSlab_();
+  glyphCount_ = 0;
+  maxBitmapBytes_ = 0;
 }
 
 void CustomFontGlyphSource::setCacheCap(size_t slots) {
   if (slots == 0) slots = 1;
+  if (slots > 65534) slots = 65534;
+  if (slots == cacheCap_) return;
   cacheCap_ = slots;
-  while (cacheList_.size() > cacheCap_) {
-    auto& slot = cacheList_.back();
-    cacheMap_.erase(slot.glyph.codepoint);
-    cacheList_.pop_back();
+  if (idxOpen_) allocSlab_();
+}
+
+void CustomFontGlyphSource::allocSlab_() {
+  // Rebuild cache structures from scratch. Called from open() (cold) and
+  // setCacheCap() when the cap actually changes. All prior cached glyphs
+  // are dropped — callers holding a Glyph* from before this call must not
+  // dereference it.
+  cacheMap_.clear();
+  slots_.clear();
+  bitmapSlab_.clear();
+
+  slots_.resize(cacheCap_);
+  bitmapSlab_.assign(cacheCap_ * maxBitmapBytes_, 0);
+  cacheMap_.reserve(cacheCap_);
+
+  // Thread every slot into the free list via `next`.
+  for (size_t i = 0; i < cacheCap_; ++i) {
+    slots_[i].prev = kNil;
+    slots_[i].next = (i + 1 < cacheCap_) ? static_cast<uint16_t>(i + 1) : kNil;
+    slots_[i].occupied = false;
   }
+  freeHead_ = cacheCap_ > 0 ? 0 : kNil;
+  lruHead_ = kNil;
+  lruTail_ = kNil;
+}
+
+void CustomFontGlyphSource::clearSlab_() {
+  cacheMap_.clear();
+  slots_.clear();
+  bitmapSlab_.clear();
+  freeHead_ = kNil;
+  lruHead_ = kNil;
+  lruTail_ = kNil;
+}
+
+void CustomFontGlyphSource::lruUnlink_(uint16_t idx) {
+  Slot& s = slots_[idx];
+  if (s.prev != kNil) slots_[s.prev].next = s.next;
+  else lruHead_ = s.next;
+  if (s.next != kNil) slots_[s.next].prev = s.prev;
+  else lruTail_ = s.prev;
+  s.prev = kNil;
+  s.next = kNil;
+}
+
+void CustomFontGlyphSource::lruPushFront_(uint16_t idx) {
+  Slot& s = slots_[idx];
+  s.prev = kNil;
+  s.next = lruHead_;
+  if (lruHead_ != kNil) slots_[lruHead_].prev = idx;
+  lruHead_ = idx;
+  if (lruTail_ == kNil) lruTail_ = idx;
+}
+
+uint16_t CustomFontGlyphSource::takeFreeSlot_() {
+  if (freeHead_ == kNil) return kNil;
+  const uint16_t idx = freeHead_;
+  freeHead_ = slots_[idx].next;
+  slots_[idx].prev = kNil;
+  slots_[idx].next = kNil;
+  return idx;
+}
+
+uint16_t CustomFontGlyphSource::evictLru_() {
+  if (lruTail_ == kNil) return kNil;
+  const uint16_t idx = lruTail_;
+  Slot& s = slots_[idx];
+  cacheMap_.erase(s.glyph.codepoint);
+  s.occupied = false;
+  lruUnlink_(idx);
+  return idx;
+}
+
+void CustomFontGlyphSource::returnToFreeList_(uint16_t idx) {
+  Slot& s = slots_[idx];
+  s.occupied = false;
+  s.prev = kNil;
+  s.next = freeHead_;
+  freeHead_ = idx;
 }
 
 bool CustomFontGlyphSource::readIndexEntry(uint32_t indexPos, IndexEntry& out) {
@@ -97,18 +182,17 @@ bool CustomFontGlyphSource::readIndexEntry(uint32_t indexPos, IndexEntry& out) {
 }
 
 const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codepoint) {
-  if (!idxOpen_ || glyphCount_ == 0) return nullptr;
+  if (!idxOpen_ || glyphCount_ == 0 || cacheCap_ == 0) return nullptr;
 
-  // Cache hit: promote to MRU and return borrowed pointer into the slot.
+  // Cache hit: promote to MRU and return the slab-backed pointer.
   const auto mapIt = cacheMap_.find(codepoint);
   if (mapIt != cacheMap_.end()) {
-    if (mapIt->second != cacheList_.begin()) {
-      cacheList_.splice(cacheList_.begin(), cacheList_, mapIt->second);
+    const uint16_t idx = mapIt->second;
+    if (lruHead_ != idx) {
+      lruUnlink_(idx);
+      lruPushFront_(idx);
     }
-    auto& slot = cacheList_.front();
-    slot.glyph.bitmap = slot.bitmap.data();
-    slot.glyph.bitmapBytes = slot.bitmap.size();
-    return &slot.glyph;
+    return &slots_[idx].glyph;
   }
 
   // Binary search the .idx by codepoint.
@@ -133,40 +217,40 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
   }
   if (!found) return nullptr;
 
-  std::vector<uint8_t> bitmap;
-  if (!decodeBitmap(hit, bitmap)) return nullptr;
+  // Grab a slot — from the free list first, fall back to evicting LRU.
+  uint16_t idx = takeFreeSlot_();
+  if (idx == kNil) idx = evictLru_();
+  if (idx == kNil) return nullptr;
 
-  // Evict oldest if at cap (check BEFORE insert to keep map iters stable).
-  if (cacheList_.size() >= cacheCap_) {
-    auto& evict = cacheList_.back();
-    cacheMap_.erase(evict.glyph.codepoint);
-    cacheList_.pop_back();
+  uint8_t* dst = bitmapSlab_.data() + static_cast<size_t>(idx) * maxBitmapBytes_;
+  if (!decodeBitmap(hit, dst, maxBitmapBytes_)) {
+    returnToFreeList_(idx);
+    return nullptr;
   }
 
-  cacheList_.emplace_front();
-  auto& inserted = cacheList_.front();
-  inserted.bitmap = std::move(bitmap);
-  inserted.glyph.codepoint = hit.codepoint;
-  inserted.glyph.bbxW = hit.bitmapW;
-  inserted.glyph.bbxH = hit.bitmapH;
-  inserted.glyph.bbxOffX = hit.bbxOffX;
-  inserted.glyph.bbxOffY = hit.bbxOffY;
-  inserted.glyph.advance = hit.advance;
-  inserted.glyph.bitmap = inserted.bitmap.data();
-  inserted.glyph.bitmapBytes = inserted.bitmap.size();
-  cacheMap_[codepoint] = cacheList_.begin();
-  return &inserted.glyph;
+  Slot& s = slots_[idx];
+  s.glyph.codepoint = hit.codepoint;
+  s.glyph.bbxW = hit.bitmapW;
+  s.glyph.bbxH = hit.bitmapH;
+  s.glyph.bbxOffX = hit.bbxOffX;
+  s.glyph.bbxOffY = hit.bbxOffY;
+  s.glyph.advance = hit.advance;
+  s.glyph.bitmap = dst;
+  s.glyph.bitmapBytes = static_cast<size_t>((hit.bitmapW + 7) / 8) * static_cast<size_t>(hit.bitmapH);
+  s.occupied = true;
+  lruPushFront_(idx);
+  cacheMap_[codepoint] = idx;
+  return &s.glyph;
 }
 
-bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, std::vector<uint8_t>& out) {
-  // Seek to the STARTCHAR line for this glyph. Then walk lines until BITMAP,
-  // then collect H rows of hex into out.
+bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, uint8_t* dst, size_t dstCap) {
   if (!bdfFile_.seekSet(e.bdfOffset)) return false;
 
   const size_t bytesPerRow = (e.bitmapW + 7) / 8;
   const size_t totalBytes = bytesPerRow * e.bitmapH;
-  out.assign(totalBytes, 0);
-  if (totalBytes == 0) return true;  // zero-size glyph (e.g. SPACE) — empty bitmap is valid
+  if (totalBytes > dstCap) return false;  // Glyph exceeds font bounding box — rejected.
+  if (totalBytes == 0) return true;        // zero-size glyph (e.g. SPACE) — empty bitmap is valid
+  std::memset(dst, 0, totalBytes);
 
   char line[kBitmapLineBuf];
   // Walk lines until BITMAP token.
@@ -191,7 +275,7 @@ bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, std::vector<uint8_
       const int hi = hexNibble(static_cast<unsigned char>(line[b * 2]));
       const int lo = hexNibble(static_cast<unsigned char>(line[b * 2 + 1]));
       if (hi < 0 || lo < 0) return false;
-      out[row * bytesPerRow + b] = static_cast<uint8_t>((hi << 4) | lo);
+      dst[row * bytesPerRow + b] = static_cast<uint8_t>((hi << 4) | lo);
     }
   }
   return true;

@@ -12,6 +12,7 @@
 #include "Paths.h"
 #include "fontIds.h"
 #include "fonts/CustomFontIds.h"
+#include "fonts/CustomFontManager.h"
 #include "util/StringUtils.h"
 
 // Initialize the static instance
@@ -745,16 +746,22 @@ int CrossPointSettings::getReaderFontId() const {
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
   if (normalizedFamily == CUSTOM_FAMILY) {
     // Custom family resolves to the family the user has selected by name.
-    // Empty name (new user who has never picked a custom font) falls
-    // through to CHAREINK so the reader doesn't crash on a bogus id. If
-    // the named family isn't currently registered in GfxRenderer the
-    // text path will log a "Font not found" and render nothing; the
-    // manage-fonts screen is the place to recover from that.
-    if (customFontName.empty()) {
-      // fall through to the CHAREINK switch below.
-    } else {
-      return crosspoint::fonts::idForFamily(customFontName, customFontSizePt);
+    // If the stored (name, sizePt) pair is not currently installed (file
+    // deleted, SD pulled, or an in-app delete happened mid-session), fall
+    // through to the CHAREINK switch below so the reader stays legible
+    // instead of rendering blank pages. The boot-time safety net in
+    // main.cpp persists a real reset on next reboot; this path is the
+    // runtime guard.
+    if (!customFontName.empty()) {
+      const auto& families = crosspoint::fonts::CustomFontManager::instance().families();
+      for (const auto& g : families) {
+        if (g.variantEntryIdx[0] < 0) continue;
+        if (g.fontName == customFontName && g.sizePt == customFontSizePt) {
+          return crosspoint::fonts::idForFamily(customFontName, customFontSizePt);
+        }
+      }
     }
+    // Named family missing (or never set) — fall through to CHAREINK switch.
   }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {

@@ -639,20 +639,18 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
         valueText = fontSizeValueLabel(SETTINGS.fontFamily, size);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
         if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-          // Find the customFontName slot inside dynamicLabels. Fall back
-          // to the first available custom label if the stored name no
-          // longer matches any installed family (file was deleted).
-          const auto& families = crosspoint::fonts::CustomFontManager::instance().families();
-          size_t slot = 0;
+          // Walk uniqueFamilyNames() — same ordering used to build
+          // dynamicLabels and to cycle the picker. Iterating families_
+          // directly desynchronises when one family has multiple sizes
+          // (slot overshoots dynamicLabels and the value renders blank).
+          const auto names = crosspoint::fonts::CustomFontManager::instance().uniqueFamilyNames();
           bool matched = false;
-          for (const auto& fg : families) {
-            if (fg.variantEntryIdx[0] < 0) continue;
-            if (fg.fontName == SETTINGS.customFontName) {
-              if (slot < setting.dynamicLabels.size()) valueText = setting.dynamicLabels[slot];
+          for (size_t i = 0; i < names.size(); ++i) {
+            if (names[i] == SETTINGS.customFontName) {
+              if (i < setting.dynamicLabels.size()) valueText = setting.dynamicLabels[i];
               matched = true;
               break;
             }
-            ++slot;
           }
           if (!matched && !setting.dynamicLabels.empty()) {
             valueText = setting.dynamicLabels[0];
