@@ -1261,8 +1261,12 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
       clearPageCache();
       section.reset();
       renderer.clearScreen();
-      renderer.drawCenteredText(UI_12_FONT_ID, 350, "Out of memory", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 400, "Press Back to exit", true, EpdFontFamily::REGULAR);
+      // Typical trigger: large custom BDF font (e.g. Unifont at size 40) —
+      // glyph cache + 32 KB ZIP dict contend for contiguous heap. A cold boot
+      // clears fragmentation and usually lets the build succeed.
+      renderer.drawCenteredText(UI_12_FONT_ID, 320, "REBOOT DEVICE", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 360, "(small memory wrinkle)", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 410, "Press Back to exit", true, EpdFontFamily::REGULAR);
       renderer.displayBuffer();
       return false;
     }
