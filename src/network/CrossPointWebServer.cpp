@@ -632,6 +632,19 @@ void CrossPointWebServer::handleStatus() const {
   server->send(200, "application/json", json);
 }
 
+// Case-insensitive tail-compare on a raw char buffer. Avoids String+toLowerCase
+// allocations in hot per-file loops.
+static bool hasExtCI(const char* name, size_t nameLen, const char* ext, size_t extLen) {
+  if (nameLen < extLen) return false;
+  const char* t = name + nameLen - extLen;
+  for (size_t i = 0; i < extLen; i++) {
+    char a = t[i];
+    if (a >= 'A' && a <= 'Z') a += 32;
+    if (a != ext[i]) return false;
+  }
+  return true;
+}
+
 void CrossPointWebServer::scanFiles(const char* path, const std::function<void(FileInfo)>& callback) const {
   FsFile root = Storage.open(path);
   if (!root) {
@@ -649,17 +662,18 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
 
   FsFile file = root.openNextFile();
   char name[256];
+  uint16_t seen = 0;
   while (file) {
     file.getName(name, sizeof(name));
-    auto fileName = String(name);
+    const size_t nameLen = strlen(name);
 
     // Skip hidden items (starting with ".")
-    bool shouldHide = !SETTINGS.showHiddenFiles && fileName.startsWith(".");
+    bool shouldHide = !SETTINGS.showHiddenFiles && nameLen > 0 && name[0] == '.';
 
     // Check against explicitly hidden items list
     if (!shouldHide) {
       for (size_t i = 0; i < HIDDEN_ITEMS_COUNT; i++) {
-        if (fileName.equals(HIDDEN_ITEMS[i])) {
+        if (strcmp(name, HIDDEN_ITEMS[i]) == 0) {
           shouldHide = true;
           break;
         }
@@ -668,7 +682,7 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
 
     if (!shouldHide) {
       FileInfo info;
-      info.name = fileName;
+      info.name = String(name);
       info.isDirectory = file.isDirectory();
 
       if (info.isDirectory) {
@@ -677,31 +691,31 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
         info.isBmp = false;
       } else {
         info.size = file.size();
-        info.isEpub = isEpubFile(info.name);
-        info.isBmp = isBmpFile(info.name);
+        info.isEpub = hasExtCI(name, nameLen, ".epub", 5);
+        info.isBmp = hasExtCI(name, nameLen, ".bmp", 4);
       }
 
       callback(info);
     }
 
     file.close();
-    yield();               // Yield to allow WiFi and other tasks to process during long scans
-    esp_task_wdt_reset();  // Reset watchdog to prevent timeout on large directories
+    // Yield + WDT reset every 16 files instead of every file — per-file overhead
+    // dominated scan time on big dirs; WDT window is seconds, 16 iters is safe.
+    if ((++seen & 0x0F) == 0) {
+      yield();
+      esp_task_wdt_reset();
+    }
     file = root.openNextFile();
   }
   root.close();
 }
 
 bool CrossPointWebServer::isEpubFile(const String& filename) const {
-  String lower = filename;
-  lower.toLowerCase();
-  return lower.endsWith(".epub");
+  return hasExtCI(filename.c_str(), filename.length(), ".epub", 5);
 }
 
 bool CrossPointWebServer::isBmpFile(const String& filename) const {
-  String lower = filename;
-  lower.toLowerCase();
-  return lower.endsWith(".bmp");
+  return hasExtCI(filename.c_str(), filename.length(), ".bmp", 4);
 }
 
 void CrossPointWebServer::handleFileList() const {
@@ -730,8 +744,13 @@ void CrossPointWebServer::handleFileListData() const {
   constexpr size_t outputSize = sizeof(output);
   bool seenFirst = false;
   JsonDocument doc;
+  // Batch entries into a single buffer before flushing. Each sendContent()
+  // emits a chunk + TCP flush; per-file flushes dominated /api/files wall-time.
+  String batch;
+  batch.reserve(3072);
+  constexpr size_t kFlushAt = 2048;
 
-  scanFiles(currentPath.c_str(), [this, &output, &doc, seenFirst](const FileInfo& info) mutable {
+  scanFiles(currentPath.c_str(), [this, &output, &doc, &seenFirst, &batch](const FileInfo& info) {
     doc.clear();
     doc["name"] = info.name;
     doc["size"] = info.size;
@@ -747,12 +766,20 @@ void CrossPointWebServer::handleFileListData() const {
     }
 
     if (seenFirst) {
-      server->sendContent(",");
+      batch += ',';
     } else {
       seenFirst = true;
     }
-    server->sendContent(output);
+    batch.concat(output, written);
+
+    if (batch.length() >= kFlushAt) {
+      server->sendContent(batch);
+      batch = "";
+      batch.reserve(3072);
+    }
   });
+
+  if (batch.length()) server->sendContent(batch);
   server->sendContent("]");
   // End of streamed response, empty chunk to signal client
   server->sendContent("");

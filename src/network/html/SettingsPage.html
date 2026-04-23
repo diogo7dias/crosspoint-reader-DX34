@@ -208,6 +208,49 @@
         width: 100%;
       }
     }
+
+    /* Dashed-border restyle — shared across Home/Files/Settings. */
+    :root {
+      --acc-upload:  #27ae60;
+      --acc-folder:  #f39c12;
+      --acc-danger:  #c0392b;
+      --acc-primary: #2980b9;
+      --acc-teal:    #16a085;
+      --acc-neutral: #555;
+    }
+    button, .nav-links a, .save-btn, .action-btn {
+      background: #fff !important;
+      color: #000 !important;
+      border: 2px dashed var(--btn-acc, var(--acc-primary)) !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+    .save-btn { --btn-acc: var(--acc-upload); }
+    button:hover, .nav-links a:hover, .save-btn:hover, .action-btn:hover {
+      background: #f2f2f2 !important;
+      color: #000 !important;
+    }
+    input[type=text], input[type=password], input[type=number],
+    input[type=search], input[type=email], input[type=url],
+    select, textarea {
+      background: #fff !important;
+      color: #000 !important;
+      border: 2px dashed var(--acc-neutral) !important;
+      box-shadow: none !important;
+    }
+    input[type=text]:focus, input[type=password]:focus,
+    input[type=number]:focus, input[type=search]:focus,
+    input[type=email]:focus, input[type=url]:focus,
+    select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--acc-primary) !important;
+    }
+    .card {
+      background: #fff !important;
+      color: #000 !important;
+      border: 2px dashed #333 !important;
+      box-shadow: none !important;
+    }
   </style>
 </head>
 <body>

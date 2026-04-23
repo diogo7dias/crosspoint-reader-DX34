@@ -69,6 +69,47 @@
       .nav-links a:hover {
         background-color: #2980b9;
       }
+
+      /* Dashed-border restyle — shared across Home/Files/Settings. */
+      :root {
+        --acc-upload:  #27ae60;
+        --acc-folder:  #f39c12;
+        --acc-danger:  #c0392b;
+        --acc-primary: #2980b9;
+        --acc-teal:    #16a085;
+        --acc-neutral: #555;
+      }
+      button, .nav-links a, .save-btn, .action-btn {
+        background: #fff !important;
+        color: #000 !important;
+        border: 2px dashed var(--btn-acc, var(--acc-primary)) !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+      button:hover, .nav-links a:hover, .save-btn:hover, .action-btn:hover {
+        background: #f2f2f2 !important;
+        color: #000 !important;
+      }
+      input[type=text], input[type=password], input[type=number],
+      input[type=search], input[type=email], input[type=url],
+      select, textarea {
+        background: #fff !important;
+        color: #000 !important;
+        border: 2px dashed var(--acc-neutral) !important;
+        box-shadow: none !important;
+      }
+      .card {
+        background: #fff !important;
+        color: #000 !important;
+        border: 2px dashed #333 !important;
+        box-shadow: none !important;
+      }
+      /* Status pill reuses green brand colour — dashed border, white bg. */
+      .status {
+        background: #fff !important;
+        color: #000 !important;
+        border: 2px dashed var(--acc-upload) !important;
+      }
     </style>
   </head>
   <body>

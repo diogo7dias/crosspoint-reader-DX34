@@ -307,22 +307,21 @@ void CrossPointWebServerActivity::loop() {
       // More iterations = more data processed per main loop cycle
       constexpr int MAX_ITERATIONS = 150;
       for (int i = 0; i < MAX_ITERATIONS && webServer->isRunning(); i++) {
-        webServer->handleClient();
-        // Reset watchdog every 32 iterations
-        if ((i & 0x1F) == 0x1F) {
-          esp_task_wdt_reset();
-        }
-        // Yield and check for exit button every 64 iterations
-        if ((i & 0x3F) == 0x3F) {
+        // Check Back button before the first handleClient() and every 16 iters
+        // after. Prior cadence (every 64) made Exit feel unresponsive while a
+        // slow HTTP request was in flight.
+        if (i == 0 || (i & 0x0F) == 0x0F) {
           yield();
-          // Force trigger an update of which buttons are being pressed so be have accurate state
-          // for back button checking
           mappedInput.update();
-          // Check for exit button inside loop for responsiveness
           if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
             onGoBack();
             return;
           }
+        }
+        webServer->handleClient();
+        // Reset watchdog every 32 iterations
+        if ((i & 0x1F) == 0x1F) {
+          esp_task_wdt_reset();
         }
       }
       lastHandleClientTime = millis();
