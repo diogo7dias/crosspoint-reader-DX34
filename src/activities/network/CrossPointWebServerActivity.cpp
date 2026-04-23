@@ -307,22 +307,20 @@ void CrossPointWebServerActivity::loop() {
       // More iterations = more data processed per main loop cycle
       constexpr int MAX_ITERATIONS = 150;
       for (int i = 0; i < MAX_ITERATIONS && webServer->isRunning(); i++) {
-        // Check Back button before the first handleClient() and every 16 iters
-        // after. Prior cadence (every 64) made Exit feel unresponsive while a
-        // slow HTTP request was in flight.
-        if (i == 0 || (i & 0x0F) == 0x0F) {
+        // Check Back button before the first handleClient() and every 32 iters
+        // after. Prior cadence (every 64) made Exit unresponsive; every 16
+        // quintupled BLE HID polling inside mappedInput.update() and measurably
+        // slowed concurrent WebSocket uploads. 32 is the middle ground.
+        if (i == 0 || (i & 0x1F) == 0x1F) {
           yield();
           mappedInput.update();
           if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
             onGoBack();
             return;
           }
-        }
-        webServer->handleClient();
-        // Reset watchdog every 32 iterations
-        if ((i & 0x1F) == 0x1F) {
           esp_task_wdt_reset();
         }
+        webServer->handleClient();
       }
       lastHandleClientTime = millis();
     }
