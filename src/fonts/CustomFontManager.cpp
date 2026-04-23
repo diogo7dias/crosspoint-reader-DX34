@@ -1,7 +1,9 @@
 #include "CustomFontManager.h"
 
 #include <BdfFilename.h>
+#include <BdfIndexBuilder.h>
 #include <BdfParser.h>
+#include <CustomFontGlyphSource.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <esp_task_wdt.h>
@@ -13,6 +15,7 @@
 
 #include "CrossPointState.h"
 #include "activities/util/CustomFontPromptActivity.h"
+#include "activities/util/FullScreenMessageActivity.h"
 
 // Defined in main.cpp; replaces the current activity slot.
 class Activity;
@@ -141,11 +144,25 @@ void CustomFontManager::scanAndQueuePrompts() {
   }
   dir.close();
 
-  // Cross-check vs persistent state.
+  // Cross-check vs persistent state. Prompt unless:
+  //   - user said "Skip forever" (always honored), OR
+  //   - user said "Install" AND the .idx file is on disk (genuine completed
+  //     install). If .idx is missing, re-prompt so the build can re-run —
+  //     this also retroactively triggers the Phase 2 index build for any
+  //     font that was "installed" under the Phase 1 stub.
   for (size_t i = 0; i < entries_.size(); ++i) {
     const auto& fn = entries_[i].filename;
     if (contains(APP_STATE.skippedCustomFonts, fn)) continue;
-    if (contains(APP_STATE.seenCustomFonts, fn)) continue;
+
+    if (contains(APP_STATE.seenCustomFonts, fn)) {
+      // .bdf -> .idx; same dir.
+      std::string idxPath = std::string(kCustomFontDir) + "/" + fn;
+      if (idxPath.size() >= 4) {
+        idxPath.resize(idxPath.size() - 4);
+        idxPath += ".idx";
+      }
+      if (Storage.exists(idxPath.c_str())) continue;
+    }
     pendingPromptIdx_.push_back(i);
   }
 
@@ -179,7 +196,81 @@ void CustomFontManager::showNextPromptIfAny(GfxRenderer& renderer, MappedInputMa
       APP_STATE.seenCustomFonts.push_back(filename);
       APP_STATE.saveToFile();
     }
-    LOG_INF(kModule, "install requested: %s", filename.c_str());
+
+    // Phase 2 Slice 2a: build the on-disk glyph index. This is the slow
+    // part — for 9 MB Unifont it walks every line. Watchdog resets are
+    // handled inside the parser (every 32 lines).
+    char bdfPath[320];
+    char idxPath[320];
+    snprintf(bdfPath, sizeof(bdfPath), "%s/%s", kCustomFontDir, filename.c_str());
+    // .bdf -> .idx
+    std::string idxStr = "/custom-font/" + filename;
+    if (idxStr.size() >= 4) {
+      idxStr.resize(idxStr.size() - 4);
+      idxStr += ".idx";
+    }
+    snprintf(idxPath, sizeof(idxPath), "%s", idxStr.c_str());
+
+    // Visual feedback — without this the device sits silent for 30+ seconds
+    // while buildIndex walks Unifont. Push a full-screen "Building..." page,
+    // force its first frame onto the e-ink, then run the build synchronously.
+    {
+      std::string msg = "Building font index\n\n";
+      msg += filename;
+      msg += "\n\nThis may take 1-3 min\nDo not reboot";
+      auto* progressActivity = new FullScreenMessageActivity(renderer, mappedInput, msg);
+      enterNewActivity(progressActivity);
+      progressActivity->requestUpdateAndWait();
+    }
+
+    LOG_INF(kModule, "building index: %s -> %s", bdfPath, idxPath);
+    const auto build = bdf::BdfIndexBuilder::buildIndex(bdfPath, idxPath);
+    if (!build.ok) {
+      LOG_INF(kModule, "index build FAILED for %s: %s", filename.c_str(),
+              build.error ? build.error : "unknown");
+    } else {
+      LOG_INF(kModule, "index built OK: %u glyphs (skipped %u) in %u ms",
+              static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.glyphsSkipped),
+              static_cast<unsigned>(build.parseTimeMs));
+
+      // Verification dump — open the source and resolve a few well-known
+      // codepoints. Confirms the entire pipeline (idx → seek → bitmap decode).
+      bdf::CustomFontGlyphSource src;
+      if (src.open(bdfPath, idxPath)) {
+        const uint32_t samples[] = {0x0041, 0x0042, 0x0048, 0x0069, 0x0420, 0x4E2D};  // A B H i Р 中
+        for (uint32_t cp : samples) {
+          const auto* g = src.lookup(cp);
+          if (!g) {
+            LOG_INF(kModule, "  cp U+%04X: not in font", static_cast<unsigned>(cp));
+            continue;
+          }
+          LOG_INF(kModule, "  cp U+%04X: %ux%u adv=%u offX=%d offY=%d bitmapBytes=%u",
+                  static_cast<unsigned>(cp), static_cast<unsigned>(g->bbxW), static_cast<unsigned>(g->bbxH),
+                  static_cast<unsigned>(g->advance), static_cast<int>(g->bbxOffX), static_cast<int>(g->bbxOffY),
+                  static_cast<unsigned>(g->bitmapBytes));
+        }
+        src.close();
+      } else {
+        LOG_INF(kModule, "verification: failed to reopen %s+%s", bdfPath, idxPath);
+      }
+    }
+
+    // Result screen — brief, then chain. Even on failure the user sees
+    // something other than the build screen.
+    {
+      char doneMsg[200];
+      if (build.ok) {
+        snprintf(doneMsg, sizeof(doneMsg), "Font installed\n\n%u glyphs\n%u ms",
+                 static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.parseTimeMs));
+      } else {
+        snprintf(doneMsg, sizeof(doneMsg), "Install failed\n\n%s", build.error ? build.error : "unknown");
+      }
+      auto* doneActivity = new FullScreenMessageActivity(renderer, mappedInput, doneMsg);
+      enterNewActivity(doneActivity);
+      doneActivity->requestUpdateAndWait();
+      delay(2500);
+    }
+
     showNextPromptIfAny(renderer, mappedInput, onAllDismissed);
   };
   auto onSkip = [this, filename, &renderer, &mappedInput, onAllDismissed]() {

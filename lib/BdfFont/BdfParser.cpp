@@ -164,5 +164,146 @@ BdfHeader BdfParser::readHeader(HalFile& in, const size_t wdtTickEvery) {
   }
 }
 
+BdfEnumResult BdfParser::readAllGlyphs(HalFile& in, const BdfGlyphCallback& cb, const size_t wdtTickEvery) {
+  BdfEnumResult result;
+  char line[kLineBuf];
+  size_t lineNum = 0;
+
+  // Per-glyph mutable state, reset between STARTCHARs.
+  bool inGlyph = false;
+  bool inBitmap = false;
+  uint32_t glyphStartOffset = 0;
+  long encoding = -1;
+  long bbxW = 0, bbxH = 0, bbxOX = 0, bbxOY = 0;
+  long dwidthX = 0;
+  bool sawEncoding = false;
+  bool sawBbx = false;
+
+  auto resetGlyph = [&]() {
+    inGlyph = false;
+    inBitmap = false;
+    encoding = -1;
+    bbxW = bbxH = bbxOX = bbxOY = 0;
+    dwidthX = 0;
+    sawEncoding = false;
+    sawBbx = false;
+  };
+
+  while (true) {
+    const uint32_t lineStartOffset = static_cast<uint32_t>(in.position());
+    const int n = readLine(in, line, sizeof(line));
+    if (n < 0) {
+      // EOF. ENDFONT may or may not have been seen; either way the file is
+      // exhausted. If we were mid-glyph that is malformed.
+      if (inGlyph) {
+        result.error = "EOF inside glyph";
+        return result;
+      }
+      result.ok = true;
+      return result;
+    }
+
+    if (++lineNum % wdtTickEvery == 0) {
+      esp_task_wdt_reset();
+      yield();
+    }
+
+    if (n == 0) continue;
+
+    if (inBitmap) {
+      // Skip every line until we hit ENDCHAR. Bitmap rows are pure hex; we
+      // do not need them for index building.
+      if (startsWithToken(line, "ENDCHAR")) {
+        if (sawEncoding && sawBbx && encoding >= 0) {
+          BdfGlyphMeta meta;
+          meta.codepoint = static_cast<uint32_t>(encoding);
+          meta.bdfOffset = glyphStartOffset;
+          meta.bbxW = static_cast<uint8_t>(bbxW < 0 ? 0 : (bbxW > 255 ? 255 : bbxW));
+          meta.bbxH = static_cast<uint8_t>(bbxH < 0 ? 0 : (bbxH > 255 ? 255 : bbxH));
+          meta.bbxOffX = static_cast<int8_t>(bbxOX < -128 ? -128 : (bbxOX > 127 ? 127 : bbxOX));
+          meta.bbxOffY = static_cast<int8_t>(bbxOY < -128 ? -128 : (bbxOY > 127 ? 127 : bbxOY));
+          meta.advance = static_cast<uint8_t>(dwidthX < 0 ? 0 : (dwidthX > 255 ? 255 : dwidthX));
+          ++result.glyphsYielded;
+          if (!cb(meta)) {
+            result.ok = true;
+            return result;
+          }
+        } else {
+          ++result.glyphsSkipped;
+        }
+        resetGlyph();
+      }
+      continue;
+    }
+
+    if (startsWithToken(line, "STARTCHAR")) {
+      if (inGlyph) {
+        // Nested STARTCHAR — malformed. Treat as reset.
+        ++result.glyphsSkipped;
+        resetGlyph();
+      }
+      inGlyph = true;
+      glyphStartOffset = lineStartOffset;
+      continue;
+    }
+
+    if (!inGlyph) {
+      if (startsWithToken(line, "ENDFONT")) {
+        result.ok = true;
+        return result;
+      }
+      // Outside any glyph and not ENDFONT — skip silently (could be tail
+      // comments or whitespace).
+      continue;
+    }
+
+    if (startsWithToken(line, "ENCODING")) {
+      const char* p = line + std::strlen("ENCODING");
+      if (parseInt(&p, &encoding)) sawEncoding = true;
+      continue;
+    }
+    if (startsWithToken(line, "BBX")) {
+      const char* p = line + std::strlen("BBX");
+      if (parseInt(&p, &bbxW) && parseInt(&p, &bbxH) && parseInt(&p, &bbxOX) && parseInt(&p, &bbxOY)) {
+        sawBbx = true;
+      }
+      continue;
+    }
+    if (startsWithToken(line, "DWIDTH")) {
+      const char* p = line + std::strlen("DWIDTH");
+      parseInt(&p, &dwidthX);  // ignore Y component (vertical advance)
+      continue;
+    }
+    if (startsWithToken(line, "BITMAP")) {
+      inBitmap = true;
+      continue;
+    }
+    if (startsWithToken(line, "ENDCHAR")) {
+      // ENDCHAR without BITMAP is malformed but tolerated — treat as a
+      // bitmap-less glyph (still has metrics).
+      if (sawEncoding && sawBbx && encoding >= 0) {
+        BdfGlyphMeta meta;
+        meta.codepoint = static_cast<uint32_t>(encoding);
+        meta.bdfOffset = glyphStartOffset;
+        meta.bbxW = static_cast<uint8_t>(bbxW < 0 ? 0 : (bbxW > 255 ? 255 : bbxW));
+        meta.bbxH = static_cast<uint8_t>(bbxH < 0 ? 0 : (bbxH > 255 ? 255 : bbxH));
+        meta.bbxOffX = static_cast<int8_t>(bbxOX < -128 ? -128 : (bbxOX > 127 ? 127 : bbxOX));
+        meta.bbxOffY = static_cast<int8_t>(bbxOY < -128 ? -128 : (bbxOY > 127 ? 127 : bbxOY));
+        meta.advance = static_cast<uint8_t>(dwidthX < 0 ? 0 : (dwidthX > 255 ? 255 : dwidthX));
+        ++result.glyphsYielded;
+        if (!cb(meta)) {
+          result.ok = true;
+          return result;
+        }
+      } else {
+        ++result.glyphsSkipped;
+      }
+      resetGlyph();
+      continue;
+    }
+    // Any other lines inside a glyph (SWIDTH, etc.) are ignored.
+  }
+}
+
 }  // namespace bdf
 }  // namespace crosspoint
