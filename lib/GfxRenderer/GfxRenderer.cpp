@@ -292,10 +292,15 @@ void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, con
     // from the baseline to the bitmap's lower-left.)
     const int baselineY = y + cf->ascender(styleBits);
     const uint8_t boldPasses = cf->getSyntheticBoldPasses(styleBits);
-    // Dark render mode (textRenderStyle == 1) mirrors the built-in path in
-    // renderCharImpl: each set pixel drops a +1-right, +1-down shadow,
-    // thickening strokes diagonally.
-    const bool dark = renderMode == BW && textRenderStyle == 1;
+    // Custom fonts always render in dark mode — the crisp (single-pixel)
+    // path leaves BDF bitmaps looking thin and broken-up on the 1-bit
+    // panel because the bitmaps were designed at small point sizes without
+    // any stroke thickening margin. User confirmed 2026-04-24 that the
+    // other render modes look bad on every tested custom family, so the
+    // textRenderStyle setting is simply ignored here. Each set pixel drops
+    // a +1-right, +1-down shadow, thickening strokes diagonally and
+    // keeping glyphs legible across every tested family + size combo.
+    const bool dark = renderMode == BW;
     // Italic shear: when the family has no real italic variant, shift each
     // bitmap row rightward by (bbxH - row) / SHEAR_DIVISOR. The divisor of
     // 4 yields ~14° slant — close to the standard 15° italic.

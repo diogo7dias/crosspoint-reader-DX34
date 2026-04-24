@@ -10,6 +10,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <climits>
@@ -105,11 +106,17 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
-  // Block 2 (v1.2.0): half refresh on book enter is enough to scrub the
-  // library list or file-actions menu ghost and is ~1 s faster than FULL.
-  // Downgrade is experimental — revert to requestFullRefresh() if ghost
-  // artifacts appear under the first page.
-  renderer.requestHalfRefresh();
+  // Full refresh on book enter. The v1.2.0 experiment downgraded this to
+  // requestHalfRefresh() to shave ~1 s off open time, but hardware capture
+  // 2026-04-24 caught the failure mode the original author warned about:
+  // the first page on open, and the first page after a mid-book font switch,
+  // both showed ghost pixels of the previous screen overlaid on the new
+  // render. Half refresh doesn't fully invert the segment drivers, so
+  // incompletely-reset pixels bleed through the first buffer write. Pay the
+  // extra second at enter-time to get a clean first page — especially
+  // important after a font switch, where old-font glyph positions would
+  // otherwise double-expose under the new layout.
+  renderer.requestFullRefresh();
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
@@ -1235,13 +1242,24 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
 
   const auto filepath = epub->getSpineItem(currentSpineIndex).href;
   LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
+  // Trace largest before/after Section alloc + clearPageCache. Phase 3
+  // hardware capture (2026-04-24) showed `largest` stuck around 45 KB
+  // mid-session even after releaseAllCaches freed the font slab —
+  // something allocated between book-open and section-build is pinning the
+  // top of heap. These snapshots narrow it to a specific lifecycle step.
+  LOG_DBG("HEAP", "ERS ensureSection:before-alloc free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
   auto* sec = new (std::nothrow) Section(epub, currentSpineIndex, renderer);
   if (!sec) {
     LOG_ERR("ERS", "OOM: Section allocation");
     return false;
   }
   section = std::unique_ptr<Section>(sec);
+  LOG_DBG("HEAP", "ERS ensureSection:after-alloc free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
   clearPageCache();
+  LOG_DBG("HEAP", "ERS ensureSection:after-clearPageCache free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
 
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
   const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());
@@ -1259,14 +1277,17 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                 boldSwapEnabled)) {
     LOG_DBG("ERS", "Cache not found, building...");
 
-    // Free font caches to reclaim a contiguous 32 KB block for the ZIP
-    // dictionary used during layout. Built-ins use clearCache (cheap
-    // decompress-again on next render); custom fonts use releaseAllCaches,
-    // which drops the slab AND the slots/map vectors so the hash-table
-    // buckets can't split the block we need.
+    // Clear built-in font cache; its pages decompress again cheaply on next
+    // render. The custom-font slab no longer needs releasing — the ZIP dict
+    // lives in BSS (lib/ZipFile/ZipFile.cpp) and the bitmap slab lives in
+    // BSS (lib/BdfFont/CustomFontSharedCache.cpp) as of 2026-04-24, so
+    // layout no longer competes with the font subsystem for a contiguous
+    // heap block. Removing the release/restore cycle here is what
+    // structurally eliminates the "blank first page after font switch"
+    // regression — the prior flow tried to re-malloc the 16 KB slab after
+    // layout, and on a fragmented heap that malloc routinely failed.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
-    crosspoint::fonts::CustomFontManager::instance().releaseAllCaches(renderer);
     crosspoint::fonts::CustomFontManager::logHeapSnapshot("createSectionFile-pre");
 
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
@@ -1277,19 +1298,18 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
         boldSwapEnabled, layoutProgressTick);
     crosspoint::fonts::CustomFontManager::logHeapSnapshot(sectionOk ? "createSectionFile-post-ok"
                                                                     : "createSectionFile-post-fail");
-    // Restore the custom font cache on BOTH paths. Success: the next render
-    // needs a warm cache to stay snappy. Failure: we still return a fallback
-    // UI to the user and they may page around; a permanently-empty cache
-    // would leave every rendered glyph blank.
-    crosspoint::fonts::CustomFontManager::instance().restoreAllCaches(renderer);
     if (!sectionOk) {
       LOG_ERR("ERS", "Failed to persist page data to SD");
       clearPageCache();
       section.reset();
       renderer.clearScreen();
-      renderer.drawCenteredText(UI_12_FONT_ID, 320, "REBOOT DEVICE", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 360, "(small memory wrinkle)", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 410, "Press Back to exit", true, EpdFontFamily::REGULAR);
+      // Friendlier copy. "REBOOT DEVICE" read like the firmware had crashed
+      // and scared users. The actual situation is recoverable: go home so
+      // the reader activity tears down + heap coalesces, then reopen.
+      renderer.drawCenteredText(UI_12_FONT_ID, 300, "Couldn't lay out this section", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 340, "(memory fragmented)", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 400, "Go back to home", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 430, "and reopen the book", true, EpdFontFamily::REGULAR);
       renderer.displayBuffer();
       return false;
     }

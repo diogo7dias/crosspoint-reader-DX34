@@ -43,10 +43,10 @@ void XtcReaderActivity::onEnter() {
     return;
   }
 
-  // Block 2 (v1.2.0): half refresh on book enter scrubs the list ghost and
-  // is ~1 s faster than FULL. Experimental; revert to requestFullRefresh()
-  // if ghost artifacts appear.
-  renderer.requestHalfRefresh();
+  // Full refresh on book enter — see EpubReaderActivity::onEnter for the
+  // regression the v1.2.0 half-refresh downgrade caused (ghost artifacts
+  // under the first page, especially post-font-switch).
+  renderer.requestFullRefresh();
 
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(xtc->getPath()));
   xtc->setupCacheDir();

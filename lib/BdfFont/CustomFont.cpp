@@ -55,9 +55,16 @@ bool CustomFont::openVariant(size_t slot, const char* bdfPath, const char* idxPa
 
 void CustomFont::trimCache(size_t slots) { sharedCache_.setCacheCap(slots == 0 ? 1 : slots); }
 
-void CustomFont::releaseCache() { sharedCache_.releaseSlab(); }
+// releaseCache / restoreCache are intentionally no-ops as of 2026-04-24.
+// The bitmap slab is now a static BSS buffer (see gStaticBitmapSlab in
+// CustomFontSharedCache.cpp) and the ZIP dict that this release used to
+// make room for is also static BSS, so there is no longer a reason to
+// tear the slab down mid-session. Kept as no-ops to preserve the public
+// API shape (CustomFontManager still calls into these in a loop and logs
+// around them) and to give us a place to hook experimental work back in.
+void CustomFont::releaseCache() {}
 
-bool CustomFont::restoreCache() { return sharedCache_.restoreSlab(); }
+bool CustomFont::restoreCache() { return true; }
 
 CustomFontGlyphSource* CustomFont::getVariant(StyleBits style) const {
   const size_t wanted = kSlotForStyle(style);

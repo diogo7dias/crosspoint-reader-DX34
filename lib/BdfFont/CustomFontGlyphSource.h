@@ -97,6 +97,20 @@ class CustomFontGlyphSource {
 
   CustomFontSharedCache* sharedCache_ = nullptr;
   uint8_t variantIndex_ = 0;
+
+  // Metrics-only fallback used when the shared cache cannot allocate a slot
+  // (typically because the slab was released before createSectionFile's ZIP
+  // dict window). The caller sees a Glyph with advance + bbx populated but
+  // bitmap=nullptr, so layout width queries return the right number while
+  // any in-flight draw call harmlessly skips the glyph via GfxRenderer's
+  // bitmap-null short-circuit. Reused across calls — safe because lookup()
+  // is called serially from the render task and callers consume the
+  // returned pointer before the next lookup.
+  CachedGlyph metricsFallback_{};
+  // One-shot flag so we only log the unexpected-fallback warning once per
+  // source lifetime (cap > 0 but allocateSlot still failed). The expected
+  // layout-time path (cap == 0) is silent.
+  bool unexpectedFallbackLogged_ = false;
 };
 
 }  // namespace bdf

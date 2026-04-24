@@ -4,6 +4,7 @@
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Serialization.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -12,7 +13,16 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 21;
+// v22 (2026-04-24): forces every pre-existing .sct to re-layout. v21 caches
+// that pre-date the CustomFontGlyphSource metrics-fallback have zero widths
+// baked in for custom-font pages — layout ran while the font cache was
+// released and lookup() returned nullptr for every codepoint, collapsing
+// word positions. Loading a v21 cache on that path renders stacked/
+// overlapping text on the first visible page. Bumping the version
+// invalidates the bad caches on first open after flash; users lose at most
+// ~80 s per previously-built chapter to re-layout, and book reading
+// position (progress.bin) is unaffected.
+constexpr uint8_t SECTION_FILE_VERSION = 22;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint8_t) +
                                  sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) + sizeof(uint16_t) +
@@ -269,7 +279,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
                                 const uint8_t wordSpacingPercent, const uint8_t firstLineIndentMode,
                                 const uint8_t readerStyleMode, const uint8_t textRenderMode, const bool readerBoldSwap,
                                 const std::function<void(int)>& progressFn) {
-  LOG_DBG("HEAP", "SCT createSectionFile:start spine=%d free=%u min=%u", spineIndex, (unsigned)ESP.getFreeHeap(),
+  LOG_DBG("HEAP", "SCT createSectionFile:start spine=%d free=%u largest=%u min=%u", spineIndex,
+          (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
           (unsigned)ESP.getMinFreeHeap());
   const auto localPath = epub->getSpineItem(spineIndex).href;
   const auto tmpHtmlPath = epub->getCachePath() + "/.tmp_" + std::to_string(spineIndex) + ".html";

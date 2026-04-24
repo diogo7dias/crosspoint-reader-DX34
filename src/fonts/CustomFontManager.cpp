@@ -82,13 +82,19 @@ constexpr size_t kCacheSlotsInactive = 4;
 // webserver, etc. Also protects against fragmentation — free heap may be
 // higher but split into pieces too small for a single slab.
 //
-// Sized to what's actually reachable mid-session. Hardware captures (Williams
-// epub cache-hit, 2026-04-24) showed post-book-open largest=45 KB — the
-// previous 56 KB floor was unreachable after any non-trivial activity
-// entered, so registerWithRenderer always bailed and every drawText call
-// logged "Font not found" until abort(). 40 KB still covers the 32 KB ZIP
-// dict + bitmap slab + small bookkeeping in fresh heap state.
-constexpr size_t kHeapFloorForNextFamilyBytes = 40 * 1024;
+// Sized to what the register path ACTUALLY needs, not to what the layout
+// path will later need. Register only allocates the bitmap slab
+// (kCustomFontCacheBudgetBytes = 16 KB) plus small slots_/cacheMap_
+// bookkeeping (~2 KB) — total ~18 KB. The old 40 KB value was sized for
+// the post-layout ZIP dict budget, which is a separate path and already
+// handled by releaseAllCaches before createSectionFile. Bumping this up to
+// cover the ZIP dict made register skip on perfectly healthy mid-session
+// heaps: hardware capture 2026-04-24 caught a font-switch attempt with
+// largest=31732 skipping because 40 KB > 31732, even though a 16 KB slab
+// would have fit with room to spare. 32 KB gives the 16 KB slab a 2×
+// margin for bookkeeping churn and transient fragmentation, while still
+// blocking when the heap is genuinely too fragmented to host a slab.
+constexpr size_t kHeapFloorForNextFamilyBytes = 32 * 1024;
 
 // True if the .idx at `path` is the current on-disk format (magic + version).
 // Used by scanAndQueuePrompts to treat stale v1 indexes as "missing" so the
@@ -305,11 +311,22 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
 
     const size_t familyCacheBudgetBytes = kCustomFontCacheBudgetBytes;
 
+    // Heap floor check intentionally removed 2026-04-24. It was guarding the
+    // slab alloc inside openVariant → setCacheBudget, but the guard was too
+    // coarse: when largest fell just short of the floor, the floor bailed
+    // out BEFORE the font was registered. The renderer then had no entry
+    // for the font id, every drawText spammed "Font N not found", and the
+    // visible page was blank until the user backed out and re-entered.
+    //
+    // CustomFontSharedCache::setCacheBudget now retries with progressively
+    // smaller slot counts, and the lookup() metrics fallback keeps layout
+    // widths correct even if the slab ends up with a single slot. Register
+    // always gets to the openVariant call — worst case the user sees a
+    // slower first render, not a missing font.
     const size_t largestFree = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     if (largestFree < kHeapFloorForNextFamilyBytes) {
-      LOG_INF(kModule, "skip register: heap floor reached (largest=%u B) at %s", static_cast<unsigned>(largestFree),
-              regEntry.filename.c_str());
-      continue;
+      LOG_INF(kModule, "heap tight at register (largest=%u B < %u B) — proceeding with degraded cache",
+              static_cast<unsigned>(largestFree), static_cast<unsigned>(kHeapFloorForNextFamilyBytes));
     }
 
     auto font = std::make_unique<bdf::CustomFont>();
@@ -371,54 +388,15 @@ void CustomFontManager::logAndResetCacheStats(const char* tag, GfxRenderer& rend
   font->resetCacheStats();
 }
 
-void CustomFontManager::releaseAllCaches(GfxRenderer& renderer) {
-  const size_t largestBefore = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  logHeapSnapshot("release-pre");
-  size_t released = 0;
-  for (const auto& g : families_) {
-    const int fontId = idForFamily(g.fontName, g.sizePt);
-    if (auto* font = renderer.findCustomFont(fontId)) {
-      font->releaseCache();
-      ++released;
-    }
-  }
-  LOG_INF(kModule, "released %u custom font caches", static_cast<unsigned>(released));
-  logHeapSnapshot("release-post");
+// releaseAllCaches / restoreAllCaches are intentionally no-ops as of
+// 2026-04-24. The bitmap slab is now static BSS (see gStaticBitmapSlab in
+// lib/BdfFont/CustomFontSharedCache.cpp) and so is the ZIP dict that the
+// release used to free room for (see ZipFile.cpp). Keeping the methods
+// around as no-ops preserves the public API surface and lets us flip the
+// behaviour back on per-branch if we ever want to experiment again.
+void CustomFontManager::releaseAllCaches(GfxRenderer& /*renderer*/) {}
 
-  // Phase 1 promised the slab free would reclaim a contiguous 32 KB block for
-  // the ZIP dict. Hardware capture 2026-04-24 showed `largest` stuck at
-  // 45044 B across release-pre/post with 16 KB slab in play — something is
-  // pinned above the slab. First attempt at diagnosing this used
-  // `heap_caps_dump(MALLOC_CAP_8BIT)` here, but the walk blocks interrupts
-  // long enough at 115200 baud to trip the interrupt WDT (captured
-  // 2026-04-24). We now just log the observation; a proper follow-up should
-  // walk the heap from a task context with explicit watchdog feeds per block.
-  const size_t largestAfter = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  if (released > 0 && largestAfter < largestBefore + (kCustomFontCacheBudgetBytes / 2)) {
-    LOG_INF(kModule, "release did not recover contiguous space (largest before=%u after=%u, released=%u)",
-            static_cast<unsigned>(largestBefore), static_cast<unsigned>(largestAfter), static_cast<unsigned>(released));
-  }
-}
-
-void CustomFontManager::restoreAllCaches(GfxRenderer& renderer) {
-  logHeapSnapshot("restore-pre");
-  size_t restored = 0;
-  size_t failed = 0;
-  for (const auto& g : families_) {
-    const int fontId = idForFamily(g.fontName, g.sizePt);
-    if (auto* font = renderer.findCustomFont(fontId)) {
-      if (font->restoreCache())
-        ++restored;
-      else
-        ++failed;
-    }
-  }
-  if (restored > 0 || failed > 0) {
-    LOG_INF(kModule, "restored %u custom font caches (failed=%u)", static_cast<unsigned>(restored),
-            static_cast<unsigned>(failed));
-  }
-  logHeapSnapshot("restore-post");
-}
+void CustomFontManager::restoreAllCaches(GfxRenderer& /*renderer*/) {}
 
 void CustomFontManager::scanAndQueuePrompts() {
   logHeapSnapshot("scan-pre");

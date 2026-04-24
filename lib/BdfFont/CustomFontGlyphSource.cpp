@@ -185,7 +185,37 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
   meta.bitmapBytes = static_cast<size_t>((hit.bitmapW + 7) / 8) * static_cast<size_t>(hit.bitmapH);
 
   uint8_t* dst = sharedCache_->allocateSlot(variantIndex_, codepoint, meta, &cached);
-  if (!dst) return nullptr;
+  if (!dst) {
+    // Slab unavailable. Expected path: EpubReaderActivity releases the font
+    // cache before createSectionFile's ZIP dict allocation, and layout runs
+    // while the slab is down. Returning nullptr here used to make
+    // CustomFont::getTextAdvanceX skip the codepoint's advance entirely,
+    // collapsing word positions so the rendered page stacked multiple text
+    // runs at the same x (captured 2026-04-24, fixed by this commit +
+    // SECTION_FILE_VERSION bump so stale .sct files with baked-in zero
+    // widths re-layout).
+    //
+    // Fall back to a metrics-only glyph: advance + bbx fields are populated
+    // from the IndexEntry we just read, bitmap is nullptr. Layout gets the
+    // correct width; any stray in-flight draw hits the `bitmap == nullptr`
+    // short-circuit in GfxRenderer::drawTextSpaced. After
+    // restoreAllCaches, lookup() takes the normal cached path and never
+    // observes this fallback during render.
+    //
+    // If the cache's cap is > 0 but allocateSlot still failed, something
+    // else went wrong (heap pressure, slab wedged) — log once so the
+    // symptom surfaces. cap == 0 is the intentional release window and
+    // stays silent.
+    if (sharedCache_->cacheCap() > 0 && !unexpectedFallbackLogged_) {
+      LOG_INF("BDF",
+              "metrics fallback fired with cap=%u (unexpected — slab alloc failure under heap pressure?) cp=U+%04X",
+              static_cast<unsigned>(sharedCache_->cacheCap()), static_cast<unsigned>(codepoint));
+      unexpectedFallbackLogged_ = true;
+    }
+    metricsFallback_ = meta;
+    metricsFallback_.bitmap = nullptr;
+    return &metricsFallback_;
+  }
 
   const uint32_t t0 = micros();
   if (!decodeBitmap(hit, dst, sharedCache_->maxBitmapBytes())) {
