@@ -1,172 +1,519 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0d10" />
     <title>CrossPoint Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, sans-serif;
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #f5f5f5;
-        color: #333;
-      }
-      h1 {
-        color: #2c3e50;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 10px;
-      }
-      h2 {
-        color: #34495e;
-        margin-top: 0;
-      }
-      .card {
-        background: white;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 15px 0;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-      .info-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid #eee;
-      }
-      .info-row:last-child {
-        border-bottom: none;
-      }
-      .label {
-        font-weight: 600;
-        color: #7f8c8d;
-      }
-      .value {
-        color: #2c3e50;
-      }
-      .status {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        background-color: #27ae60;
-        color: white;
-        font-size: 0.9em;
-      }
-      .nav-links {
-        margin: 20px 0;
-      }
-      .nav-links a {
-        display: inline-block;
-        padding: 10px 20px;
-        background-color: #3498db;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        margin-right: 10px;
-      }
-      .nav-links a:hover {
-        background-color: #2980b9;
+      :root {
+        --bg: #0d0d10;
+        --fg: #f4f4f4;
+        --muted: #9a9aa0;
+        --dash: #ffffff;
+        --red: #ff2e3c;
+        --yellow: #ffe14a;
+        --green: #3cff8f;
+        --blue: #4dc0ff;
+
+        --pad: clamp(14px, 3vw, 28px);
+        --gap: clamp(8px, 1.6vw, 14px);
+        --h1-size: clamp(44px, 11vw, 96px);
+        --num-size: clamp(32px, 7vw, 56px);
       }
 
-      /* Dashed-border restyle — shared across Home/Files/Settings. */
-      :root {
-        --acc-upload:  #27ae60;
-        --acc-folder:  #f39c12;
-        --acc-danger:  #c0392b;
-        --acc-primary: #2980b9;
-        --acc-teal:    #16a085;
-        --acc-neutral: #555;
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      html { background: var(--bg); }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: "Space Mono", ui-monospace, Menlo, Consolas, monospace;
+        font-size: 14px;
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+        image-rendering: pixelated;
       }
-      button, .nav-links a, .save-btn, .action-btn {
-        background: #fff !important;
-        color: #000 !important;
-        border: 2px dashed var(--btn-acc, var(--acc-primary)) !important;
-        box-shadow: none !important;
-        text-shadow: none !important;
+
+      /* Faint 48px grid overlay */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background:
+          linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 48px 48px,
+          linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 48px 48px;
       }
-      button:hover, .nav-links a:hover, .save-btn:hover, .action-btn:hover {
-        background: #f2f2f2 !important;
-        color: #000 !important;
+
+      .wrap {
+        position: relative;
+        z-index: 1;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--pad);
       }
-      input[type=text], input[type=password], input[type=number],
-      input[type=search], input[type=email], input[type=url],
-      select, textarea {
-        background: #fff !important;
-        color: #000 !important;
-        border: 2px dashed var(--acc-neutral) !important;
-        box-shadow: none !important;
+
+      a { color: inherit; text-decoration: none; }
+      button, input, select { font-family: inherit; }
+
+      /* ── Masthead ───────────────────────────────────────────── */
+      .mast {
+        border: 1px dashed var(--dash);
+        padding: var(--pad);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--pad);
       }
-      .card {
-        background: #fff !important;
-        color: #000 !important;
-        border: 2px dashed #333 !important;
-        box-shadow: none !important;
+      @media (min-width: 760px) {
+        .mast { grid-template-columns: 1fr 1fr; }
+        .mast .rt { border-left: 1px dashed var(--dash); padding-left: var(--pad); }
       }
-      /* Status pill reuses green brand colour — dashed border, white bg. */
-      .status {
-        background: #fff !important;
-        color: #000 !important;
-        border: 2px dashed var(--acc-upload) !important;
+
+      .mast h1 {
+        margin: 0;
+        font-weight: 700;
+        font-size: var(--h1-size);
+        line-height: 0.88;
+        letter-spacing: -0.04em;
+        text-transform: uppercase;
+      }
+      .mast h1 em { font-style: normal; color: var(--red); }
+      .mast .sub {
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.28em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .sprite {
+        display: grid;
+        grid-template-columns: repeat(16, 5px);
+        grid-auto-rows: 5px;
+        margin-top: 14px;
+      }
+      @media (min-width: 500px) {
+        .sprite { grid-template-columns: repeat(16, 6px); grid-auto-rows: 6px; }
+      }
+      .sprite i { background: transparent; }
+      .sprite i.f { background: var(--yellow); }
+      .sprite i.r { background: var(--red); }
+      .sprite i.g { background: var(--green); }
+
+      .mast .rt {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        justify-content: space-between;
+      }
+      .time {
+        font-size: clamp(26px, 6vw, 42px);
+        font-weight: 700;
+        color: var(--yellow);
+        letter-spacing: 0.04em;
+        line-height: 1;
+      }
+      .time small {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.26em;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      .chips {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      @media (max-width: 360px) { .chips { grid-template-columns: 1fr; } }
+      @media (min-width: 600px) { .chips { grid-template-columns: repeat(2, 1fr); } }
+      .chip {
+        border: 1px dashed var(--dash);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        min-height: 56px;
+        overflow: hidden;
+      }
+      .chip b {
+        font-size: 10px;
+        letter-spacing: 0.24em;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-weight: 400;
+      }
+      .chip em {
+        font-style: normal;
+        font-size: clamp(14px, 1.8vw, 18px);
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+      .chip em small {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 400;
+        margin-left: 2px;
+      }
+      .chip.green em { color: var(--green); }
+      .chip.yellow em { color: var(--yellow); }
+      .chip.blue em { color: var(--blue); }
+      .chip.red em { color: var(--red); }
+
+      /* ── Nav ────────────────────────────────────────────────── */
+      nav.nav {
+        margin-top: var(--gap);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      @media (min-width: 500px) { nav.nav { grid-template-columns: repeat(3, 1fr); } }
+      nav.nav a {
+        border: 1px dashed var(--dash);
+        padding: 18px 12px;
+        text-align: center;
+        letter-spacing: 0.2em;
+        font-weight: 700;
+        font-size: 14px;
+        text-transform: uppercase;
+        position: relative;
+        min-height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      nav.nav a .k {
+        position: absolute;
+        top: 4px;
+        left: 8px;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        font-weight: 400;
+      }
+      nav.nav a.on { background: var(--yellow); color: #000; }
+      nav.nav a.on .k { color: #000; }
+      nav.nav a:hover:not(.on) { background: rgba(255,255,255,.05); }
+      nav.nav a:active { background: rgba(255,255,255,.1); }
+
+      /* ── Numerals board ─────────────────────────────────────── */
+      .board {
+        margin-top: var(--gap);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      @media (min-width: 520px) { .board { grid-template-columns: repeat(2, 1fr); } }
+      @media (min-width: 900px) { .board { grid-template-columns: repeat(3, 1fr); } }
+      .tile {
+        border: 1px dashed var(--dash);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 140px;
+      }
+      .tile .lbl {
+        font-size: 10px;
+        letter-spacing: 0.28em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .tile .num {
+        font-size: var(--num-size);
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        word-break: break-all;
+      }
+      .tile .num small {
+        font-size: 0.38em;
+        color: var(--muted);
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        margin-left: 4px;
+      }
+      .tile .foot {
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-top: auto;
+      }
+      .tile .foot b { color: var(--fg); font-weight: 400; }
+      .tile.a .num { color: var(--green); }
+      .tile.b .num { color: var(--yellow); }
+      .tile.c .num { color: var(--blue); }
+
+      /* Signal-strength pixel bar for WIFI tile */
+      .bars {
+        display: inline-grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 2px;
+        margin-top: 8px;
+        width: 100%;
+        max-width: 220px;
+      }
+      .bars i {
+        height: 12px;
+        background: rgba(255,255,255,.08);
+        border: 1px dashed rgba(255,255,255,.2);
+      }
+      .bars i.on { background: var(--blue); border-color: #000; }
+
+      /* ── Footer ─────────────────────────────────────────────── */
+      .foot {
+        margin-top: var(--gap);
+        border: 1px dashed var(--dash);
+        padding: 12px var(--pad);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px 24px;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+      }
+      .foot b { color: var(--fg); font-weight: 400; }
+      .foot .heart { color: var(--red); }
+
+      /* Reduce motion / small tweaks */
+      @media (prefers-reduced-motion: reduce) {
+        * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
+      @media (max-width: 380px) {
+        .mast { padding: 14px; }
+        .wrap { padding: 12px; }
+        nav.nav a { padding: 14px 10px; font-size: 13px; }
+        .chip { padding: 8px 10px; min-height: 48px; }
       }
     </style>
   </head>
   <body>
-    <h1>📚 CrossPoint Reader</h1>
+    <div class="wrap">
+      <!-- Masthead -->
+      <header class="mast">
+        <div class="lt">
+          <h1>CROSS<br /><em>POINT</em></h1>
+          <div class="sub">Reader &middot; Web UI &middot; <span id="mode">—</span></div>
+          <div class="sprite" id="sprite" aria-hidden="true"></div>
+        </div>
+        <div class="rt">
+          <div class="time">
+            <span id="clock">—</span>
+            <small id="date">—</small>
+          </div>
+          <div class="chips">
+            <div class="chip green"><b>Firmware</b><em id="chip-fw">—</em></div>
+            <div class="chip yellow"><b>Heap</b><em id="chip-heap">—</em></div>
+            <div class="chip blue"><b>WiFi</b><em id="chip-rssi">—</em></div>
+            <div class="chip red"><b>IP</b><em id="chip-ip">—</em></div>
+          </div>
+        </div>
+      </header>
 
-    <div class="nav-links">
-      <a href="/">Home</a>
-      <a href="/files">File Manager</a>
-      <a href="/fonts">Custom Fonts</a>
-      <a href="/settings">Settings</a>
+      <!-- Nav -->
+      <nav class="nav" aria-label="Primary">
+        <a href="/" class="on"><span class="k">[1]</span>HOME</a>
+        <a href="/files"><span class="k">[2]</span>FILES</a>
+        <a href="/settings"><span class="k">[3]</span>SETTINGS</a>
+      </nav>
+
+      <!-- Numerals board -->
+      <section class="board" aria-label="Device status">
+        <div class="tile a">
+          <div class="lbl">Uptime</div>
+          <div class="num" id="tile-uptime">—</div>
+          <div class="foot"><b id="uptime-detail">—</b></div>
+        </div>
+        <div class="tile b">
+          <div class="lbl">Heap Free</div>
+          <div class="num" id="tile-heap">—<small>KB</small></div>
+          <div class="foot"><b id="heap-detail">—</b> bytes</div>
+        </div>
+        <div class="tile c">
+          <div class="lbl">WiFi Signal</div>
+          <div class="num" id="tile-rssi">—<small>dBm</small></div>
+          <div class="bars" id="bars" aria-hidden="true"></div>
+          <div class="foot"><b id="rssi-detail">—</b></div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="foot">
+        <span><b>Host</b> crosspoint.local</span>
+        <span><b>IP</b> <span id="foot-ip">—</span></span>
+        <span><b>Mode</b> <span id="foot-mode">—</span></span>
+        <span class="heart">&bull; Open-source &middot; MIT</span>
+      </footer>
     </div>
 
-    <div class="card">
-      <h2>Device Status</h2>
-      <div class="info-row">
-        <span class="label">Version</span>
-        <span class="value" id="version"></span>
-      </div>
-      <div class="info-row">
-        <span class="label">WiFi Status</span>
-        <span class="status">Connected</span>
-      </div>
-      <div class="info-row">
-        <span class="label">IP Address</span>
-        <span class="value" id="ip-address"></span>
-      </div>
-      <div class="info-row">
-        <span class="label">Free Memory</span>
-        <span class="value" id="free-heap"></span>
-      </div>
-    </div>
-
-    <div class="card">
-      <p style="text-align: center; color: #95a5a6; margin: 0">
-        CrossPoint E-Reader • Open Source
-      </p>
-    </div>
-  <script>
-    async function fetchStatus() {
-      try {
-        const response = await fetch('/api/status');
-        if (!response.ok) {
-          throw new Error('Failed to fetch status: ' + response.status + ' ' + response.statusText);
+    <script>
+      // ── tiny pixel-art sprite (16 × 12) ──────────────────────
+      (function () {
+        var pat = [
+          "..ffff....ffff..",
+          ".f....f..f....f.",
+          "f......ff......f",
+          "f..rr......rr..f",
+          "f..rr......rr..f",
+          "f......ff......f",
+          "f..............f",
+          ".f..gg....gg..f.",
+          "..f..gggggg..f..",
+          "...ff......ff...",
+          ".....ffffff.....",
+          "................"
+        ];
+        var el = document.getElementById("sprite");
+        if (!el) return;
+        var frag = document.createDocumentFragment();
+        for (var y = 0; y < pat.length; y++) {
+          for (var x = 0; x < pat[y].length; x++) {
+            var c = pat[y][x];
+            var i = document.createElement("i");
+            if (c === "f") i.className = "f";
+            else if (c === "r") i.className = "r";
+            else if (c === "g") i.className = "g";
+            frag.appendChild(i);
+          }
         }
-        const data = await response.json();
-        document.getElementById('version').textContent = data.version || 'N/A';
-        document.getElementById('ip-address').textContent = data.ip || 'N/A';
-        document.getElementById('free-heap').textContent = data.freeHeap
-          ? data.freeHeap.toLocaleString() + ' bytes'
-          : 'N/A';
-      } catch (error) {
-        console.error('Error fetching status:', error);
-      }
-    }
+        el.appendChild(frag);
+      })();
 
-    // Fetch status on page load
-    window.onload = fetchStatus;
-  </script>
+      // ── wall clock ──────────────────────────────────────────
+      function pad(n) { return n < 10 ? "0" + n : "" + n; }
+      function tick() {
+        var d = new Date();
+        var clk = document.getElementById("clock");
+        var dt = document.getElementById("date");
+        if (clk) clk.textContent = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+        if (dt) {
+          var days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+          var months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+          dt.textContent = days[d.getDay()] + " · " + pad(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
+        }
+      }
+      tick();
+      setInterval(tick, 1000);
+
+      // ── helpers ─────────────────────────────────────────────
+      function fmtUptime(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        var d = Math.floor(sec / 86400);
+        var h = Math.floor((sec % 86400) / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        var s = sec % 60;
+        return { d: d, h: h, m: m, s: s };
+      }
+      function rssiBars(rssi) {
+        // -50 or better: 10 bars, -100 or worse: 0 bars
+        if (!rssi) return 0;
+        var n = Math.round((rssi + 100) / 5);
+        if (n < 0) n = 0;
+        if (n > 10) n = 10;
+        return n;
+      }
+      function rssiLabel(rssi) {
+        if (rssi === 0 || rssi === undefined || rssi === null) return "—";
+        if (rssi >= -50) return "EXCELLENT";
+        if (rssi >= -60) return "GOOD";
+        if (rssi >= -70) return "FAIR";
+        if (rssi >= -80) return "WEAK";
+        return "POOR";
+      }
+
+      // ── pixel bars for signal ──────────────────────────────
+      (function () {
+        var el = document.getElementById("bars");
+        if (!el) return;
+        for (var i = 0; i < 10; i++) el.appendChild(document.createElement("i"));
+      })();
+      function setBars(rssi) {
+        var n = rssiBars(rssi);
+        var cells = document.querySelectorAll("#bars i");
+        for (var i = 0; i < cells.length; i++) {
+          cells[i].className = i < n ? "on" : "";
+        }
+      }
+
+      // ── fetch + render /api/status ─────────────────────────
+      function setText(id, v) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = v;
+      }
+      async function fetchStatus() {
+        try {
+          var resp = await fetch("/api/status", { cache: "no-store" });
+          if (!resp.ok) throw new Error("status " + resp.status);
+          var d = await resp.json();
+
+          setText("chip-fw", d.version || "—");
+          setText("chip-ip", d.ip || "—");
+          setText("foot-ip", d.ip || "—");
+          setText("mode", (d.mode || "—") + " mode");
+          setText("foot-mode", d.mode || "—");
+
+          // Heap
+          if (typeof d.freeHeap === "number") {
+            var kb = Math.round(d.freeHeap / 1024);
+            setText("chip-heap", kb + " KB");
+            var tileHeap = document.getElementById("tile-heap");
+            if (tileHeap) tileHeap.innerHTML = kb + "<small>KB</small>";
+            setText("heap-detail", d.freeHeap.toLocaleString());
+          }
+
+          // RSSI
+          if (typeof d.rssi === "number") {
+            var rssi = d.rssi;
+            if (rssi === 0 && d.mode === "AP") {
+              setText("chip-rssi", "AP");
+              var tileRssi = document.getElementById("tile-rssi");
+              if (tileRssi) tileRssi.innerHTML = "AP<small>mode</small>";
+              setText("rssi-detail", "ACCESS POINT HOST");
+              setBars(-50);
+            } else {
+              setText("chip-rssi", rssi + " dBm");
+              var tileRssi2 = document.getElementById("tile-rssi");
+              if (tileRssi2) tileRssi2.innerHTML = rssi + "<small>dBm</small>";
+              setText("rssi-detail", rssiLabel(rssi));
+              setBars(rssi);
+            }
+          }
+
+          // Uptime
+          if (typeof d.uptime === "number") {
+            var u = fmtUptime(d.uptime);
+            var big = u.d > 0 ? (u.d + "d") : (u.h > 0 ? (u.h + "h") : (u.m + "m"));
+            var tileUp = document.getElementById("tile-uptime");
+            if (tileUp) {
+              var unit = big.slice(-1);
+              var val = big.slice(0, -1);
+              tileUp.innerHTML = val + "<small>" + unit + "</small>";
+            }
+            setText("uptime-detail",
+              pad(u.d) + "d " + pad(u.h) + "h " + pad(u.m) + "m " + pad(u.s) + "s · stable");
+          }
+        } catch (err) {
+          console.error("status fetch failed", err);
+        }
+      }
+      window.addEventListener("load", fetchStatus);
+      setInterval(fetchStatus, 5000);
+    </script>
   </body>
 </html>
