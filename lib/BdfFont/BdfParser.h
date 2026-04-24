@@ -25,15 +25,18 @@ struct BdfHeader {
 
 // One glyph as yielded by readAllGlyphs(). Bitmap bytes are NOT included —
 // the index builder only needs metrics + offset; runtime decode pulls the
-// bitmap on demand using bdfOffset.
+// bitmap on demand using bitmapOffset.
 struct BdfGlyphMeta {
-  uint32_t codepoint;       // ENCODING value (skipped if < 0)
-  uint32_t bdfOffset;       // byte offset where "STARTCHAR" begins
-  uint8_t bbxW;             // BBX W
-  uint8_t bbxH;             // BBX H
-  int8_t bbxOffX;           // BBX X
-  int8_t bbxOffY;           // BBX Y
-  uint8_t advance;          // DWIDTH x; 0 if absent
+  uint32_t codepoint;     // ENCODING value (skipped if < 0)
+  uint32_t bdfOffset;     // byte offset where "STARTCHAR" begins (debug / legacy)
+  uint32_t bitmapOffset;  // byte offset of the first hex row, i.e. the byte
+                          // AFTER the "BITMAP\n" line. 0 if this glyph had
+                          // no BITMAP (rare, malformed).
+  uint8_t bbxW;           // BBX W
+  uint8_t bbxH;           // BBX H
+  int8_t bbxOffX;         // BBX X
+  int8_t bbxOffY;         // BBX Y
+  uint8_t advance;        // DWIDTH x; 0 if absent
 };
 
 // Per-glyph callback. Return false to abort enumeration.
@@ -41,7 +44,7 @@ using BdfGlyphCallback = std::function<bool(const BdfGlyphMeta& g)>;
 
 struct BdfEnumResult {
   uint32_t glyphsYielded = 0;
-  uint32_t glyphsSkipped = 0;     // missing/invalid ENCODING
+  uint32_t glyphsSkipped = 0;  // missing/invalid ENCODING
   bool ok = false;
   const char* error = nullptr;
 };

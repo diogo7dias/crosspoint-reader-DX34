@@ -173,6 +173,7 @@ BdfEnumResult BdfParser::readAllGlyphs(HalFile& in, const BdfGlyphCallback& cb, 
   bool inGlyph = false;
   bool inBitmap = false;
   uint32_t glyphStartOffset = 0;
+  uint32_t bitmapOffset = 0;  // file position of first hex row, set at BITMAP
   long encoding = -1;
   long bbxW = 0, bbxH = 0, bbxOX = 0, bbxOY = 0;
   long dwidthX = 0;
@@ -182,6 +183,7 @@ BdfEnumResult BdfParser::readAllGlyphs(HalFile& in, const BdfGlyphCallback& cb, 
   auto resetGlyph = [&]() {
     inGlyph = false;
     inBitmap = false;
+    bitmapOffset = 0;
     encoding = -1;
     bbxW = bbxH = bbxOX = bbxOY = 0;
     dwidthX = 0;
@@ -218,6 +220,7 @@ BdfEnumResult BdfParser::readAllGlyphs(HalFile& in, const BdfGlyphCallback& cb, 
           BdfGlyphMeta meta;
           meta.codepoint = static_cast<uint32_t>(encoding);
           meta.bdfOffset = glyphStartOffset;
+          meta.bitmapOffset = bitmapOffset;
           meta.bbxW = static_cast<uint8_t>(bbxW < 0 ? 0 : (bbxW > 255 ? 255 : bbxW));
           meta.bbxH = static_cast<uint8_t>(bbxH < 0 ? 0 : (bbxH > 255 ? 255 : bbxH));
           meta.bbxOffX = static_cast<int8_t>(bbxOX < -128 ? -128 : (bbxOX > 127 ? 127 : bbxOX));
@@ -276,15 +279,21 @@ BdfEnumResult BdfParser::readAllGlyphs(HalFile& in, const BdfGlyphCallback& cb, 
     }
     if (startsWithToken(line, "BITMAP")) {
       inBitmap = true;
+      // readLine has already consumed the BITMAP line AND its trailing \n,
+      // so the file cursor sits exactly at the first byte of the first hex
+      // row. That is the offset decodeBitmap() will seek to at runtime.
+      bitmapOffset = static_cast<uint32_t>(in.position());
       continue;
     }
     if (startsWithToken(line, "ENDCHAR")) {
       // ENDCHAR without BITMAP is malformed but tolerated — treat as a
-      // bitmap-less glyph (still has metrics).
+      // bitmap-less glyph (still has metrics). bitmapOffset stays 0 — the
+      // runtime decoder interprets 0 as "no bitmap" and skips the read.
       if (sawEncoding && sawBbx && encoding >= 0) {
         BdfGlyphMeta meta;
         meta.codepoint = static_cast<uint32_t>(encoding);
         meta.bdfOffset = glyphStartOffset;
+        meta.bitmapOffset = bitmapOffset;
         meta.bbxW = static_cast<uint8_t>(bbxW < 0 ? 0 : (bbxW > 255 ? 255 : bbxW));
         meta.bbxH = static_cast<uint8_t>(bbxH < 0 ? 0 : (bbxH > 255 ? 255 : bbxH));
         meta.bbxOffX = static_cast<int8_t>(bbxOX < -128 ? -128 : (bbxOX > 127 ? 127 : bbxOX));

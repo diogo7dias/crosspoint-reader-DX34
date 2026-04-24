@@ -117,6 +117,15 @@ void EpubReaderActivity::onEnter() {
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
   ImageBlock::setDitherMode(SETTINGS.imageDither);
 
+  // Register the active custom font with the renderer BEFORE any drawText can
+  // run. Chrome elements (page counter, header) draw during onEnter, well
+  // before ensureSectionLoaded — if the font isn't registered yet, every
+  // glyph logs "Font not found" and the render path aborts after spam.
+  // The late re-register inside ensureSectionLoaded is kept for per-book
+  // theme changes; the cost of registering twice is bounded by the clear
+  // pass at the top of registerWithRenderer.
+  crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+
   epub->setupCacheDir();
 
   int32_t loadedPageCount = -1;
@@ -1250,28 +1259,34 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                 boldSwapEnabled)) {
     LOG_DBG("ERS", "Cache not found, building...");
 
-    // Free font caches to reclaim contiguous heap for ZIP decompression (needs a 32 KB
-    // dictionary). They rebuild automatically on next render.
+    // Free font caches to reclaim a contiguous 32 KB block for the ZIP
+    // dictionary used during layout. Built-ins use clearCache (cheap
+    // decompress-again on next render); custom fonts use releaseAllCaches,
+    // which drops the slab AND the slots/map vectors so the hash-table
+    // buckets can't split the block we need.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
-    crosspoint::fonts::CustomFontManager::instance().trimAllCaches(renderer);
+    crosspoint::fonts::CustomFontManager::instance().releaseAllCaches(renderer);
+    crosspoint::fonts::CustomFontManager::logHeapSnapshot("createSectionFile-pre");
 
-    // Progress hook: the layout parser emits percentages as it chews the HTML. We only use it
-    // to gate the "Still working on it..." toast, not a real progress bar — keeps UX simple
-    // and consistent with the cached-open path.
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
-    if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                    SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
-                                    viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
-                                    SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                    boldSwapEnabled, layoutProgressTick)) {
+    const bool sectionOk = section->createSectionFile(
+        SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacingLevel,
+        SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
+        SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
+        boldSwapEnabled, layoutProgressTick);
+    crosspoint::fonts::CustomFontManager::logHeapSnapshot(sectionOk ? "createSectionFile-post-ok"
+                                                                    : "createSectionFile-post-fail");
+    // Restore the custom font cache on BOTH paths. Success: the next render
+    // needs a warm cache to stay snappy. Failure: we still return a fallback
+    // UI to the user and they may page around; a permanently-empty cache
+    // would leave every rendered glyph blank.
+    crosspoint::fonts::CustomFontManager::instance().restoreAllCaches(renderer);
+    if (!sectionOk) {
       LOG_ERR("ERS", "Failed to persist page data to SD");
       clearPageCache();
       section.reset();
       renderer.clearScreen();
-      // Typical trigger: large custom BDF font (e.g. Unifont at size 40) —
-      // glyph cache + 32 KB ZIP dict contend for contiguous heap. A cold boot
-      // clears fragmentation and usually lets the build succeed.
       renderer.drawCenteredText(UI_12_FONT_ID, 320, "REBOOT DEVICE", true, EpdFontFamily::REGULAR);
       renderer.drawCenteredText(UI_12_FONT_ID, 360, "(small memory wrinkle)", true, EpdFontFamily::REGULAR);
       renderer.drawCenteredText(UI_12_FONT_ID, 410, "Press Back to exit", true, EpdFontFamily::REGULAR);
@@ -1971,14 +1986,26 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Two-pass font prewarm: scan pass collects text, then decompress needed glyphs.
   // The actual render must happen inside the scope so page buffers stay alive.
   auto* fcm = renderer.getFontCacheManager();
+  auto& cfMgr = crosspoint::fonts::CustomFontManager::instance();
+  cfMgr.logAndResetCacheStats("frame-start", renderer);
+  const uint32_t tFrameStart = millis();
   if (fcm) {
     auto scope = fcm->createPrewarmScope();
+    const uint32_t tScanStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // scan pass
+    const uint32_t tScanEnd = millis();
     scope.endScanAndPrewarm();
+    cfMgr.logAndResetCacheStats("after-scan-pass", renderer);
+    const uint32_t tRenderStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // actual render
+    const uint32_t tRenderEnd = millis();
+    LOG_INF("ERS", "page render timings: scan=%u ms render=%u ms total=%u ms",
+            static_cast<unsigned>(tScanEnd - tScanStart), static_cast<unsigned>(tRenderEnd - tRenderStart),
+            static_cast<unsigned>(tRenderEnd - tFrameStart));
   } else {
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
   }
+  cfMgr.logAndResetCacheStats("frame-end", renderer);
   // Render highlight overlay and border if in highlight/quote selection mode
   if (highlights_.state() != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);

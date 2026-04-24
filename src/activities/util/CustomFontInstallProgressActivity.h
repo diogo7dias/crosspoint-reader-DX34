@@ -1,12 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 
-#include "activities/Activity.h"
 #include "BdfIndexBuilder.h"
-#include <functional>
+#include "activities/Activity.h"
 
 // Full-screen progress activity shown while BdfIndexBuilder walks a
 // large (9–12 MB) BDF file. Updated live from the builder's progress
@@ -19,8 +19,10 @@
 // updates are coalesced.
 class CustomFontInstallProgressActivity final : public Activity {
  public:
-  CustomFontInstallProgressActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string filename, std::string bdfPath, std::string idxPath, std::function<void(crosspoint::bdf::BuildIndexResult)> onComplete)
-      : Activity("CustomFontInstallProgress", renderer, mappedInput), 
+  CustomFontInstallProgressActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string filename,
+                                    std::string bdfPath, std::string idxPath,
+                                    std::function<void(crosspoint::bdf::BuildIndexResult)> onComplete)
+      : Activity("CustomFontInstallProgress", renderer, mappedInput),
         filename(std::move(filename)),
         bdfPath(std::move(bdfPath)),
         idxPath(std::move(idxPath)),

@@ -90,15 +90,14 @@ class GfxRenderer {
   // Setup
   void begin();  // must be called right after display.begin()
   void insertFont(int fontId, EpdFontFamily font);
-  // Registers a user-dropped BDF font under `fontId`. Takes ownership; the
-  // renderer deletes the pointer in its destructor. The text-path methods
-  // (getTextWidth, drawText, ...) dispatch to this font when the ID is
-  // present here; otherwise they fall through to the built-in EpdFontFamily
-  // path. If `fontId` already has a custom font registered, the previous
-  // one is freed and replaced.
+  // Registers a borrowed CustomFont pointer under `fontId`. The renderer
+  // does NOT take ownership — CustomFontManager owns the object lifetime.
+  // The text-path methods (getTextWidth, drawText, ...) dispatch to this
+  // font when the ID is present here; otherwise they fall through to the
+  // built-in EpdFontFamily path. If `fontId` already has a custom font
+  // registered, the old borrow is replaced without deleting.
   void insertCustomFont(int fontId, crosspoint::bdf::CustomFont* font);
-  // Frees and removes the custom font registered under `fontId`. No-op if
-  // not present.
+  // Drops the borrow for `fontId` (no delete). No-op if not present.
   void removeCustomFont(int fontId);
   // Returns nullptr if `fontId` is not registered as a custom font.
   crosspoint::bdf::CustomFont* findCustomFont(int fontId) const;

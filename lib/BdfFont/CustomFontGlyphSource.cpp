@@ -12,33 +12,12 @@ namespace bdf {
 
 namespace {
 
-
-
 // Parse one hex character. Returns -1 on non-hex.
 int hexNibble(int c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'A' && c <= 'F') return c - 'A' + 10;
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
   return -1;
-}
-
-int readBitmapLine(HalFile& in, char* buf, size_t bufSize) {
-  if (bufSize == 0) return -1;
-  size_t len = 0;
-  bool sawAny = false;
-  while (true) {
-    const int c = in.read();
-    if (c < 0) {
-      if (!sawAny) return -1;
-      break;
-    }
-    sawAny = true;
-    if (c == '\n') break;
-    if (c == '\r') continue;
-    if (len + 1 < bufSize) buf[len++] = static_cast<char>(c);
-  }
-  buf[len] = '\0';
-  return static_cast<int>(len);
 }
 
 }  // namespace
@@ -56,6 +35,13 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
     return false;
   }
   if (hdr_.magic != kBdfIndexMagic || hdr_.version != kBdfIndexVersion) {
+    // Reject older versions. v1 indexes exist in the wild from prior builds;
+    // they used bdfOffset (STARTCHAR position) which is wrong for the new
+    // decodeBitmap. Treating them as "not installed" routes the file back
+    // through the install prompt which rebuilds a v2 index.
+    LOG_INF("BDF", "rejecting idx %s (magic=%08X version=%u, want version=%u) — reinstall required", idxPath,
+            static_cast<unsigned>(hdr_.magic), static_cast<unsigned>(hdr_.version),
+            static_cast<unsigned>(kBdfIndexVersion));
     idxFile_.close();
     return false;
   }
@@ -77,28 +63,70 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
 
   idxOpen_ = true;
 
+  // Allocate the bulk-read scratch buffer once per source so decodeBitmap
+  // does not put a multi-KB array on the stack. Sized for the worst-case
+  // glyph (font BBX) + slack for per-row newlines.
+  {
+    const size_t bytesPerRow = static_cast<size_t>((bbxW + 7) / 8);
+    const size_t hexCharsPerRow = bytesPerRow * 2;
+    const size_t worst = hexCharsPerRow * static_cast<size_t>(bbxH) + 2 * static_cast<size_t>(bbxH) + 16;
+    bulkBufCap_ = worst > 0 ? worst : 32;
+    bulkBuf_ = static_cast<uint8_t*>(heap_caps_malloc(bulkBufCap_, MALLOC_CAP_8BIT));
+    if (bulkBuf_ == nullptr) {
+      // Fall back to zero-cap buffer — decodeBitmap will return false for
+      // any glyph, and the cache layer silently skips missing glyphs. Font
+      // stays openable; pages just render blank. Not worse than a full
+      // open() failure, which would break the whole family.
+      bulkBufCap_ = 0;
+    }
+  }
+
+  // Phase 2.1: slurp the whole index into RAM for fonts that fit. Eliminates
+  // the log2(N) SD seeks every cold glyph paid. Above the cap we stay on
+  // disk — Unifont (57 K × 16 B ≈ 912 KB) has no hope of fitting.
+  const size_t indexBytes = static_cast<size_t>(glyphCount_) * sizeof(IndexEntry);
+  if (glyphCount_ > 0 && indexBytes <= kInMemoryIndexCapBytes) {
+    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    // Keep a 32 KB margin so the index alloc itself does not split the
+    // block we want for a glyph slab / epub section ZIP dict.
+    constexpr size_t kIndexAllocSafetyMargin = 32 * 1024;
+    if (indexBytes + kIndexAllocSafetyMargin <= largest) {
+      auto buf = std::unique_ptr<IndexEntry[]>(new (std::nothrow) IndexEntry[glyphCount_]);
+      if (buf) {
+        if (idxFile_.read(buf.get(), indexBytes) == static_cast<int>(indexBytes)) {
+          indexArray_ = std::move(buf);
+          // Close the idx file — every lookup from here on is pure RAM.
+          idxFile_.close();
+        }
+      }
+    }
+  }
+
   return true;
 }
 
 void CustomFontGlyphSource::close() {
   if (idxOpen_) {
+    // idxFile_ may already be closed if we slurped the index at open time.
     idxFile_.close();
     bdfFile_.close();
     idxOpen_ = false;
   }
-
+  indexArray_.reset();
+  if (bulkBuf_ != nullptr) {
+    heap_caps_free(bulkBuf_);
+    bulkBuf_ = nullptr;
+  }
+  bulkBufCap_ = 0;
   glyphCount_ = 0;
   maxBitmapBytes_ = 0;
 }
 
-
-
-bool CustomFontGlyphSource::readIndexEntry(uint32_t indexPos, IndexEntry& out) {
+bool CustomFontGlyphSource::readIndexEntryFromFile(uint32_t indexPos, IndexEntry& out) {
   const size_t fileOffset = sizeof(IndexHeader) + indexPos * sizeof(IndexEntry);
   if (!idxFile_.seekSet(fileOffset)) return false;
   return idxFile_.read(&out, sizeof(out)) == static_cast<int>(sizeof(out));
 }
-
 
 const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codepoint) {
   if (!idxOpen_ || glyphCount_ == 0 || !sharedCache_) return nullptr;
@@ -108,24 +136,41 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
     return cached;
   }
 
-  // Binary search the .idx by codepoint.
+  // Binary search — either against the in-RAM array (zero I/O) or against
+  // the .idx file (one seek + one read per step).
   uint32_t lo = 0;
   uint32_t hi = glyphCount_;
   IndexEntry hit{};
   bool found = false;
-  while (lo < hi) {
-    const uint32_t mid = lo + (hi - lo) / 2;
-    IndexEntry e{};
-    if (!readIndexEntry(mid, e)) return nullptr;
-    if (e.codepoint == codepoint) {
-      hit = e;
-      found = true;
-      break;
+  if (indexArray_) {
+    const IndexEntry* arr = indexArray_.get();
+    while (lo < hi) {
+      const uint32_t mid = lo + (hi - lo) / 2;
+      const IndexEntry& e = arr[mid];
+      if (e.codepoint == codepoint) {
+        hit = e;
+        found = true;
+        break;
+      }
+      if (e.codepoint < codepoint)
+        lo = mid + 1;
+      else
+        hi = mid;
     }
-    if (e.codepoint < codepoint) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
+  } else {
+    while (lo < hi) {
+      const uint32_t mid = lo + (hi - lo) / 2;
+      IndexEntry e{};
+      if (!readIndexEntryFromFile(mid, e)) return nullptr;
+      if (e.codepoint == codepoint) {
+        hit = e;
+        found = true;
+        break;
+      }
+      if (e.codepoint < codepoint)
+        lo = mid + 1;
+      else
+        hi = mid;
     }
   }
   if (!found) return nullptr;
@@ -142,66 +187,66 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
   uint8_t* dst = sharedCache_->allocateSlot(variantIndex_, codepoint, meta, &cached);
   if (!dst) return nullptr;
 
+  const uint32_t t0 = micros();
   if (!decodeBitmap(hit, dst, sharedCache_->maxBitmapBytes())) {
     sharedCache_->abortSlot(variantIndex_, codepoint);
     return nullptr;
   }
-
+  sharedCache_->recordDecodeTime(micros() - t0);
   return cached;
 }
 
 bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, uint8_t* dst, size_t dstCap) {
-  if (!bdfFile_.seekSet(e.bdfOffset)) return false;
-
   const size_t bytesPerRow = (e.bitmapW + 7) / 8;
   const size_t totalBytes = bytesPerRow * e.bitmapH;
   if (totalBytes > dstCap) return false;  // Glyph exceeds font bounding box — rejected.
-  if (totalBytes == 0) return true;        // zero-size glyph (e.g. SPACE) — empty bitmap is valid
+  if (totalBytes == 0) return true;       // zero-size glyph (e.g. SPACE) — empty bitmap is valid
+
+  // v2 index points directly at the first hex row — no more BITMAP token
+  // scan. bitmapOffset=0 means "no bitmap for this glyph" (malformed BDF).
+  if (e.bitmapOffset == 0) return false;
+  if (!bdfFile_.seekSet(e.bitmapOffset)) return false;
+
   std::memset(dst, 0, totalBytes);
 
-  char header[32];
-  // Walk lines until BITMAP token.
-  bool sawBitmap = false;
-  for (int safety = 0; safety < 64; ++safety) {
-    const int n = readBitmapLine(bdfFile_, header, sizeof(header));
-    if (n < 0) return false;
-    if (std::strncmp(header, "BITMAP", 6) == 0 && (header[6] == '\0' || header[6] == ' ' || header[6] == '\t')) {
-      sawBitmap = true;
-      break;
-    }
-  }
-  if (!sawBitmap) return false;
-
   const size_t hexCharsPerRow = bytesPerRow * 2;
-  char hexBuf[128];
-  if (hexCharsPerRow > sizeof(hexBuf)) {
-    // Glyph wider than 512 px — one-shot log so we notice if a real font
-    // hits this limit. Silently returning false otherwise looked like a
-    // missing-glyph mystery during Phase 2b testing.
-    static bool warned = false;
-    if (!warned) {
-      warned = true;
-      LOG_INF("BDF", "glyph hex row too wide (%u bytes > %u buf) — glyph skipped",
-              static_cast<unsigned>(hexCharsPerRow), static_cast<unsigned>(sizeof(hexBuf)));
+  // Phase 2.3 bulk read — reuses the heap buffer allocated in open()
+  // (bulkBuf_, sized from fontBBX). Each row is hexCharsPerRow hex digits
+  // followed by 1 or 2 newline bytes; worst-case bulkBufCap_ was computed
+  // from the font's bounding box so every glyph fits.
+  if (bulkBuf_ == nullptr || bulkBufCap_ == 0) return false;
+  const size_t bulkBytes = hexCharsPerRow * e.bitmapH + 2 * e.bitmapH + 16;
+  if (bulkBytes > bulkBufCap_) {
+    static bool warnedBulk = false;
+    if (!warnedBulk) {
+      warnedBulk = true;
+      LOG_INF("BDF", "glyph bitmap exceeds per-source buffer (%u > %u) — glyph skipped",
+              static_cast<unsigned>(bulkBytes), static_cast<unsigned>(bulkBufCap_));
     }
     return false;
   }
+  const int got = bdfFile_.read(bulkBuf_, bulkBytes);
+  if (got <= 0) return false;
 
-  for (size_t row = 0; row < e.bitmapH; ++row) {
-    if (bdfFile_.read(hexBuf, hexCharsPerRow) != static_cast<int>(hexCharsPerRow)) return false;
-    for (size_t b = 0; b < bytesPerRow; ++b) {
-      const int hi = hexNibble(static_cast<unsigned char>(hexBuf[b * 2]));
-      const int lo = hexNibble(static_cast<unsigned char>(hexBuf[b * 2 + 1]));
-      if (hi < 0 || lo < 0) return false;
-      dst[row * bytesPerRow + b] = static_cast<uint8_t>((hi << 4) | lo);
+  // Hex-parse in RAM. Walk the buffer skipping \n / \r; collect nibbles in
+  // pairs. After `totalBytes * 2` nibbles we stop — any trailing whitespace
+  // or ENDCHAR token is ignored.
+  size_t nibbleCount = 0;
+  const size_t nibblesNeeded = totalBytes * 2;
+  uint8_t pending = 0;
+  for (int i = 0; i < got && nibbleCount < nibblesNeeded; ++i) {
+    const unsigned char c = bulkBuf_[i];
+    if (c == '\n' || c == '\r' || c == ' ' || c == '\t') continue;
+    const int nib = hexNibble(c);
+    if (nib < 0) return false;  // unexpected char before we finished the bitmap
+    if ((nibbleCount & 1) == 0) {
+      pending = static_cast<uint8_t>(nib << 4);
+    } else {
+      dst[nibbleCount / 2] = pending | static_cast<uint8_t>(nib);
     }
-    // drain until newline
-    while (true) {
-      int c = bdfFile_.read();
-      if (c < 0 || c == '\n') break;
-    }
+    ++nibbleCount;
   }
-  return true;
+  return nibbleCount == nibblesNeeded;
 }
 
 }  // namespace bdf

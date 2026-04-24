@@ -94,8 +94,7 @@ void ReaderSettingsActivity::startFontSizeEdit() {
     // built-in enum table. Snaps to 0 if the currently-persisted size
     // isn't in the list (e.g. the family was re-scanned and that size
     // was deleted between reader opens).
-    const auto sizes =
-        crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
+    const auto sizes = crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
     fontSizeEditDraftIndex = 0;
     for (size_t i = 0; i < sizes.size(); ++i) {
       if (sizes[i] == SETTINGS.customFontSizePt) {
@@ -123,8 +122,7 @@ void ReaderSettingsActivity::adjustFontSizeEdit(const int delta) {
 
 void ReaderSettingsActivity::applyFontSizeEdit() {
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    const auto sizes =
-        crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
+    const auto sizes = crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
     if (!sizes.empty() && fontSizeEditDraftIndex < sizes.size()) {
       SETTINGS.customFontSizePt = sizes[fontSizeEditDraftIndex];
     }
@@ -453,7 +451,10 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
         // valid default.
         bool keep = false;
         for (auto s : sizes) {
-          if (s == SETTINGS.customFontSizePt) { keep = true; break; }
+          if (s == SETTINGS.customFontSizePt) {
+            keep = true;
+            break;
+          }
         }
         if (!keep) SETTINGS.customFontSizePt = sizes.empty() ? 0 : sizes.front();
       }
@@ -640,9 +641,8 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
       valueText = (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
     } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
       if (setting.valuePtr == &CrossPointSettings::fontSize) {
-        const uint8_t size = (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY)
-                                 ? SETTINGS.customFontSizePt
-                                 : SETTINGS.fontSize;
+        const uint8_t size =
+            (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) ? SETTINGS.customFontSizePt : SETTINGS.fontSize;
         valueText = fontSizeValueLabel(SETTINGS.fontFamily, size);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
         if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {

@@ -7,9 +7,10 @@
 #include <Utf8.h>
 
 GfxRenderer::~GfxRenderer() {
-  for (auto& kv : customFontMap) {
-    delete kv.second;
-  }
+  // customFontMap stores NON-OWNING pointers — ownership lives with
+  // CustomFontManager (the manager survives the renderer in every
+  // production call path, and hands out borrowed pointers). Clearing the
+  // map is enough; deleting here would double-free.
   customFontMap.clear();
   freeBwBufferChunks();
 }
@@ -26,21 +27,13 @@ void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) { fontMap.ins
 
 void GfxRenderer::insertCustomFont(const int fontId, crosspoint::bdf::CustomFont* font) {
   if (!font) return;
-  const auto it = customFontMap.find(fontId);
-  if (it != customFontMap.end()) {
-    delete it->second;
-    it->second = font;
-    return;
-  }
-  customFontMap.emplace(fontId, font);
+  // Non-owning: caller (CustomFontManager) retains the unique_ptr. Collision
+  // replaces the borrow without deleting — the manager is responsible for
+  // freeing the old one when it re-registers.
+  customFontMap[fontId] = font;
 }
 
-void GfxRenderer::removeCustomFont(const int fontId) {
-  const auto it = customFontMap.find(fontId);
-  if (it == customFontMap.end()) return;
-  delete it->second;
-  customFontMap.erase(it);
-}
+void GfxRenderer::removeCustomFont(const int fontId) { customFontMap.erase(fontId); }
 
 crosspoint::bdf::CustomFont* GfxRenderer::findCustomFont(const int fontId) const {
   const auto it = customFontMap.find(fontId);
@@ -116,8 +109,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   // non-rotated path — side-button labels (the only rotated callers) would
   // read wrong with a sheared glyph. Divisor 4 ≈ 14° slant, close to the
   // standard 15° italic convention.
-  const bool shearItalic =
-      rotation == TextRotation::None && fontFamily.shouldSynthesizeItalic(style);
+  const bool shearItalic = rotation == TextRotation::None && fontFamily.shouldSynthesizeItalic(style);
   constexpr int kShearDivisor = 4;
 
   const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
@@ -281,17 +273,23 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
 void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, const char* text, const int letterSpacing,
                                  const bool black, const EpdFontFamily::Style style) const {
   if (auto* cf = findCustomFont(fontId)) {
-    // Custom fonts skip the FontCacheManager scan-pass (no compressed-group
-    // prewarming applies; the LRU fills on first real render). Walk the
-    // UTF-8 text via CustomFont::visitGlyphs and stamp each bitmap onto
-    // the framebuffer with drawPixel. BDF origin sits on the baseline at
-    // character start; pixel (col,row) in the glyph bitmap maps to
+    // During the scan pass (FontCacheManager drives this for built-ins), we
+    // do NOT draw — we just force every codepoint through the LRU so the
+    // real draw pass becomes pure-RAM. This closes the pre-existing gap
+    // where custom fonts would pay SD I/O during the first visible frame
+    // of a page with new codepoints.
+    if (text == nullptr || *text == '\0') return;
+    const auto styleBits = static_cast<crosspoint::bdf::CustomFont::StyleBits>(style);
+    if (fontCacheManager_ && fontCacheManager_->isScanning()) {
+      cf->prewarmGlyphs(text, styleBits);
+      return;
+    }
+    // BDF origin sits on the baseline at character start; pixel (col,row) in
+    // the glyph bitmap maps to
     //   screenX = cursorX + bbxOffX + col
     //   screenY = baselineY - bbxOffY - bbxH + row
     // (BDF stores bitmap rows top-to-bottom, and bbxOffY is the Y offset
     // from the baseline to the bitmap's lower-left.)
-    if (text == nullptr || *text == '\0') return;
-    const auto styleBits = static_cast<crosspoint::bdf::CustomFont::StyleBits>(style);
     const int baselineY = y + cf->ascender(styleBits);
     const uint8_t boldPasses = cf->getSyntheticBoldPasses(styleBits);
     // Dark render mode (textRenderStyle == 1) mirrors the built-in path in
@@ -304,7 +302,8 @@ void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, con
     const bool shear = cf->shouldSynthesizeItalic(styleBits);
     constexpr int kShearDivisor = 4;
     cf->visitGlyphs(text, letterSpacing, styleBits,
-                    [this, baselineY, x, black, boldPasses, dark, shear](int cursorX, const crosspoint::bdf::CustomFontGlyphSource::Glyph& g) {
+                    [this, baselineY, x, black, boldPasses, dark, shear](
+                        int cursorX, const crosspoint::bdf::CustomFontGlyphSource::Glyph& g) {
                       if (g.bitmap == nullptr || g.bbxW == 0 || g.bbxH == 0) return true;
                       const int topLeftX = x + cursorX + g.bbxOffX;
                       const int topLeftY = baselineY - g.bbxOffY - g.bbxH;

@@ -2,6 +2,8 @@
 
 #include <esp_heap_caps.h>
 
+#include <cstdlib>
+
 namespace crosspoint {
 namespace bdf {
 
@@ -40,6 +42,7 @@ bool CustomFontSharedCache::setCacheCap(size_t slots) {
 }
 
 bool CustomFontSharedCache::setCacheBudget(size_t budgetBytes) {
+  lastBudgetBytes_ = budgetBytes;
   size_t slots = maxBitmapBytes_ > 0 ? (budgetBytes / maxBitmapBytes_) : 1;
   if (slots < 1) slots = 1;
   return setCacheCap(slots);
@@ -47,13 +50,66 @@ bool CustomFontSharedCache::setCacheBudget(size_t budgetBytes) {
 
 void CustomFontSharedCache::clearCache() {
   clearSlab_();
-  allocSlab_(); // re-init with same cap
+  allocSlab_();  // re-init with same cap
+}
+
+void CustomFontSharedCache::releaseSlab() {
+  // Snapshot the live shape before dropping it so restoreSlab() can rebuild
+  // an identical cache. lastBudgetBytes_ is carried through because
+  // setCacheBudget() is the real source of truth for "how big was this
+  // supposed to be" — cap * maxBytes may have been rounded.
+  if (bitmapSlab_ != nullptr || cacheCap_ > 0) {
+    savedCap_ = cacheCap_;
+    savedMaxBitmapBytes_ = maxBitmapBytes_;
+    savedBudgetBytes_ = lastBudgetBytes_;
+  }
+  clearSlab_();
+  cacheCap_ = 0;
+  maxBitmapBytes_ = 0;
+}
+
+bool CustomFontSharedCache::restoreSlab() {
+  if (savedMaxBitmapBytes_ == 0) return false;  // nothing to restore
+  maxBitmapBytes_ = savedMaxBitmapBytes_;
+  // Prefer the original byte-budget; falls back to the saved slot count if
+  // we never went through setCacheBudget (shouldn't happen in production).
+  if (savedBudgetBytes_ > 0) {
+    lastBudgetBytes_ = savedBudgetBytes_;
+    size_t slots = savedBudgetBytes_ / savedMaxBitmapBytes_;
+    if (slots < 1) slots = 1;
+    cacheCap_ = slots;
+  } else {
+    cacheCap_ = savedCap_ > 0 ? savedCap_ : 1;
+  }
+  const bool ok = allocSlab_();
+  // Clear the save slots regardless — a failed restore should not re-attempt
+  // every frame. If allocation failed the cache stays empty; glyphs will
+  // miss and the decode path will skip them (same as first-boot behaviour).
+  savedCap_ = 0;
+  savedMaxBitmapBytes_ = 0;
+  savedBudgetBytes_ = 0;
+  return ok;
 }
 
 bool CustomFontSharedCache::allocSlab_() {
+  // Drop prior tables BEFORE sizing anything new — otherwise the old slots_
+  // + cacheMap_ can occupy heap that the fresh slab needs.
   std::unordered_map<uint32_t, uint16_t>().swap(cacheMap_);
   std::vector<Slot>().swap(slots_);
-  std::vector<uint8_t>().swap(bitmapSlab_);
+  if (bitmapSlab_ != nullptr) {
+    heap_caps_free(bitmapSlab_);
+    bitmapSlab_ = nullptr;
+    slabBytes_ = 0;
+  }
+
+  if (cacheCap_ == 0 || maxBitmapBytes_ == 0) {
+    // Nothing to allocate. Reset LRU/free pointers so callers see a clean
+    // closed state (lookup/allocateSlot short-circuit on cacheCap_==0).
+    freeHead_ = kNil;
+    lruHead_ = kNil;
+    lruTail_ = kNil;
+    return true;
+  }
 
   constexpr size_t kHeapSafetyMargin = 32 * 1024;
   constexpr size_t kLargeSlabThreshold = 2048;
@@ -64,8 +120,14 @@ bool CustomFontSharedCache::allocSlab_() {
     return false;
   }
 
+  // Allocate the big slab FIRST — while largest-contiguous is still largest.
+  // If this succeeds, the smaller slots_/cacheMap_ allocations that follow
+  // fit into fragments left over, not the block we want for bitmaps.
+  bitmapSlab_ = static_cast<uint8_t*>(heap_caps_malloc(slabBytes, MALLOC_CAP_8BIT));
+  if (bitmapSlab_ == nullptr) return false;
+  slabBytes_ = slabBytes;
+
   slots_.resize(cacheCap_);
-  bitmapSlab_.assign(cacheCap_ * maxBitmapBytes_, 0);
   cacheMap_.reserve(cacheCap_);
 
   for (size_t i = 0; i < cacheCap_; ++i) {
@@ -73,7 +135,7 @@ bool CustomFontSharedCache::allocSlab_() {
     slots_[i].next = (i + 1 < cacheCap_) ? static_cast<uint16_t>(i + 1) : kNil;
     slots_[i].occupied = false;
   }
-  freeHead_ = cacheCap_ > 0 ? 0 : kNil;
+  freeHead_ = 0;
   lruHead_ = kNil;
   lruTail_ = kNil;
   return true;
@@ -82,7 +144,11 @@ bool CustomFontSharedCache::allocSlab_() {
 void CustomFontSharedCache::clearSlab_() {
   std::unordered_map<uint32_t, uint16_t>().swap(cacheMap_);
   std::vector<Slot>().swap(slots_);
-  std::vector<uint8_t>().swap(bitmapSlab_);
+  if (bitmapSlab_ != nullptr) {
+    heap_caps_free(bitmapSlab_);
+    bitmapSlab_ = nullptr;
+  }
+  slabBytes_ = 0;
   freeHead_ = kNil;
   lruHead_ = kNil;
   lruTail_ = kNil;
@@ -90,10 +156,14 @@ void CustomFontSharedCache::clearSlab_() {
 
 void CustomFontSharedCache::lruUnlink_(uint16_t idx) {
   Slot& s = slots_[idx];
-  if (s.prev != kNil) slots_[s.prev].next = s.next;
-  else lruHead_ = s.next;
-  if (s.next != kNil) slots_[s.next].prev = s.prev;
-  else lruTail_ = s.prev;
+  if (s.prev != kNil)
+    slots_[s.prev].next = s.next;
+  else
+    lruHead_ = s.next;
+  if (s.next != kNil)
+    slots_[s.next].prev = s.prev;
+  else
+    lruTail_ = s.prev;
   s.prev = kNil;
   s.next = kNil;
 }
@@ -135,7 +205,10 @@ void CustomFontSharedCache::returnToFreeList_(uint16_t idx) {
 }
 
 bool CustomFontSharedCache::lookup(uint8_t variant, uint32_t codepoint, const CachedGlyph** outGlyph) {
-  if (cacheCap_ == 0 || maxBitmapBytes_ == 0) return false;
+  if (cacheCap_ == 0 || maxBitmapBytes_ == 0 || bitmapSlab_ == nullptr) {
+    stats_.misses += 1;
+    return false;
+  }
   const uint32_t key = makeKey(variant, codepoint);
   const auto mapIt = cacheMap_.find(key);
   if (mapIt != cacheMap_.end()) {
@@ -145,28 +218,34 @@ bool CustomFontSharedCache::lookup(uint8_t variant, uint32_t codepoint, const Ca
       lruPushFront_(idx);
     }
     if (outGlyph) *outGlyph = &slots_[idx].glyph;
+    stats_.hits += 1;
     return true;
   }
+  stats_.misses += 1;
   return false;
 }
 
-uint8_t* CustomFontSharedCache::allocateSlot(uint8_t variant, uint32_t codepoint, const CachedGlyph& metadata, const CachedGlyph** outGlyph) {
-  if (cacheCap_ == 0 || maxBitmapBytes_ == 0) return nullptr;
+uint8_t* CustomFontSharedCache::allocateSlot(uint8_t variant, uint32_t codepoint, const CachedGlyph& metadata,
+                                             const CachedGlyph** outGlyph) {
+  if (cacheCap_ == 0 || maxBitmapBytes_ == 0 || bitmapSlab_ == nullptr) return nullptr;
   uint16_t idx = takeFreeSlot_();
-  if (idx == kNil) idx = evictLru_();
+  if (idx == kNil) {
+    idx = evictLru_();
+    if (idx != kNil) stats_.evictions += 1;  // count ONLY real evictions, not free-slot promotions
+  }
   if (idx == kNil) return nullptr;
 
-  uint8_t* dst = bitmapSlab_.data() + static_cast<size_t>(idx) * maxBitmapBytes_;
-  
+  uint8_t* dst = bitmapSlab_ + static_cast<size_t>(idx) * maxBitmapBytes_;
+
   Slot& s = slots_[idx];
   s.glyph = metadata;
   s.glyph.bitmap = dst;
   s.mapKey = makeKey(variant, codepoint);
   s.occupied = true;
-  
+
   lruPushFront_(idx);
   cacheMap_[s.mapKey] = idx;
-  
+
   if (outGlyph) *outGlyph = &s.glyph;
   return dst;
 }

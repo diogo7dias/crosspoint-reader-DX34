@@ -18,7 +18,7 @@ enum class BdfVariant : uint8_t {
 };
 
 struct BdfFilenameInfo {
-  std::string name;            // family name WITHOUT the -bold / -italic tag
+  std::string name;  // family name WITHOUT the -bold / -italic tag
   uint16_t sizePt;
   BdfVariant variant = BdfVariant::Regular;
 };
