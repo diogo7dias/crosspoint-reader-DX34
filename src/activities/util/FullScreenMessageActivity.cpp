@@ -4,6 +4,7 @@
 
 #include <vector>
 
+#include "MappedInputManager.h"
 #include "fontIds.h"
 
 void FullScreenMessageActivity::onEnter() {
@@ -35,4 +36,14 @@ void FullScreenMessageActivity::onEnter() {
     y += lineH + lineGap;
   }
   renderer.displayBuffer(refreshMode);
+}
+
+void FullScreenMessageActivity::loop() {
+  if (!onDismiss) return;
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back) ||
+      mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    auto cb = onDismiss;
+    onDismiss = nullptr;  // guard against re-entry from the parent's exit path
+    cb();
+  }
 }

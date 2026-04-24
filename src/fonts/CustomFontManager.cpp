@@ -245,6 +245,81 @@ size_t CustomFontManager::deleteFamily(const std::string& fontName, GfxRenderer&
   return removed;
 }
 
+size_t CustomFontManager::deleteFamilySize(const std::string& fontName, uint16_t sizePt, GfxRenderer& renderer) {
+  if (fontName.empty() || sizePt == 0) return 0;
+
+  // Collect filenames scoped to (name, size) so erasing from entries_ under
+  // iteration is safe. Up to four files: regular + bold + italic + bold-italic.
+  std::vector<std::string> toRemove;
+  for (const auto& e : entries_) {
+    if (e.fontName == fontName && e.sizePt == sizePt) toRemove.push_back(e.filename);
+  }
+
+  size_t removed = 0;
+  for (const auto& filename : toRemove) {
+    char bdfPath[320];
+    snprintf(bdfPath, sizeof(bdfPath), "%s/%s", kCustomFontDir, filename.c_str());
+    const std::string idx = idxPathFor(filename);
+    const bool bdfOk = Storage.remove(bdfPath);
+    const bool idxOk = Storage.exists(idx.c_str()) ? Storage.remove(idx.c_str()) : true;
+    if (bdfOk) ++removed;
+    LOG_INF(kModule, "delete %s: bdf=%d idx=%d", filename.c_str(), bdfOk ? 1 : 0, idxOk ? 1 : 0);
+
+    APP_STATE.seenCustomFonts.erase(
+        std::remove(APP_STATE.seenCustomFonts.begin(), APP_STATE.seenCustomFonts.end(), filename),
+        APP_STATE.seenCustomFonts.end());
+    APP_STATE.skippedCustomFonts.erase(
+        std::remove(APP_STATE.skippedCustomFonts.begin(), APP_STATE.skippedCustomFonts.end(), filename),
+        APP_STATE.skippedCustomFonts.end());
+  }
+  if (!toRemove.empty()) APP_STATE.saveToFile();
+
+  // Drop the single renderer dispatch entry for the deleted (name, size).
+  const int deletedId = idForFamily(fontName, sizePt);
+  renderer.removeCustomFont(deletedId);
+  ownedFonts_.erase(deletedId);
+
+  // If the active reader font IS the row being deleted, try to stay inside
+  // the same family at a nearby size before hard-resetting. Compute the
+  // fallback from pre-rescan families_ so we can still see neighbour sizes.
+  if (SETTINGS.customFontName == fontName && SETTINGS.customFontSizePt == sizePt) {
+    uint16_t fallback = 0;
+    uint16_t largestSmaller = 0;
+    uint16_t smallestLarger = 0;
+    for (const auto& g : families_) {
+      if (g.fontName != fontName) continue;
+      if (g.sizePt == sizePt) continue;  // the one we're about to erase
+      if (g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR] < 0) continue;
+      if (g.sizePt > sizePt) {
+        if (smallestLarger == 0 || g.sizePt < smallestLarger) smallestLarger = g.sizePt;
+      } else {
+        if (g.sizePt > largestSmaller) largestSmaller = g.sizePt;
+      }
+    }
+    fallback = smallestLarger != 0 ? smallestLarger : largestSmaller;
+
+    if (fallback != 0) {
+      SETTINGS.customFontSizePt = fallback;
+      LOG_INF(kModule, "active size %upt deleted; falling back to %upt of same family", static_cast<unsigned>(sizePt),
+              static_cast<unsigned>(fallback));
+      SETTINGS.saveToFile();
+    } else {
+      SETTINGS.customFontName.clear();
+      SETTINGS.customFontSizePt = 0;
+      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
+        SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
+        SETTINGS.fontSize = CrossPointSettings::SIZE_12;
+        SETTINGS.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
+      }
+      SETTINGS.saveToFile();
+    }
+  }
+
+  scanAndQueuePrompts();
+  registerWithRenderer(renderer);
+  return removed;
+}
+
 void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
   logHeapSnapshot("register-pre");
   // Register every (name, sizePt) family group that has a regular variant
@@ -353,6 +428,16 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
       }
       LOG_INF(kModule, "variant %s loaded: %s", kSlotNames[slot], ve.filename.c_str());
     }
+
+    // Scale synthetic-bold strength with point size so fake bold reads as
+    // clearly heavier than regular at every size. passes = max(1, sizePt/8)
+    // → 10pt→1, 16pt→2, 24pt→3. CustomFont::getSyntheticBoldPasses already
+    // gates this behind "no real bold variant", so families that ship a
+    // bold BDF render identically (no stacking). In dark mode every glyph
+    // still gets the +1,+1 shadow stamp; the extra passes now ensure bold
+    // is at least 2 px wider than regular at typical reading sizes.
+    const uint8_t boldPasses = static_cast<uint8_t>(std::max(1, static_cast<int>(g.sizePt) / 8));
+    font->setSyntheticBold(0, boldPasses);
 
     const int fontId = idForFamily(g.fontName, g.sizePt);
     LOG_INF(kModule, "registered custom font '%s' @ id=0x%08X (size=%upt, variants=%s%s%s%s)", g.fontName.c_str(),

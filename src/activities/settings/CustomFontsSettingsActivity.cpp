@@ -4,6 +4,7 @@
 #include <I18n.h>
 #include <Logging.h>
 
+#include <cstdio>
 #include <string>
 
 #include "MappedInputManager.h"
@@ -12,10 +13,19 @@
 #include "fontIds.h"
 #include "fonts/CustomFontManager.h"
 
+namespace {
+constexpr int kActionDeleteSize = 0;
+constexpr int kActionDeleteFamily = 1;
+constexpr int kActionCancel = 2;
+constexpr int kActionCount = 3;
+}  // namespace
+
 void CustomFontsSettingsActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
   rebuildRows();
   selectedIndex = rows.empty() ? 0 : std::min<int>(selectedIndex, static_cast<int>(rows.size()) - 1);
+  inActionMenu = false;
+  actionIndex = 0;
   requestUpdate();
 }
 
@@ -36,9 +46,50 @@ void CustomFontsSettingsActivity::rebuildRows() {
   }
 }
 
+void CustomFontsSettingsActivity::openActionMenu() {
+  if (rows.empty()) return;
+  inActionMenu = true;
+  actionIndex = kActionDeleteSize;
+  requestUpdate();
+}
+
+void CustomFontsSettingsActivity::closeActionMenu() {
+  inActionMenu = false;
+  actionIndex = 0;
+  requestUpdate();
+}
+
 void CustomFontsSettingsActivity::loop() {
   if (subActivity) {
     subActivity->loop();
+    return;
+  }
+
+  if (inActionMenu) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      closeActionMenu();
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      if (actionIndex == kActionDeleteSize) {
+        runDeleteSize();
+      } else if (actionIndex == kActionDeleteFamily) {
+        runDeleteFamily();
+      } else {
+        closeActionMenu();
+      }
+      return;
+    }
+    buttonNavigator.onPressAndContinuous(
+        {MappedInputManager::Button::Down, MappedInputManager::Button::Right}, [this] {
+          actionIndex = (actionIndex + 1) % kActionCount;
+          requestUpdate();
+        });
+    buttonNavigator.onPressAndContinuous(
+        {MappedInputManager::Button::Up, MappedInputManager::Button::Left}, [this] {
+          actionIndex = (actionIndex + kActionCount - 1) % kActionCount;
+          requestUpdate();
+        });
     return;
   }
 
@@ -48,7 +99,7 @@ void CustomFontsSettingsActivity::loop() {
   }
 
   if (!rows.empty() && mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    handleSelection();
+    openActionMenu();
     return;
   }
 
@@ -64,10 +115,40 @@ void CustomFontsSettingsActivity::loop() {
   });
 }
 
-void CustomFontsSettingsActivity::handleSelection() {
+void CustomFontsSettingsActivity::runDeleteSize() {
   if (selectedIndex < 0 || selectedIndex >= static_cast<int>(rows.size())) return;
   const std::string name = rows[selectedIndex].fontName;
-  const std::string prompt = std::string(tr(STR_DELETE_CUSTOM_FONT_CONFIRM)) + "\n\n" + name;
+  const uint16_t sizePt = rows[selectedIndex].sizePt;
+  char header[96];
+  snprintf(header, sizeof(header), "%s  %upt", name.c_str(), static_cast<unsigned>(sizePt));
+  const std::string prompt = std::string(tr(STR_DELETE_CUSTOM_FONT_SIZE_CONFIRM)) + "\n\n" + header;
+  inActionMenu = false;
+  exitActivity();
+  enterNewActivity(new ConfirmDialogActivity(
+      renderer, mappedInput, prompt,
+      [this, name, sizePt]() {
+        const size_t removed =
+            crosspoint::fonts::CustomFontManager::instance().deleteFamilySize(name, sizePt, renderer);
+        LOG_INF("CFONT", "UI deleted size %s %upt (%u files)", name.c_str(), static_cast<unsigned>(sizePt),
+                static_cast<unsigned>(removed));
+        exitActivity();
+        rebuildRows();
+        if (selectedIndex >= static_cast<int>(rows.size())) {
+          selectedIndex = rows.empty() ? 0 : static_cast<int>(rows.size()) - 1;
+        }
+        requestUpdate();
+      },
+      [this]() {
+        exitActivity();
+        requestUpdate();
+      }));
+}
+
+void CustomFontsSettingsActivity::runDeleteFamily() {
+  if (selectedIndex < 0 || selectedIndex >= static_cast<int>(rows.size())) return;
+  const std::string name = rows[selectedIndex].fontName;
+  const std::string prompt = std::string(tr(STR_DELETE_CUSTOM_FONT_FAMILY_CONFIRM)) + "\n\n" + name;
+  inActionMenu = false;
   exitActivity();
   enterNewActivity(new ConfirmDialogActivity(
       renderer, mappedInput, prompt,
@@ -90,19 +171,46 @@ void CustomFontsSettingsActivity::handleSelection() {
 void CustomFontsSettingsActivity::render(Activity::RenderLock&&) {
   renderer.clearScreen();
   const auto pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
 
   renderer.drawCenteredText(UI_12_FONT_ID, 15, tr(STR_MANAGE_CUSTOM_FONTS), true, EpdFontFamily::REGULAR);
 
+  if (inActionMenu && !rows.empty()) {
+    // Show which row the destructive action will hit.
+    char header[96];
+    snprintf(header, sizeof(header), "%s  %upt", rows[selectedIndex].fontName.c_str(),
+             static_cast<unsigned>(rows[selectedIndex].sizePt));
+    renderer.drawCenteredText(UI_10_FONT_ID, 40, header, true, EpdFontFamily::BOLD);
+
+    const char* actionLabels[kActionCount] = {
+        tr(STR_DELETE_CUSTOM_FONT_SIZE_ACTION),
+        tr(STR_DELETE_CUSTOM_FONT_FAMILY_ACTION),
+        tr(STR_CANCEL),
+    };
+    const int rowHeight = 30;
+    const int firstRowY = 80;
+    for (int i = 0; i < kActionCount; ++i) {
+      const int y = firstRowY + i * rowHeight;
+      const bool isSelected = (i == actionIndex);
+      if (isSelected) {
+        renderer.fillRect(0, y - 2, pageWidth - 1, rowHeight);
+      }
+      renderer.drawCenteredText(UI_10_FONT_ID, y, actionLabels[i], !isSelected);
+    }
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    renderer.displayBuffer();
+    return;
+  }
+
   if (rows.empty()) {
-    renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2, tr(STR_CUSTOM_FONTS_EMPTY), true,
-                              EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2, tr(STR_CUSTOM_FONTS_EMPTY), true, EpdFontFamily::REGULAR);
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();
     return;
   }
 
-  const int pageHeight = renderer.getScreenHeight();
   const int rowHeight = 30;
   const int firstRowY = 60;
   // Reserve space for header + button-hint footer (~30 px each). Cap how

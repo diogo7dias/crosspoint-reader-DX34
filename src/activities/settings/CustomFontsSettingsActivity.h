@@ -39,6 +39,17 @@ class CustomFontsSettingsActivity final : public ActivityWithSubactivity {
   int selectedIndex = 0;
   const std::function<void()> onBack;
 
+  // When true, the screen shows a 3-option action menu (Delete Size /
+  // Delete Family / Cancel) layered over the list selection. Kept in-
+  // activity rather than pushed as a separate ConfirmDialog so the list
+  // row stays visible underneath via the title, giving the user a clear
+  // "what am I about to destroy?" anchor. Back cancels.
+  bool inActionMenu = false;
+  int actionIndex = 0;
+
   void rebuildRows();
-  void handleSelection();
+  void openActionMenu();
+  void closeActionMenu();
+  void runDeleteSize();
+  void runDeleteFamily();
 };

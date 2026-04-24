@@ -584,6 +584,7 @@ void SettingsActivity::toggleCurrentSetting() {
           customFonts.showNextPromptIfAny(renderer, mappedInput, {});
         } else {
           auto* msg = new FullScreenMessageActivity(renderer, mappedInput, tr(STR_NO_NEW_CUSTOM_FONTS));
+          msg->setOnDismiss(onComplete);
           enterSubActivity(msg);
         }
         break;

@@ -128,6 +128,15 @@ class CustomFontManager {
   // re-render / settings save if it cares about the visible state.
   size_t deleteFamily(const std::string& fontName, GfxRenderer& renderer);
 
+  // Delete only the BDF + IDX files for a single (fontName, sizePt) pair —
+  // up to four variant files. State.json seen/skipped entries are pruned
+  // per filename. If the currently-active reader font is the deleted
+  // (name, size), falls back to another installed size of the same family
+  // (smallest size ≥ deleted; else largest size <); if no sizes remain,
+  // reverts to CHAREINK 12 crisp — same hard-reset deleteFamily uses.
+  // Returns files removed.
+  size_t deleteFamilySize(const std::string& fontName, uint16_t sizePt, GfxRenderer& renderer);
+
  private:
   CustomFontManager();
   ~CustomFontManager();
