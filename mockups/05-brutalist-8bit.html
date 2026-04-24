@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>05 · BRUTALIST 8-BIT — CrossPoint</title>
+<style>
+  :root{
+    --bg:#0d0d10;
+    --fg:#f4f4f4;
+    --muted:#9a9aa0;
+    --red:#ff2e3c;
+    --yellow:#ffe14a;
+    --green:#3cff8f;
+    --blue:#4dc0ff;
+    --dash:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:"Space Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+    overflow-x:hidden;
+    image-rendering:pixelated;
+  }
+  /* overlay grid */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      linear-gradient(to right,rgba(255,255,255,.04) 1px,transparent 1px) 0 0/48px 48px,
+      linear-gradient(to bottom,rgba(255,255,255,.04) 1px,transparent 1px) 0 0/48px 48px;
+  }
+  .pixels{position:fixed;inset:0;z-index:1;pointer-events:none;}
+  .pixels i{
+    position:absolute;width:6px;height:6px;background:#fff;opacity:.16;
+    animation:march 8s steps(20) infinite;
+  }
+  @keyframes march{
+    0%{transform:translate(0,0);}
+    100%{transform:translate(60px,-80px);opacity:.04;}
+  }
+  .wrap{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:24px;}
+
+  /* masthead: oversized logo + status chips */
+  .mast{
+    border:1px dashed var(--dash);padding:18px;
+    display:grid;grid-template-columns:1fr 1fr;gap:0;
+  }
+  .mast .lt{border-right:1px dashed var(--dash);padding-right:18px;}
+  .mast .rt{padding-left:18px;display:flex;flex-direction:column;justify-content:space-between;}
+  .mast h1{
+    margin:0;font-size:78px;line-height:.88;letter-spacing:-.04em;font-weight:700;
+    text-transform:uppercase;
+  }
+  .mast h1 em{font-style:normal;color:var(--red);}
+  .mast .sub{
+    margin-top:10px;font-size:11px;letter-spacing:.32em;color:var(--muted);text-transform:uppercase;
+  }
+  .mast .sprite{
+    display:grid;grid-template-columns:repeat(16,6px);grid-auto-rows:6px;gap:0;
+    margin-top:16px;
+  }
+  .mast .sprite i{background:transparent;}
+  .mast .sprite i.f{background:var(--yellow);}
+  .mast .sprite i.r{background:var(--red);}
+  .mast .sprite i.g{background:var(--green);}
+
+  .mast .chips{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+  .chip{
+    border:1px dashed var(--dash);padding:8px 10px;
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .chip b{font-size:10px;letter-spacing:.28em;color:var(--muted);text-transform:uppercase;}
+  .chip em{font-style:normal;font-size:22px;letter-spacing:.02em;}
+  .chip.red em{color:var(--red);}
+  .chip.yellow em{color:var(--yellow);}
+  .chip.green em{color:var(--green);}
+  .chip.blue em{color:var(--blue);}
+
+  .mast .time{
+    font-size:42px;letter-spacing:.04em;color:var(--yellow);font-weight:700;
+    text-align:right;
+  }
+  .mast .time small{display:block;font-size:11px;color:var(--muted);letter-spacing:.28em;margin-top:4px;}
+
+  /* nav row — oversized, flat */
+  .nav{
+    margin-top:16px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px;
+  }
+  .nav a{
+    border:1px dashed var(--dash);text-decoration:none;color:var(--fg);
+    padding:14px 8px;text-align:center;letter-spacing:.18em;
+    font-weight:700;font-size:13px;text-transform:uppercase;
+    position:relative;
+  }
+  .nav a.on{background:var(--yellow);color:#000;border-style:dashed;}
+  .nav a:hover{background:rgba(255,255,255,.05);}
+  .nav a .k{position:absolute;top:3px;left:6px;font-size:9px;color:var(--muted);letter-spacing:.1em;}
+  .nav a.on .k{color:#000;}
+
+  /* huge numerals board */
+  .board{
+    margin-top:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+  }
+  .tile{
+    border:1px dashed var(--dash);padding:16px;display:flex;flex-direction:column;
+    gap:6px;min-height:150px;position:relative;overflow:hidden;
+  }
+  .tile .lbl{font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;}
+  .tile .num{font-size:52px;font-weight:700;line-height:1;letter-spacing:-.02em;}
+  .tile .num small{font-size:18px;color:var(--muted);letter-spacing:.02em;margin-left:4px;}
+  .tile .foot{font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin-top:auto;}
+  .tile .foot b{color:var(--fg);}
+
+  .tile.a .num{color:var(--green);}
+  .tile.b .num{color:var(--yellow);}
+  .tile.c .num{color:var(--blue);}
+  .tile.d .num{color:var(--red);}
+
+  /* pixel-art status glyph in corner */
+  .glyph{
+    position:absolute;right:10px;top:10px;
+    display:grid;grid-template-columns:repeat(6,5px);grid-auto-rows:5px;
+  }
+  .glyph i{background:transparent;}
+  .glyph i.on{background:currentColor;}
+
+  /* main area: big book + log strip */
+  .main{
+    margin-top:16px;display:grid;grid-template-columns:2fr 1fr;gap:8px;
+  }
+  .bookcard{
+    border:1px dashed var(--dash);padding:18px;
+    display:grid;grid-template-columns:200px 1fr;gap:22px;
+  }
+  .cover{
+    width:200px;height:280px;border:1px dashed var(--dash);
+    background:
+      repeating-linear-gradient(90deg,var(--red) 0 10px,#000 10px 20px),
+      #000;
+    display:flex;flex-direction:column;justify-content:space-between;padding:12px;
+    position:relative;
+  }
+  .cover::after{
+    content:"";position:absolute;inset:8px;border:1px dashed rgba(255,255,255,.4);
+  }
+  .cover b{font-size:13px;letter-spacing:.12em;background:var(--yellow);color:#000;padding:2px 6px;align-self:flex-start;z-index:1;}
+  .cover span{font-size:10px;letter-spacing:.2em;color:#fff;background:#000;padding:2px 5px;z-index:1;align-self:flex-end;}
+  .bookmeta h2{
+    margin:0;font-size:48px;line-height:.9;letter-spacing:-.02em;font-weight:700;text-transform:uppercase;
+  }
+  .bookmeta h2 em{color:var(--red);font-style:normal;}
+  .bookmeta .au{margin-top:8px;color:var(--muted);letter-spacing:.24em;font-size:12px;text-transform:uppercase;}
+  .bookmeta .prog{
+    margin-top:18px;display:grid;grid-template-columns:repeat(40,1fr);gap:2px;
+  }
+  .bookmeta .prog i{height:14px;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.2);}
+  .bookmeta .prog i.f{background:var(--green);border-color:#000;}
+  .bookmeta .pmeta{
+    display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;
+  }
+  .bookmeta .actions{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;}
+  .bookmeta .btn{
+    border:1px dashed var(--dash);padding:12px 14px;background:transparent;
+    color:var(--fg);font-family:inherit;font-weight:700;font-size:12px;
+    letter-spacing:.22em;text-transform:uppercase;cursor:pointer;
+  }
+  .bookmeta .btn.p{background:var(--green);color:#000;border-color:#000;}
+  .bookmeta .btn.d{background:var(--red);color:#000;border-color:#000;}
+  .bookmeta .btn.y{background:var(--yellow);color:#000;border-color:#000;}
+
+  /* log strip */
+  .log{
+    border:1px dashed var(--dash);padding:14px;font-size:11px;line-height:1.7;
+    background:rgba(255,255,255,.02);
+  }
+  .log h3{
+    margin:0 0 10px;font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;font-weight:600;
+    border-bottom:1px dashed rgba(255,255,255,.3);padding-bottom:6px;
+  }
+  .log .ln{display:grid;grid-template-columns:70px 40px 1fr;gap:6px;border-bottom:1px dashed rgba(255,255,255,.08);padding:2px 0;}
+  .log .ln time{color:var(--muted);}
+  .log .ln .l{font-weight:700;letter-spacing:.18em;}
+  .log .ln .l.ok{color:var(--green);}
+  .log .ln .l.wn{color:var(--yellow);}
+  .log .ln .l.er{color:var(--red);}
+  .log .ln .l.in{color:var(--blue);}
+
+  /* pixel button row */
+  .filemgr{
+    margin-top:16px;border:1px dashed var(--dash);padding:14px;
+  }
+  .filemgr h3{
+    margin:0 0 10px;font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);font-weight:600;
+    display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:1px dashed rgba(255,255,255,.3);padding-bottom:8px;
+  }
+  .flist{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;}
+  .fitem{
+    display:grid;grid-template-columns:32px 1fr 90px 100px;gap:8px;align-items:center;
+    padding:6px;border:1px dashed rgba(255,255,255,.25);font-size:12px;
+  }
+  .fitem .ico{
+    width:22px;height:22px;background:var(--yellow);display:grid;place-items:center;color:#000;font-weight:700;font-size:11px;
+  }
+  .fitem .name{letter-spacing:.04em;}
+  .fitem .size{color:var(--muted);letter-spacing:.18em;font-size:10px;text-transform:uppercase;text-align:right;}
+  .fitem .btns{display:flex;gap:3px;}
+  .fitem .btns button{
+    background:transparent;border:1px dashed rgba(255,255,255,.4);color:var(--fg);
+    font-family:inherit;font-size:9px;padding:3px 5px;letter-spacing:.16em;cursor:pointer;text-transform:uppercase;
+  }
+  .fitem .btns button.x{color:var(--red);border-color:var(--red);}
+
+  /* footer bar */
+  .foot{
+    margin-top:16px;border:1px dashed var(--dash);padding:10px 14px;
+    display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;font-size:10px;color:var(--muted);
+    letter-spacing:.28em;text-transform:uppercase;
+  }
+  .foot b{color:var(--fg);}
+  .foot .heart{color:var(--red);}
+
+  .note{font-size:11px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-top:4px;}
+</style>
+</head>
+<body>
+  <div class="pixels" id="pixels"></div>
+  <div class="wrap">
+
+    <!-- masthead -->
+    <div class="mast">
+      <div class="lt">
+        <h1>CROSS<br/><em>POINT</em></h1>
+        <div class="sub">Reader · DX34 · Web UI Ver. 0.MOCK</div>
+        <div class="sprite" id="sprite"></div>
+      </div>
+      <div class="rt">
+        <div class="time">21:44:02<small>WED · 24 APR 2026 · LOCAL</small></div>
+        <div class="chips">
+          <div class="chip green"><b>HEAP</b><em>214<small style="font-size:11px;color:var(--muted);">KB</small></em></div>
+          <div class="chip yellow"><b>BATT</b><em>78<small style="font-size:11px;color:var(--muted);">%</small></em></div>
+          <div class="chip blue"><b>WIFI</b><em>−52<small style="font-size:11px;color:var(--muted);">dB</small></em></div>
+          <div class="chip red"><b>TEMP</b><em>14<small style="font-size:11px;color:var(--muted);">°C ⚠</small></em></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- nav -->
+    <nav class="nav">
+      <a class="on"><span class="k">[1]</span>HOME</a>
+      <a><span class="k">[2]</span>LIBRARY</a>
+      <a><span class="k">[3]</span>UPLOAD</a>
+      <a><span class="k">[4]</span>SETTINGS</a>
+      <a><span class="k">[5]</span>SYNC</a>
+      <a><span class="k">[6]</span>ABOUT</a>
+    </nav>
+
+    <!-- big numeral board -->
+    <div class="board">
+      <div class="tile a">
+        <div class="lbl">UPTIME</div>
+        <div class="num">03<small>d</small></div>
+        <div class="glyph" style="color:var(--green);"></div>
+        <div class="foot"><b>14h 22m</b> · STABLE</div>
+      </div>
+      <div class="tile b">
+        <div class="lbl">FILES</div>
+        <div class="num">142<small>/256</small></div>
+        <div class="foot"><b>12.4 MB</b> USED · 3 NEW</div>
+      </div>
+      <div class="tile c">
+        <div class="lbl">SYNC</div>
+        <div class="num">14<small>ok</small></div>
+        <div class="foot"><b>AUTO 60s</b> · NEXT 00:23</div>
+      </div>
+      <div class="tile d">
+        <div class="lbl">ALERTS</div>
+        <div class="num">02</div>
+        <div class="foot"><b>BATT · LOW-TEMP</b> CLEAR?</div>
+      </div>
+    </div>
+
+    <!-- main area -->
+    <div class="main">
+      <div class="bookcard">
+        <div class="cover">
+          <b>NOW READING</b>
+          <span>P. 184 / 298</span>
+        </div>
+        <div class="bookmeta">
+          <div class="lbl" style="font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;">CURRENT BOOK</div>
+          <h2>INVISIBLE<br/><em>CITIES</em></h2>
+          <div class="au">ITALO CALVINO · 412 KB · EPUB</div>
+          <div class="prog" id="prog"></div>
+          <div class="pmeta"><span>P.184</span><span>62% ▰</span><span>P.298</span></div>
+          <div class="actions">
+            <button class="btn p">▶ RESUME</button>
+            <button class="btn y">⇪ UPLOAD</button>
+            <button class="btn">⚙ FONT</button>
+            <button class="btn d">✕ REMOVE</button>
+          </div>
+          <div class="note">press &lt;SPACE&gt; to resume · &lt;F&gt; fullscreen · &lt;ESC&gt; quit</div>
+        </div>
+      </div>
+
+      <div class="log">
+        <h3>SYSTEM LOG <span>TAIL -20</span></h3>
+        <div class="ln"><time>21:44:02</time><span class="l in">IDLE</span><span>heap 214.8 KB · no tasks</span></div>
+        <div class="ln"><time>21:43:10</time><span class="l ok">OK</span><span>render page 184 (320 ms)</span></div>
+        <div class="ln"><time>21:41:55</time><span class="l ok">OK</span><span>sync /library 14 files</span></div>
+        <div class="ln"><time>21:41:02</time><span class="l wn">WARN</span><span>battery low-temp (14 °C)</span></div>
+        <div class="ln"><time>21:40:13</time><span class="l ok">OK</span><span>epd.init 480×800 4bpp</span></div>
+        <div class="ln"><time>21:40:12</time><span class="l ok">OK</span><span>http server :80 listen</span></div>
+        <div class="ln"><time>21:40:11</time><span class="l ok">OK</span><span>wifi.connect crosspoint-net</span></div>
+        <div class="ln"><time>21:40:11</time><span class="l ok">OK</span><span>mount /spiffs</span></div>
+        <div class="ln"><time>21:40:10</time><span class="l in">BOOT</span><span>fw 1.4.2-dx34 · 320 KB heap</span></div>
+        <div class="ln"><time>21:40:10</time><span class="l in">BOOT</span><span>serial 0x8A2F4 · esp32-s3</span></div>
+        <div class="ln"><time>21:40:09</time><span class="l er">ERR</span><span>lfs: prev mount dirty · repaired</span></div>
+        <div class="ln"><time>21:40:08</time><span class="l in">POR</span><span>cold start · vbat 3.92V</span></div>
+      </div>
+    </div>
+
+    <!-- file manager -->
+    <div class="filemgr">
+      <h3>LIBRARY ─ QUICK VIEW <span>142 FILES · 12.4 MB</span></h3>
+      <div class="flist">
+        <div class="fitem"><div class="ico">E</div><div class="name">invisible_cities.epub</div><div class="size">412 KB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">E</div><div class="name">wind_up_bird.epub</div><div class="size">1.2 MB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">E</div><div class="name">ficciones.epub</div><div class="size">188 KB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">E</div><div class="name">dispossessed.epub</div><div class="size">602 KB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">P</div><div class="name">pillow_book.pdf</div><div class="size">221 KB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">E</div><div class="name">brothers_karamazov.epub</div><div class="size">2.4 MB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">E</div><div class="name">kitchen.epub</div><div class="size">97 KB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+        <div class="fitem"><div class="ico">E</div><div class="name">snow_country.epub</div><div class="size">142 KB</div><div class="btns"><button>OPEN</button><button>DL</button><button class="x">DEL</button></div></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span><b>FW</b> 1.4.2-dx34</span>
+      <span><b>IP</b> 192.168.1.104</span>
+      <span><b>MAC</b> 8C:AA:B5:F3:22:0E</span>
+      <span><b>HOST</b> crosspoint.local</span>
+      <span><b>OPEN-SOURCE</b> · MIT</span>
+      <span class="heart">● REC · 00:12:44</span>
+    </div>
+
+  </div>
+
+<script>
+  // pixel drift
+  const layer=document.getElementById('pixels');
+  for(let i=0;i<80;i++){
+    const s=document.createElement('i');
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    s.style.animationDuration=(5+Math.random()*9)+'s';
+    s.style.animationDelay=(-Math.random()*14)+'s';
+    const r=Math.random();
+    if(r<.15){s.style.background='#ff2e3c';}
+    else if(r<.3){s.style.background='#ffe14a';}
+    else if(r<.45){s.style.background='#3cff8f';}
+    else if(r<.6){s.style.background='#4dc0ff';}
+    if(Math.random()<.4){s.style.width='4px';s.style.height='4px';}
+    layer.appendChild(s);
+  }
+  // pixel sprite (little face/icon in masthead)
+  const spritePattern=[
+    "..ffff....ffff..",
+    ".f....f..f....f.",
+    "f......ff......f",
+    "f..rr......rr..f",
+    "f..rr......rr..f",
+    "f......ff......f",
+    "f..............f",
+    ".f..gg....gg..f.",
+    "..f..gggggg..f..",
+    "...ff......ff...",
+    ".....ffffff.....",
+    "................",
+  ];
+  const sp=document.getElementById('sprite');
+  for(const row of spritePattern){
+    for(const c of row){
+      const el=document.createElement('i');
+      if(c==='f') el.className='f';
+      else if(c==='r') el.className='r';
+      else if(c==='g') el.className='g';
+      sp.appendChild(el);
+    }
+  }
+  // progress bar (62%)
+  const prog=document.getElementById('prog');
+  for(let i=0;i<40;i++){
+    const el=document.createElement('i');
+    if(i<25) el.className='f';
+    prog.appendChild(el);
+  }
+</script>
+</body>
+</html>

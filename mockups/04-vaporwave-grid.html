@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>04 · VAPOR GRID — CrossPoint</title>
+<style>
+  :root{
+    --bg:#06030e;
+    --fg:#f1eaff;
+    --muted:#9590b8;
+    --mag:#ff3ea5;
+    --cyan:#3ef3ff;
+    --amber:#ffd46b;
+    --violet:#9b5dff;
+    --dash:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:
+      radial-gradient(ellipse at 20% 0%,rgba(155,93,255,.22),transparent 60%),
+      radial-gradient(ellipse at 100% 100%,rgba(62,243,255,.18),transparent 55%),
+      radial-gradient(ellipse at 70% 20%,rgba(255,62,165,.18),transparent 50%),
+      var(--bg);
+    color:var(--fg);
+    font-family:"Space Grotesk","Inter",ui-sans-serif,system-ui,sans-serif;
+    overflow-x:hidden;
+  }
+  /* horizon grid */
+  body::before{
+    content:"";position:fixed;left:0;right:0;bottom:0;height:55%;
+    pointer-events:none;z-index:0;
+    background:
+      linear-gradient(to top,rgba(255,62,165,.35),transparent 70%),
+      repeating-linear-gradient(to right,transparent 0 40px,rgba(62,243,255,.3) 40px 41px),
+      repeating-linear-gradient(to bottom,transparent 0 40px,rgba(62,243,255,.3) 40px 41px);
+    transform:perspective(800px) rotateX(60deg);
+    transform-origin:center top;
+    mask-image:linear-gradient(to top,#000 30%,transparent 100%);
+  }
+  /* drifting pixel squares — BIG + small mix */
+  .pixels{position:fixed;inset:0;z-index:1;pointer-events:none;}
+  .pixels i{
+    position:absolute;width:4px;height:4px;background:#fff;opacity:.5;
+    animation:drift 12s linear infinite;
+  }
+  @keyframes drift{
+    0%{transform:translate(0,0) scale(1);opacity:.2;}
+    50%{transform:translate(60px,-80px) scale(1.3);opacity:.8;}
+    100%{transform:translate(0,0) scale(1);opacity:.2;}
+  }
+  .wrap{position:relative;z-index:2;max-width:1080px;margin:0 auto;padding:32px 28px 80px;}
+  /* header */
+  .topline{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.3em;text-transform:uppercase;border-bottom:1px dashed var(--dash);padding-bottom:10px;}
+  .topline em{font-style:normal;color:var(--mag);}
+  .hero{
+    margin:36px 0 32px;position:relative;
+    display:grid;grid-template-columns:1fr auto;align-items:end;gap:24px;
+  }
+  .hero h1{
+    font-family:"Space Mono","IBM Plex Mono",ui-monospace,monospace;
+    font-size:88px;line-height:.9;margin:0;letter-spacing:-.03em;font-weight:700;
+    background:linear-gradient(100deg,var(--mag),var(--violet),var(--cyan));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero h1 small{
+    display:block;font-size:14px;font-weight:400;margin-top:10px;
+    color:var(--muted);letter-spacing:.4em;-webkit-text-fill-color:var(--muted);
+  }
+  .hero .jp{
+    font-family:"Shippori Mincho","Noto Serif JP",serif;
+    font-size:60px;color:var(--cyan);line-height:.95;
+    text-shadow:0 0 16px rgba(62,243,255,.4);
+    writing-mode:vertical-rl;letter-spacing:.2em;
+    border:1px dashed var(--dash);padding:18px 12px;
+  }
+  .hero .jp small{display:block;font-size:11px;color:var(--muted);font-family:inherit;letter-spacing:.3em;margin-top:8px;}
+
+  .tagline{
+    margin:4px 0 0;font-size:14px;color:#e7dcff;max-width:560px;letter-spacing:.04em;
+    border-left:1px dashed var(--dash);padding:6px 0 6px 14px;
+  }
+
+  /* big pixel blocks — decorative */
+  .blocks{position:absolute;right:0;top:-12px;display:grid;grid-template-columns:repeat(4,14px);grid-auto-rows:14px;gap:3px;opacity:.7;}
+  .blocks i{background:var(--mag);display:block;}
+  .blocks i:nth-child(3n){background:var(--cyan);}
+  .blocks i:nth-child(5n){background:var(--amber);}
+  .blocks i:nth-child(7n){background:var(--violet);}
+
+  /* system module */
+  .sys{
+    display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px;
+  }
+  .card{
+    border:1px dashed var(--dash);
+    background:rgba(16,10,34,.55);
+    backdrop-filter:blur(6px);
+    padding:18px;
+  }
+  .card h3{
+    margin:0 0 12px;font-size:11px;letter-spacing:.32em;color:var(--cyan);
+    text-transform:uppercase;font-weight:600;
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .card h3 .jp-small{font-family:"Shippori Mincho",serif;color:var(--mag);letter-spacing:.16em;font-size:12px;}
+  .kv{
+    display:grid;grid-template-columns:130px 1fr auto;gap:10px;
+    padding:7px 0;border-bottom:1px dashed rgba(255,255,255,.12);font-size:13px;
+  }
+  .kv b{color:var(--muted);font-weight:500;letter-spacing:.18em;font-size:11px;text-transform:uppercase;}
+  .kv em{font-style:normal;font-family:"Space Mono",ui-monospace,monospace;color:var(--fg);}
+  .kv span.ok{color:var(--cyan);font-size:11px;letter-spacing:.2em;}
+  .kv span.warn{color:var(--amber);font-size:11px;letter-spacing:.2em;}
+
+  /* mini pixel bar */
+  .bar{display:flex;gap:2px;align-items:center;}
+  .bar i{display:inline-block;width:10px;height:10px;background:var(--cyan);opacity:.9;}
+  .bar i.off{background:rgba(255,255,255,.12);}
+
+  /* library strip */
+  .strip{
+    margin-top:10px;display:grid;grid-template-columns:repeat(6,1fr);gap:10px;
+  }
+  .book{
+    border:1px dashed var(--dash);padding:10px;background:rgba(255,255,255,.03);
+    min-height:130px;display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .book .cov{
+    height:60px;
+    background:
+      repeating-linear-gradient(45deg,var(--mag) 0 4px,var(--violet) 4px 8px);
+    border:1px dashed rgba(255,255,255,.3);
+    position:relative;overflow:hidden;
+  }
+  .book:nth-child(2) .cov{background:repeating-linear-gradient(45deg,var(--cyan) 0 4px,#0b6680 4px 8px);}
+  .book:nth-child(3) .cov{background:repeating-linear-gradient(90deg,var(--amber) 0 4px,#6b4a00 4px 8px);}
+  .book:nth-child(4) .cov{background:repeating-linear-gradient(135deg,var(--violet) 0 4px,#2a005e 4px 8px);}
+  .book:nth-child(5) .cov{background:repeating-linear-gradient(0deg,var(--mag) 0 4px,#5a0030 4px 8px);}
+  .book:nth-child(6) .cov{background:repeating-linear-gradient(45deg,var(--cyan) 0 4px,var(--mag) 4px 8px);}
+  .book b{font-size:11px;margin-top:8px;letter-spacing:.04em;display:block;}
+  .book small{color:var(--muted);font-size:10px;letter-spacing:.14em;}
+
+  /* actions */
+  .actions{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;}
+  .btn{
+    border:1px dashed var(--dash);padding:10px 14px;font-size:11px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--fg);
+    background:rgba(255,255,255,.02);cursor:pointer;font-family:inherit;
+  }
+  .btn:hover{background:rgba(62,243,255,.1);color:var(--cyan);}
+  .btn.mag{color:var(--mag);border-color:var(--mag);}
+  .btn.cya{color:var(--cyan);border-color:var(--cyan);}
+  .btn.amb{color:var(--amber);border-color:var(--amber);}
+
+  /* nav pill */
+  .nav{
+    margin-top:22px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+    border-top:1px dashed var(--dash);padding-top:14px;
+  }
+  .nav a{
+    color:var(--fg);text-decoration:none;font-size:11px;
+    letter-spacing:.22em;text-transform:uppercase;padding:6px 12px;
+    border:1px dashed rgba(255,255,255,.4);
+  }
+  .nav a:hover{border-color:var(--mag);color:var(--mag);}
+  .nav a.current{background:var(--mag);color:#000;border-color:#000;}
+
+  footer{
+    margin-top:40px;font-size:10px;color:var(--muted);letter-spacing:.32em;
+    display:flex;justify-content:space-between;border-top:1px dashed var(--dash);padding-top:14px;
+  }
+  .hira{font-family:"Shippori Mincho",serif;color:var(--cyan);letter-spacing:.4em;font-size:14px;}
+
+  .big-pixel{
+    width:18px;height:18px;display:inline-block;background:var(--mag);margin-right:8px;vertical-align:middle;
+  }
+</style>
+</head>
+<body>
+  <div class="pixels" id="pixels"></div>
+  <div class="wrap">
+
+    <div class="topline">
+      <div><em>CROSSPOINT</em> ⟡ READER ⟡ DX34</div>
+      <div>04.24.2026 · <span class="hira">夕方</span> · 21:44</div>
+    </div>
+
+    <div class="hero">
+      <div>
+        <h1>cross<br/>point<small>— 接 続 点 —</small></h1>
+        <p class="tagline">A small, open-source e-ink reader with a web interface you actually enjoy opening. Upload books, tune the font, and watch the horizon from your couch.</p>
+      </div>
+      <div class="jp">非同期 図書<small>ASYNC LIBRARY</small></div>
+      <div class="blocks" id="bx"></div>
+    </div>
+
+    <div class="nav">
+      <a class="current"><span class="big-pixel"></span>HOME</a>
+      <a>LIBRARY</a>
+      <a>UPLOAD</a>
+      <a>SETTINGS</a>
+      <a>WIFI</a>
+      <a>DISPLAY</a>
+      <a>SYNC</a>
+      <a>LOG</a>
+      <a>ABOUT</a>
+    </div>
+
+    <section class="sys" style="margin-top:22px;">
+      <div class="card">
+        <h3>◐ SYSTEM <span class="jp-small">状態 STATUS</span></h3>
+        <div class="kv"><b>firmware</b><em>1.4.2-dx34</em><span class="ok">● ACTIVE</span></div>
+        <div class="kv"><b>wifi</b><em>crosspoint-net</em><span class="ok">−52 dBm</span></div>
+        <div class="kv"><b>ip address</b><em>192.168.1.104</em><span class="ok">LAN</span></div>
+        <div class="kv"><b>heap free</b><em>214.8 / 320 KB</em>
+          <span class="bar">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i>
+          </span>
+        </div>
+        <div class="kv"><b>battery</b><em>78% · 3.92 V</em>
+          <span class="bar">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i><i class="off"></i><i class="off"></i>
+          </span>
+        </div>
+        <div class="kv"><b>uptime</b><em>03d 14h 22m</em><span class="ok">STABLE</span></div>
+        <div class="kv"><b>temperature</b><em>14° C</em><span class="warn">⚠ LOW</span></div>
+        <div class="kv" style="border-bottom:none;"><b>display</b><em>e-ink 480 × 800 · 4bpp</em><span class="ok">READY</span></div>
+      </div>
+
+      <div class="card">
+        <h3>◑ NOW READING <span class="jp-small">読書中</span></h3>
+        <div style="display:flex;gap:12px;">
+          <div style="width:110px;height:150px;border:1px dashed var(--dash);background:repeating-linear-gradient(45deg,var(--cyan) 0 6px,var(--violet) 6px 12px);position:relative;flex:0 0 auto;">
+            <div style="position:absolute;bottom:6px;left:6px;right:6px;font-family:'Space Mono',monospace;font-size:10px;background:#000;padding:3px 5px;letter-spacing:.1em;">invisible_cities</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-family:'Shippori Mincho',serif;font-size:20px;color:var(--cyan);letter-spacing:.08em;">見えない都市</div>
+            <div style="margin-top:4px;font-size:18px;font-weight:600;">Invisible Cities</div>
+            <div style="color:var(--muted);font-size:12px;letter-spacing:.12em;margin-top:2px;">ITALO CALVINO · 412 KB</div>
+            <div style="margin-top:12px;font-size:11px;color:var(--muted);letter-spacing:.18em;">PROGRESS</div>
+            <div style="height:8px;border:1px dashed var(--dash);margin-top:4px;display:flex;">
+              <div style="width:62%;background:linear-gradient(90deg,var(--mag),var(--violet),var(--cyan));"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:11px;margin-top:4px;color:var(--muted);">
+              <span>p. 184</span><span>62%</span><span>p. 298</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn cya">▶ RESUME</button>
+          <button class="btn mag">⇪ UPLOAD</button>
+          <button class="btn amb">⚙ SETTINGS</button>
+          <button class="btn">⟳ SYNC</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>◈ LIBRARY <span class="jp-small">書庫 · 142 ITEMS</span></h3>
+      <div class="strip">
+        <div class="book"><div class="cov"></div><b>Invisible Cities</b><small>CALVINO · 412 KB</small></div>
+        <div class="book"><div class="cov"></div><b>Wind-Up Bird</b><small>MURAKAMI · 1.2 MB</small></div>
+        <div class="book"><div class="cov"></div><b>Ficciones</b><small>BORGES · 188 KB</small></div>
+        <div class="book"><div class="cov"></div><b>Dispossessed</b><small>LE GUIN · 602 KB</small></div>
+        <div class="book"><div class="cov"></div><b>Pillow Book</b><small>SEI SHŌNAGON · 221 KB</small></div>
+        <div class="book"><div class="cov"></div><b>Kitchen</b><small>YOSHIMOTO · 97 KB</small></div>
+      </div>
+    </section>
+
+    <footer>
+      <span>◢ WEB UI · v0.MOCK</span>
+      <span class="hira">ク ロ ス ポ イ ン ト</span>
+      <span>OPEN-SOURCE · MIT</span>
+    </footer>
+  </div>
+
+<script>
+  const layer=document.getElementById('pixels');
+  for(let i=0;i<120;i++){
+    const s=document.createElement('i');
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    s.style.animationDuration=(9+Math.random()*15)+'s';
+    s.style.animationDelay=(-Math.random()*18)+'s';
+    const r=Math.random();
+    if(r<.25){s.style.background='#ff3ea5';}
+    else if(r<.5){s.style.background='#3ef3ff';}
+    else if(r<.65){s.style.background='#ffd46b';}
+    const sz=1+Math.floor(Math.random()*4);
+    s.style.width=(sz*2)+'px';s.style.height=(sz*2)+'px';
+    layer.appendChild(s);
+  }
+  const bx=document.getElementById('bx');
+  for(let i=0;i<40;i++){
+    const b=document.createElement('i');
+    if(Math.random()<.3) b.style.background='transparent';
+    bx.appendChild(b);
+  }
+</script>
+</body>
+</html>

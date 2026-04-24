@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CrossPoint Reader — Web UI Mockups</title>
+<style>
+  :root {
+    --bg: #07080c;
+    --fg: #e8e8e8;
+    --muted: #8a8a8a;
+    --dash: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    overflow-x: hidden;
+  }
+  /* animated pixel squares background */
+  .pixels { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .pixels i {
+    position: absolute;
+    width: 3px; height: 3px;
+    background: #fff;
+    opacity: .12;
+    animation: drift 18s linear infinite;
+  }
+  @keyframes drift {
+    0%   { transform: translate(0,0); }
+    50%  { transform: translate(40px,-60px); opacity:.28; }
+    100% { transform: translate(0,0); opacity:.12; }
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-bottom: 1px dashed var(--dash);
+    padding-bottom: 16px; margin-bottom: 28px;
+  }
+  h1 { font-size: 20px; letter-spacing: .2em; margin: 0; text-transform: uppercase; }
+  .sub { color: var(--muted); font-size: 12px; letter-spacing: .18em; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+  a.card {
+    display: block; text-decoration: none; color: inherit;
+    border: 1px dashed var(--dash);
+    padding: 18px;
+    background: rgba(255,255,255,0.02);
+    transition: transform .15s ease, background .15s ease;
+  }
+  a.card:hover { background: rgba(255,255,255,0.06); transform: translate(-2px,-2px); }
+  .num { font-size: 11px; color: var(--muted); letter-spacing: .24em; }
+  .ttl { font-size: 16px; margin: 6px 0 10px; letter-spacing: .08em; }
+  .desc { font-size: 12px; color: #b9b9b9; line-height: 1.55; }
+  footer { margin-top: 40px; font-size: 11px; color: var(--muted); letter-spacing: .2em; text-align: center; }
+  .ascii { white-space: pre; color: var(--muted); font-size: 11px; line-height: 1.2; margin-top: 18px; }
+</style>
+</head>
+<body>
+  <div class="pixels" id="pixels"></div>
+  <div class="wrap">
+    <header class="top">
+      <h1>CROSSPOINT ─ WEB UI // MOCKUPS</h1>
+      <span class="sub">v0.MOCK · 2026.04</span>
+    </header>
+
+    <p class="desc" style="margin:0 0 22px;max-width:640px;">
+      Five alternative directions for the embedded web interface.
+      All share a dark background, drifting pixel squares, and 1px dashed
+      borders — each takes the brief in a different visual direction.
+    </p>
+
+    <div class="grid">
+      <a class="card" href="01-crt-terminal.html">
+        <div class="num">01 / 05</div>
+        <div class="ttl">CRT TERMINAL</div>
+        <div class="desc">Green phosphor. Scanlines. Blinking cursor. A literal 80s serial console dressed up as a dashboard.</div>
+      </a>
+      <a class="card" href="02-bbs-condensed.html">
+        <div class="num">02 / 05</div>
+        <div class="ttl">JP BBS ─ CONDENSED</div>
+        <div class="desc">Dense vertical bands, katakana ornaments, tight monospace, magenta + cyan spot colour. A 2ch-flavoured control panel.</div>
+      </a>
+      <a class="card" href="03-kr-portal.html">
+        <div class="num">03 / 05</div>
+        <div class="ttl">KR PORTAL ─ MULTIWINDOW</div>
+        <div class="desc">Naver-era busy portal. Many small panes, ticker bars, badges, mixed Hangul + English labels.</div>
+      </a>
+      <a class="card" href="04-vaporwave-grid.html">
+        <div class="num">04 / 05</div>
+        <div class="ttl">VAPOR / PIXEL GRID</div>
+        <div class="desc">Magenta-cyan gradient, large drifting pixel blocks, hiragana/kanji accents, modern type mixed with bitmap.</div>
+      </a>
+      <a class="card" href="05-brutalist-8bit.html">
+        <div class="num">05 / 05</div>
+        <div class="ttl">BRUTALIST / 8-BIT</div>
+        <div class="desc">Flat, chunky, oversized labels. Huge numerals, thick dashed dividers, pixel-art status glyphs.</div>
+      </a>
+    </div>
+
+    <pre class="ascii">
+ ┌─ drift ─┐  ┌─ drift ─┐  ┌─ drift ─┐
+ │  ▚▚▚▚  │  │  ▖▖▖▖  │  │  ░░░░  │
+ └────────┘  └────────┘  └────────┘
+    </pre>
+
+    <footer>— select a mockup above —</footer>
+  </div>
+
+<script>
+  // seed pixel drift
+  const layer = document.getElementById('pixels');
+  const N = 90;
+  for (let i=0;i<N;i++){
+    const s = document.createElement('i');
+    s.style.left = Math.random()*100 + '%';
+    s.style.top = Math.random()*100 + '%';
+    s.style.animationDuration = (10 + Math.random()*20) + 's';
+    s.style.animationDelay = (-Math.random()*20) + 's';
+    if (Math.random() < .25) { s.style.width='2px'; s.style.height='2px'; }
+    if (Math.random() < .15) { s.style.background='#6ef08a'; s.style.opacity='.25'; }
+    layer.appendChild(s);
+  }
+</script>
+</body>
+</html>

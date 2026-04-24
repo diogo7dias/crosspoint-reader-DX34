@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>01 · CRT TERMINAL — CrossPoint</title>
+<style>
+  :root{
+    --bg:#050806;
+    --fg:#7cf09a;
+    --fg-dim:#3aa05a;
+    --accent:#c6ffb8;
+    --amber:#f1b44a;
+    --dash:#9bffb4;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:"VT323","IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+    overflow-x:hidden;
+    text-shadow:0 0 2px rgba(124,240,154,.6), 0 0 6px rgba(124,240,154,.25);
+  }
+  /* scanlines */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:3;
+    background:repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0 2px,
+      rgba(0,0,0,.35) 2px 3px);
+    mix-blend-mode:multiply;
+  }
+  /* CRT vignette */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:4;
+    background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.75) 100%);
+  }
+  .pixels{position:fixed;inset:0;z-index:0;pointer-events:none;}
+  .pixels i{
+    position:absolute;width:3px;height:3px;background:var(--fg);
+    opacity:.35;animation:drift 14s linear infinite;
+  }
+  @keyframes drift{
+    0%{transform:translate(0,0);opacity:.1;}
+    50%{transform:translate(-30px,40px);opacity:.5;}
+    100%{transform:translate(0,0);opacity:.1;}
+  }
+  .wrap{position:relative;z-index:2;max-width:920px;margin:0 auto;padding:22px 22px 60px;font-size:18px;line-height:1.4;}
+  .bar{
+    display:flex;justify-content:space-between;align-items:center;
+    border:1px dashed var(--dash);padding:6px 10px;margin-bottom:18px;
+  }
+  .bar b{letter-spacing:.18em;}
+  .blink{animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  h1{
+    font-size:44px;margin:0 0 4px;letter-spacing:.04em;color:var(--accent);
+  }
+  .tag{color:var(--fg-dim);letter-spacing:.28em;font-size:14px;}
+  hr{border:none;border-top:1px dashed var(--dash);margin:14px 0;}
+  .ascii{white-space:pre;color:var(--fg-dim);font-size:14px;line-height:1.1;}
+  .panels{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:18px;}
+  .box{border:1px dashed var(--dash);padding:12px 14px;background:rgba(124,240,154,.03);}
+  .box h3{margin:0 0 8px;font-size:18px;color:var(--accent);letter-spacing:.16em;font-weight:normal;}
+  .kv{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed rgba(155,255,180,.18);}
+  .kv span:first-child{color:var(--fg-dim);}
+  .kv span:last-child{color:var(--accent);}
+  .log{font-size:14px;color:var(--fg-dim);}
+  .log .ok{color:var(--accent);}
+  .log .warn{color:var(--amber);}
+  .prompt{margin-top:18px;font-size:18px;}
+  .prompt::before{content:"crosspoint@reader:~$ ";color:var(--amber);}
+  nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;}
+  nav a{
+    color:var(--fg);text-decoration:none;padding:6px 12px;
+    border:1px dashed var(--dash);letter-spacing:.18em;font-size:14px;
+  }
+  nav a:hover{background:rgba(124,240,154,.08);}
+  .tick{font-size:13px;color:var(--fg-dim);}
+  footer{margin-top:24px;font-size:13px;color:var(--fg-dim);letter-spacing:.16em;text-align:center;}
+</style>
+</head>
+<body>
+  <div class="pixels" id="pixels"></div>
+  <div class="wrap">
+
+    <div class="bar">
+      <b>CROSSPOINT // TTY0</b>
+      <span>24 APR 2026 · 21:44:02 UTC <span class="blink">█</span></span>
+    </div>
+
+    <pre class="ascii">
+  ██████╗██████╗  ██████╗ ███████╗███████╗██████╗  ██████╗ ██╗███╗   ██╗████████╗
+ ██╔════╝██╔══██╗██╔═══██╗██╔════╝██╔════╝██╔══██╗██╔═══██╗██║████╗  ██║╚══██╔══╝
+ ██║     ██████╔╝██║   ██║███████╗███████╗██████╔╝██║   ██║██║██╔██╗ ██║   ██║
+ ██║     ██╔══██╗██║   ██║╚════██║╚════██║██╔═══╝ ██║   ██║██║██║╚██╗██║   ██║
+ ╚██████╗██║  ██║╚██████╔╝███████║███████║██║     ╚██████╔╝██║██║ ╚████║   ██║
+  ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝╚═╝      ╚═════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝
+                                                         R E A D E R — DX34
+    </pre>
+
+    <div class="tag">&gt; BOOT OK · SERIAL 0x8A2F4 · FW 1.4.2 · HEAP 214.8 KB FREE</div>
+
+    <nav>
+      <a href="#">[ HOME ]</a>
+      <a href="#">[ FILES ]</a>
+      <a href="#">[ SETTINGS ]</a>
+      <a href="#">[ SERIAL ]</a>
+      <a href="#">[ ABOUT ]</a>
+    </nav>
+
+    <div class="panels">
+      <div class="box">
+        <h3>◤ DEVICE STATUS</h3>
+        <div class="kv"><span>FIRMWARE</span><span>1.4.2-dx34</span></div>
+        <div class="kv"><span>WIFI</span><span>CONNECTED · -52 dBm</span></div>
+        <div class="kv"><span>SSID</span><span>crosspoint-net</span></div>
+        <div class="kv"><span>IP</span><span>192.168.1.104</span></div>
+        <div class="kv"><span>MAC</span><span>8C:AA:B5:F3:22:0E</span></div>
+        <div class="kv"><span>HEAP</span><span>214.8 / 320 KB</span></div>
+        <div class="kv"><span>UPTIME</span><span>03d 14h 22m</span></div>
+        <div class="kv"><span>BATTERY</span><span>78% ▓▓▓▓▓▓▓░░░</span></div>
+      </div>
+
+      <div class="box">
+        <h3>◤ SYSTEM LOG</h3>
+        <div class="log">
+          [21:40:11] <span class="ok">OK</span> mount /spiffs<br/>
+          [21:40:11] <span class="ok">OK</span> wifi.connect <span>crosspoint-net</span><br/>
+          [21:40:12] <span class="ok">OK</span> http server :80<br/>
+          [21:40:13] <span class="ok">OK</span> epd.init 480x800<br/>
+          [21:41:02] <span class="warn">!!</span> battery low-temp warn<br/>
+          [21:41:55] <span class="ok">OK</span> sync /library 14 files<br/>
+          [21:43:10] <span class="ok">OK</span> render page 184 ~320ms<br/>
+          [21:44:02] <span class="blink">_</span>
+        </div>
+      </div>
+    </div>
+
+    <hr/>
+
+    <div class="box">
+      <h3>◤ LIBRARY</h3>
+      <div class="log" style="columns:2;column-gap:28px;">
+        ▸ calvino_invisible_cities.epub &nbsp;<span class="tick">412 KB</span><br/>
+        ▸ murakami_wind_up_bird.epub &nbsp;<span class="tick">1.2 MB</span><br/>
+        ▸ borges_ficciones.epub &nbsp;<span class="tick">188 KB</span><br/>
+        ▸ ursula_le_guin_dispossessed.epub &nbsp;<span class="tick">602 KB</span><br/>
+        ▸ sei_shonagon_pillow.epub &nbsp;<span class="tick">221 KB</span><br/>
+        ▸ dostoevsky_brothers_k.epub &nbsp;<span class="tick">2.4 MB</span><br/>
+        ▸ yoshimoto_kitchen.epub &nbsp;<span class="tick">97 KB</span><br/>
+        ▸ kawabata_snow_country.epub &nbsp;<span class="tick">142 KB</span><br/>
+      </div>
+    </div>
+
+    <div class="prompt">list --sort=recent<span class="blink">█</span></div>
+
+    <footer>── TTY0 · READY ── 80 COL ── LOCAL ECHO ON ──</footer>
+  </div>
+
+<script>
+  const layer=document.getElementById('pixels');
+  for(let i=0;i<110;i++){
+    const s=document.createElement('i');
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    s.style.animationDuration=(8+Math.random()*14)+'s';
+    s.style.animationDelay=(-Math.random()*16)+'s';
+    if(Math.random()<.3){s.style.background='#c6ffb8';}
+    if(Math.random()<.2){s.style.width='2px';s.style.height='2px';}
+    layer.appendChild(s);
+  }
+</script>
+</body>
+</html>

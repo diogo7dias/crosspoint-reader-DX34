@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>02 · 掲示板 — CrossPoint</title>
+<style>
+  :root{
+    --bg:#0b0a10;
+    --panel:#121119;
+    --fg:#e6e6ee;
+    --muted:#8b8aa0;
+    --cyan:#66e7ff;
+    --magenta:#ff4fbb;
+    --amber:#ffd166;
+    --dash:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:"M PLUS 1 Code","IBM Plex Mono","Noto Sans JP",ui-monospace,monospace;
+    font-size:12px;line-height:1.45;letter-spacing:.02em;
+    overflow-x:hidden;
+  }
+  .pixels{position:fixed;inset:0;z-index:0;pointer-events:none;}
+  .pixels i{
+    position:absolute;width:2px;height:2px;background:#fff;opacity:.18;
+    animation:drift 16s linear infinite;
+  }
+  @keyframes drift{
+    0%{transform:translate(0,0);}
+    50%{transform:translate(50px,-30px);opacity:.35;}
+    100%{transform:translate(0,0);opacity:.18;}
+  }
+  .wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:10px;}
+  /* top ticker */
+  .ticker{
+    border:1px dashed var(--dash);padding:4px 8px;
+    display:flex;gap:14px;align-items:center;
+    font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;
+  }
+  .ticker b{color:var(--magenta);letter-spacing:.14em;}
+  .ticker em{color:var(--cyan);font-style:normal;}
+  /* header row */
+  .hdr{
+    margin-top:6px;
+    display:grid;grid-template-columns:220px 1fr 160px;gap:6px;
+  }
+  .hdr .logo{
+    border:1px dashed var(--dash);padding:10px 12px;
+    background:linear-gradient(180deg,rgba(255,79,187,.1),rgba(102,231,255,.06));
+  }
+  .hdr .logo .en{font-size:20px;letter-spacing:.18em;}
+  .hdr .logo .jp{font-size:11px;color:var(--muted);letter-spacing:.4em;margin-top:2px;}
+  .hdr .nav{
+    border:1px dashed var(--dash);padding:6px 8px;
+    display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;
+  }
+  .hdr .nav a{
+    color:var(--fg);text-decoration:none;font-size:11px;
+    padding:2px 6px;border:1px dashed rgba(255,255,255,.35);
+  }
+  .hdr .nav a:hover{background:rgba(102,231,255,.12);color:var(--cyan);}
+  .hdr .nav a.hot{color:var(--magenta);border-color:var(--magenta);}
+  .hdr .clock{
+    border:1px dashed var(--dash);padding:8px;text-align:center;
+  }
+  .hdr .clock .big{font-size:22px;color:var(--cyan);letter-spacing:.08em;}
+  .hdr .clock .sm{font-size:10px;color:var(--muted);letter-spacing:.3em;}
+
+  /* 3-column body */
+  .cols{
+    margin-top:6px;
+    display:grid;grid-template-columns:220px 1fr 260px;gap:6px;
+  }
+  .pane{border:1px dashed var(--dash);padding:8px;background:rgba(255,255,255,.02);}
+  .pane h3{
+    margin:0 0 6px;font-size:11px;letter-spacing:.3em;color:var(--magenta);
+    border-bottom:1px dashed rgba(255,255,255,.4);padding-bottom:4px;
+    font-weight:normal;text-transform:uppercase;
+  }
+  .pane h3 span{color:var(--muted);float:right;letter-spacing:.1em;}
+
+  /* left: vertical menu */
+  .vmenu li{list-style:none;padding:3px 4px;margin:0;border-bottom:1px dashed rgba(255,255,255,.14);display:flex;justify-content:space-between;}
+  .vmenu li a{color:var(--fg);text-decoration:none;}
+  .vmenu li a:hover{color:var(--cyan);}
+  .vmenu li .num{color:var(--muted);font-size:10px;}
+  .vmenu ul{margin:0;padding:0;}
+
+  /* center: thread list */
+  .thread{
+    display:grid;grid-template-columns:24px 1fr 70px 50px;gap:6px;
+    padding:4px 6px;border-bottom:1px dashed rgba(255,255,255,.12);
+    font-size:11px;
+  }
+  .thread .n{color:var(--muted);}
+  .thread .t a{color:var(--fg);text-decoration:none;}
+  .thread .t a:hover{color:var(--magenta);}
+  .thread .t .k{color:var(--cyan);font-size:10px;margin-left:6px;letter-spacing:.2em;}
+  .thread .r{color:var(--amber);text-align:right;}
+  .thread .d{color:var(--muted);text-align:right;font-size:10px;}
+  .hot-badge{display:inline-block;background:var(--magenta);color:#000;padding:0 3px;font-size:9px;margin-right:4px;letter-spacing:.1em;}
+  .new-badge{display:inline-block;background:var(--cyan);color:#000;padding:0 3px;font-size:9px;margin-right:4px;letter-spacing:.1em;}
+
+  /* right: status + misc */
+  .stats .row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.12);font-size:11px;}
+  .stats .row span:first-child{color:var(--muted);}
+  .bar-mini{height:4px;background:rgba(255,255,255,.1);border:1px dashed rgba(255,255,255,.3);margin-top:2px;}
+  .bar-mini i{display:block;height:100%;background:var(--magenta);}
+  .kawaii{font-size:10px;color:var(--muted);letter-spacing:.2em;text-align:center;margin-top:6px;}
+
+  /* bottom marquee */
+  .marq{
+    margin-top:6px;border:1px dashed var(--dash);padding:4px 8px;
+    font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;
+  }
+  .marq span{display:inline-block;padding-right:60px;animation:scroll 40s linear infinite;}
+  @keyframes scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+
+  /* condensed footer grid */
+  .fgrid{
+    margin-top:6px;
+    display:grid;grid-template-columns:repeat(6,1fr);gap:6px;
+  }
+  .fgrid .cell{
+    border:1px dashed var(--dash);padding:6px;font-size:10px;
+    display:flex;flex-direction:column;gap:2px;min-height:52px;
+  }
+  .fgrid .cell b{color:var(--cyan);letter-spacing:.18em;font-size:10px;}
+  .fgrid .cell em{color:var(--magenta);font-style:normal;font-size:14px;letter-spacing:.04em;}
+  .fgrid .cell .s{color:var(--muted);font-size:9px;letter-spacing:.16em;}
+
+  .sub{color:var(--muted);}
+  .pink{color:var(--magenta);}
+  .cyan{color:var(--cyan);}
+</style>
+</head>
+<body>
+  <div class="pixels" id="pixels"></div>
+  <div class="wrap">
+
+    <div class="ticker">
+      <b>▼ NOTICE ▼</b>
+      <em>FW 1.4.2 → 1.4.3 リリース</em>
+      <span>·</span>
+      <span>バッテリー 78% / LOW-TEMP WARN</span>
+      <span>·</span>
+      <span class="cyan">同期 14件 完了</span>
+      <span>·</span>
+      <span>SSID: crosspoint-net -52dBm</span>
+      <span>·</span>
+      <span class="pink">新着スレッド 3</span>
+    </div>
+
+    <div class="hdr">
+      <div class="logo">
+        <div class="en">CrossPoint</div>
+        <div class="jp">クロスポイント・リーダー // DX34</div>
+      </div>
+      <div class="nav">
+        <a href="#" class="hot">[HOME / ホーム]</a>
+        <a href="#">[FILES / 書庫]</a>
+        <a href="#">[SETTINGS / 設定]</a>
+        <a href="#">[UPDATE / 更新]</a>
+        <a href="#">[LOG / 記録]</a>
+        <a href="#">[WIFI / 無線]</a>
+        <a href="#">[ABOUT / 情報]</a>
+        <a href="#">[HELP / 助け]</a>
+        <a href="#">[LIB / 図書]</a>
+      </div>
+      <div class="clock">
+        <div class="big">21:44:02</div>
+        <div class="sm">2026 · 04 · 24</div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <!-- LEFT -->
+      <div class="pane vmenu">
+        <h3>MENU <span>一覧</span></h3>
+        <ul>
+          <li><a>▸ device / 端末</a><span class="num">01</span></li>
+          <li><a>▸ library / 書庫</a><span class="num">142</span></li>
+          <li><a>▸ upload / 送信</a><span class="num">—</span></li>
+          <li><a>▸ convert / 変換</a><span class="num">3</span></li>
+          <li><a>▸ wifi / 無線</a><span class="num">OK</span></li>
+          <li><a>▸ display / 画面</a><span class="num">e-ink</span></li>
+          <li><a>▸ keymap / 鍵盤</a><span class="num">JIS</span></li>
+          <li><a>▸ sync / 同期</a><span class="num">auto</span></li>
+          <li><a>▸ logs / 記録</a><span class="num">214</span></li>
+          <li><a>▸ about / 情報</a><span class="num">i</span></li>
+        </ul>
+        <div class="kawaii">─── 終 ───</div>
+        <div class="kawaii">(  ᴗ_ᴗ)  待機中</div>
+      </div>
+
+      <!-- CENTER -->
+      <div class="pane">
+        <h3>LIBRARY / 書庫 <span>全 142 件</span></h3>
+        <div class="thread">
+          <div class="n">001</div>
+          <div class="t"><span class="hot-badge">HOT</span><a>invisible_cities.epub</a><span class="k">カルヴィーノ</span></div>
+          <div class="r">412 KB</div>
+          <div class="d">p.184</div>
+        </div>
+        <div class="thread">
+          <div class="n">002</div>
+          <div class="t"><span class="new-badge">NEW</span><a>wind_up_bird.epub</a><span class="k">村上春樹</span></div>
+          <div class="r">1.2 MB</div>
+          <div class="d">p.032</div>
+        </div>
+        <div class="thread">
+          <div class="n">003</div>
+          <div class="t"><a>ficciones.epub</a><span class="k">ボルヘス</span></div>
+          <div class="r">188 KB</div>
+          <div class="d">p.091</div>
+        </div>
+        <div class="thread">
+          <div class="n">004</div>
+          <div class="t"><a>dispossessed.epub</a><span class="k">ル＝グウィン</span></div>
+          <div class="r">602 KB</div>
+          <div class="d">p.212</div>
+        </div>
+        <div class="thread">
+          <div class="n">005</div>
+          <div class="t"><span class="new-badge">NEW</span><a>pillow_book.epub</a><span class="k">清少納言</span></div>
+          <div class="r">221 KB</div>
+          <div class="d">p.004</div>
+        </div>
+        <div class="thread">
+          <div class="n">006</div>
+          <div class="t"><a>brothers_k.epub</a><span class="k">ドストエフスキー</span></div>
+          <div class="r">2.4 MB</div>
+          <div class="d">p.448</div>
+        </div>
+        <div class="thread">
+          <div class="n">007</div>
+          <div class="t"><a>kitchen.epub</a><span class="k">吉本ばなな</span></div>
+          <div class="r">97 KB</div>
+          <div class="d">p.012</div>
+        </div>
+        <div class="thread">
+          <div class="n">008</div>
+          <div class="t"><a>snow_country.epub</a><span class="k">川端康成</span></div>
+          <div class="r">142 KB</div>
+          <div class="d">p.060</div>
+        </div>
+        <div class="thread">
+          <div class="n">009</div>
+          <div class="t"><span class="hot-badge">HOT</span><a>the_master_and_margarita.epub</a><span class="k">ブルガーコフ</span></div>
+          <div class="r">1.8 MB</div>
+          <div class="d">p.220</div>
+        </div>
+        <div class="thread">
+          <div class="n">010</div>
+          <div class="t"><a>earthsea.epub</a><span class="k">ル＝グウィン</span></div>
+          <div class="r">840 KB</div>
+          <div class="d">—</div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="pane stats">
+        <h3>STATUS <span>状態</span></h3>
+        <div class="row"><span>fw</span><span class="cyan">1.4.2-dx34</span></div>
+        <div class="row"><span>ip</span><span>192.168.1.104</span></div>
+        <div class="row"><span>mac</span><span>8C:AA:…:0E</span></div>
+        <div class="row"><span>wifi</span><span>-52 dBm</span></div>
+        <div class="row"><span>heap</span><span class="pink">214.8 KB</span></div>
+        <div class="bar-mini"><i style="width:67%"></i></div>
+        <div class="row" style="margin-top:6px;"><span>battery</span><span>78%</span></div>
+        <div class="bar-mini"><i style="width:78%;background:var(--cyan)"></i></div>
+        <div class="row" style="margin-top:6px;"><span>uptime</span><span>3d 14h</span></div>
+        <div class="row"><span>sync</span><span class="cyan">auto · 60s</span></div>
+        <div class="row"><span>display</span><span>480×800</span></div>
+        <div class="row"><span>mode</span><span>e-ink · 4bpp</span></div>
+
+        <h3 style="margin-top:10px;">RECENT <span>最近</span></h3>
+        <div style="font-size:10px;color:var(--muted);line-height:1.55;">
+          <div><span class="cyan">21:41</span> sync 14 files</div>
+          <div><span class="cyan">21:40</span> wifi.up</div>
+          <div><span class="pink">21:41</span> batt low-temp</div>
+          <div><span class="cyan">21:43</span> render 320ms</div>
+          <div><span class="cyan">21:44</span> idle</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fgrid">
+      <div class="cell"><b>HEAP</b><em>214<span class="s">.8 KB</span></em><span class="s">FREE</span></div>
+      <div class="cell"><b>BATT</b><em>78<span class="s">%</span></em><span class="s">3.92 V</span></div>
+      <div class="cell"><b>WIFI</b><em>-52<span class="s"> dBm</span></em><span class="s">ch 6</span></div>
+      <div class="cell"><b>FILES</b><em>142</em><span class="s">/ 256</span></div>
+      <div class="cell"><b>TEMP</b><em>14°<span class="s">C</span></em><span class="s">warn</span></div>
+      <div class="cell"><b>UP</b><em>03d</em><span class="s">14h 22m</span></div>
+    </div>
+
+    <div class="marq">
+      <span>
+        ※ 管理者より ※ &nbsp; サーバ稼動中 ・ 掲示板は開放されています ・
+        新しいファームウェアが利用可能です → /update ・
+        cross-point-reader // DX34 // e-ink 480×800 ・
+        press &lt;ESC&gt; to disconnect · press &lt;TAB&gt; to cycle panes · ありがとう ・
+        ※ 管理者より ※ &nbsp; サーバ稼動中 ・ 掲示板は開放されています ・
+        新しいファームウェアが利用可能です → /update ・
+      </span>
+    </div>
+  </div>
+
+<script>
+  const layer=document.getElementById('pixels');
+  for(let i=0;i<140;i++){
+    const s=document.createElement('i');
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    s.style.animationDuration=(10+Math.random()*18)+'s';
+    s.style.animationDelay=(-Math.random()*18)+'s';
+    const r=Math.random();
+    if(r<.15){s.style.background='#ff4fbb';s.style.opacity='.4';}
+    else if(r<.3){s.style.background='#66e7ff';s.style.opacity='.4';}
+    if(Math.random()<.3){s.style.width='3px';s.style.height='3px';}
+    layer.appendChild(s);
+  }
+</script>
+</body>
+</html>

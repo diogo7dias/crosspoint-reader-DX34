@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>03 · 포털 — CrossPoint</title>
+<style>
+  :root{
+    --bg:#0a0c12;
+    --panel:#10131b;
+    --fg:#f0f2f8;
+    --muted:#8a92a8;
+    --accent:#ff3d3d;
+    --lime:#b4ff3a;
+    --sky:#5bd1ff;
+    --gold:#ffc24a;
+    --dash:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:"Noto Sans KR","IBM Plex Sans KR","Pretendard","Helvetica Neue",Arial,sans-serif;
+    font-size:12px;line-height:1.4;
+    overflow-x:hidden;
+  }
+  .pixels{position:fixed;inset:0;z-index:0;pointer-events:none;}
+  .pixels i{
+    position:absolute;width:2px;height:2px;background:#fff;opacity:.15;
+    animation:drift 20s linear infinite;
+  }
+  @keyframes drift{
+    0%{transform:translate(0,0);opacity:.1;}
+    50%{transform:translate(-40px,40px);opacity:.28;}
+    100%{transform:translate(0,0);opacity:.1;}
+  }
+  .wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:8px;}
+
+  /* top utility bar */
+  .util{
+    display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px dashed var(--dash);padding:3px 6px;font-size:10px;
+    color:var(--muted);letter-spacing:.08em;
+  }
+  .util a{color:var(--muted);margin:0 4px;text-decoration:none;}
+  .util a:hover{color:var(--sky);}
+  .util .flags{display:flex;gap:4px;}
+  .util .flags span{padding:1px 4px;border:1px dashed rgba(255,255,255,.3);}
+
+  /* masthead */
+  .mast{
+    display:grid;grid-template-columns:300px 1fr 200px;gap:6px;padding:8px 0;
+    border-bottom:1px dashed var(--dash);
+  }
+  .mast .brand{display:flex;align-items:center;gap:10px;}
+  .mast .brand .cube{
+    width:40px;height:40px;border:1px dashed #fff;
+    background:
+      linear-gradient(45deg,var(--accent) 25%,transparent 25%) 0 0/8px 8px,
+      var(--panel);
+  }
+  .mast .brand h1{margin:0;font-size:22px;letter-spacing:.02em;font-weight:900;}
+  .mast .brand h1 em{color:var(--accent);font-style:normal;}
+  .mast .brand .ko{color:var(--muted);font-size:10px;letter-spacing:.24em;}
+  .search{
+    border:1px dashed var(--dash);display:flex;align-items:center;padding:4px;
+  }
+  .search input{
+    flex:1;background:transparent;border:none;outline:none;color:var(--fg);
+    font-family:inherit;font-size:14px;padding:6px 8px;letter-spacing:.04em;
+  }
+  .search button{
+    background:var(--accent);color:#000;border:none;padding:6px 14px;font-weight:700;
+    letter-spacing:.1em;font-family:inherit;cursor:pointer;
+  }
+  .search .hint{font-size:10px;color:var(--muted);padding:0 8px;letter-spacing:.1em;}
+  .login{
+    border:1px dashed var(--dash);padding:6px 8px;display:flex;flex-direction:column;gap:2px;
+    font-size:10px;
+  }
+  .login b{color:var(--lime);letter-spacing:.18em;}
+  .login small{color:var(--muted);letter-spacing:.12em;}
+  .login .row{display:flex;justify-content:space-between;}
+
+  /* primary nav (main categories) */
+  .pnav{
+    display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px dashed var(--dash);padding:6px 0;
+  }
+  .pnav a{
+    color:var(--fg);text-decoration:none;font-size:12px;font-weight:700;
+    padding:4px 10px;letter-spacing:.04em;
+  }
+  .pnav a.on{background:var(--accent);color:#000;}
+  .pnav a:hover{color:var(--sky);}
+  .pnav a.hot::after{content:" NEW";color:var(--lime);font-size:9px;margin-left:3px;letter-spacing:.2em;}
+  .pnav a.fire::after{content:" 🔥";}
+
+  /* body grid */
+  .body{
+    margin-top:6px;
+    display:grid;grid-template-columns:240px 1fr 260px;gap:6px;
+  }
+  .panel{
+    border:1px dashed var(--dash);background:rgba(255,255,255,.02);
+  }
+  .phead{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:4px 8px;border-bottom:1px dashed rgba(255,255,255,.35);
+    background:rgba(255,255,255,.04);
+  }
+  .phead h3{margin:0;font-size:11px;letter-spacing:.2em;font-weight:800;}
+  .phead .more{font-size:9px;color:var(--muted);letter-spacing:.14em;text-decoration:none;}
+  .phead .more:hover{color:var(--sky);}
+  .pbody{padding:6px 8px;}
+
+  /* left sidebar mini widgets */
+  .w{margin-bottom:6px;}
+  .w .phead h3{color:var(--sky);}
+  .shortcut{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;
+  }
+  .shortcut a{
+    border:1px dashed rgba(255,255,255,.3);text-align:center;padding:8px 2px;
+    color:var(--fg);text-decoration:none;font-size:10px;letter-spacing:.1em;
+  }
+  .shortcut a:hover{border-color:var(--lime);color:var(--lime);}
+  .shortcut a b{display:block;font-size:18px;margin-bottom:2px;}
+  .miniq{padding:6px 8px;font-size:11px;}
+  .miniq .row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.1);}
+  .miniq .row span:first-child{color:var(--muted);}
+  .miniq .row span:last-child{color:var(--sky);}
+
+  /* center */
+  .banner{
+    border:1px dashed var(--dash);position:relative;overflow:hidden;
+    padding:16px;background:
+      radial-gradient(circle at 85% 50%,rgba(255,61,61,.25),transparent 60%),
+      linear-gradient(120deg,rgba(91,209,255,.08),rgba(180,255,58,.06));
+    display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px;min-height:120px;
+  }
+  .banner h2{
+    margin:0;font-size:28px;line-height:1.1;letter-spacing:-.01em;
+  }
+  .banner h2 em{color:var(--lime);font-style:normal;}
+  .banner h2 strong{color:var(--accent);}
+  .banner p{color:var(--muted);font-size:11px;margin:4px 0 0;letter-spacing:.12em;}
+  .banner .cta{
+    background:var(--lime);color:#000;padding:6px 14px;font-weight:900;font-size:11px;
+    letter-spacing:.16em;border:1px dashed #000;
+  }
+
+  .hotlist{margin-top:6px;}
+  .rank{
+    display:grid;grid-template-columns:28px 1fr 60px;gap:6px;
+    padding:3px 8px;border-bottom:1px dashed rgba(255,255,255,.12);font-size:11px;
+  }
+  .rank b{color:var(--accent);font-size:11px;text-align:center;}
+  .rank:nth-child(-n+4) b{color:var(--lime);}
+  .rank a{color:var(--fg);text-decoration:none;}
+  .rank a:hover{color:var(--sky);}
+  .rank .ko{color:var(--muted);font-size:10px;margin-left:4px;letter-spacing:.08em;}
+  .rank .delta{color:var(--gold);text-align:right;font-size:10px;}
+  .rank .delta.up{color:var(--lime);}
+  .rank .delta.dn{color:var(--accent);}
+
+  /* 4-col mini panels */
+  .fourup{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px;
+  }
+  .fourup .panel .pbody{font-size:11px;}
+  .fourup .num{font-size:22px;font-weight:900;color:var(--lime);letter-spacing:.02em;}
+  .fourup .lbl{color:var(--muted);font-size:10px;letter-spacing:.18em;text-transform:uppercase;}
+
+  /* right column */
+  .ad{
+    border:1px dashed var(--dash);padding:10px;text-align:center;
+    background:
+      repeating-linear-gradient(45deg,rgba(255,194,74,.06) 0 6px,transparent 6px 12px);
+  }
+  .ad b{color:var(--gold);letter-spacing:.24em;font-size:11px;}
+  .ad p{margin:6px 0 0;font-size:18px;font-weight:900;color:var(--fg);line-height:1.15;}
+  .ad small{color:var(--muted);font-size:10px;letter-spacing:.14em;}
+
+  .live .pbody{font-size:11px;}
+  .live .item{display:flex;gap:6px;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.12);}
+  .live .dot{width:6px;height:6px;background:var(--accent);border-radius:50%;margin-top:4px;flex:0 0 auto;animation:pulse 1.4s infinite;}
+  @keyframes pulse{50%{opacity:.3;}}
+  .live time{color:var(--muted);font-size:10px;}
+
+  .chat{padding:6px 8px;}
+  .chat .msg{font-size:11px;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.08);}
+  .chat .msg b{color:var(--sky);margin-right:4px;}
+  .chat input{
+    width:100%;background:transparent;border:1px dashed rgba(255,255,255,.35);
+    color:var(--fg);font-family:inherit;padding:4px 6px;font-size:11px;margin-top:4px;
+  }
+
+  /* footer strip */
+  .fstrip{
+    margin-top:6px;border:1px dashed var(--dash);
+    display:grid;grid-template-columns:repeat(8,1fr);font-size:10px;
+  }
+  .fstrip div{padding:6px;border-right:1px dashed rgba(255,255,255,.18);letter-spacing:.1em;}
+  .fstrip div:last-child{border-right:none;}
+  .fstrip b{display:block;color:var(--sky);font-size:9px;letter-spacing:.24em;}
+
+  .mini-cube{
+    display:inline-block;width:8px;height:8px;background:var(--accent);margin-right:4px;vertical-align:middle;
+  }
+
+  .lime{color:var(--lime);}
+  .sky{color:var(--sky);}
+  .gold{color:var(--gold);}
+  .red{color:var(--accent);}
+</style>
+</head>
+<body>
+  <div class="pixels" id="pixels"></div>
+  <div class="wrap">
+
+    <div class="util">
+      <div>
+        <a>홈 설정</a>·<a>바로가기</a>·<a>도움말</a>·<a>고객센터</a>·<a>운영정책</a>
+      </div>
+      <div class="flags">
+        <span>한국어</span><span>English</span><span>日本語</span><span>中文</span>
+        <span class="lime">LOGIN: admin</span>
+      </div>
+    </div>
+
+    <div class="mast">
+      <div class="brand">
+        <div class="cube"></div>
+        <div>
+          <h1>Cross<em>Point</em></h1>
+          <div class="ko">크로스포인트 리더 · DX34 · 포털</div>
+        </div>
+      </div>
+      <div class="search">
+        <span class="hint">검색</span>
+        <input value="device settings / 설정"/>
+        <button>SEARCH ▶</button>
+      </div>
+      <div class="login">
+        <div class="row"><b>ADMIN</b><span class="lime">● online</span></div>
+        <div class="row"><small>session</small><small>00:12:44</small></div>
+        <div class="row"><small>ip</small><small>192.168.1.104</small></div>
+      </div>
+    </div>
+
+    <div class="pnav">
+      <a class="on">홈 / HOME</a>
+      <a class="hot">서재 / LIBRARY</a>
+      <a>업로드 / UPLOAD</a>
+      <a class="fire">설정 / SETTINGS</a>
+      <a>무선 / WIFI</a>
+      <a>화면 / DISPLAY</a>
+      <a>동기화 / SYNC</a>
+      <a>로그 / LOG</a>
+      <a>정보 / ABOUT</a>
+      <a>업데이트 / UPDATE</a>
+      <a>도움말 / HELP</a>
+      <a>고객센터 / SUPPORT</a>
+    </div>
+
+    <div class="body">
+      <!-- LEFT -->
+      <div>
+        <div class="panel w">
+          <div class="phead"><h3>◆ 바로가기 / SHORTCUT</h3><a class="more">편집</a></div>
+          <div class="shortcut">
+            <a><b>📚</b>서재</a>
+            <a><b>⇪</b>업로드</a>
+            <a><b>⚙</b>설정</a>
+            <a><b>⟳</b>동기화</a>
+            <a><b>⇄</b>변환</a>
+            <a><b>◉</b>무선</a>
+          </div>
+        </div>
+
+        <div class="panel w">
+          <div class="phead"><h3>◆ 단축키 / KEYS</h3><a class="more">전체</a></div>
+          <div class="miniq">
+            <div class="row"><span>← / →</span><span>page</span></div>
+            <div class="row"><span>↑ / ↓</span><span>scroll</span></div>
+            <div class="row"><span>SPACE</span><span>next</span></div>
+            <div class="row"><span>R</span><span>refresh</span></div>
+            <div class="row"><span>F</span><span>fullscreen</span></div>
+            <div class="row"><span>ESC</span><span>close</span></div>
+          </div>
+        </div>
+
+        <div class="panel w">
+          <div class="phead"><h3>◆ 날씨 / WEATHER</h3><a class="more">서울</a></div>
+          <div class="miniq" style="text-align:center;">
+            <div style="font-size:28px;color:var(--gold);font-weight:900;">14°</div>
+            <div style="color:var(--muted);letter-spacing:.18em;">맑음 · CLEAR</div>
+            <div class="row" style="margin-top:4px;"><span>미세먼지</span><span class="lime">좋음</span></div>
+            <div class="row"><span>습도</span><span>42%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER -->
+      <div>
+        <div class="banner">
+          <div>
+            <h2>펌웨어 <em>1.4.3</em> <strong>출시!</strong></h2>
+            <p>새로운 e-ink 최적화 · 배터리 수명 +18% · 버그 수정 14건</p>
+          </div>
+          <a class="cta">지금 업데이트 ▶</a>
+        </div>
+
+        <div class="panel hotlist">
+          <div class="phead"><h3>◆ 인기 / HOT READS</h3><a class="more">전체보기 →</a></div>
+          <div class="pbody" style="padding:0;">
+            <div class="rank"><b>01</b><a>invisible_cities.epub<span class="ko">보이지 않는 도시들</span></a><span class="delta up">▲ 4</span></div>
+            <div class="rank"><b>02</b><a>wind_up_bird.epub<span class="ko">태엽 감는 새</span></a><span class="delta up">▲ 2</span></div>
+            <div class="rank"><b>03</b><a>ficciones.epub<span class="ko">픽션들</span></a><span class="delta">—</span></div>
+            <div class="rank"><b>04</b><a>dispossessed.epub<span class="ko">빼앗긴 자들</span></a><span class="delta dn">▼ 1</span></div>
+            <div class="rank"><b>05</b><a>pillow_book.epub<span class="ko">베갯머리 서책</span></a><span class="delta up">▲ NEW</span></div>
+            <div class="rank"><b>06</b><a>brothers_k.epub<span class="ko">카라마조프가의 형제들</span></a><span class="delta dn">▼ 2</span></div>
+            <div class="rank"><b>07</b><a>kitchen.epub<span class="ko">키친</span></a><span class="delta">—</span></div>
+            <div class="rank"><b>08</b><a>snow_country.epub<span class="ko">설국</span></a><span class="delta up">▲ 1</span></div>
+          </div>
+        </div>
+
+        <div class="fourup">
+          <div class="panel">
+            <div class="phead"><h3>HEAP</h3><span class="lime">OK</span></div>
+            <div class="pbody"><div class="num">214<small style="font-size:11px;color:var(--muted);">.8 KB</small></div><div class="lbl">free of 320kb</div></div>
+          </div>
+          <div class="panel">
+            <div class="phead"><h3>BATT</h3><span class="lime">OK</span></div>
+            <div class="pbody"><div class="num">78<small style="font-size:11px;color:var(--muted);">%</small></div><div class="lbl">3.92 V · cable</div></div>
+          </div>
+          <div class="panel">
+            <div class="phead"><h3>WIFI</h3><span class="sky">STRONG</span></div>
+            <div class="pbody"><div class="num">−52<small style="font-size:11px;color:var(--muted);">dBm</small></div><div class="lbl">crosspoint-net ch6</div></div>
+          </div>
+          <div class="panel">
+            <div class="phead"><h3>FILES</h3><span class="gold">NEW 3</span></div>
+            <div class="pbody"><div class="num">142</div><div class="lbl">of 256 · 12.4 MB</div></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:6px;">
+          <div class="phead"><h3>◆ 공지 / NOTICE BOARD</h3><a class="more">더보기</a></div>
+          <div class="pbody" style="padding:0;">
+            <div class="rank"><b class="red">공지</b><a>FW 1.4.3 릴리즈 — 2026.04.24 점검 공지</a><span class="delta">방금</span></div>
+            <div class="rank"><b class="red">공지</b><a>저온 배터리 보호 모드 적용 안내</a><span class="delta">1h</span></div>
+            <div class="rank"><b>005</b><a>서재 정렬 옵션 추가됨 (날짜/크기)</a><span class="delta">3h</span></div>
+            <div class="rank"><b>004</b><a>키맵 JIS/ANSI 토글 안정화</a><span class="delta">어제</span></div>
+            <div class="rank"><b>003</b><a>SPIFFS → LittleFS 마이그레이션 메모</a><span class="delta">2d</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div>
+        <div class="ad">
+          <b>★ 광고 / AD ★</b>
+          <p>한정판 <span class="red">e-ink 케이스</span><br/>지금 <span class="lime">30% OFF</span></p>
+          <small>crosspoint.store</small>
+        </div>
+
+        <div class="panel live" style="margin-top:6px;">
+          <div class="phead"><h3>◆ 실시간 / LIVE</h3><span class="red">● REC</span></div>
+          <div class="pbody">
+            <div class="item"><div class="dot"></div><div><time>21:44:02</time><br/>idle · heap 214.8 KB</div></div>
+            <div class="item"><div class="dot"></div><div><time>21:43:10</time><br/>render page 184 · 320 ms</div></div>
+            <div class="item"><div class="dot"></div><div><time>21:41:55</time><br/>sync /library 14 files</div></div>
+            <div class="item"><div class="dot"></div><div><time>21:41:02</time><br/><span class="gold">warn</span> battery low-temp</div></div>
+            <div class="item"><div class="dot"></div><div><time>21:40:12</time><br/>http :80 listen</div></div>
+            <div class="item"><div class="dot"></div><div><time>21:40:11</time><br/>wifi.up crosspoint-net</div></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:6px;">
+          <div class="phead"><h3>◆ 채팅 / CHAT</h3><span class="sky">4 online</span></div>
+          <div class="chat">
+            <div class="msg"><b>admin:</b> 펌업 테스트 진행 중</div>
+            <div class="msg"><b>dx34:</b> e-ink refresh 안정적</div>
+            <div class="msg"><b>reader01:</b> 키맵 JIS 적용 확인</div>
+            <div class="msg"><b>admin:</b> ok 머지합니다 ✓</div>
+            <input placeholder="메시지 입력 / type a message…"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fstrip">
+      <div><b>FW</b>1.4.2-dx34</div>
+      <div><b>IP</b>192.168.1.104</div>
+      <div><b>MAC</b>8C:AA:B5:…:0E</div>
+      <div><b>UPTIME</b>03d 14h 22m</div>
+      <div><b>HEAP</b>214.8 / 320 KB</div>
+      <div><b>BATT</b>78% · 3.92V</div>
+      <div><b>DISPLAY</b>480×800 · 4bpp</div>
+      <div><b>© 2026</b>CrossPoint · open-source</div>
+    </div>
+
+  </div>
+
+<script>
+  const layer=document.getElementById('pixels');
+  for(let i=0;i<160;i++){
+    const s=document.createElement('i');
+    s.style.left=Math.random()*100+'%';
+    s.style.top=Math.random()*100+'%';
+    s.style.animationDuration=(12+Math.random()*20)+'s';
+    s.style.animationDelay=(-Math.random()*20)+'s';
+    const r=Math.random();
+    if(r<.1){s.style.background='#ff3d3d';s.style.opacity='.35';}
+    else if(r<.2){s.style.background='#b4ff3a';s.style.opacity='.35';}
+    else if(r<.3){s.style.background='#5bd1ff';s.style.opacity='.35';}
+    if(Math.random()<.3){s.style.width='3px';s.style.height='3px';}
+    layer.appendChild(s);
+  }
+</script>
+</body>
+</html>
