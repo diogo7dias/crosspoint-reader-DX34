@@ -325,6 +325,24 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
   logHeapSnapshot("register-post");
 }
 
+void CustomFontManager::logAndResetCacheStats(const char* tag, GfxRenderer& renderer) {
+  if (SETTINGS.customFontName.empty() || SETTINGS.customFontSizePt == 0) return;
+  const int fontId = idForFamily(SETTINGS.customFontName, SETTINGS.customFontSizePt);
+  auto* font = renderer.findCustomFont(fontId);
+  if (!font) return;
+  const auto s = font->cacheStats();
+  const uint32_t total = s.hits + s.misses;
+  const uint32_t hitPctX10 = total > 0 ? (s.hits * 1000u) / total : 0;
+  const uint32_t meanDecodeUs = s.decodeCount > 0 ? s.decodeTotalUs / s.decodeCount : 0;
+  LOG_INF(kModule, "cache[%s] cap=%u hits=%u misses=%u (%u.%u%%) evictions=%u decodes=%u meanUs=%u",
+          tag, static_cast<unsigned>(font->cacheCap()),
+          static_cast<unsigned>(s.hits), static_cast<unsigned>(s.misses),
+          static_cast<unsigned>(hitPctX10 / 10), static_cast<unsigned>(hitPctX10 % 10),
+          static_cast<unsigned>(s.evictions),
+          static_cast<unsigned>(s.decodeCount), static_cast<unsigned>(meanDecodeUs));
+  font->resetCacheStats();
+}
+
 void CustomFontManager::releaseAllCaches(GfxRenderer& renderer) {
   logHeapSnapshot("release-pre");
   size_t released = 0;

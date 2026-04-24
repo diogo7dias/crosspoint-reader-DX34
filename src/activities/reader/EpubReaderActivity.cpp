@@ -1978,14 +1978,27 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Two-pass font prewarm: scan pass collects text, then decompress needed glyphs.
   // The actual render must happen inside the scope so page buffers stay alive.
   auto* fcm = renderer.getFontCacheManager();
+  auto& cfMgr = crosspoint::fonts::CustomFontManager::instance();
+  cfMgr.logAndResetCacheStats("frame-start", renderer);
+  const uint32_t tFrameStart = millis();
   if (fcm) {
     auto scope = fcm->createPrewarmScope();
+    const uint32_t tScanStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // scan pass
+    const uint32_t tScanEnd = millis();
     scope.endScanAndPrewarm();
+    cfMgr.logAndResetCacheStats("after-scan-pass", renderer);
+    const uint32_t tRenderStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // actual render
+    const uint32_t tRenderEnd = millis();
+    LOG_INF("ERS", "page render timings: scan=%u ms render=%u ms total=%u ms",
+            static_cast<unsigned>(tScanEnd - tScanStart),
+            static_cast<unsigned>(tRenderEnd - tRenderStart),
+            static_cast<unsigned>(tRenderEnd - tFrameStart));
   } else {
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
   }
+  cfMgr.logAndResetCacheStats("frame-end", renderer);
   // Render highlight overlay and border if in highlight/quote selection mode
   if (highlights_.state() != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);

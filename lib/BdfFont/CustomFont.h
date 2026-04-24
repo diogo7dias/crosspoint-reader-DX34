@@ -87,6 +87,13 @@ class CustomFont {
   // Returns true if a slab was re-allocated.
   bool restoreCache();
 
+  // Diagnostic stats for the shared LRU cache (hits/misses/evictions plus
+  // cumulative decode time). Resetting before a page render and logging
+  // after isolates that frame's cache behaviour.
+  CustomFontSharedCache::Stats cacheStats() const { return sharedCache_.getStats(); }
+  void resetCacheStats() { sharedCache_.resetStats(); }
+  size_t cacheCap() const { return sharedCache_.cacheCap(); }
+
   // Synthetic-bold tuning. Mirrors EpdFontFamily:
   // totalPasses(style) = syntheticRegularBoldPasses_
   //                    + (no real bold variant AND style has BOLD ? syntheticBoldExtraPasses_ : 0)

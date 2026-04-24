@@ -83,6 +83,14 @@ class CustomFontGlyphSource {
   // is always sorted ascending by codepoint (enforced at build time).
   std::unique_ptr<IndexEntry[]> indexArray_;
 
+  // Heap-allocated bulk-read scratch buffer sized from fontBbxW×fontBbxH at
+  // open() time. Replaces a 4 KB stack buffer that, combined with the
+  // render-task's layout-pass call stack, could overflow on ESP32-C3
+  // (main loop stack ≈ 8 KB). Freed in close(). Single buffer per source
+  // is fine: lookup() is called serially from the render task.
+  uint8_t* bulkBuf_ = nullptr;
+  size_t bulkBufCap_ = 0;
+
   IndexHeader hdr_{};
   uint32_t glyphCount_ = 0;
   size_t maxBitmapBytes_ = 0;

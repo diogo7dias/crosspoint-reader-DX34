@@ -94,6 +94,11 @@ bool hasPendingPrompt() const { return !pendingPromptIdx_.empty(); }
   // regression is diagnosable from logs alone.
   static void logHeapSnapshot(const char* tag);
 
+  // Dump active custom font's cache stats (hits / misses / evictions /
+  // mean decode µs) and reset them. Call pre/post render to isolate a
+  // single frame. No-op when no custom font is registered.
+  void logAndResetCacheStats(const char* tag, GfxRenderer& renderer);
+
   // Fully release every registered CustomFont's glyph slab so the heap can
   // coalesce a 32 KB+ contiguous block for the epub section ZIP dictionary.
   // Unlike the old trimAllCaches (which kept 1 slot alive and left slots_ /

@@ -63,6 +63,26 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
 
   idxOpen_ = true;
 
+  // Allocate the bulk-read scratch buffer once per source so decodeBitmap
+  // does not put a multi-KB array on the stack. Sized for the worst-case
+  // glyph (font BBX) + slack for per-row newlines.
+  {
+    const size_t bytesPerRow = static_cast<size_t>((bbxW + 7) / 8);
+    const size_t hexCharsPerRow = bytesPerRow * 2;
+    const size_t worst = hexCharsPerRow * static_cast<size_t>(bbxH)
+                         + 2 * static_cast<size_t>(bbxH)
+                         + 16;
+    bulkBufCap_ = worst > 0 ? worst : 32;
+    bulkBuf_ = static_cast<uint8_t*>(heap_caps_malloc(bulkBufCap_, MALLOC_CAP_8BIT));
+    if (bulkBuf_ == nullptr) {
+      // Fall back to zero-cap buffer — decodeBitmap will return false for
+      // any glyph, and the cache layer silently skips missing glyphs. Font
+      // stays openable; pages just render blank. Not worse than a full
+      // open() failure, which would break the whole family.
+      bulkBufCap_ = 0;
+    }
+  }
+
   // Phase 2.1: slurp the whole index into RAM for fonts that fit. Eliminates
   // the log2(N) SD seeks every cold glyph paid. Above the cap we stay on
   // disk — Unifont (57 K × 16 B ≈ 912 KB) has no hope of fitting.
@@ -95,6 +115,11 @@ void CustomFontGlyphSource::close() {
     idxOpen_ = false;
   }
   indexArray_.reset();
+  if (bulkBuf_ != nullptr) {
+    heap_caps_free(bulkBuf_);
+    bulkBuf_ = nullptr;
+  }
+  bulkBufCap_ = 0;
   glyphCount_ = 0;
   maxBitmapBytes_ = 0;
 }
@@ -160,11 +185,12 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
   uint8_t* dst = sharedCache_->allocateSlot(variantIndex_, codepoint, meta, &cached);
   if (!dst) return nullptr;
 
+  const uint32_t t0 = micros();
   if (!decodeBitmap(hit, dst, sharedCache_->maxBitmapBytes())) {
     sharedCache_->abortSlot(variantIndex_, codepoint);
     return nullptr;
   }
-
+  sharedCache_->recordDecodeTime(micros() - t0);
   return cached;
 }
 
@@ -182,24 +208,22 @@ bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, uint8_t* dst, size
   std::memset(dst, 0, totalBytes);
 
   const size_t hexCharsPerRow = bytesPerRow * 2;
-  // Phase 2.3 bulk read. Each row is hexCharsPerRow hex digits followed by
-  // 1 or 2 newline bytes (\n or \r\n). Worst case: 2 newline bytes per row.
-  // +16 slack for a final EOF case. Stack buffer; cap enforces a sensible
-  // per-glyph limit (any font above this already failed under the old
-  // per-row path).
-  constexpr size_t kBulkBufSize = 4096;
+  // Phase 2.3 bulk read — reuses the heap buffer allocated in open()
+  // (bulkBuf_, sized from fontBBX). Each row is hexCharsPerRow hex digits
+  // followed by 1 or 2 newline bytes; worst-case bulkBufCap_ was computed
+  // from the font's bounding box so every glyph fits.
+  if (bulkBuf_ == nullptr || bulkBufCap_ == 0) return false;
   const size_t bulkBytes = hexCharsPerRow * e.bitmapH + 2 * e.bitmapH + 16;
-  if (bulkBytes > kBulkBufSize) {
+  if (bulkBytes > bulkBufCap_) {
     static bool warnedBulk = false;
     if (!warnedBulk) {
       warnedBulk = true;
-      LOG_INF("BDF", "glyph bitmap too large for bulk decode (%u B > %u) — glyph skipped",
-              static_cast<unsigned>(bulkBytes), static_cast<unsigned>(kBulkBufSize));
+      LOG_INF("BDF", "glyph bitmap exceeds per-source buffer (%u > %u) — glyph skipped",
+              static_cast<unsigned>(bulkBytes), static_cast<unsigned>(bulkBufCap_));
     }
     return false;
   }
-  char bulk[kBulkBufSize];
-  const int got = bdfFile_.read(bulk, bulkBytes);
+  const int got = bdfFile_.read(bulkBuf_, bulkBytes);
   if (got <= 0) return false;
 
   // Hex-parse in RAM. Walk the buffer skipping \n / \r; collect nibbles in
@@ -209,7 +233,7 @@ bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, uint8_t* dst, size
   const size_t nibblesNeeded = totalBytes * 2;
   uint8_t pending = 0;
   for (int i = 0; i < got && nibbleCount < nibblesNeeded; ++i) {
-    const unsigned char c = static_cast<unsigned char>(bulk[i]);
+    const unsigned char c = bulkBuf_[i];
     if (c == '\n' || c == '\r' || c == ' ' || c == '\t') continue;
     const int nib = hexNibble(c);
     if (nib < 0) return false;  // unexpected char before we finished the bitmap

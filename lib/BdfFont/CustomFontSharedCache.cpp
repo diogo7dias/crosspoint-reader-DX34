@@ -201,7 +201,10 @@ void CustomFontSharedCache::returnToFreeList_(uint16_t idx) {
 }
 
 bool CustomFontSharedCache::lookup(uint8_t variant, uint32_t codepoint, const CachedGlyph** outGlyph) {
-  if (cacheCap_ == 0 || maxBitmapBytes_ == 0 || bitmapSlab_ == nullptr) return false;
+  if (cacheCap_ == 0 || maxBitmapBytes_ == 0 || bitmapSlab_ == nullptr) {
+    stats_.misses += 1;
+    return false;
+  }
   const uint32_t key = makeKey(variant, codepoint);
   const auto mapIt = cacheMap_.find(key);
   if (mapIt != cacheMap_.end()) {
@@ -211,15 +214,20 @@ bool CustomFontSharedCache::lookup(uint8_t variant, uint32_t codepoint, const Ca
       lruPushFront_(idx);
     }
     if (outGlyph) *outGlyph = &slots_[idx].glyph;
+    stats_.hits += 1;
     return true;
   }
+  stats_.misses += 1;
   return false;
 }
 
 uint8_t* CustomFontSharedCache::allocateSlot(uint8_t variant, uint32_t codepoint, const CachedGlyph& metadata, const CachedGlyph** outGlyph) {
   if (cacheCap_ == 0 || maxBitmapBytes_ == 0 || bitmapSlab_ == nullptr) return nullptr;
   uint16_t idx = takeFreeSlot_();
-  if (idx == kNil) idx = evictLru_();
+  if (idx == kNil) {
+    idx = evictLru_();
+    if (idx != kNil) stats_.evictions += 1;  // count ONLY real evictions, not free-slot promotions
+  }
   if (idx == kNil) return nullptr;
 
   uint8_t* dst = bitmapSlab_ + static_cast<size_t>(idx) * maxBitmapBytes_;

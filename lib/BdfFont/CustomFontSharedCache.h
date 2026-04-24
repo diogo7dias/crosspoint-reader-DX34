@@ -68,6 +68,26 @@ class CustomFontSharedCache {
   // Call if decoding fails after allocating a slot, to free it.
   void abortSlot(uint8_t variant, uint32_t codepoint);
 
+  // Runtime stats — zero overhead in the hot path (one increment per call)
+  // and massively useful for diagnosing "why is my font slow" in the field.
+  // Callers should resetStats() before a page-turn and log after to isolate
+  // the frame's cache behaviour.
+  struct Stats {
+    uint32_t hits = 0;
+    uint32_t misses = 0;
+    uint32_t evictions = 0;
+    uint32_t decodeTotalUs = 0;   // cumulative time spent in allocateSlot+decode callers
+    uint32_t decodeCount = 0;
+  };
+  Stats getStats() const { return stats_; }
+  void resetStats() { stats_ = Stats{}; }
+  // Add a single decode timing sample (microseconds). Called by the glyph
+  // source after a successful cache miss + decode.
+  void recordDecodeTime(uint32_t micros) {
+    stats_.decodeTotalUs += micros;
+    stats_.decodeCount += 1;
+  }
+
  private:
   static constexpr uint16_t kNil = 0xFFFF;
 
@@ -113,6 +133,8 @@ class CustomFontSharedCache {
   uint16_t lruHead_ = kNil;
   uint16_t lruTail_ = kNil;
   uint16_t freeHead_ = kNil;
+
+  Stats stats_;
 };
 
 }  // namespace bdf
