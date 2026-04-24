@@ -1277,14 +1277,17 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                 boldSwapEnabled)) {
     LOG_DBG("ERS", "Cache not found, building...");
 
-    // Free font caches to reclaim a contiguous 32 KB block for the ZIP
-    // dictionary used during layout. Built-ins use clearCache (cheap
-    // decompress-again on next render); custom fonts use releaseAllCaches,
-    // which drops the slab AND the slots/map vectors so the hash-table
-    // buckets can't split the block we need.
+    // Clear built-in font cache; its pages decompress again cheaply on next
+    // render. The custom-font slab no longer needs releasing — the ZIP dict
+    // lives in BSS (lib/ZipFile/ZipFile.cpp) and the bitmap slab lives in
+    // BSS (lib/BdfFont/CustomFontSharedCache.cpp) as of 2026-04-24, so
+    // layout no longer competes with the font subsystem for a contiguous
+    // heap block. Removing the release/restore cycle here is what
+    // structurally eliminates the "blank first page after font switch"
+    // regression — the prior flow tried to re-malloc the 16 KB slab after
+    // layout, and on a fragmented heap that malloc routinely failed.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
-    crosspoint::fonts::CustomFontManager::instance().releaseAllCaches(renderer);
     crosspoint::fonts::CustomFontManager::logHeapSnapshot("createSectionFile-pre");
 
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
@@ -1295,19 +1298,18 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
         boldSwapEnabled, layoutProgressTick);
     crosspoint::fonts::CustomFontManager::logHeapSnapshot(sectionOk ? "createSectionFile-post-ok"
                                                                     : "createSectionFile-post-fail");
-    // Restore the custom font cache on BOTH paths. Success: the next render
-    // needs a warm cache to stay snappy. Failure: we still return a fallback
-    // UI to the user and they may page around; a permanently-empty cache
-    // would leave every rendered glyph blank.
-    crosspoint::fonts::CustomFontManager::instance().restoreAllCaches(renderer);
     if (!sectionOk) {
       LOG_ERR("ERS", "Failed to persist page data to SD");
       clearPageCache();
       section.reset();
       renderer.clearScreen();
-      renderer.drawCenteredText(UI_12_FONT_ID, 320, "REBOOT DEVICE", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 360, "(small memory wrinkle)", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 410, "Press Back to exit", true, EpdFontFamily::REGULAR);
+      // Friendlier copy. "REBOOT DEVICE" read like the firmware had crashed
+      // and scared users. The actual situation is recoverable: go home so
+      // the reader activity tears down + heap coalesces, then reopen.
+      renderer.drawCenteredText(UI_12_FONT_ID, 300, "Couldn't lay out this section", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 340, "(memory fragmented)", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 400, "Go back to home", true, EpdFontFamily::REGULAR);
+      renderer.drawCenteredText(UI_12_FONT_ID, 430, "and reopen the book", true, EpdFontFamily::REGULAR);
       renderer.displayBuffer();
       return false;
     }

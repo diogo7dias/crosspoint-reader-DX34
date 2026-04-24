@@ -606,91 +606,247 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
   const int contentY = metrics.topPadding + metrics.headerHeight;
   const int contentHeight = pageHeight - (contentY + metrics.buttonHintsHeight + metrics.verticalSpacing);
   const int rowHeight = metrics.listRowHeight;
-  const int pageItems = std::max(1, contentHeight / rowHeight);
-  const int pageStartIndex = (selectedRowIndex / pageItems) * pageItems;
+  const int rowFont = UI_10_FONT_ID;
+  const int availableWidth = pageWidth - metrics.contentSidePadding * 2;
+  const int wrapGap = metrics.contentSidePadding;
+  constexpr int kChipPad = 1;
 
-  for (int i = pageStartIndex; i < static_cast<int>(flatRows.size()) && i < pageStartIndex + pageItems; i++) {
-    const int rowY = contentY + (i - pageStartIndex) * rowHeight;
-    const auto& row = flatRows[i];
-
-    if (row.isHeader) {
-      renderer.fillRect(0, rowY, pageWidth, rowHeight, true);
-      const char* label = I18N.get(kCategoryNames[row.categoryIndex]);
-      const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, (pageWidth - textW) / 2, rowY, label, false, EpdFontFamily::REGULAR);
-      continue;
+  // Helper lambdas mirror SettingsActivity — split a label into up to two
+  // lines with greedy word-wrap and a codepoint-wrap fallback for very long
+  // single words (some custom font family names are one big word).
+  auto takePrefixFit = [&](const std::string& word, int maxW) -> std::pair<std::string, std::string> {
+    int bestEnd = 0;
+    for (int end = 1; end <= static_cast<int>(word.size()); end++) {
+      if (end < static_cast<int>(word.size()) && (static_cast<uint8_t>(word[end]) & 0xC0) == 0x80) continue;
+      const std::string candidate = word.substr(0, end);
+      if (renderer.getTextWidth(rowFont, candidate.c_str()) <= maxW) {
+        bestEnd = end;
+      } else {
+        break;
+      }
     }
+    if (bestEnd == 0) return {std::string(), word};
+    return {word.substr(0, bestEnd), word.substr(bestEnd)};
+  };
 
+  auto splitLabel = [&](const char* label) -> std::pair<std::string, std::string> {
+    std::string s(label);
+    if (renderer.getTextWidth(rowFont, s.c_str()) <= availableWidth) return {s, std::string()};
+    std::vector<std::string> words;
+    {
+      std::string cur;
+      for (char c : s) {
+        if (c == ' ') {
+          if (!cur.empty()) {
+            words.push_back(std::move(cur));
+            cur.clear();
+          }
+        } else {
+          cur += c;
+        }
+      }
+      if (!cur.empty()) words.push_back(std::move(cur));
+    }
+    std::string line1;
+    size_t wi = 0;
+    while (wi < words.size()) {
+      const std::string candidate = line1.empty() ? words[wi] : (line1 + " " + words[wi]);
+      if (renderer.getTextWidth(rowFont, candidate.c_str()) <= availableWidth) {
+        line1 = candidate;
+        wi++;
+      } else {
+        break;
+      }
+    }
+    if (line1.empty() && wi < words.size()) {
+      auto split = takePrefixFit(words[wi], availableWidth);
+      line1 = split.first;
+      if (!split.second.empty())
+        words[wi] = split.second;
+      else
+        wi++;
+    }
+    std::string line2;
+    while (wi < words.size()) {
+      const std::string candidate = line2.empty() ? words[wi] : (line2 + " " + words[wi]);
+      if (renderer.getTextWidth(rowFont, candidate.c_str()) <= availableWidth) {
+        line2 = candidate;
+        wi++;
+      } else {
+        if (line2.empty()) {
+          auto split = takePrefixFit(words[wi], availableWidth);
+          line2 = split.first;
+        }
+        break;
+      }
+    }
+    return {line1, line2};
+  };
+
+  // computeValueText mirrors the original inline block so the pre-scan and
+  // render loop share one source of truth for what the row shows.
+  auto computeValueText = [&](const FlatSettingRow& row) -> std::string {
+    if (row.isHeader) return std::string();
     const auto* settings = settingsForCategory(row.categoryIndex);
     const auto& setting = (*settings)[row.settingIndex];
-    const bool isSelected = (i == selectedRowIndex);
-    const char* settingName = I18N.get(setting.nameId);
-    constexpr int kChipPad = 1;
-    const int textH = renderer.getTextHeight(UI_10_FONT_ID);
-    const int chipH = textH + kChipPad * 2;
-    const int chipY = rowY + (rowHeight - chipH) / 2;
-
-    if (isSelected) {
-      const int nameWidth = renderer.getTextWidth(UI_10_FONT_ID, settingName);
-      renderer.fillRect(metrics.contentSidePadding - kChipPad, chipY, nameWidth + kChipPad * 2, chipH, true);
-    }
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, rowY, settingName, !isSelected);
-
-    std::string valueText;
+    std::string v;
     if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
-      valueText = (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
+      v = (SETTINGS.*(setting.valuePtr)) ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
     } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
       if (setting.valuePtr == &CrossPointSettings::fontSize) {
         const uint8_t size =
             (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) ? SETTINGS.customFontSizePt : SETTINGS.fontSize;
-        valueText = fontSizeValueLabel(SETTINGS.fontFamily, size);
+        v = fontSizeValueLabel(SETTINGS.fontFamily, size);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
         if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-          // Walk uniqueFamilyNames() — same ordering used to build
-          // dynamicLabels and to cycle the picker. Iterating families_
-          // directly desynchronises when one family has multiple sizes
-          // (slot overshoots dynamicLabels and the value renders blank).
           const auto names = crosspoint::fonts::CustomFontManager::instance().uniqueFamilyNames();
           bool matched = false;
-          for (size_t i = 0; i < names.size(); ++i) {
-            if (names[i] == SETTINGS.customFontName) {
-              if (i < setting.dynamicLabels.size()) valueText = setting.dynamicLabels[i];
+          for (size_t k = 0; k < names.size(); ++k) {
+            if (names[k] == SETTINGS.customFontName) {
+              if (k < setting.dynamicLabels.size()) v = setting.dynamicLabels[k];
               matched = true;
               break;
             }
           }
-          if (!matched && !setting.dynamicLabels.empty()) {
-            valueText = setting.dynamicLabels[0];
-          } else if (!matched) {
-            // No installed custom fonts at all — display the built-in
-            // default so the picker isn't blank.
-            valueText = I18N.get(setting.enumValues[0]);
-          }
+          if (!matched && !setting.dynamicLabels.empty())
+            v = setting.dynamicLabels[0];
+          else if (!matched)
+            v = I18N.get(setting.enumValues[0]);
         } else {
-          valueText = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
+          v = I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
         }
       } else {
-        valueText = I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
+        v = I18N.get(setting.enumValues[SETTINGS.*(setting.valuePtr)]);
       }
     } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
       const uint8_t valueToShow =
           (valueEditMode && row.categoryIndex == valueEditCategoryIndex && row.settingIndex == valueEditSettingIndex)
               ? valueEditDraft
               : SETTINGS.*(setting.valuePtr);
-      valueText = std::to_string(valueToShow);
-      if (setting.valuePtr == &CrossPointSettings::lineSpacingPercent) {
-        valueText += "%";
+      v = std::to_string(valueToShow);
+      if (setting.valuePtr == &CrossPointSettings::lineSpacingPercent) v += "%";
+    }
+    return v;
+  };
+
+  // Pre-scan pass: for every row decide how its label wraps and whether the
+  // value inlines next to the label or drops to a line below. Rows that do
+  // not fit on one line grow to 2 (wrapped label OR dropped value) or 3
+  // (wrapped label + dropped value) row-heights. Pagination then packs by
+  // summed heights so we never clip a row mid-wrap.
+  const int rowCount = static_cast<int>(flatRows.size());
+  std::vector<std::string> valueTexts(rowCount);
+  std::vector<std::string> labelLine1s(rowCount);
+  std::vector<std::string> labelLine2s(rowCount);
+  std::vector<uint8_t> valueLineOffset(rowCount, 0);
+  std::vector<int> rowHeights(rowCount, rowHeight);
+
+  for (int i = 0; i < rowCount; i++) {
+    const auto& row = flatRows[i];
+    if (row.isHeader) continue;
+    const auto* settings = settingsForCategory(row.categoryIndex);
+    const auto& setting = (*settings)[row.settingIndex];
+    const char* settingName = I18N.get(setting.nameId);
+    auto labelSplit = splitLabel(settingName);
+    labelLine1s[i] = std::move(labelSplit.first);
+    labelLine2s[i] = std::move(labelSplit.second);
+    const int labelLineCount = labelLine2s[i].empty() ? 1 : 2;
+
+    std::string v = computeValueText(row);
+    if (v.empty()) {
+      rowHeights[i] = labelLineCount * rowHeight;
+      continue;
+    }
+    const int valueW = renderer.getTextWidth(rowFont, v.c_str());
+    const int line1W = renderer.getTextWidth(rowFont, labelLine1s[i].c_str());
+    const bool canInline = (labelLineCount == 1) && (line1W + wrapGap + valueW <= availableWidth);
+    if (canInline) {
+      rowHeights[i] = rowHeight;
+      valueLineOffset[i] = 0;
+    } else {
+      rowHeights[i] = (labelLineCount + 1) * rowHeight;
+      valueLineOffset[i] = static_cast<uint8_t>(labelLineCount);
+    }
+    valueTexts[i] = std::move(v);
+  }
+
+  // Page-pack by summed row heights so no row ever gets clipped mid-wrap.
+  std::vector<int> pageOfRow(rowCount, 0);
+  {
+    int curPage = 0;
+    int usedH = 0;
+    for (int i = 0; i < rowCount; i++) {
+      if (usedH > 0 && usedH + rowHeights[i] > contentHeight) {
+        curPage++;
+        usedH = 0;
       }
+      pageOfRow[i] = curPage;
+      usedH += rowHeights[i];
+    }
+  }
+
+  int pageStartIndex = 0;
+  if (rowCount > 0) {
+    const int clampedSel = std::min(std::max(selectedRowIndex, 0), rowCount - 1);
+    const int targetPage = pageOfRow[clampedSel];
+    while (pageStartIndex < rowCount && pageOfRow[pageStartIndex] != targetPage) pageStartIndex++;
+  }
+
+  const int renderPage = (rowCount > 0) ? pageOfRow[pageStartIndex] : 0;
+  int rowYOffset = 0;
+  for (int i = pageStartIndex; i < rowCount && pageOfRow[i] == renderPage; i++) {
+    const int rowY = contentY + rowYOffset;
+    const auto& row = flatRows[i];
+    const int thisRowHeight = rowHeights[i];
+
+    if (row.isHeader) {
+      renderer.fillRect(0, rowY, pageWidth, rowHeight, true);
+      const char* label = I18N.get(kCategoryNames[row.categoryIndex]);
+      const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
+      renderer.drawText(UI_10_FONT_ID, (pageWidth - textW) / 2, rowY, label, false, EpdFontFamily::REGULAR);
+      rowYOffset += thisRowHeight;
+      continue;
     }
 
+    const bool isSelected = (i == selectedRowIndex);
+    const int textH = renderer.getTextHeight(rowFont);
+    const int chipH = textH + kChipPad * 2;
+
+    const std::string& labelL1 = labelLine1s[i];
+    const std::string& labelL2 = labelLine2s[i];
+    const bool hasLabelL2 = !labelL2.empty();
+    const int labelL1Y = rowY;
+    const int labelL2Y = rowY + rowHeight;
+    const int valueY = rowY + valueLineOffset[i] * rowHeight;
+    const int labelL1ChipY = labelL1Y + (rowHeight - chipH) / 2;
+    const int labelL2ChipY = labelL2Y + (rowHeight - chipH) / 2;
+    const int valueChipY = valueY + (rowHeight - chipH) / 2;
+
+    const int labelL1W = renderer.getTextWidth(rowFont, labelL1.c_str());
+    if (isSelected) {
+      renderer.fillRect(metrics.contentSidePadding - kChipPad, labelL1ChipY, labelL1W + kChipPad * 2, chipH, true);
+    }
+    renderer.drawText(rowFont, metrics.contentSidePadding, labelL1Y, labelL1.c_str(), !isSelected);
+
+    if (hasLabelL2) {
+      const int labelL2W = renderer.getTextWidth(rowFont, labelL2.c_str());
+      if (isSelected) {
+        renderer.fillRect(metrics.contentSidePadding - kChipPad, labelL2ChipY, labelL2W + kChipPad * 2, chipH, true);
+      }
+      renderer.drawText(rowFont, metrics.contentSidePadding, labelL2Y, labelL2.c_str(), !isSelected);
+    }
+
+    const std::string& valueText = valueTexts[i];
     if (!valueText.empty()) {
-      const int valueW = renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str());
+      const int valueW = renderer.getTextWidth(rowFont, valueText.c_str());
       const int valueX = pageWidth - metrics.contentSidePadding - valueW;
       if (isSelected) {
-        renderer.fillRect(valueX - kChipPad, chipY, valueW + kChipPad * 2, chipH, true);
+        renderer.fillRect(valueX - kChipPad, valueChipY, valueW + kChipPad * 2, chipH, true);
       }
-      renderer.drawText(UI_10_FONT_ID, valueX, rowY, valueText.c_str(), !isSelected);
+      renderer.drawText(rowFont, valueX, valueY, valueText.c_str(), !isSelected);
     }
+
+    rowYOffset += thisRowHeight;
   }
 
   const char* confirmLabel = (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM) : tr(STR_TOGGLE);

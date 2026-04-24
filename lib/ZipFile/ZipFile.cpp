@@ -552,23 +552,29 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   }
 
   if (fileStat.method == MZ_DEFLATED) {
-    // Allocate the largest buffer first (32 KB dictionary) to maximise the
-    // chance of finding a contiguous block before smaller allocations
-    // fragment the heap.
-    const auto outputBuffer = static_cast<uint8_t*>(malloc(TINFL_LZ_DICT_SIZE));
-    if (!outputBuffer) {
-      LOG_ERR("ZIP", "Failed to allocate %u bytes for dictionary", (unsigned)TINFL_LZ_DICT_SIZE);
-      if (!wasOpen) {
-        close();
-      }
-      return false;
-    }
+    // The 32 KB sliding-window dictionary used to come from malloc here,
+    // which meant every call into the DEFLATE path needed a fresh 32 KB
+    // contiguous block. Hardware capture 2026-04-24 caught the failure
+    // mode: user switches fonts mid-book, layout re-runs, largest free
+    // block has fragmented to ~29 KB from normal activity, malloc(32 KB)
+    // returns null, section build fails, user sees "Couldn't lay out this
+    // section". 32 KB contiguous was unreliable at best — the single
+    // biggest contiguous demand the reader makes.
+    //
+    // Reserve it as BSS (function-scope static) so it's allocated once at
+    // boot, never fragments, and is always available regardless of
+    // mid-session heap state. Trade: 32 KB of SRAM dedicated permanently
+    // (~10% of the ESP32-C3's 320 KB). Worth it — this is the allocation
+    // that has caused the majority of "REBOOT DEVICE" reports. Single-
+    // threaded ZIP decompression (main loop serialises every caller) so
+    // sharing one buffer is safe without locking.
+    static uint8_t outputBuffer[TINFL_LZ_DICT_SIZE];
     memset(outputBuffer, 0, TINFL_LZ_DICT_SIZE);
 
     const auto inflator = static_cast<tinfl_decompressor*>(malloc(sizeof(tinfl_decompressor)));
     if (!inflator) {
       LOG_ERR("ZIP", "Failed to allocate memory for inflator");
-      free(outputBuffer);
+      // outputBuffer is static BSS — no free needed
       if (!wasOpen) {
         close();
       }
@@ -580,7 +586,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     const auto fileReadBuffer = static_cast<uint8_t*>(malloc(chunkSize));
     if (!fileReadBuffer) {
       LOG_ERR("ZIP", "Failed to allocate memory for zip file read buffer");
-      free(outputBuffer);
+      // outputBuffer is static BSS — no free needed
       free(inflator);
       if (!wasOpen) {
         close();
@@ -633,7 +639,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
           if (!wasOpen) {
             close();
           }
-          free(outputBuffer);
+          // outputBuffer is static BSS — no free needed
           free(fileReadBuffer);
           free(inflator);
           return false;
@@ -647,7 +653,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
         if (!wasOpen) {
           close();
         }
-        free(outputBuffer);
+        // outputBuffer is static BSS — no free needed
         free(fileReadBuffer);
         free(inflator);
         return false;
@@ -660,7 +666,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
         }
         free(inflator);
         free(fileReadBuffer);
-        free(outputBuffer);
+        // outputBuffer is static BSS — no free needed
         return true;
       }
     }
@@ -670,7 +676,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     if (!wasOpen) {
       close();
     }
-    free(outputBuffer);
+    // outputBuffer is static BSS — no free needed
     free(fileReadBuffer);
     free(inflator);
     return false;

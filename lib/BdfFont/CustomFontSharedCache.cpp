@@ -7,6 +7,24 @@
 namespace crosspoint {
 namespace bdf {
 
+// Permanent BSS reservation for the decoded-glyph bitmap slab. Sized to the
+// kCustomFontCacheBudgetBytes constant used by CustomFontManager when it
+// calls setCacheBudget. Previously this buffer was heap_caps_malloc'd fresh
+// on every registerWithRenderer / restoreSlab, but by the time createSection
+// File's 82 s layout pass had run the heap was routinely fragmented enough
+// that a 16 KB contiguous alloc failed → `restored 0 custom font caches
+// (failed=1)` → every lookup() hit the metrics fallback → blank text on the
+// first page after a font switch. Single-active-custom-font invariant
+// (enforced in CustomFontManager::registerWithRenderer) means exactly one
+// CustomFontSharedCache ever points into this buffer at a time, and access
+// is single-threaded from the main loop, so no locking is needed.
+//
+// Cost: 16 KB permanent SRAM (BSS). The device has ~400 KB SRAM total and
+// the dedicated-reading workload benefits far more from a bulletproof font
+// path than from the flex that heap-allocating this region provided.
+constexpr size_t kStaticSlabBytes = 16 * 1024;
+static uint8_t gStaticBitmapSlab[kStaticSlabBytes];
+
 CustomFontSharedCache::~CustomFontSharedCache() { clearSlab_(); }
 
 bool CustomFontSharedCache::ensureMaxBitmapBytes(size_t requiredBytes) {
@@ -43,9 +61,30 @@ bool CustomFontSharedCache::setCacheCap(size_t slots) {
 
 bool CustomFontSharedCache::setCacheBudget(size_t budgetBytes) {
   lastBudgetBytes_ = budgetBytes;
-  size_t slots = maxBitmapBytes_ > 0 ? (budgetBytes / maxBitmapBytes_) : 1;
+  if (maxBitmapBytes_ == 0) return setCacheCap(1);
+
+  // Try the requested budget first. If the slab alloc fails we fall back
+  // toward a 1-slot cache rather than giving up — the caller (the font
+  // register path) used to bail with a "heap floor reached" log when
+  // largest was just 5–10 KB short of the full 16 KB budget, which left
+  // the renderer with no custom font at all and triggered "Font N not
+  // found" spam + blank text on every page (captured 2026-04-24).
+  // Degraded-but-working beats not-registered; lookup() falls back to the
+  // decode-on-each-call path via the metrics fallback when the cache is
+  // tiny, and we re-grow the slab on the next releaseSlab/restoreSlab
+  // cycle when heap pressure eases.
+  size_t slots = budgetBytes / maxBitmapBytes_;
   if (slots < 1) slots = 1;
-  return setCacheCap(slots);
+  while (slots >= 1) {
+    if (setCacheCap(slots)) return true;
+    if (slots == 1) break;
+    // Halve the slot count and retry. The allocator may have had room for
+    // fewer slots but not the full slab; give it a chance before declaring
+    // the font unusable.
+    slots /= 2;
+    if (slots < 1) slots = 1;
+  }
+  return false;
 }
 
 void CustomFontSharedCache::clearCache() {
@@ -92,15 +131,13 @@ bool CustomFontSharedCache::restoreSlab() {
 }
 
 bool CustomFontSharedCache::allocSlab_() {
-  // Drop prior tables BEFORE sizing anything new — otherwise the old slots_
-  // + cacheMap_ can occupy heap that the fresh slab needs.
+  // Drop the prior slot metadata tables. Unlike the old heap-slab design we
+  // no longer free the bitmap buffer itself — gStaticBitmapSlab lives in
+  // BSS for the life of the program.
   std::unordered_map<uint32_t, uint16_t>().swap(cacheMap_);
   std::vector<Slot>().swap(slots_);
-  if (bitmapSlab_ != nullptr) {
-    heap_caps_free(bitmapSlab_);
-    bitmapSlab_ = nullptr;
-    slabBytes_ = 0;
-  }
+  bitmapSlab_ = nullptr;
+  slabBytes_ = 0;
 
   if (cacheCap_ == 0 || maxBitmapBytes_ == 0) {
     // Nothing to allocate. Reset LRU/free pointers so callers see a clean
@@ -111,21 +148,22 @@ bool CustomFontSharedCache::allocSlab_() {
     return true;
   }
 
-  constexpr size_t kHeapSafetyMargin = 32 * 1024;
-  constexpr size_t kLargeSlabThreshold = 2048;
-  const size_t slabBytes = cacheCap_ * maxBitmapBytes_;
-  const size_t requiredMargin = slabBytes >= kLargeSlabThreshold ? kHeapSafetyMargin : 0;
-  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  if (slabBytes + requiredMargin > largest) {
-    return false;
+  // Clamp cacheCap_ so (cacheCap_ * maxBitmapBytes_) fits in the static
+  // buffer. Fonts with larger bbx get fewer slots but still work — no
+  // failure path. In practice every real-world font the user can install
+  // uses < 800 B per glyph, so 16 KB / 800 ≈ 20 slots is still a usable
+  // cache even in the worst case.
+  if (cacheCap_ * maxBitmapBytes_ > kStaticSlabBytes) {
+    cacheCap_ = kStaticSlabBytes / maxBitmapBytes_;
+    if (cacheCap_ == 0) cacheCap_ = 1;
   }
 
-  // Allocate the big slab FIRST — while largest-contiguous is still largest.
-  // If this succeeds, the smaller slots_/cacheMap_ allocations that follow
-  // fit into fragments left over, not the block we want for bitmaps.
-  bitmapSlab_ = static_cast<uint8_t*>(heap_caps_malloc(slabBytes, MALLOC_CAP_8BIT));
-  if (bitmapSlab_ == nullptr) return false;
-  slabBytes_ = slabBytes;
+  // Point at the static buffer. No malloc, no heap pressure, no failure.
+  // Only the trailing slots_.resize() / cacheMap_.reserve() calls touch
+  // the heap, and those allocations are in the low-KB range that the
+  // allocator has never struggled with in practice.
+  bitmapSlab_ = gStaticBitmapSlab;
+  slabBytes_ = cacheCap_ * maxBitmapBytes_;
 
   slots_.resize(cacheCap_);
   cacheMap_.reserve(cacheCap_);
@@ -144,10 +182,9 @@ bool CustomFontSharedCache::allocSlab_() {
 void CustomFontSharedCache::clearSlab_() {
   std::unordered_map<uint32_t, uint16_t>().swap(cacheMap_);
   std::vector<Slot>().swap(slots_);
-  if (bitmapSlab_ != nullptr) {
-    heap_caps_free(bitmapSlab_);
-    bitmapSlab_ = nullptr;
-  }
+  // bitmapSlab_ points into the static gStaticBitmapSlab buffer when active;
+  // just forget the pointer, never free.
+  bitmapSlab_ = nullptr;
   slabBytes_ = 0;
   freeHead_ = kNil;
   lruHead_ = kNil;
