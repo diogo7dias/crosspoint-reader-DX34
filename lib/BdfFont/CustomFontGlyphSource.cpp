@@ -207,7 +207,8 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
     // symptom surfaces. cap == 0 is the intentional release window and
     // stays silent.
     if (sharedCache_->cacheCap() > 0 && !unexpectedFallbackLogged_) {
-      LOG_INF("BDF", "metrics fallback fired with cap=%u (unexpected — slab alloc failure under heap pressure?) cp=U+%04X",
+      LOG_INF("BDF",
+              "metrics fallback fired with cap=%u (unexpected — slab alloc failure under heap pressure?) cp=U+%04X",
               static_cast<unsigned>(sharedCache_->cacheCap()), static_cast<unsigned>(codepoint));
       unexpectedFallbackLogged_ = true;
     }

@@ -1,10 +1,10 @@
 #include "ReaderActivity.h"
 
 #include <Arduino.h>
-#include <esp_heap_caps.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include "CrossPointSettings.h"
 #include "Epub.h"

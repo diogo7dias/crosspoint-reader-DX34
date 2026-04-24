@@ -1,10 +1,10 @@
 #include "Section.h"
 
 #include <Arduino.h>
-#include <esp_heap_caps.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Serialization.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
