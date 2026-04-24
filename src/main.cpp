@@ -689,12 +689,21 @@ void setup() {
   Storage.mkdir("/custom-font");
 
   auto& customFonts = crosspoint::fonts::CustomFontManager::instance();
-  customFonts.scanAndQueuePrompts();
-  // Register any BDF whose .idx is already on SD so the reader text path can
-  // dispatch to it. Runs BEFORE showing the install prompt so that if the
-  // user chose "Skip (this boot)" on a previously-installed font they can
-  // still read with it today.
-  customFonts.registerWithRenderer(renderer);
+  
+  if (Storage.exists("/custom-font/.lock")) {
+    LOG_ERR("MAIN", "Boot-loop detected during custom font load! Skipping fonts this boot.");
+    Storage.remove("/custom-font/.lock");
+    // Fonts will not be loaded or registered. The fallback logic below will handle reverting the settings.
+  } else {
+    Storage.writeFile("/custom-font/.lock", "1");
+    customFonts.scanAndQueuePrompts();
+    // Register any BDF whose .idx is already on SD so the reader text path can
+    // dispatch to it. Runs BEFORE showing the install prompt so that if the
+    // user chose "Skip (this boot)" on a previously-installed font they can
+    // still read with it today.
+    customFonts.registerWithRenderer(renderer);
+    Storage.remove("/custom-font/.lock");
+  }
 
   // Safety net: if SETTINGS picks a custom family whose named BDF is not
   // actually registered (e.g. user deleted the file off SD externally),

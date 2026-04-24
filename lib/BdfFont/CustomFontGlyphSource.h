@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "BdfIndex.h"
+#include "CustomFontSharedCache.h"
 
 namespace crosspoint {
 namespace bdf {
@@ -42,12 +43,11 @@ class CustomFontGlyphSource {
   void close();
   bool isOpen() const { return idxOpen_; }
 
-  // Configure max cached glyphs. Must be >=1; clamped to 65534. Changing
-  // the cap while open clears all cached glyphs and reallocates the slab.
-  // Returns false if reallocation failed due to heap pressure — source is
-  // left closed in that case (caller should treat the font as unavailable).
-  bool setCacheCap(size_t slots);
-  size_t cacheCap() const { return cacheCap_; }
+  void setSharedCache(CustomFontSharedCache* cache, uint8_t variantIndex) {
+    sharedCache_ = cache;
+    variantIndex_ = variantIndex;
+  }
+  size_t maxBitmapBytes() const { return maxBitmapBytes_; }
 
   uint32_t glyphCount() const { return glyphCount_; }
   int8_t fontBbxW() const { return hdr_.fontBbxW; }
@@ -55,19 +55,7 @@ class CustomFontGlyphSource {
   int8_t fontAscent() const { return hdr_.fontAscent; }
   int8_t fontDescent() const { return hdr_.fontDescent; }
 
-  struct Glyph {
-    uint32_t codepoint;
-    uint8_t bbxW;
-    uint8_t bbxH;
-    int8_t bbxOffX;
-    int8_t bbxOffY;
-    uint8_t advance;
-    // ceil(bbxW / 8) * bbxH bytes, MSB-first per row, padded to byte
-    // boundary at the end of each row. Borrowed pointer into the slab;
-    // valid until that slot is evicted or the source is closed.
-    const uint8_t* bitmap;
-    size_t bitmapBytes;
-  };
+  using Glyph = CachedGlyph;
 
   // O(log N) binary search in .idx + bitmap decode. Returns nullptr if the
   // codepoint is not in the index. On cache hit the slot is promoted to
@@ -76,27 +64,8 @@ class CustomFontGlyphSource {
   const Glyph* lookup(uint32_t codepoint);
 
  private:
-  static constexpr uint16_t kNil = 0xFFFF;
-
-  struct Slot {
-    Glyph glyph{};
-    uint16_t prev = kNil;  // MRU neighbour (or kNil if head / free)
-    uint16_t next = kNil;  // LRU neighbour (or kNil if tail / end of free list)
-    bool occupied = false;
-  };
-
   bool readIndexEntry(uint32_t indexPos, IndexEntry& out);
   bool decodeBitmap(const IndexEntry& e, uint8_t* dst, size_t dstCap);
-
-  // Returns false if required slab size cannot fit in the largest free heap
-  // block (plus safety margin). On failure the source is left closed.
-  bool allocSlab_();
-  void clearSlab_();
-  void lruUnlink_(uint16_t idx);
-  void lruPushFront_(uint16_t idx);
-  uint16_t takeFreeSlot_();
-  uint16_t evictLru_();
-  void returnToFreeList_(uint16_t idx);
 
   HalFile bdfFile_;
   HalFile idxFile_;
@@ -106,17 +75,8 @@ class CustomFontGlyphSource {
   uint32_t glyphCount_ = 0;
   size_t maxBitmapBytes_ = 0;
 
-  size_t cacheCap_ = 1;
-
-  // Pre-allocated storage. Sized at allocSlab_() (open / setCacheCap).
-  // Single contiguous bitmap arena: slot i owns bytes
-  // [i * maxBitmapBytes_, (i + 1) * maxBitmapBytes_).
-  std::vector<uint8_t> bitmapSlab_;
-  std::vector<Slot> slots_;
-  std::unordered_map<uint32_t, uint16_t> cacheMap_;
-  uint16_t lruHead_ = kNil;  // most recently used
-  uint16_t lruTail_ = kNil;  // least recently used
-  uint16_t freeHead_ = kNil;
+  CustomFontSharedCache* sharedCache_ = nullptr;
+  uint8_t variantIndex_ = 0;
 };
 
 }  // namespace bdf

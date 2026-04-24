@@ -18,43 +18,56 @@ constexpr size_t kSlotForStyle(CustomFont::StyleBits style) {
 
 }  // namespace
 
-bool CustomFont::open(const char* bdfPath, const char* idxPath, uint16_t sizePt, size_t cacheSlots) {
-  auto src = std::make_unique<CustomFontGlyphSource>();
-  if (!src->open(bdfPath, idxPath)) return false;
-  if (!src->setCacheCap(cacheSlots == 0 ? 1 : cacheSlots)) return false;
-  variants_[SLOT_REGULAR] = std::move(src);
-  sizePt_ = sizePt;
-  return true;
-}
 
-bool CustomFont::openVariant(size_t slot, const char* bdfPath, const char* idxPath, size_t cacheSlots) {
-  if (slot == SLOT_REGULAR || slot >= 4) return false;
-  auto src = std::make_unique<CustomFontGlyphSource>();
-  if (!src->open(bdfPath, idxPath)) return false;
-  if (!src->setCacheCap(cacheSlots == 0 ? 1 : cacheSlots)) return false;
-  variants_[slot] = std::move(src);
+
+bool CustomFont::openVariant(size_t slot, const char* bdfPath, const char* idxPath, size_t cacheBudgetBytes) {
+  if (slot >= 4) return false;
+  pendingVariants_[slot].bdfPath = bdfPath ? bdfPath : "";
+  pendingVariants_[slot].idxPath = idxPath ? idxPath : "";
+  pendingVariants_[slot].cacheBudgetBytes = cacheBudgetBytes == 0 ? 1 : cacheBudgetBytes;
+  pendingVariants_[slot].registered = true;
   return true;
 }
 
 void CustomFont::trimCache(size_t slots) {
-  for (auto& v : variants_) {
-    if (v && v->isOpen()) {
-      v->setCacheCap(slots == 0 ? 1 : slots);
+  sharedCache_.setCacheCap(slots == 0 ? 1 : slots);
+  for (auto& p : pendingVariants_) {
+    if (p.registered) {
+      p.cacheBudgetBytes = (slots == 0 ? 1 : slots);
     }
   }
 }
 
 CustomFontGlyphSource* CustomFont::getVariant(StyleBits style) const {
   const size_t wanted = kSlotForStyle(style);
-  if (wanted != SLOT_REGULAR && variants_[wanted]) return variants_[wanted].get();
+  
+  auto resolveSlot = [this](size_t slot) -> CustomFontGlyphSource* {
+    if (slot >= 4) return nullptr;
+    if (!variants_[slot] && pendingVariants_[slot].registered) {
+      auto src = std::make_unique<CustomFontGlyphSource>();
+      if (src->open(pendingVariants_[slot].bdfPath.c_str(), pendingVariants_[slot].idxPath.c_str())) {
+        sharedCache_.ensureMaxBitmapBytes(src->maxBitmapBytes());
+        src->setSharedCache(&sharedCache_, slot);
+        sharedCache_.setCacheBudget(pendingVariants_[slot].cacheBudgetBytes);
+        // Prewarm ASCII and Latin-1
+        for (uint32_t cp = 0x20; cp <= 0x00FF; ++cp) src->lookup(cp);
+        variants_[slot] = std::move(src);
+      }
+      pendingVariants_[slot].registered = false;
+    }
+    return variants_[slot].get();
+  };
+
+  if (wanted != SLOT_REGULAR && resolveSlot(wanted)) return variants_[wanted].get();
+
   // Fallthroughs match EpdFontFamily::getFont priority. bold+italic →
   // italic → bold → regular.
   if (wanted == SLOT_BOLD_ITALIC) {
-    if (variants_[SLOT_ITALIC]) return variants_[SLOT_ITALIC].get();
-    if (variants_[SLOT_BOLD]) return variants_[SLOT_BOLD].get();
-  } else if (wanted == SLOT_ITALIC && variants_[SLOT_ITALIC]) {
+    if (resolveSlot(SLOT_ITALIC)) return variants_[SLOT_ITALIC].get();
+    if (resolveSlot(SLOT_BOLD)) return variants_[SLOT_BOLD].get();
+  } else if (wanted == SLOT_ITALIC && resolveSlot(SLOT_ITALIC)) {
     return variants_[SLOT_ITALIC].get();
-  } else if (wanted == SLOT_BOLD && variants_[SLOT_BOLD]) {
+  } else if (wanted == SLOT_BOLD && resolveSlot(SLOT_BOLD)) {
     return variants_[SLOT_BOLD].get();
   }
   return variants_[SLOT_REGULAR] ? variants_[SLOT_REGULAR].get() : nullptr;
@@ -69,8 +82,8 @@ uint8_t CustomFont::getSyntheticBoldPasses(StyleBits style) const {
   if (bold) {
     const bool italic = (style & STYLE_ITALIC) != 0;
     const size_t resolvedSlot =
-        italic ? (variants_[SLOT_BOLD_ITALIC] ? SLOT_BOLD_ITALIC : (variants_[SLOT_BOLD] ? SLOT_BOLD : SLOT_REGULAR))
-               : (variants_[SLOT_BOLD] ? SLOT_BOLD : SLOT_REGULAR);
+        italic ? (hasVariant(SLOT_BOLD_ITALIC) ? SLOT_BOLD_ITALIC : (hasVariant(SLOT_BOLD) ? SLOT_BOLD : SLOT_REGULAR))
+               : (hasVariant(SLOT_BOLD) ? SLOT_BOLD : SLOT_REGULAR);
     boldHandledByVariant = (resolvedSlot == SLOT_BOLD || resolvedSlot == SLOT_BOLD_ITALIC);
   }
   return syntheticRegularBoldPasses_ + ((bold && !boldHandledByVariant) ? syntheticBoldExtraPasses_ : 0);
@@ -82,9 +95,9 @@ bool CustomFont::shouldSynthesizeItalic(StyleBits style) const {
   const bool bold = (style & STYLE_BOLD) != 0;
   // Match getVariant fallback order for italic resolution.
   if (bold) {
-    return !variants_[SLOT_BOLD_ITALIC] && !variants_[SLOT_ITALIC];
+    return !hasVariant(SLOT_BOLD_ITALIC) && !hasVariant(SLOT_ITALIC);
   }
-  return !variants_[SLOT_ITALIC];
+  return !hasVariant(SLOT_ITALIC);
 }
 
 const CustomFontGlyphSource::Glyph* CustomFont::resolveGlyph(CustomFontGlyphSource& src, uint32_t cp) {
@@ -102,7 +115,7 @@ int CustomFont::ascender(StyleBits /*style*/) const {
   // (happens often with third-party bold variants). Built-in
   // EpdFontFamily enforces the same convention by computing metrics
   // from the regular slot.
-  auto* v = variants_[SLOT_REGULAR] ? variants_[SLOT_REGULAR].get() : nullptr;
+  auto* v = getVariant(STYLE_REGULAR);
   if (!v) return 0;
   const int a = v->fontAscent();
   if (a > 0) return a;
@@ -110,14 +123,14 @@ int CustomFont::ascender(StyleBits /*style*/) const {
 }
 
 int CustomFont::descender(StyleBits /*style*/) const {
-  auto* v = variants_[SLOT_REGULAR] ? variants_[SLOT_REGULAR].get() : nullptr;
+  auto* v = getVariant(STYLE_REGULAR);
   if (!v) return 0;
   const int d = v->fontDescent();
   return d > 0 ? -d : 0;
 }
 
 int CustomFont::lineHeight(StyleBits /*style*/) const {
-  auto* v = variants_[SLOT_REGULAR] ? variants_[SLOT_REGULAR].get() : nullptr;
+  auto* v = getVariant(STYLE_REGULAR);
   if (!v) return 0;
   const int a = v->fontAscent();
   const int d = v->fontDescent();

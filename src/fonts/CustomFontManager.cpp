@@ -38,17 +38,18 @@ namespace {
 
 constexpr const char* kModule = "CFONT";
 constexpr const char* kCustomFontDir = "/custom-font";
-constexpr size_t kScanCap = 250;         // hard limit on .bdf files scanned per boot
+constexpr size_t kScanCap = 1000;        // hard limit on .bdf files scanned per boot
+constexpr size_t kScanHeapFloorBytes = 150 * 1024; // stop scanning if free heap drops below this
 constexpr size_t kWdtResetInterval = 32; // reset watchdog every N dir entries
 
 // Phase 2b LRU cache budget. Per-variant slab = slots * maxBitmapBytes, where
 // maxBitmapBytes scales with the font's bounding box. For a 32pt display font
 // with bbx 112x46 that is ~644 B/slot. Only the reader-active family gets the
-// full cap; the rest register with kCacheSlotsInactive so they take minimal
-// heap and do not fragment the arena into pieces too small for the epub
+// full cap. We now size by byte-budget to ensure tiny fonts get more slots
+// and huge fonts don't OOM.
 // section-cache's 32 KB contiguous block (which shows the OOM/reboot screen
 // when it fails).
-constexpr size_t kCustomFontCacheSlots = 32;
+constexpr size_t kCustomFontCacheBudgetBytes = 16 * 1024;
 constexpr size_t kCacheSlotsInactive = 4;
 
 // Stop opening more families when the largest contiguous free block drops
@@ -233,7 +234,7 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
       continue;
     }
 
-    const size_t familyCacheSlots = kCustomFontCacheSlots;
+    const size_t familyCacheBudgetBytes = kCustomFontCacheBudgetBytes;
 
     const size_t largestFree = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     if (largestFree < kHeapFloorForNextFamilyBytes) {
@@ -247,11 +248,9 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
       LOG_INF(kModule, "alloc CustomFont failed for %s", regEntry.filename.c_str());
       continue;
     }
-    if (!font->open(bdfPath, regIdxPath.c_str(), regEntry.sizePt, familyCacheSlots)) {
-      LOG_INF(kModule, "open failed for %s (heap pressure or IO)", regEntry.filename.c_str());
-      delete font;
-      continue;
-    }
+    
+    font->setSizePt(g.sizePt);
+    font->openVariant(bdf::CustomFont::SLOT_REGULAR, bdfPath, regIdxPath.c_str(), familyCacheBudgetBytes);
 
     for (size_t slot = bdf::CustomFont::SLOT_BOLD; slot < 4; ++slot) {
       const int idx = g.variantEntryIdx[slot];
@@ -264,7 +263,7 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
         LOG_INF(kModule, "variant %s present but .idx missing: %s", kSlotNames[slot], ve.filename.c_str());
         continue;
       }
-      if (!font->openVariant(slot, vBdfPath, vIdxPath.c_str(), familyCacheSlots)) {
+      if (!font->openVariant(slot, vBdfPath, vIdxPath.c_str(), familyCacheBudgetBytes)) {
         LOG_INF(kModule, "variant %s open failed: %s", kSlotNames[slot], ve.filename.c_str());
         continue;
       }
@@ -329,6 +328,14 @@ void CustomFontManager::scanAndQueuePrompts() {
     }
     if (++scanned > kScanCap) {
       LOG_INF(kModule, "scan cap reached (%u files); stopping", static_cast<unsigned>(kScanCap));
+      file.close();
+      break;
+    }
+
+    const size_t largestFree = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (largestFree < kScanHeapFloorBytes) {
+      LOG_INF(kModule, "scan heap budget reached (largest=%u B); stopping at %u files", 
+              static_cast<unsigned>(largestFree), static_cast<unsigned>(scanned));
       file.close();
       break;
     }
@@ -497,70 +504,63 @@ void CustomFontManager::showNextPromptIfAny(GfxRenderer& renderer, MappedInputMa
     }
     snprintf(idxPath, sizeof(idxPath), "%s", idxStr.c_str());
 
-    // Live progress screen. Activity render task picks up setProgress +
-    // requestUpdate from the build callback; the e-ink refresh tick
-    // (~200 ms) naturally rate-limits the updates.
-    auto* progressActivity = new CustomFontInstallProgressActivity(renderer, mappedInput, filename);
+    auto onComplete = [this, filename, bdfPath = std::string(bdfPath), idxPath = std::string(idxPath), &renderer, &mappedInput, onAllDismissed](crosspoint::bdf::BuildIndexResult build) {
+      if (!build.ok) {
+        LOG_INF(kModule, "index build FAILED for %s: %s", filename.c_str(),
+                build.error ? build.error : "unknown");
+      } else {
+        // Register with the renderer right away so the user can pick the
+        // font immediately after install without rebooting.
+        registerWithRenderer(renderer);
+        LOG_INF(kModule, "index built OK: %u glyphs (skipped %u) in %u ms",
+                static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.glyphsSkipped),
+                static_cast<unsigned>(build.parseTimeMs));
+
+        // Verification dump — open the source and resolve a few well-known
+        // codepoints. Confirms the entire pipeline (idx → seek → bitmap decode).
+        bdf::CustomFontGlyphSource src;
+        if (src.open(bdfPath.c_str(), idxPath.c_str())) {
+          const uint32_t samples[] = {0x0041, 0x0042, 0x0048, 0x0069, 0x0420, 0x4E2D};  // A B H i Р 中
+          for (uint32_t cp : samples) {
+            const auto* g = src.lookup(cp);
+            if (!g) {
+              LOG_INF(kModule, "  cp U+%04X: not in font", static_cast<unsigned>(cp));
+              continue;
+            }
+            LOG_INF(kModule, "  cp U+%04X: %ux%u adv=%u offX=%d offY=%d bitmapBytes=%u",
+                    static_cast<unsigned>(cp), static_cast<unsigned>(g->bbxW), static_cast<unsigned>(g->bbxH),
+                    static_cast<unsigned>(g->advance), static_cast<int>(g->bbxOffX), static_cast<int>(g->bbxOffY),
+                    static_cast<unsigned>(g->bitmapBytes));
+          }
+          src.close();
+        } else {
+          LOG_INF(kModule, "verification: failed to reopen %s+%s", bdfPath.c_str(), idxPath.c_str());
+        }
+      }
+
+      // Result screen — brief, then chain. Even on failure the user sees
+      // something other than the build screen.
+      {
+        char doneMsg[200];
+        if (build.ok) {
+          snprintf(doneMsg, sizeof(doneMsg), "Font installed\n\n%u glyphs\n%u ms",
+                   static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.parseTimeMs));
+        } else {
+          snprintf(doneMsg, sizeof(doneMsg), "Install failed\n\n%s", build.error ? build.error : "unknown");
+        }
+        auto* doneActivity = new FullScreenMessageActivity(renderer, mappedInput, doneMsg);
+        exitActivity();
+        enterNewActivity(doneActivity);
+        doneActivity->requestUpdateAndWait();
+        delay(2500);
+      }
+
+      showNextPromptIfAny(renderer, mappedInput, onAllDismissed);
+    };
+
+    auto* progressActivity = new CustomFontInstallProgressActivity(renderer, mappedInput, filename, std::string(bdfPath), std::string(idxPath), onComplete);
     exitActivity();
     enterNewActivity(progressActivity);
-    progressActivity->requestUpdateAndWait();
-
-    LOG_INF(kModule, "building index: %s -> %s", bdfPath, idxPath);
-    // Progress callback dropped in favour of a static "Installing..." screen
-    // (e-ink ghosting swallowed the progress bar). Builder runs with its
-    // default no-op progress.
-    const auto build = bdf::BdfIndexBuilder::buildIndex(bdfPath, idxPath);
-    if (!build.ok) {
-      LOG_INF(kModule, "index build FAILED for %s: %s", filename.c_str(),
-              build.error ? build.error : "unknown");
-    } else {
-      // Register with the renderer right away so the user can pick the
-      // font immediately after install without rebooting.
-      registerWithRenderer(renderer);
-      LOG_INF(kModule, "index built OK: %u glyphs (skipped %u) in %u ms",
-              static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.glyphsSkipped),
-              static_cast<unsigned>(build.parseTimeMs));
-
-      // Verification dump — open the source and resolve a few well-known
-      // codepoints. Confirms the entire pipeline (idx → seek → bitmap decode).
-      bdf::CustomFontGlyphSource src;
-      if (src.open(bdfPath, idxPath)) {
-        const uint32_t samples[] = {0x0041, 0x0042, 0x0048, 0x0069, 0x0420, 0x4E2D};  // A B H i Р 中
-        for (uint32_t cp : samples) {
-          const auto* g = src.lookup(cp);
-          if (!g) {
-            LOG_INF(kModule, "  cp U+%04X: not in font", static_cast<unsigned>(cp));
-            continue;
-          }
-          LOG_INF(kModule, "  cp U+%04X: %ux%u adv=%u offX=%d offY=%d bitmapBytes=%u",
-                  static_cast<unsigned>(cp), static_cast<unsigned>(g->bbxW), static_cast<unsigned>(g->bbxH),
-                  static_cast<unsigned>(g->advance), static_cast<int>(g->bbxOffX), static_cast<int>(g->bbxOffY),
-                  static_cast<unsigned>(g->bitmapBytes));
-        }
-        src.close();
-      } else {
-        LOG_INF(kModule, "verification: failed to reopen %s+%s", bdfPath, idxPath);
-      }
-    }
-
-    // Result screen — brief, then chain. Even on failure the user sees
-    // something other than the build screen.
-    {
-      char doneMsg[200];
-      if (build.ok) {
-        snprintf(doneMsg, sizeof(doneMsg), "Font installed\n\n%u glyphs\n%u ms",
-                 static_cast<unsigned>(build.glyphsWritten), static_cast<unsigned>(build.parseTimeMs));
-      } else {
-        snprintf(doneMsg, sizeof(doneMsg), "Install failed\n\n%s", build.error ? build.error : "unknown");
-      }
-      auto* doneActivity = new FullScreenMessageActivity(renderer, mappedInput, doneMsg);
-      exitActivity();
-      enterNewActivity(doneActivity);
-      doneActivity->requestUpdateAndWait();
-      delay(2500);
-    }
-
-    showNextPromptIfAny(renderer, mappedInput, onAllDismissed);
   };
   auto onSkip = [this, filename, &renderer, &mappedInput, onAllDismissed]() {
     LOG_INF(kModule, "skip (this boot): %s", filename.c_str());

@@ -8,6 +8,7 @@
 #include <string>
 
 #include "CustomFontGlyphSource.h"
+#include "CustomFontSharedCache.h"
 
 namespace crosspoint {
 namespace bdf {
@@ -44,18 +45,20 @@ class CustomFont {
   CustomFont(const CustomFont&) = delete;
   CustomFont& operator=(const CustomFont&) = delete;
 
-  // Opens the regular variant (required). Allocates + opens the glyph
-  // source into the SLOT_REGULAR slot. Must be called before openVariant()
-  // for any other slot.
-  bool open(const char* bdfPath, const char* idxPath, uint16_t sizePt, size_t cacheSlots);
+  // Sets the font size in points.
+  void setSizePt(uint16_t sizePt) { sizePt_ = sizePt; }
 
-  // Opens an additional variant. `slot` in {SLOT_BOLD, SLOT_ITALIC,
+  // Opens an additional variant. `slot` in {SLOT_REGULAR, SLOT_BOLD, SLOT_ITALIC,
   // SLOT_BOLD_ITALIC}. Safe to skip any subset — unopened slots fall
   // back via variant resolution + synthetic passes.
-  bool openVariant(size_t slot, const char* bdfPath, const char* idxPath, size_t cacheSlots);
+  bool openVariant(size_t slot, const char* bdfPath, const char* idxPath, size_t cacheBudgetBytes);
 
   bool isOpen() const { return variants_[SLOT_REGULAR] && variants_[SLOT_REGULAR]->isOpen(); }
-  bool hasVariant(size_t slot) const { return slot < 4 && variants_[slot] && variants_[slot]->isOpen(); }
+  bool hasVariant(size_t slot) const { 
+    if (slot >= 4) return false;
+    if (variants_[slot] && variants_[slot]->isOpen()) return true;
+    return pendingVariants_[slot].registered;
+  }
   uint16_t sizePt() const { return sizePt_; }
 
   // Shrink every variant's glyph cache to `slots` (default 1). Frees the
@@ -117,10 +120,20 @@ class CustomFont {
   // unique_ptr so visitGlyph state (LRU) stays tied to one glyph source
   // and the struct remains non-copyable without deleting the move ops
   // on CustomFont itself.
-  std::array<std::unique_ptr<CustomFontGlyphSource>, 4> variants_{};
+  mutable std::array<std::unique_ptr<CustomFontGlyphSource>, 4> variants_{};
+
+  struct PendingVariant {
+    std::string bdfPath;
+    std::string idxPath;
+    size_t cacheBudgetBytes = 0;
+    bool registered = false;
+  };
+  mutable std::array<PendingVariant, 4> pendingVariants_{};
+
   uint16_t sizePt_ = 0;
   uint8_t syntheticRegularBoldPasses_ = 0;
   uint8_t syntheticBoldExtraPasses_ = 1;  // 1 = visible-but-subtle bold
+  mutable CustomFontSharedCache sharedCache_;
 };
 
 }  // namespace bdf

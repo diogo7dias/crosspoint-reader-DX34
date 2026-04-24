@@ -12,6 +12,29 @@ void CustomFontInstallProgressActivity::onEnter() {
   // refresh. A half refresh clears to white before the progress frame draws.
   renderer.requestHalfRefresh();
   requestUpdate();
+
+  struct TaskArgs {
+      std::string bdf;
+      std::string idx;
+      std::atomic<bool>* done;
+      crosspoint::bdf::BuildIndexResult* result;
+  };
+  auto* args = new TaskArgs{bdfPath, idxPath, &taskDone, &taskResult};
+  
+  xTaskCreate([](void* p) {
+      auto* a = static_cast<TaskArgs*>(p);
+      *a->result = crosspoint::bdf::BdfIndexBuilder::buildIndex(a->bdf.c_str(), a->idx.c_str());
+      a->done->store(true);
+      delete a;
+      vTaskDelete(nullptr);
+  }, "f_install", 8192, args, 1, nullptr);
+}
+
+void CustomFontInstallProgressActivity::loop() {
+    if (taskDone.load()) {
+        taskDone.store(false);
+        if (onComplete) onComplete(taskResult);
+    }
 }
 
 void CustomFontInstallProgressActivity::render(Activity::RenderLock&&) {
