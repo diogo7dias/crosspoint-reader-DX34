@@ -13,7 +13,16 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 21;
+// v22 (2026-04-24): forces every pre-existing .sct to re-layout. v21 caches
+// that pre-date the CustomFontGlyphSource metrics-fallback have zero widths
+// baked in for custom-font pages — layout ran while the font cache was
+// released and lookup() returned nullptr for every codepoint, collapsing
+// word positions. Loading a v21 cache on that path renders stacked/
+// overlapping text on the first visible page. Bumping the version
+// invalidates the bad caches on first open after flash; users lose at most
+// ~80 s per previously-built chapter to re-layout, and book reading
+// position (progress.bin) is unaffected.
+constexpr uint8_t SECTION_FILE_VERSION = 22;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint8_t) +
                                  sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) + sizeof(uint16_t) +
