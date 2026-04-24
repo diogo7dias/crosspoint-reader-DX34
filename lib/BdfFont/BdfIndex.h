@@ -27,7 +27,13 @@ namespace bdf {
 constexpr uint32_t kBdfIndexMagic =
     static_cast<uint32_t>('C') | (static_cast<uint32_t>('P') << 8) | (static_cast<uint32_t>('B') << 16) |
     (static_cast<uint32_t>('I') << 24);
-constexpr uint8_t kBdfIndexVersion = 1;
+// v2: renamed IndexEntry.bdfOffset → bitmapOffset. Same size, same position —
+// only the semantic changed (now points at the first hex row, not at the
+// STARTCHAR line), which lets CustomFontGlyphSource::decodeBitmap seek
+// directly to the hex data and skip the 64-line "find BITMAP" scan that
+// every cold glyph paid under v1. v1 .idx files are rejected at open time
+// so the install flow re-runs and produces a v2 file.
+constexpr uint8_t kBdfIndexVersion = 2;
 
 struct __attribute__((packed)) IndexHeader {
   uint32_t magic;        // kBdfIndexMagic
@@ -45,7 +51,9 @@ static_assert(sizeof(IndexHeader) == 16, "IndexHeader must be exactly 16 bytes")
 
 struct __attribute__((packed)) IndexEntry {
   uint32_t codepoint;     // Unicode scalar
-  uint32_t bdfOffset;     // byte offset of "STARTCHAR" in the source BDF
+  uint32_t bitmapOffset;  // byte offset of the first hex row (first byte AFTER
+                          // the "BITMAP\n" line) in the source BDF. Decoder
+                          // seeks straight here.
   uint8_t bitmapW;        // BBX width  (BDF "BBX W H X Y" first field)
   uint8_t bitmapH;        // BBX height
   uint8_t advance;        // DWIDTH x (advance width in pixels). 0 if not present.

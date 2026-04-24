@@ -7,9 +7,10 @@
 #include <Utf8.h>
 
 GfxRenderer::~GfxRenderer() {
-  for (auto& kv : customFontMap) {
-    delete kv.second;
-  }
+  // customFontMap stores NON-OWNING pointers — ownership lives with
+  // CustomFontManager (the manager survives the renderer in every
+  // production call path, and hands out borrowed pointers). Clearing the
+  // map is enough; deleting here would double-free.
   customFontMap.clear();
   freeBwBufferChunks();
 }
@@ -26,20 +27,14 @@ void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) { fontMap.ins
 
 void GfxRenderer::insertCustomFont(const int fontId, crosspoint::bdf::CustomFont* font) {
   if (!font) return;
-  const auto it = customFontMap.find(fontId);
-  if (it != customFontMap.end()) {
-    delete it->second;
-    it->second = font;
-    return;
-  }
-  customFontMap.emplace(fontId, font);
+  // Non-owning: caller (CustomFontManager) retains the unique_ptr. Collision
+  // replaces the borrow without deleting — the manager is responsible for
+  // freeing the old one when it re-registers.
+  customFontMap[fontId] = font;
 }
 
 void GfxRenderer::removeCustomFont(const int fontId) {
-  const auto it = customFontMap.find(fontId);
-  if (it == customFontMap.end()) return;
-  delete it->second;
-  customFontMap.erase(it);
+  customFontMap.erase(fontId);
 }
 
 crosspoint::bdf::CustomFont* GfxRenderer::findCustomFont(const int fontId) const {
@@ -281,17 +276,23 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
 void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, const char* text, const int letterSpacing,
                                  const bool black, const EpdFontFamily::Style style) const {
   if (auto* cf = findCustomFont(fontId)) {
-    // Custom fonts skip the FontCacheManager scan-pass (no compressed-group
-    // prewarming applies; the LRU fills on first real render). Walk the
-    // UTF-8 text via CustomFont::visitGlyphs and stamp each bitmap onto
-    // the framebuffer with drawPixel. BDF origin sits on the baseline at
-    // character start; pixel (col,row) in the glyph bitmap maps to
+    // During the scan pass (FontCacheManager drives this for built-ins), we
+    // do NOT draw — we just force every codepoint through the LRU so the
+    // real draw pass becomes pure-RAM. This closes the pre-existing gap
+    // where custom fonts would pay SD I/O during the first visible frame
+    // of a page with new codepoints.
+    if (text == nullptr || *text == '\0') return;
+    const auto styleBits = static_cast<crosspoint::bdf::CustomFont::StyleBits>(style);
+    if (fontCacheManager_ && fontCacheManager_->isScanning()) {
+      cf->prewarmGlyphs(text, styleBits);
+      return;
+    }
+    // BDF origin sits on the baseline at character start; pixel (col,row) in
+    // the glyph bitmap maps to
     //   screenX = cursorX + bbxOffX + col
     //   screenY = baselineY - bbxOffY - bbxH + row
     // (BDF stores bitmap rows top-to-bottom, and bbxOffY is the Y offset
     // from the baseline to the bitmap's lower-left.)
-    if (text == nullptr || *text == '\0') return;
-    const auto styleBits = static_cast<crosspoint::bdf::CustomFont::StyleBits>(style);
     const int baselineY = y + cf->ascender(styleBits);
     const uint8_t boldPasses = cf->getSyntheticBoldPasses(styleBits);
     // Dark render mode (textRenderStyle == 1) mirrors the built-in path in

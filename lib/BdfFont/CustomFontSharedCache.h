@@ -43,6 +43,20 @@ class CustomFontSharedCache {
 
   void clearCache();
 
+  // Fully releases the slab + slots + map. Unlike clearCache(), which re-inits
+  // at the same cap, this drops cacheCap_ and maxBitmapBytes_ to 0 so all
+  // backing allocations are freed. The previous (cap, maxBitmapBytes, budget)
+  // are remembered so restoreSlab() can bring the cache back to the prior
+  // shape once contiguous-memory pressure lifts.
+  //
+  // Used by EpubReaderActivity before `createSectionFile()` so the 32 KB
+  // zlib dictionary can coalesce a single contiguous block.
+  void releaseSlab();
+
+  // Inverse of releaseSlab(). No-op if the cache was not previously released
+  // (or the save slots are empty). Returns true if the slab was re-allocated.
+  bool restoreSlab();
+
   // Returns true if hit (and populates *outGlyph).
   bool lookup(uint8_t variant, uint32_t codepoint, const CachedGlyph** outGlyph);
 
@@ -79,8 +93,21 @@ class CustomFontSharedCache {
 
   size_t maxBitmapBytes_ = 0;
   size_t cacheCap_ = 1;
+  size_t lastBudgetBytes_ = 0;
 
-  std::vector<uint8_t> bitmapSlab_;
+  // Saved state for releaseSlab() / restoreSlab(). Zero when no release is
+  // pending. Kept separate from the live fields because the live fields drop
+  // to 0 on release — we need the "what to restore to" numbers to survive.
+  size_t savedCap_ = 0;
+  size_t savedMaxBitmapBytes_ = 0;
+  size_t savedBudgetBytes_ = 0;
+
+  // Raw heap_caps_malloc(MALLOC_CAP_8BIT) buffer (not std::vector) so
+  // allocation ordering is deterministic and a failed grow cannot realloc
+  // into a different arena. Size in bytes = cacheCap_ * maxBitmapBytes_.
+  uint8_t* bitmapSlab_ = nullptr;
+  size_t slabBytes_ = 0;
+
   std::vector<Slot> slots_;
   std::unordered_map<uint32_t, uint16_t> cacheMap_;
   uint16_t lruHead_ = kNil;

@@ -6,8 +6,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+namespace crosspoint {
+namespace bdf {
+class CustomFont;
+}
+}  // namespace crosspoint
 
 class GfxRenderer;
 class MappedInputManager;
@@ -80,12 +88,29 @@ bool hasPendingPrompt() const { return !pendingPromptIdx_.empty(); }
   // also after an install-button-triggered build completes.
   void registerWithRenderer(GfxRenderer& renderer);
 
-  // Shrink every registered CustomFont's glyph cache to the minimum size,
-  // freeing each slab so a single large contiguous allocation (epub section
-  // ZIP dict = 32 KB) can succeed. Used by EpubReaderActivity before
-  // createSectionFile to avoid the "REBOOT DEVICE" OOM screen when custom
-  // fonts are fragmenting the heap. Caches rebuild lazily on next render.
-  void trimAllCaches(GfxRenderer& renderer);
+  // Log a one-line heap snapshot (free / largest contiguous / min-free-ever)
+  // under a caller-supplied tag. Cheap; guarded by a compile-time verbose
+  // flag inside the .cpp. Call at the ends of the font-heap dance so a
+  // regression is diagnosable from logs alone.
+  static void logHeapSnapshot(const char* tag);
+
+  // Fully release every registered CustomFont's glyph slab so the heap can
+  // coalesce a 32 KB+ contiguous block for the epub section ZIP dictionary.
+  // Unlike the old trimAllCaches (which kept 1 slot alive and left slots_ /
+  // cacheMap_ in the way of the region we actually wanted), this drops
+  // EVERYTHING: slab pointer, slots vector, hash map buckets. Call
+  // restoreAllCaches() after the contiguous allocation has succeeded — a
+  // cached cap/budget per font brings the cache back to its prior shape
+  // and the prewarm scan pass re-fills it on the next frame.
+  void releaseAllCaches(GfxRenderer& renderer);
+
+  // Inverse of releaseAllCaches(). Safe to call even if nothing was released.
+  void restoreAllCaches(GfxRenderer& renderer);
+
+  // Legacy alias kept for call sites that still want a "make the cache
+  // small" knob. New code should prefer releaseAllCaches/restoreAllCaches
+  // for the book-open memory dance.
+  void trimAllCaches(GfxRenderer& renderer) { releaseAllCaches(renderer); }
 
   // Delete every BDF + IDX file belonging to `fontName` from /custom-font/
   // and drop the font from the renderer. Re-scans the directory to rebuild
@@ -99,13 +124,21 @@ bool hasPendingPrompt() const { return !pendingPromptIdx_.empty(); }
   size_t deleteFamily(const std::string& fontName, GfxRenderer& renderer);
 
  private:
-  CustomFontManager() = default;
+  CustomFontManager();
+  ~CustomFontManager();
   // Rebuild families_ from entries_. Called at the tail of scanAndQueuePrompts.
   void rebuildFamilyGroups();
 
   std::vector<CustomFontEntry> entries_;
   std::vector<CustomFontFamilyGroup> families_;
   std::vector<size_t> pendingPromptIdx_;
+
+  // Owned CustomFont objects. Renderer holds borrowed raw pointers keyed by
+  // the same fontId. Keys are idForFamily(name, sizePt). We previously
+  // let the renderer own these via new/delete in insertCustomFont, which
+  // made ownership ambiguous on error paths (a failed open would leak, and
+  // deleteFamily had to reach into renderer internals to clean up).
+  std::unordered_map<int, std::unique_ptr<crosspoint::bdf::CustomFont>> ownedFonts_;
 };
 
 }  // namespace fonts

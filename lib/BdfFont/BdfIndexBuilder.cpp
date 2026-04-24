@@ -117,7 +117,7 @@ BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* id
     auto cb = [&](const BdfGlyphMeta& g) -> bool {
       IndexEntry e{};
       e.codepoint = g.codepoint;
-      e.bdfOffset = g.bdfOffset;
+      e.bitmapOffset = g.bitmapOffset;
       e.bitmapW = g.bbxW;
       e.bitmapH = g.bbxH;
       e.advance = g.advance;
@@ -162,7 +162,7 @@ BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* id
       }
       IndexEntry e{};
       e.codepoint = g.codepoint;
-      e.bdfOffset = g.bdfOffset;
+      e.bitmapOffset = g.bitmapOffset;
       e.bitmapW = g.bbxW;
       e.bitmapH = g.bbxH;
       e.advance = g.advance;

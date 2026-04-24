@@ -39,6 +39,25 @@ namespace {
 constexpr const char* kModule = "CFONT";
 constexpr const char* kCustomFontDir = "/custom-font";
 constexpr size_t kScanCap = 1000;        // hard limit on .bdf files scanned per boot
+
+// Flip to false before a release build if log volume is a problem. Keeps
+// the three metrics (free, largest, min_free_ever) aligned so regressions
+// stand out by diffing two boots.
+constexpr bool kVerboseFontHeap = true;
+
+}  // namespace
+
+// static
+void CustomFontManager::logHeapSnapshot(const char* tag) {
+  if (!kVerboseFontHeap) return;
+  LOG_INF(kModule, "heap[%s] free=%u largest=%u minFreeEver=%u",
+          tag,
+          static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_8BIT)),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)),
+          static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT)));
+}
+
+namespace {
 // Scan only opens each BDF, reads its header (~64 B), and closes. It does NOT
 // allocate a glyph slab, so the floor protects against running the reader OOM
 // while paging through many BDFs — not against the BDF read itself. 24 KB
@@ -76,6 +95,12 @@ bool contains(const std::vector<std::string>& v, const std::string& needle) {
 }
 
 }  // namespace
+
+CustomFontManager::CustomFontManager() = default;
+// Defined out-of-line so the unique_ptr<CustomFont> inside ownedFonts_ sees
+// the complete CustomFont type (which is forward-declared in the header to
+// keep compile times down for callers that only need the API surface).
+CustomFontManager::~CustomFontManager() = default;
 
 CustomFontManager& CustomFontManager::instance() {
   static CustomFontManager inst;
@@ -156,10 +181,13 @@ size_t CustomFontManager::deleteFamily(const std::string& fontName, GfxRenderer&
   // Drop any renderer dispatch pointing at the deleted family so the reader
   // path doesn't try to lookup glyphs from a closed CustomFontGlyphSource.
   // Walk families_ (still reflecting pre-delete state) to find every size
-  // we registered for this name and remove each id.
+  // we registered for this name; drop from the renderer AND free the owned
+  // unique_ptr so the CustomFont's destructor closes its HalFile handles.
   for (const auto& g : families_) {
     if (g.fontName == fontName) {
-      renderer.removeCustomFont(idForFamily(g.fontName, g.sizePt));
+      const int id = idForFamily(g.fontName, g.sizePt);
+      renderer.removeCustomFont(id);
+      ownedFonts_.erase(id);
     }
   }
 
@@ -183,6 +211,7 @@ size_t CustomFontManager::deleteFamily(const std::string& fontName, GfxRenderer&
 }
 
 void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
+  logHeapSnapshot("register-pre");
   // Register every (name, sizePt) family group that has a regular variant
   // + .idx on disk. Each group binds to its own hashed fontId so that
   // users with multiple sizes of the same family (e.g. fontA_17 +
@@ -197,16 +226,20 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
   // (from `entries_`/`families_`) — selecting one triggers re-register
   // via ReaderSettingsActivity → this function.
   //
-  // Clear prior registrations first so a font switch drops the old slab
-  // before the new one is allocated. `insertCustomFont` already does this
-  // on collision, but the ID changes across families so explicit sweep is
-  // required.
+  // Clear prior registrations (both the borrow held by the renderer AND
+  // the owned unique_ptr held here). A font switch must free the old slab
+  // before the new one is allocated — doing both in the manager means
+  // ownership and visibility stay in sync, and a failed re-register can't
+  // leave a dangling borrow in the renderer's map.
   for (const auto& g : families_) {
-    renderer.removeCustomFont(idForFamily(g.fontName, g.sizePt));
+    const int id = idForFamily(g.fontName, g.sizePt);
+    renderer.removeCustomFont(id);
+    ownedFonts_.erase(id);
   }
 
   if (SETTINGS.customFontName.empty() || SETTINGS.customFontSizePt == 0) {
     LOG_INF(kModule, "no active custom font; renderer left without custom registrations");
+    logHeapSnapshot("register-post");
     return;
   }
 
@@ -220,6 +253,7 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
   if (!activeGroup) {
     LOG_INF(kModule, "active font '%s' @ %upt not present in scanned families",
             SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt));
+    logHeapSnapshot("register-post");
     return;
   }
 
@@ -249,14 +283,12 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
       continue;
     }
 
-    auto* font = new (std::nothrow) bdf::CustomFont();
-    if (font == nullptr) {
-      LOG_INF(kModule, "alloc CustomFont failed for %s", regEntry.filename.c_str());
+    auto font = std::make_unique<bdf::CustomFont>();
+    font->setSizePt(g.sizePt);
+    if (!font->openVariant(bdf::CustomFont::SLOT_REGULAR, bdfPath, regIdxPath.c_str(), familyCacheBudgetBytes)) {
+      LOG_INF(kModule, "regular open failed for %s", regEntry.filename.c_str());
       continue;
     }
-    
-    font->setSizePt(g.sizePt);
-    font->openVariant(bdf::CustomFont::SLOT_REGULAR, bdfPath, regIdxPath.c_str(), familyCacheBudgetBytes);
 
     for (size_t slot = bdf::CustomFont::SLOT_BOLD; slot < 4; ++slot) {
       const int idx = g.variantEntryIdx[slot];
@@ -283,25 +315,50 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
             font->hasVariant(bdf::CustomFont::SLOT_BOLD) ? "B" : "-",
             font->hasVariant(bdf::CustomFont::SLOT_ITALIC) ? "I" : "-",
             font->hasVariant(bdf::CustomFont::SLOT_BOLD_ITALIC) ? "Z" : "-");
-    renderer.insertCustomFont(fontId, font);
+    // Hand the renderer a borrowed pointer, keep ownership in the manager
+    // so error paths / deleteFamily can drop it cleanly without reaching
+    // into renderer internals.
+    bdf::CustomFont* borrow = font.get();
+    ownedFonts_[fontId] = std::move(font);
+    renderer.insertCustomFont(fontId, borrow);
   }
+  logHeapSnapshot("register-post");
 }
 
-void CustomFontManager::trimAllCaches(GfxRenderer& renderer) {
-  size_t trimmed = 0;
+void CustomFontManager::releaseAllCaches(GfxRenderer& renderer) {
+  logHeapSnapshot("release-pre");
+  size_t released = 0;
   for (const auto& g : families_) {
     const int fontId = idForFamily(g.fontName, g.sizePt);
     if (auto* font = renderer.findCustomFont(fontId)) {
-      font->trimCache(1);
-      ++trimmed;
+      font->releaseCache();
+      ++released;
     }
   }
-  LOG_INF(kModule, "trimmed %u custom font caches (largest free now=%u B)",
-          static_cast<unsigned>(trimmed),
-          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+  LOG_INF(kModule, "released %u custom font caches", static_cast<unsigned>(released));
+  logHeapSnapshot("release-post");
+}
+
+void CustomFontManager::restoreAllCaches(GfxRenderer& renderer) {
+  logHeapSnapshot("restore-pre");
+  size_t restored = 0;
+  size_t failed = 0;
+  for (const auto& g : families_) {
+    const int fontId = idForFamily(g.fontName, g.sizePt);
+    if (auto* font = renderer.findCustomFont(fontId)) {
+      if (font->restoreCache()) ++restored;
+      else ++failed;
+    }
+  }
+  if (restored > 0 || failed > 0) {
+    LOG_INF(kModule, "restored %u custom font caches (failed=%u)",
+            static_cast<unsigned>(restored), static_cast<unsigned>(failed));
+  }
+  logHeapSnapshot("restore-post");
 }
 
 void CustomFontManager::scanAndQueuePrompts() {
+  logHeapSnapshot("scan-pre");
   entries_.clear();
   families_.clear();
   pendingPromptIdx_.clear();
@@ -433,6 +490,7 @@ void CustomFontManager::scanAndQueuePrompts() {
           static_cast<unsigned>(valid), static_cast<unsigned>(pendingPromptIdx_.size()));
 
   rebuildFamilyGroups();
+  logHeapSnapshot("scan-post");
 }
 
 void CustomFontManager::rebuildFamilyGroups() {

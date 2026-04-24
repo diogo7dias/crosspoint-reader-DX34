@@ -25,10 +25,13 @@ struct BdfHeader {
 
 // One glyph as yielded by readAllGlyphs(). Bitmap bytes are NOT included —
 // the index builder only needs metrics + offset; runtime decode pulls the
-// bitmap on demand using bdfOffset.
+// bitmap on demand using bitmapOffset.
 struct BdfGlyphMeta {
   uint32_t codepoint;       // ENCODING value (skipped if < 0)
-  uint32_t bdfOffset;       // byte offset where "STARTCHAR" begins
+  uint32_t bdfOffset;       // byte offset where "STARTCHAR" begins (debug / legacy)
+  uint32_t bitmapOffset;    // byte offset of the first hex row, i.e. the byte
+                            // AFTER the "BITMAP\n" line. 0 if this glyph had
+                            // no BITMAP (rare, malformed).
   uint8_t bbxW;             // BBX W
   uint8_t bbxH;             // BBX H
   int8_t bbxOffX;           // BBX X

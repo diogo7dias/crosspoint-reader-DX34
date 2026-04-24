@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -14,9 +15,12 @@ namespace crosspoint {
 namespace bdf {
 
 // Runtime read-only access to a custom BDF font that has already been indexed.
-// On open() it reads the .idx header (kept in RAM) and keeps both the BDF and
-// .idx files open. lookup(cp) does a binary search in the .idx (via SD seek)
-// and lazy-decodes the bitmap from the BDF on cache miss.
+// On open() it reads the .idx header (kept in RAM), and for small fonts it
+// pulls the full IndexEntry[] into RAM and closes the .idx file — making
+// every subsequent lookup() pure-RAM binary search. Large fonts (Unifont,
+// 57 K glyphs → 912 KB) exceed the in-RAM cap and fall back to seek-based
+// search against the still-open .idx file. lookup(cp) caches the decoded
+// bitmap via CustomFontSharedCache.
 //
 // Cache: bounded LRU of decoded glyphs, backed by a single pre-allocated
 // bitmap slab + slot array + intrusive index list. After open() + setCacheCap(),
@@ -64,12 +68,20 @@ class CustomFontGlyphSource {
   const Glyph* lookup(uint32_t codepoint);
 
  private:
-  bool readIndexEntry(uint32_t indexPos, IndexEntry& out);
+  bool readIndexEntryFromFile(uint32_t indexPos, IndexEntry& out);
   bool decodeBitmap(const IndexEntry& e, uint8_t* dst, size_t dstCap);
+
+  // Cap on the in-RAM index array. Above this, we fall back to seek-based
+  // binary search against the still-open idxFile_. 16 KB / 16 B = 1024
+  // glyph entries — covers every normal font; Unifont (57 K) stays on disk.
+  static constexpr size_t kInMemoryIndexCapBytes = 16 * 1024;
 
   HalFile bdfFile_;
   HalFile idxFile_;
   bool idxOpen_ = false;
+  // When populated, idxFile_ is closed and every lookup is pure-RAM. Array
+  // is always sorted ascending by codepoint (enforced at build time).
+  std::unique_ptr<IndexEntry[]> indexArray_;
 
   IndexHeader hdr_{};
   uint32_t glyphCount_ = 0;

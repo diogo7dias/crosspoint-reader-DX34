@@ -1250,28 +1250,35 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                 boldSwapEnabled)) {
     LOG_DBG("ERS", "Cache not found, building...");
 
-    // Free font caches to reclaim contiguous heap for ZIP decompression (needs a 32 KB
-    // dictionary). They rebuild automatically on next render.
+    // Free font caches to reclaim a contiguous 32 KB block for the ZIP
+    // dictionary used during layout. Built-ins use clearCache (cheap
+    // decompress-again on next render); custom fonts use releaseAllCaches,
+    // which drops the slab AND the slots/map vectors so the hash-table
+    // buckets can't split the block we need.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
-    crosspoint::fonts::CustomFontManager::instance().trimAllCaches(renderer);
+    crosspoint::fonts::CustomFontManager::instance().releaseAllCaches(renderer);
+    crosspoint::fonts::CustomFontManager::logHeapSnapshot("createSectionFile-pre");
 
-    // Progress hook: the layout parser emits percentages as it chews the HTML. We only use it
-    // to gate the "Still working on it..." toast, not a real progress bar — keeps UX simple
-    // and consistent with the cached-open path.
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
-    if (!section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                    SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
-                                    viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
-                                    SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                    boldSwapEnabled, layoutProgressTick)) {
+    const bool sectionOk = section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                                                      SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment,
+                                                      viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
+                                                      SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode,
+                                                      SETTINGS.readerStyleMode, sectionTextRenderMode, boldSwapEnabled,
+                                                      layoutProgressTick);
+    crosspoint::fonts::CustomFontManager::logHeapSnapshot(
+        sectionOk ? "createSectionFile-post-ok" : "createSectionFile-post-fail");
+    // Restore the custom font cache on BOTH paths. Success: the next render
+    // needs a warm cache to stay snappy. Failure: we still return a fallback
+    // UI to the user and they may page around; a permanently-empty cache
+    // would leave every rendered glyph blank.
+    crosspoint::fonts::CustomFontManager::instance().restoreAllCaches(renderer);
+    if (!sectionOk) {
       LOG_ERR("ERS", "Failed to persist page data to SD");
       clearPageCache();
       section.reset();
       renderer.clearScreen();
-      // Typical trigger: large custom BDF font (e.g. Unifont at size 40) —
-      // glyph cache + 32 KB ZIP dict contend for contiguous heap. A cold boot
-      // clears fragmentation and usually lets the build succeed.
       renderer.drawCenteredText(UI_12_FONT_ID, 320, "REBOOT DEVICE", true, EpdFontFamily::REGULAR);
       renderer.drawCenteredText(UI_12_FONT_ID, 360, "(small memory wrinkle)", true, EpdFontFamily::REGULAR);
       renderer.drawCenteredText(UI_12_FONT_ID, 410, "Press Back to exit", true, EpdFontFamily::REGULAR);
