@@ -34,6 +34,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "fonts/CustomFontManager.h"
 #include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
 #include "util/FavoriteBmp.h"
@@ -1236,6 +1237,12 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
   const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());
 
+  // Single-active custom-font registration. Per-book ReadingThemes can
+  // change SETTINGS.customFontName after boot-time setup, so re-register
+  // here — unconditionally, since the cache-hit path still needs the font
+  // resolvable when drawText runs.
+  crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+
   if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                 SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                 viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
@@ -1247,6 +1254,7 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     // dictionary). They rebuild automatically on next render.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
+    crosspoint::fonts::CustomFontManager::instance().trimAllCaches(renderer);
 
     // Progress hook: the layout parser emits percentages as it chews the HTML. We only use it
     // to gate the "Still working on it..." toast, not a real progress bar — keeps UX simple

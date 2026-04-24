@@ -58,6 +58,11 @@ class CustomFont {
   bool hasVariant(size_t slot) const { return slot < 4 && variants_[slot] && variants_[slot]->isOpen(); }
   uint16_t sizePt() const { return sizePt_; }
 
+  // Shrink every variant's glyph cache to `slots` (default 1). Frees the
+  // existing slab so a large contiguous allocation elsewhere can succeed.
+  // Cache rebuilds organically on next lookup().
+  void trimCache(size_t slots = 1);
+
   // Synthetic-bold tuning. Mirrors EpdFontFamily:
   // totalPasses(style) = syntheticRegularBoldPasses_
   //                    + (no real bold variant AND style has BOLD ? syntheticBoldExtraPasses_ : 0)

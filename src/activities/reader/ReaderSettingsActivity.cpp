@@ -128,6 +128,9 @@ void ReaderSettingsActivity::applyFontSizeEdit() {
     if (!sizes.empty() && fontSizeEditDraftIndex < sizes.size()) {
       SETTINGS.customFontSizePt = sizes[fontSizeEditDraftIndex];
     }
+    // Registration is single-active — re-register so the renderer has
+    // the new (name, size) pair before the next draw.
+    crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
   } else {
     SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
   }
@@ -457,6 +460,10 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
       SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
       SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
       SETTINGS.lineSpacingPercent = CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
+      // Single-active registration: drop the previously-active custom font
+      // and register the new one (if any) so the renderer has the right
+      // glyph source before the next draw.
+      crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {

@@ -21,7 +21,7 @@ constexpr size_t kSlotForStyle(CustomFont::StyleBits style) {
 bool CustomFont::open(const char* bdfPath, const char* idxPath, uint16_t sizePt, size_t cacheSlots) {
   auto src = std::make_unique<CustomFontGlyphSource>();
   if (!src->open(bdfPath, idxPath)) return false;
-  src->setCacheCap(cacheSlots == 0 ? 1 : cacheSlots);
+  if (!src->setCacheCap(cacheSlots == 0 ? 1 : cacheSlots)) return false;
   variants_[SLOT_REGULAR] = std::move(src);
   sizePt_ = sizePt;
   return true;
@@ -31,9 +31,17 @@ bool CustomFont::openVariant(size_t slot, const char* bdfPath, const char* idxPa
   if (slot == SLOT_REGULAR || slot >= 4) return false;
   auto src = std::make_unique<CustomFontGlyphSource>();
   if (!src->open(bdfPath, idxPath)) return false;
-  src->setCacheCap(cacheSlots == 0 ? 1 : cacheSlots);
+  if (!src->setCacheCap(cacheSlots == 0 ? 1 : cacheSlots)) return false;
   variants_[slot] = std::move(src);
   return true;
+}
+
+void CustomFont::trimCache(size_t slots) {
+  for (auto& v : variants_) {
+    if (v && v->isOpen()) {
+      v->setCacheCap(slots == 0 ? 1 : slots);
+    }
+  }
 }
 
 CustomFontGlyphSource* CustomFont::getVariant(StyleBits style) const {
