@@ -9,8 +9,20 @@ CustomFontSharedCache::~CustomFontSharedCache() { clearSlab_(); }
 
 bool CustomFontSharedCache::ensureMaxBitmapBytes(size_t requiredBytes) {
   if (requiredBytes <= maxBitmapBytes_) return true;
+  // Stage locally — if allocSlab_() fails due to heap pressure we must not
+  // leave maxBitmapBytes_ bumped, or setCacheBudget's slots-from-bytes math
+  // will use a size that has no backing slab (→ cacheCap_>0 but bitmapSlab_
+  // empty → null-deref on allocateSlot).
+  const size_t prevMax = maxBitmapBytes_;
   maxBitmapBytes_ = requiredBytes;
-  return allocSlab_();
+  if (allocSlab_()) return true;
+  // Grow failed. allocSlab_ already dropped the old slab. Roll back max
+  // and try to re-init at the prior size so at least the smaller variants
+  // can still cache. If that also fails the cache is empty (miss on every
+  // lookup → callers fall back to returning nullptr → glyph skipped).
+  maxBitmapBytes_ = prevMax;
+  if (prevMax > 0) allocSlab_();
+  return false;
 }
 
 bool CustomFontSharedCache::setCacheCap(size_t slots) {

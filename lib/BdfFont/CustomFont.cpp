@@ -38,39 +38,53 @@ void CustomFont::trimCache(size_t slots) {
   }
 }
 
+CustomFontGlyphSource* CustomFont::resolveSlot_(size_t slot) const {
+  if (slot >= 4) return nullptr;
+  if (variants_[slot]) return variants_[slot].get();
+  if (!pendingVariants_[slot].registered) return nullptr;
+
+  auto src = std::make_unique<CustomFontGlyphSource>();
+  const bool ok = src->open(pendingVariants_[slot].bdfPath.c_str(),
+                            pendingVariants_[slot].idxPath.c_str());
+  // Clear pending flag regardless — a failed open should not retry every
+  // render tick (would stall the render task on bad SD / missing file).
+  pendingVariants_[slot].registered = false;
+  if (!ok) return nullptr;
+
+  // Grow the shared slab if this variant's glyphs are larger than any
+  // previously-opened variant. Only the first grow actually reallocates;
+  // subsequent same-or-smaller opens are no-ops (keeps existing cache).
+  sharedCache_.ensureMaxBitmapBytes(src->maxBitmapBytes());
+  src->setSharedCache(&sharedCache_, slot);
+
+  // Apply the byte-budget once per CustomFont. Without this guard, each
+  // variant's open would re-run setCacheBudget → flush the cache we just
+  // warmed for the prior variant.
+  if (!cacheBudgetApplied_) {
+    sharedCache_.setCacheBudget(pendingVariants_[slot].cacheBudgetBytes);
+    cacheBudgetApplied_ = true;
+  }
+
+  variants_[slot] = std::move(src);
+  return variants_[slot].get();
+}
+
 CustomFontGlyphSource* CustomFont::getVariant(StyleBits style) const {
   const size_t wanted = kSlotForStyle(style);
-  
-  auto resolveSlot = [this](size_t slot) -> CustomFontGlyphSource* {
-    if (slot >= 4) return nullptr;
-    if (!variants_[slot] && pendingVariants_[slot].registered) {
-      auto src = std::make_unique<CustomFontGlyphSource>();
-      if (src->open(pendingVariants_[slot].bdfPath.c_str(), pendingVariants_[slot].idxPath.c_str())) {
-        sharedCache_.ensureMaxBitmapBytes(src->maxBitmapBytes());
-        src->setSharedCache(&sharedCache_, slot);
-        sharedCache_.setCacheBudget(pendingVariants_[slot].cacheBudgetBytes);
-        // Prewarm ASCII and Latin-1
-        for (uint32_t cp = 0x20; cp <= 0x00FF; ++cp) src->lookup(cp);
-        variants_[slot] = std::move(src);
-      }
-      pendingVariants_[slot].registered = false;
-    }
-    return variants_[slot].get();
-  };
 
-  if (wanted != SLOT_REGULAR && resolveSlot(wanted)) return variants_[wanted].get();
+  if (auto* v = resolveSlot_(wanted)) return v;
 
   // Fallthroughs match EpdFontFamily::getFont priority. bold+italic →
   // italic → bold → regular.
   if (wanted == SLOT_BOLD_ITALIC) {
-    if (resolveSlot(SLOT_ITALIC)) return variants_[SLOT_ITALIC].get();
-    if (resolveSlot(SLOT_BOLD)) return variants_[SLOT_BOLD].get();
-  } else if (wanted == SLOT_ITALIC && resolveSlot(SLOT_ITALIC)) {
-    return variants_[SLOT_ITALIC].get();
-  } else if (wanted == SLOT_BOLD && resolveSlot(SLOT_BOLD)) {
-    return variants_[SLOT_BOLD].get();
+    if (auto* v = resolveSlot_(SLOT_ITALIC)) return v;
+    if (auto* v = resolveSlot_(SLOT_BOLD)) return v;
+  } else if (wanted == SLOT_ITALIC) {
+    if (auto* v = resolveSlot_(SLOT_ITALIC)) return v;
+  } else if (wanted == SLOT_BOLD) {
+    if (auto* v = resolveSlot_(SLOT_BOLD)) return v;
   }
-  return variants_[SLOT_REGULAR] ? variants_[SLOT_REGULAR].get() : nullptr;
+  return resolveSlot_(SLOT_REGULAR);
 }
 
 uint8_t CustomFont::getSyntheticBoldPasses(StyleBits style) const {
@@ -78,13 +92,18 @@ uint8_t CustomFont::getSyntheticBoldPasses(StyleBits style) const {
   // When a real bold (or bolditalic) variant is installed and resolves for
   // the requested style, no synthetic passes are needed — the bold glyph
   // bitmap IS the weight. Only inflate when we fell back to regular.
+  // Resolve through resolveSlot_ so a failed-open pending variant does not
+  // report as "available" — otherwise we'd skip synthetic bold and render
+  // regular weight instead.
   bool boldHandledByVariant = false;
   if (bold) {
     const bool italic = (style & STYLE_ITALIC) != 0;
-    const size_t resolvedSlot =
-        italic ? (hasVariant(SLOT_BOLD_ITALIC) ? SLOT_BOLD_ITALIC : (hasVariant(SLOT_BOLD) ? SLOT_BOLD : SLOT_REGULAR))
-               : (hasVariant(SLOT_BOLD) ? SLOT_BOLD : SLOT_REGULAR);
-    boldHandledByVariant = (resolvedSlot == SLOT_BOLD || resolvedSlot == SLOT_BOLD_ITALIC);
+    if (italic) {
+      boldHandledByVariant = resolveSlot_(SLOT_BOLD_ITALIC) != nullptr ||
+                             resolveSlot_(SLOT_BOLD) != nullptr;
+    } else {
+      boldHandledByVariant = resolveSlot_(SLOT_BOLD) != nullptr;
+    }
   }
   return syntheticRegularBoldPasses_ + ((bold && !boldHandledByVariant) ? syntheticBoldExtraPasses_ : 0);
 }
@@ -95,9 +114,10 @@ bool CustomFont::shouldSynthesizeItalic(StyleBits style) const {
   const bool bold = (style & STYLE_BOLD) != 0;
   // Match getVariant fallback order for italic resolution.
   if (bold) {
-    return !hasVariant(SLOT_BOLD_ITALIC) && !hasVariant(SLOT_ITALIC);
+    return resolveSlot_(SLOT_BOLD_ITALIC) == nullptr &&
+           resolveSlot_(SLOT_ITALIC) == nullptr;
   }
-  return !hasVariant(SLOT_ITALIC);
+  return resolveSlot_(SLOT_ITALIC) == nullptr;
 }
 
 const CustomFontGlyphSource::Glyph* CustomFont::resolveGlyph(CustomFontGlyphSource& src, uint32_t cp) {

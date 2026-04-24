@@ -53,8 +53,16 @@ class CustomFont {
   // back via variant resolution + synthetic passes.
   bool openVariant(size_t slot, const char* bdfPath, const char* idxPath, size_t cacheBudgetBytes);
 
-  bool isOpen() const { return variants_[SLOT_REGULAR] && variants_[SLOT_REGULAR]->isOpen(); }
-  bool hasVariant(size_t slot) const { 
+  bool isOpen() const {
+    // Regular is mandatory. Either already resolved, or still pending
+    // (will be resolved on first lookup / metrics call).
+    return (variants_[SLOT_REGULAR] && variants_[SLOT_REGULAR]->isOpen()) ||
+           pendingVariants_[SLOT_REGULAR].registered;
+  }
+  // Conservative check — true only when the variant is already opened and
+  // verified readable, OR still pending (not yet tried). Avoids claiming a
+  // variant exists when its open has already failed.
+  bool hasVariant(size_t slot) const {
     if (slot >= 4) return false;
     if (variants_[slot] && variants_[slot]->isOpen()) return true;
     return pendingVariants_[slot].registered;
@@ -115,7 +123,18 @@ class CustomFont {
   // regular slot when the requested style's slot is absent.
   CustomFontGlyphSource* getVariant(StyleBits style) const;
 
+  // Lazy-open a single slot. Returns nullptr if the slot is empty and
+  // not pending, or if open fails. Idempotent for repeat calls on an
+  // already-opened slot.
+  CustomFontGlyphSource* resolveSlot_(size_t slot) const;
+
   const CustomFontGlyphSource::Glyph* resolveGlyph(CustomFontGlyphSource& src, uint32_t cp);
+
+  // sharedCache_ must outlive variants_ — glyph sources hold a raw
+  // pointer to it (set via setSharedCache). C++ destroys members in
+  // reverse declaration order, so declare it FIRST to ensure it is
+  // destroyed LAST.
+  mutable CustomFontSharedCache sharedCache_;
 
   // unique_ptr so visitGlyph state (LRU) stays tied to one glyph source
   // and the struct remains non-copyable without deleting the move ops
@@ -133,7 +152,9 @@ class CustomFont {
   uint16_t sizePt_ = 0;
   uint8_t syntheticRegularBoldPasses_ = 0;
   uint8_t syntheticBoldExtraPasses_ = 1;  // 1 = visible-but-subtle bold
-  mutable CustomFontSharedCache sharedCache_;
+  // Shared cache byte-budget applied once on first variant resolve —
+  // prevents later variant opens from flushing the cache we just warmed.
+  mutable bool cacheBudgetApplied_ = false;
 };
 
 }  // namespace bdf

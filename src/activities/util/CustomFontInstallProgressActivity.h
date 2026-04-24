@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <string>
 
 #include "activities/Activity.h"
@@ -43,8 +44,14 @@ class CustomFontInstallProgressActivity final : public Activity {
   std::string idxPath;
   std::function<void(crosspoint::bdf::BuildIndexResult)> onComplete;
 
-  std::atomic<bool> taskDone{false};
-  crosspoint::bdf::BuildIndexResult taskResult{};
+  // Shared between the activity and the build task so the task can safely
+  // write its result even if the activity was destroyed (user nav, sleep,
+  // etc.) before buildIndex returns. Last holder frees it.
+  struct TaskState {
+    std::atomic<bool> done{false};
+    crosspoint::bdf::BuildIndexResult result{};
+  };
+  std::shared_ptr<TaskState> taskState;
 
   std::atomic<uint32_t> progressDone{0};
   std::atomic<uint32_t> progressTotal{0};

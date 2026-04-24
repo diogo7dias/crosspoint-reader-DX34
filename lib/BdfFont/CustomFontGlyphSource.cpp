@@ -1,6 +1,7 @@
 #include "CustomFontGlyphSource.h"
 
 #include <Arduino.h>
+#include <Logging.h>
 #include <esp_heap_caps.h>
 
 #include <cctype>
@@ -173,7 +174,18 @@ bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, uint8_t* dst, size
 
   const size_t hexCharsPerRow = bytesPerRow * 2;
   char hexBuf[128];
-  if (hexCharsPerRow > sizeof(hexBuf)) return false;
+  if (hexCharsPerRow > sizeof(hexBuf)) {
+    // Glyph wider than 512 px — one-shot log so we notice if a real font
+    // hits this limit. Silently returning false otherwise looked like a
+    // missing-glyph mystery during Phase 2b testing.
+    static bool warned = false;
+    if (!warned) {
+      warned = true;
+      LOG_INF("BDF", "glyph hex row too wide (%u bytes > %u buf) — glyph skipped",
+              static_cast<unsigned>(hexCharsPerRow), static_cast<unsigned>(sizeof(hexBuf)));
+    }
+    return false;
+  }
 
   for (size_t row = 0; row < e.bitmapH; ++row) {
     if (bdfFile_.read(hexBuf, hexCharsPerRow) != static_cast<int>(hexCharsPerRow)) return false;

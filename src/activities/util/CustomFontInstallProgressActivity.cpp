@@ -13,28 +13,41 @@ void CustomFontInstallProgressActivity::onEnter() {
   renderer.requestHalfRefresh();
   requestUpdate();
 
+  taskState = std::make_shared<TaskState>();
+
+  // Heap-allocate a shared_ptr copy for the task. If the activity is
+  // destroyed before the task completes, the task still holds a live
+  // state object and writes into it safely. Last holder frees it.
   struct TaskArgs {
-      std::string bdf;
-      std::string idx;
-      std::atomic<bool>* done;
-      crosspoint::bdf::BuildIndexResult* result;
+    std::string bdf;
+    std::string idx;
+    std::shared_ptr<TaskState> state;
   };
-  auto* args = new TaskArgs{bdfPath, idxPath, &taskDone, &taskResult};
-  
+  auto* args = new TaskArgs{bdfPath, idxPath, taskState};
+
   xTaskCreate([](void* p) {
-      auto* a = static_cast<TaskArgs*>(p);
-      *a->result = crosspoint::bdf::BdfIndexBuilder::buildIndex(a->bdf.c_str(), a->idx.c_str());
-      a->done->store(true);
-      delete a;
-      vTaskDelete(nullptr);
+    auto* a = static_cast<TaskArgs*>(p);
+    a->state->result = crosspoint::bdf::BdfIndexBuilder::buildIndex(a->bdf.c_str(), a->idx.c_str());
+    a->state->done.store(true);
+    delete a;
+    vTaskDelete(nullptr);
   }, "f_install", 8192, args, 1, nullptr);
 }
 
 void CustomFontInstallProgressActivity::loop() {
-    if (taskDone.load()) {
-        taskDone.store(false);
-        if (onComplete) onComplete(taskResult);
-    }
+  if (!taskState || !taskState->done.load()) return;
+
+  // Copy everything we need out of `this` BEFORE firing the callback —
+  // onComplete typically calls exitActivity() → deletes this activity.
+  // Any member access after the call would be use-after-free. The local
+  // move of onComplete and copy of result keep the invocation safe.
+  auto cb = std::move(onComplete);
+  onComplete = nullptr;
+  const auto result = taskState->result;
+  taskState.reset();
+
+  if (cb) cb(result);
+  // DO NOT touch any member of *this below this point — we may be deleted.
 }
 
 void CustomFontInstallProgressActivity::render(Activity::RenderLock&&) {

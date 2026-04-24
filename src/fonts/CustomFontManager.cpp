@@ -39,7 +39,13 @@ namespace {
 constexpr const char* kModule = "CFONT";
 constexpr const char* kCustomFontDir = "/custom-font";
 constexpr size_t kScanCap = 1000;        // hard limit on .bdf files scanned per boot
-constexpr size_t kScanHeapFloorBytes = 150 * 1024; // stop scanning if free heap drops below this
+// Scan only opens each BDF, reads its header (~64 B), and closes. It does NOT
+// allocate a glyph slab, so the floor protects against running the reader OOM
+// while paging through many BDFs — not against the BDF read itself. 24 KB
+// leaves plenty of headroom for HalFile + display buffers; the prior 150 KB
+// was sized for the REGISTER path and mistakenly applied here, so scan bailed
+// after 1 file on a fragmented heap.
+constexpr size_t kScanHeapFloorBytes = 24 * 1024;
 constexpr size_t kWdtResetInterval = 32; // reset watchdog every N dir entries
 
 // Phase 2b LRU cache budget. Per-variant slab = slots * maxBitmapBytes, where
