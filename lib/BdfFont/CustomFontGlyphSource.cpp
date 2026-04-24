@@ -1,6 +1,8 @@
 #include "CustomFontGlyphSource.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
+
 #include <cctype>
 #include <cstring>
 
@@ -73,7 +75,10 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
   if (maxBitmapBytes_ == 0) maxBitmapBytes_ = 1;
 
   idxOpen_ = true;
-  allocSlab_();
+  if (!allocSlab_()) {
+    close();
+    return false;
+  }
   return true;
 }
 
@@ -88,22 +93,49 @@ void CustomFontGlyphSource::close() {
   maxBitmapBytes_ = 0;
 }
 
-void CustomFontGlyphSource::setCacheCap(size_t slots) {
+bool CustomFontGlyphSource::setCacheCap(size_t slots) {
   if (slots == 0) slots = 1;
   if (slots > 65534) slots = 65534;
-  if (slots == cacheCap_) return;
+  if (slots == cacheCap_) return true;
+  const size_t prevCap = cacheCap_;
   cacheCap_ = slots;
-  if (idxOpen_) allocSlab_();
+  if (idxOpen_ && !allocSlab_()) {
+    cacheCap_ = prevCap;
+    close();
+    return false;
+  }
+  return true;
 }
 
-void CustomFontGlyphSource::allocSlab_() {
+bool CustomFontGlyphSource::allocSlab_() {
   // Rebuild cache structures from scratch. Called from open() (cold) and
   // setCacheCap() when the cap actually changes. All prior cached glyphs
   // are dropped — callers holding a Glyph* from before this call must not
   // dereference it.
-  cacheMap_.clear();
-  slots_.clear();
-  bitmapSlab_.clear();
+  //
+  // vector::clear() + assign(smaller) does NOT shrink capacity, so the old
+  // (possibly tens of KB) heap block stays attached to the vector. Swap with
+  // a default-constructed container guarantees the release, which is what
+  // trimCache(1) relies on to reclaim contiguous heap for the epub section
+  // ZIP dict.
+  std::unordered_map<uint32_t, uint16_t>().swap(cacheMap_);
+  std::vector<Slot>().swap(slots_);
+  std::vector<uint8_t>().swap(bitmapSlab_);
+
+  // -fno-exceptions: a failed std::vector::assign aborts via operator new
+  // rather than throwing. Pre-check the largest contiguous free block so
+  // we can bail gracefully and let the caller continue without this font.
+  // Safety margin only applies when the slab is big — trim paths allocate
+  // a few hundred bytes and MUST succeed (otherwise setCacheCap closes the
+  // source, leaving the font unrenderable and the book with blank text).
+  constexpr size_t kHeapSafetyMargin = 32 * 1024;
+  constexpr size_t kLargeSlabThreshold = 2048;
+  const size_t slabBytes = cacheCap_ * maxBitmapBytes_;
+  const size_t requiredMargin = slabBytes >= kLargeSlabThreshold ? kHeapSafetyMargin : 0;
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if (slabBytes + requiredMargin > largest) {
+    return false;
+  }
 
   slots_.resize(cacheCap_);
   bitmapSlab_.assign(cacheCap_ * maxBitmapBytes_, 0);
@@ -118,12 +150,15 @@ void CustomFontGlyphSource::allocSlab_() {
   freeHead_ = cacheCap_ > 0 ? 0 : kNil;
   lruHead_ = kNil;
   lruTail_ = kNil;
+  return true;
 }
 
 void CustomFontGlyphSource::clearSlab_() {
-  cacheMap_.clear();
-  slots_.clear();
-  bitmapSlab_.clear();
+  // See allocSlab_ — swap idiom forces heap release where clear() alone
+  // would keep the underlying allocation attached.
+  std::unordered_map<uint32_t, uint16_t>().swap(cacheMap_);
+  std::vector<Slot>().swap(slots_);
+  std::vector<uint8_t>().swap(bitmapSlab_);
   freeHead_ = kNil;
   lruHead_ = kNil;
   lruTail_ = kNil;

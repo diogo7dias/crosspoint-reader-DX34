@@ -21,3 +21,4 @@ releases/
 .claude/.DS_Store
 .claude/scheduled_tasks.lock
 CLAUDE.md
+logs/

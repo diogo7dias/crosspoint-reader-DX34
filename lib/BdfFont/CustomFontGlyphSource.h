@@ -44,7 +44,9 @@ class CustomFontGlyphSource {
 
   // Configure max cached glyphs. Must be >=1; clamped to 65534. Changing
   // the cap while open clears all cached glyphs and reallocates the slab.
-  void setCacheCap(size_t slots);
+  // Returns false if reallocation failed due to heap pressure — source is
+  // left closed in that case (caller should treat the font as unavailable).
+  bool setCacheCap(size_t slots);
   size_t cacheCap() const { return cacheCap_; }
 
   uint32_t glyphCount() const { return glyphCount_; }
@@ -86,7 +88,9 @@ class CustomFontGlyphSource {
   bool readIndexEntry(uint32_t indexPos, IndexEntry& out);
   bool decodeBitmap(const IndexEntry& e, uint8_t* dst, size_t dstCap);
 
-  void allocSlab_();
+  // Returns false if required slab size cannot fit in the largest free heap
+  // block (plus safety margin). On failure the source is left closed.
+  bool allocSlab_();
   void clearSlab_();
   void lruUnlink_(uint16_t idx);
   void lruPushFront_(uint16_t idx);

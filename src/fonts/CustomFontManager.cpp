@@ -8,6 +8,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 #include <strings.h>
 
@@ -37,13 +38,24 @@ namespace {
 
 constexpr const char* kModule = "CFONT";
 constexpr const char* kCustomFontDir = "/custom-font";
-constexpr size_t kScanCap = 50;          // hard limit on .bdf files scanned per boot
+constexpr size_t kScanCap = 250;         // hard limit on .bdf files scanned per boot
 constexpr size_t kWdtResetInterval = 32; // reset watchdog every N dir entries
 
-// Phase 2b LRU cache budget. Unifont-16 glyphs are 32 bytes each, so 384
-// slots ≈ 12 KB of bitmap + ~6 KB of std::list/unordered_map overhead on
-// top. Sits comfortably in the ~180 KB free heap.
-constexpr size_t kCustomFontCacheSlots = 384;
+// Phase 2b LRU cache budget. Per-variant slab = slots * maxBitmapBytes, where
+// maxBitmapBytes scales with the font's bounding box. For a 32pt display font
+// with bbx 112x46 that is ~644 B/slot. Only the reader-active family gets the
+// full cap; the rest register with kCacheSlotsInactive so they take minimal
+// heap and do not fragment the arena into pieces too small for the epub
+// section-cache's 32 KB contiguous block (which shows the OOM/reboot screen
+// when it fails).
+constexpr size_t kCustomFontCacheSlots = 32;
+constexpr size_t kCacheSlotsInactive = 4;
+
+// Stop opening more families when the largest contiguous free block drops
+// below this threshold. Leaves room for render buffers, epub section cache,
+// webserver, etc. Also protects against fragmentation — free heap may be
+// higher but split into pieces too small for a single slab.
+constexpr size_t kHeapFloorForNextFamilyBytes = 56 * 1024;
 
 bool isBdfName(const char* name) {
   if (!name || name[0] == '\0' || name[0] == '.') return false;
@@ -170,8 +182,45 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
   // fontA_20) can switch between them via the reader Font Size picker
   // without re-scanning SD.
   static constexpr const char* kSlotNames[4] = {"regular", "bold", "italic", "bolditalic"};
-
+  // Only the user's currently-active family is registered in the renderer.
+  // Every previous attempt to preload multiple families fragmented the
+  // ESP32-C3 heap badly enough that the 32 KB epub section ZIP dict could
+  // no longer coalesce, crashing book open with a `std::terminate` from
+  // operator new. Non-active families are still visible in the picker
+  // (from `entries_`/`families_`) — selecting one triggers re-register
+  // via ReaderSettingsActivity → this function.
+  //
+  // Clear prior registrations first so a font switch drops the old slab
+  // before the new one is allocated. `insertCustomFont` already does this
+  // on collision, but the ID changes across families so explicit sweep is
+  // required.
   for (const auto& g : families_) {
+    renderer.removeCustomFont(idForFamily(g.fontName, g.sizePt));
+  }
+
+  if (SETTINGS.customFontName.empty() || SETTINGS.customFontSizePt == 0) {
+    LOG_INF(kModule, "no active custom font; renderer left without custom registrations");
+    return;
+  }
+
+  const CustomFontFamilyGroup* activeGroup = nullptr;
+  for (const auto& g : families_) {
+    if (g.fontName == SETTINGS.customFontName && g.sizePt == SETTINGS.customFontSizePt) {
+      activeGroup = &g;
+      break;
+    }
+  }
+  if (!activeGroup) {
+    LOG_INF(kModule, "active font '%s' @ %upt not present in scanned families",
+            SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt));
+    return;
+  }
+
+  // Single-family loop — keeps the original variant/.idx handling code
+  // below untouched. `continue` inside this loop always falls through to
+  // the end of the function, which is the desired behaviour.
+  for (const auto* gp : {activeGroup}) {
+    const auto& g = *gp;
     if (g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR] < 0) continue;
 
     const int regIdx = g.variantEntryIdx[bdf::CustomFont::SLOT_REGULAR];
@@ -184,9 +233,22 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
       continue;
     }
 
-    auto* font = new bdf::CustomFont();
-    if (!font->open(bdfPath, regIdxPath.c_str(), regEntry.sizePt, kCustomFontCacheSlots)) {
-      LOG_INF(kModule, "open failed for %s", regEntry.filename.c_str());
+    const size_t familyCacheSlots = kCustomFontCacheSlots;
+
+    const size_t largestFree = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (largestFree < kHeapFloorForNextFamilyBytes) {
+      LOG_INF(kModule, "skip register: heap floor reached (largest=%u B) at %s",
+              static_cast<unsigned>(largestFree), regEntry.filename.c_str());
+      continue;
+    }
+
+    auto* font = new (std::nothrow) bdf::CustomFont();
+    if (font == nullptr) {
+      LOG_INF(kModule, "alloc CustomFont failed for %s", regEntry.filename.c_str());
+      continue;
+    }
+    if (!font->open(bdfPath, regIdxPath.c_str(), regEntry.sizePt, familyCacheSlots)) {
+      LOG_INF(kModule, "open failed for %s (heap pressure or IO)", regEntry.filename.c_str());
       delete font;
       continue;
     }
@@ -202,7 +264,7 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
         LOG_INF(kModule, "variant %s present but .idx missing: %s", kSlotNames[slot], ve.filename.c_str());
         continue;
       }
-      if (!font->openVariant(slot, vBdfPath, vIdxPath.c_str(), kCustomFontCacheSlots)) {
+      if (!font->openVariant(slot, vBdfPath, vIdxPath.c_str(), familyCacheSlots)) {
         LOG_INF(kModule, "variant %s open failed: %s", kSlotNames[slot], ve.filename.c_str());
         continue;
       }
@@ -218,6 +280,20 @@ void CustomFontManager::registerWithRenderer(GfxRenderer& renderer) {
             font->hasVariant(bdf::CustomFont::SLOT_BOLD_ITALIC) ? "Z" : "-");
     renderer.insertCustomFont(fontId, font);
   }
+}
+
+void CustomFontManager::trimAllCaches(GfxRenderer& renderer) {
+  size_t trimmed = 0;
+  for (const auto& g : families_) {
+    const int fontId = idForFamily(g.fontName, g.sizePt);
+    if (auto* font = renderer.findCustomFont(fontId)) {
+      font->trimCache(1);
+      ++trimmed;
+    }
+  }
+  LOG_INF(kModule, "trimmed %u custom font caches (largest free now=%u B)",
+          static_cast<unsigned>(trimmed),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
 }
 
 void CustomFontManager::scanAndQueuePrompts() {

@@ -76,6 +76,13 @@ bool hasPendingPrompt() const { return !pendingPromptIdx_.empty(); }
   // also after an install-button-triggered build completes.
   void registerWithRenderer(GfxRenderer& renderer);
 
+  // Shrink every registered CustomFont's glyph cache to the minimum size,
+  // freeing each slab so a single large contiguous allocation (epub section
+  // ZIP dict = 32 KB) can succeed. Used by EpubReaderActivity before
+  // createSectionFile to avoid the "REBOOT DEVICE" OOM screen when custom
+  // fonts are fragmenting the heap. Caches rebuild lazily on next render.
+  void trimAllCaches(GfxRenderer& renderer);
+
   // Delete every BDF + IDX file belonging to `fontName` from /custom-font/
   // and drop the font from the renderer. Re-scans the directory to rebuild
   // entries_/families_. Returns the number of files removed.
