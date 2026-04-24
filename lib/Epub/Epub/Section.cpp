@@ -1,6 +1,7 @@
 #include "Section.h"
 
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Serialization.h>
@@ -269,7 +270,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
                                 const uint8_t wordSpacingPercent, const uint8_t firstLineIndentMode,
                                 const uint8_t readerStyleMode, const uint8_t textRenderMode, const bool readerBoldSwap,
                                 const std::function<void(int)>& progressFn) {
-  LOG_DBG("HEAP", "SCT createSectionFile:start spine=%d free=%u min=%u", spineIndex, (unsigned)ESP.getFreeHeap(),
+  LOG_DBG("HEAP", "SCT createSectionFile:start spine=%d free=%u largest=%u min=%u", spineIndex,
+          (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
           (unsigned)ESP.getMinFreeHeap());
   const auto localPath = epub->getSpineItem(spineIndex).href;
   const auto tmpHtmlPath = epub->getCachePath() + "/.tmp_" + std::to_string(spineIndex) + ".html";

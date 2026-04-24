@@ -10,6 +10,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <climits>
@@ -105,11 +106,17 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
-  // Block 2 (v1.2.0): half refresh on book enter is enough to scrub the
-  // library list or file-actions menu ghost and is ~1 s faster than FULL.
-  // Downgrade is experimental — revert to requestFullRefresh() if ghost
-  // artifacts appear under the first page.
-  renderer.requestHalfRefresh();
+  // Full refresh on book enter. The v1.2.0 experiment downgraded this to
+  // requestHalfRefresh() to shave ~1 s off open time, but hardware capture
+  // 2026-04-24 caught the failure mode the original author warned about:
+  // the first page on open, and the first page after a mid-book font switch,
+  // both showed ghost pixels of the previous screen overlaid on the new
+  // render. Half refresh doesn't fully invert the segment drivers, so
+  // incompletely-reset pixels bleed through the first buffer write. Pay the
+  // extra second at enter-time to get a clean first page — especially
+  // important after a font switch, where old-font glyph positions would
+  // otherwise double-expose under the new layout.
+  renderer.requestFullRefresh();
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
@@ -1235,13 +1242,24 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
 
   const auto filepath = epub->getSpineItem(currentSpineIndex).href;
   LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
+  // Trace largest before/after Section alloc + clearPageCache. Phase 3
+  // hardware capture (2026-04-24) showed `largest` stuck around 45 KB
+  // mid-session even after releaseAllCaches freed the font slab —
+  // something allocated between book-open and section-build is pinning the
+  // top of heap. These snapshots narrow it to a specific lifecycle step.
+  LOG_DBG("HEAP", "ERS ensureSection:before-alloc free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
   auto* sec = new (std::nothrow) Section(epub, currentSpineIndex, renderer);
   if (!sec) {
     LOG_ERR("ERS", "OOM: Section allocation");
     return false;
   }
   section = std::unique_ptr<Section>(sec);
+  LOG_DBG("HEAP", "ERS ensureSection:after-alloc free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
   clearPageCache();
+  LOG_DBG("HEAP", "ERS ensureSection:after-clearPageCache free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
 
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
   const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());

@@ -7,11 +7,17 @@
 #include <Logging.h>
 #include <PngToBmpConverter.h>
 #include <ZipFile.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 
-#define LOG_HEAP(label) \
-  LOG_DBG("HEAP", "EBP %s free=%u min=%u", label, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap())
+// Temporary (fix/fonts-stranded-largest branch): include `largest` so we can
+// trace where the top contiguous block collapses across the epub-load
+// lifecycle. `free` tells you how much RAM is unused; `largest` tells you how
+// much of it is in one piece — which is what matters for the 32 KB ZIP dict.
+#define LOG_HEAP(label)                                                                                               \
+  LOG_DBG("HEAP", "EBP %s free=%u largest=%u min=%u", label, (unsigned)ESP.getFreeHeap(),                             \
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap())
 
 #include "Epub/parsers/ContainerParser.h"
 #include "Epub/parsers/ContentOpfParser.h"
