@@ -33,8 +33,8 @@ class BdfIndexBuilder {
   // UI code can draw a live bar; default 256 keeps callback overhead
   // negligible (~200 calls for a 57 k-glyph BDF). Passing nullptr or
   // progressEveryN=0 disables progress reporting.
-  static BuildIndexResult buildIndex(const char* bdfPath, const char* idxPath,
-                                     BuildProgressCallback progress = nullptr, uint32_t progressEveryN = 256);
+  static BuildIndexResult buildIndex(const char* bdfPath, const char* idxPath, BuildProgressCallback progress = nullptr,
+                                     uint32_t progressEveryN = 256);
 };
 
 }  // namespace bdf

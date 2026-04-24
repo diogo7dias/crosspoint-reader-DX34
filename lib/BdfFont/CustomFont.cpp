@@ -53,9 +53,7 @@ bool CustomFont::openVariant(size_t slot, const char* bdfPath, const char* idxPa
   return true;
 }
 
-void CustomFont::trimCache(size_t slots) {
-  sharedCache_.setCacheCap(slots == 0 ? 1 : slots);
-}
+void CustomFont::trimCache(size_t slots) { sharedCache_.setCacheCap(slots == 0 ? 1 : slots); }
 
 void CustomFont::releaseCache() { sharedCache_.releaseSlab(); }
 
@@ -135,9 +133,7 @@ int CustomFont::lineHeight(StyleBits /*style*/) const {
   return v->fontBbxH();
 }
 
-int CustomFont::getTextWidth(const char* text, StyleBits style) {
-  return getTextAdvanceX(text, 0, style);
-}
+int CustomFont::getTextWidth(const char* text, StyleBits style) { return getTextAdvanceX(text, 0, style); }
 
 int CustomFont::getTextAdvanceX(const char* text, int letterSpacing, StyleBits style) {
   auto* src = getVariant(style);

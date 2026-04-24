@@ -79,7 +79,7 @@ std::optional<BdfFilenameInfo> parseBdfFilename(const char* basename) {
       break;
     }
   }
-  if (underscorePos <= 0) return std::nullopt;          // no underscore, or empty name
+  if (underscorePos <= 0) return std::nullopt;           // no underscore, or empty name
   if (underscorePos == extPos - 1) return std::nullopt;  // "_.bdf" or "foo_.bdf"
 
   // Validate name chars in [0, underscorePos).

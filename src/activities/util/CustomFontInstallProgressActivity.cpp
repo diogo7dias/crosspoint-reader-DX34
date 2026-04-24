@@ -25,13 +25,15 @@ void CustomFontInstallProgressActivity::onEnter() {
   };
   auto* args = new TaskArgs{bdfPath, idxPath, taskState};
 
-  xTaskCreate([](void* p) {
-    auto* a = static_cast<TaskArgs*>(p);
-    a->state->result = crosspoint::bdf::BdfIndexBuilder::buildIndex(a->bdf.c_str(), a->idx.c_str());
-    a->state->done.store(true);
-    delete a;
-    vTaskDelete(nullptr);
-  }, "f_install", 8192, args, 1, nullptr);
+  xTaskCreate(
+      [](void* p) {
+        auto* a = static_cast<TaskArgs*>(p);
+        a->state->result = crosspoint::bdf::BdfIndexBuilder::buildIndex(a->bdf.c_str(), a->idx.c_str());
+        a->state->done.store(true);
+        delete a;
+        vTaskDelete(nullptr);
+      },
+      "f_install", 8192, args, 1, nullptr);
 }
 
 void CustomFontInstallProgressActivity::loop() {

@@ -33,9 +33,7 @@ void GfxRenderer::insertCustomFont(const int fontId, crosspoint::bdf::CustomFont
   customFontMap[fontId] = font;
 }
 
-void GfxRenderer::removeCustomFont(const int fontId) {
-  customFontMap.erase(fontId);
-}
+void GfxRenderer::removeCustomFont(const int fontId) { customFontMap.erase(fontId); }
 
 crosspoint::bdf::CustomFont* GfxRenderer::findCustomFont(const int fontId) const {
   const auto it = customFontMap.find(fontId);
@@ -111,8 +109,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   // non-rotated path — side-button labels (the only rotated callers) would
   // read wrong with a sheared glyph. Divisor 4 ≈ 14° slant, close to the
   // standard 15° italic convention.
-  const bool shearItalic =
-      rotation == TextRotation::None && fontFamily.shouldSynthesizeItalic(style);
+  const bool shearItalic = rotation == TextRotation::None && fontFamily.shouldSynthesizeItalic(style);
   constexpr int kShearDivisor = 4;
 
   const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
@@ -305,7 +302,8 @@ void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, con
     const bool shear = cf->shouldSynthesizeItalic(styleBits);
     constexpr int kShearDivisor = 4;
     cf->visitGlyphs(text, letterSpacing, styleBits,
-                    [this, baselineY, x, black, boldPasses, dark, shear](int cursorX, const crosspoint::bdf::CustomFontGlyphSource::Glyph& g) {
+                    [this, baselineY, x, black, boldPasses, dark, shear](
+                        int cursorX, const crosspoint::bdf::CustomFontGlyphSource::Glyph& g) {
                       if (g.bitmap == nullptr || g.bbxW == 0 || g.bbxH == 0) return true;
                       const int topLeftX = x + cursorX + g.bbxOffX;
                       const int topLeftY = baselineY - g.bbxOffY - g.bbxH;

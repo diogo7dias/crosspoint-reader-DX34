@@ -39,8 +39,8 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
     // they used bdfOffset (STARTCHAR position) which is wrong for the new
     // decodeBitmap. Treating them as "not installed" routes the file back
     // through the install prompt which rebuilds a v2 index.
-    LOG_INF("BDF", "rejecting idx %s (magic=%08X version=%u, want version=%u) — reinstall required",
-            idxPath, static_cast<unsigned>(hdr_.magic), static_cast<unsigned>(hdr_.version),
+    LOG_INF("BDF", "rejecting idx %s (magic=%08X version=%u, want version=%u) — reinstall required", idxPath,
+            static_cast<unsigned>(hdr_.magic), static_cast<unsigned>(hdr_.version),
             static_cast<unsigned>(kBdfIndexVersion));
     idxFile_.close();
     return false;
@@ -69,9 +69,7 @@ bool CustomFontGlyphSource::open(const char* bdfPath, const char* idxPath) {
   {
     const size_t bytesPerRow = static_cast<size_t>((bbxW + 7) / 8);
     const size_t hexCharsPerRow = bytesPerRow * 2;
-    const size_t worst = hexCharsPerRow * static_cast<size_t>(bbxH)
-                         + 2 * static_cast<size_t>(bbxH)
-                         + 16;
+    const size_t worst = hexCharsPerRow * static_cast<size_t>(bbxH) + 2 * static_cast<size_t>(bbxH) + 16;
     bulkBufCap_ = worst > 0 ? worst : 32;
     bulkBuf_ = static_cast<uint8_t*>(heap_caps_malloc(bulkBufCap_, MALLOC_CAP_8BIT));
     if (bulkBuf_ == nullptr) {
@@ -154,8 +152,10 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
         found = true;
         break;
       }
-      if (e.codepoint < codepoint) lo = mid + 1;
-      else hi = mid;
+      if (e.codepoint < codepoint)
+        lo = mid + 1;
+      else
+        hi = mid;
     }
   } else {
     while (lo < hi) {
@@ -167,8 +167,10 @@ const CustomFontGlyphSource::Glyph* CustomFontGlyphSource::lookup(uint32_t codep
         found = true;
         break;
       }
-      if (e.codepoint < codepoint) lo = mid + 1;
-      else hi = mid;
+      if (e.codepoint < codepoint)
+        lo = mid + 1;
+      else
+        hi = mid;
     }
   }
   if (!found) return nullptr;
@@ -198,7 +200,7 @@ bool CustomFontGlyphSource::decodeBitmap(const IndexEntry& e, uint8_t* dst, size
   const size_t bytesPerRow = (e.bitmapW + 7) / 8;
   const size_t totalBytes = bytesPerRow * e.bitmapH;
   if (totalBytes > dstCap) return false;  // Glyph exceeds font bounding box — rejected.
-  if (totalBytes == 0) return true;        // zero-size glyph (e.g. SPACE) — empty bitmap is valid
+  if (totalBytes == 0) return true;       // zero-size glyph (e.g. SPACE) — empty bitmap is valid
 
   // v2 index points directly at the first hex row — no more BITMAP token
   // scan. bitmapOffset=0 means "no bitmap for this glyph" (malformed BDF).

@@ -117,6 +117,15 @@ void EpubReaderActivity::onEnter() {
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
   ImageBlock::setDitherMode(SETTINGS.imageDither);
 
+  // Register the active custom font with the renderer BEFORE any drawText can
+  // run. Chrome elements (page counter, header) draw during onEnter, well
+  // before ensureSectionLoaded — if the font isn't registered yet, every
+  // glyph logs "Font not found" and the render path aborts after spam.
+  // The late re-register inside ensureSectionLoaded is kept for per-book
+  // theme changes; the cost of registering twice is bounded by the clear
+  // pass at the top of registerWithRenderer.
+  crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+
   epub->setupCacheDir();
 
   int32_t loadedPageCount = -1;
@@ -1261,14 +1270,13 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     crosspoint::fonts::CustomFontManager::logHeapSnapshot("createSectionFile-pre");
 
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
-    const bool sectionOk = section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
-                                                      SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment,
-                                                      viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
-                                                      SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode,
-                                                      SETTINGS.readerStyleMode, sectionTextRenderMode, boldSwapEnabled,
-                                                      layoutProgressTick);
-    crosspoint::fonts::CustomFontManager::logHeapSnapshot(
-        sectionOk ? "createSectionFile-post-ok" : "createSectionFile-post-fail");
+    const bool sectionOk = section->createSectionFile(
+        SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacingLevel,
+        SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
+        SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
+        boldSwapEnabled, layoutProgressTick);
+    crosspoint::fonts::CustomFontManager::logHeapSnapshot(sectionOk ? "createSectionFile-post-ok"
+                                                                    : "createSectionFile-post-fail");
     // Restore the custom font cache on BOTH paths. Success: the next render
     // needs a warm cache to stay snappy. Failure: we still return a fallback
     // UI to the user and they may page around; a permanently-empty cache
@@ -1992,8 +2000,7 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // actual render
     const uint32_t tRenderEnd = millis();
     LOG_INF("ERS", "page render timings: scan=%u ms render=%u ms total=%u ms",
-            static_cast<unsigned>(tScanEnd - tScanStart),
-            static_cast<unsigned>(tRenderEnd - tRenderStart),
+            static_cast<unsigned>(tScanEnd - tScanStart), static_cast<unsigned>(tRenderEnd - tRenderStart),
             static_cast<unsigned>(tRenderEnd - tFrameStart));
   } else {
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);

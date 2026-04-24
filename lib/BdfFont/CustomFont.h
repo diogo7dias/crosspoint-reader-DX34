@@ -61,9 +61,7 @@ class CustomFont {
   // The shared cache's byte budget is applied on the first successful open.
   bool openVariant(size_t slot, const char* bdfPath, const char* idxPath, size_t cacheBudgetBytes);
 
-  bool isOpen() const {
-    return variants_[SLOT_REGULAR] && variants_[SLOT_REGULAR]->isOpen();
-  }
+  bool isOpen() const { return variants_[SLOT_REGULAR] && variants_[SLOT_REGULAR]->isOpen(); }
   // True iff this variant was opened AND its files are readable.
   bool hasVariant(size_t slot) const {
     if (slot >= 4) return false;

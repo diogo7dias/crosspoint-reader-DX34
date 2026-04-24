@@ -70,7 +70,7 @@ class CustomFontManager {
   void showNextPromptIfAny(GfxRenderer& renderer, MappedInputManager& mappedInput,
                            std::function<void()> onAllDismissed);
 
-bool hasPendingPrompt() const { return !pendingPromptIdx_.empty(); }
+  bool hasPendingPrompt() const { return !pendingPromptIdx_.empty(); }
   const std::vector<CustomFontEntry>& entries() const { return entries_; }
   const std::vector<CustomFontFamilyGroup>& families() const { return families_; }
 

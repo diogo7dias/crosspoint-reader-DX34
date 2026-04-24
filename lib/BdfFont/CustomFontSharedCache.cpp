@@ -50,7 +50,7 @@ bool CustomFontSharedCache::setCacheBudget(size_t budgetBytes) {
 
 void CustomFontSharedCache::clearCache() {
   clearSlab_();
-  allocSlab_(); // re-init with same cap
+  allocSlab_();  // re-init with same cap
 }
 
 void CustomFontSharedCache::releaseSlab() {
@@ -156,10 +156,14 @@ void CustomFontSharedCache::clearSlab_() {
 
 void CustomFontSharedCache::lruUnlink_(uint16_t idx) {
   Slot& s = slots_[idx];
-  if (s.prev != kNil) slots_[s.prev].next = s.next;
-  else lruHead_ = s.next;
-  if (s.next != kNil) slots_[s.next].prev = s.prev;
-  else lruTail_ = s.prev;
+  if (s.prev != kNil)
+    slots_[s.prev].next = s.next;
+  else
+    lruHead_ = s.next;
+  if (s.next != kNil)
+    slots_[s.next].prev = s.prev;
+  else
+    lruTail_ = s.prev;
   s.prev = kNil;
   s.next = kNil;
 }
@@ -221,7 +225,8 @@ bool CustomFontSharedCache::lookup(uint8_t variant, uint32_t codepoint, const Ca
   return false;
 }
 
-uint8_t* CustomFontSharedCache::allocateSlot(uint8_t variant, uint32_t codepoint, const CachedGlyph& metadata, const CachedGlyph** outGlyph) {
+uint8_t* CustomFontSharedCache::allocateSlot(uint8_t variant, uint32_t codepoint, const CachedGlyph& metadata,
+                                             const CachedGlyph** outGlyph) {
   if (cacheCap_ == 0 || maxBitmapBytes_ == 0 || bitmapSlab_ == nullptr) return nullptr;
   uint16_t idx = takeFreeSlot_();
   if (idx == kNil) {

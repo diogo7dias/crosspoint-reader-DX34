@@ -24,9 +24,8 @@ namespace bdf {
 // Sorted-codepoint invariant lets the runtime do an O(log N) binary search.
 // Unsorted BDFs are rejected at build time with an error.
 
-constexpr uint32_t kBdfIndexMagic =
-    static_cast<uint32_t>('C') | (static_cast<uint32_t>('P') << 8) | (static_cast<uint32_t>('B') << 16) |
-    (static_cast<uint32_t>('I') << 24);
+constexpr uint32_t kBdfIndexMagic = static_cast<uint32_t>('C') | (static_cast<uint32_t>('P') << 8) |
+                                    (static_cast<uint32_t>('B') << 16) | (static_cast<uint32_t>('I') << 24);
 // v2: renamed IndexEntry.bdfOffset → bitmapOffset. Same size, same position —
 // only the semantic changed (now points at the first hex row, not at the
 // STARTCHAR line), which lets CustomFontGlyphSource::decodeBitmap seek
@@ -36,8 +35,8 @@ constexpr uint32_t kBdfIndexMagic =
 constexpr uint8_t kBdfIndexVersion = 2;
 
 struct __attribute__((packed)) IndexHeader {
-  uint32_t magic;        // kBdfIndexMagic
-  uint8_t version;       // kBdfIndexVersion
+  uint32_t magic;   // kBdfIndexMagic
+  uint8_t version;  // kBdfIndexVersion
   uint8_t reserved0;
   uint8_t reserved1;
   uint8_t reserved2;

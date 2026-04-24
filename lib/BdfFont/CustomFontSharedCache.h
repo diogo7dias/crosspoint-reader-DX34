@@ -76,7 +76,7 @@ class CustomFontSharedCache {
     uint32_t hits = 0;
     uint32_t misses = 0;
     uint32_t evictions = 0;
-    uint32_t decodeTotalUs = 0;   // cumulative time spent in allocateSlot+decode callers
+    uint32_t decodeTotalUs = 0;  // cumulative time spent in allocateSlot+decode callers
     uint32_t decodeCount = 0;
   };
   Stats getStats() const { return stats_; }

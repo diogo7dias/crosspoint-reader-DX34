@@ -15,9 +15,7 @@ namespace bdf {
 
 namespace {
 
-bool writePod(HalFile& f, const void* data, size_t len) {
-  return f.write(data, len) == len;
-}
+bool writePod(HalFile& f, const void* data, size_t len) { return f.write(data, len) == len; }
 
 void buildTmpPath(const char* finalPath, char* out, size_t outSize) {
   // <finalPath>.tmp
@@ -26,8 +24,8 @@ void buildTmpPath(const char* finalPath, char* out, size_t outSize) {
 
 }  // namespace
 
-BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* idxPath,
-                                             BuildProgressCallback progress, uint32_t progressEveryN) {
+BuildIndexResult BdfIndexBuilder::buildIndex(const char* bdfPath, const char* idxPath, BuildProgressCallback progress,
+                                             uint32_t progressEveryN) {
   BuildIndexResult result;
   if (!bdfPath || !idxPath) {
     result.error = "null path";
