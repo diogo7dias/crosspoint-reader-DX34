@@ -41,7 +41,11 @@ struct CustomFontFamilyGroup {
 // state.json seenCustomFonts / skippedCustomFonts).
 //
 // Phase 1: prompt only — "Install" logs + marks seen, no glyph extraction.
-// Phase 2 will hang real install + render integration off the same entries.
+// Phase 2: real install + render integration + single-active registration
+// (PR #69).
+// Phase 3 (in progress): architecture + performance refactor — see the
+// v2 PR for the roadmap (lazy variant loading, per-font cache sizing,
+// prewarm, zero-copy decode, etc.).
 class CustomFontManager {
  public:
   static CustomFontManager& instance();
