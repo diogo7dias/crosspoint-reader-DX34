@@ -312,14 +312,39 @@ void EpubReaderActivity::showLayoutRecoveryScreen(LayoutRecoveryState newState) 
   // be consumed as the retry trigger and produce a no-op flicker.
   mappedInput.suppressUntilAllReleased();
   renderer.clearScreen();
+
+  // Body strings (e.g. "Tap any key to free memory and try again.") are wider
+  // than the screen at UI_12_FONT_ID, so drawCenteredText alone overflows both
+  // edges. Wrap to multiple lines and stack vertically.
+  constexpr int kSideMargin = 30;
+  constexpr int kSectionGap = 20;
+  const int maxWidth = renderer.getScreenWidth() - 2 * kSideMargin;
+  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+
+  const char* titleStr;
+  const char* bodyStr;
   if (newState == LayoutRecoveryState::AwaitingRetryAfterRevert) {
-    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_FONT_REVERTED_TITLE), true, EpdFontFamily::REGULAR);
-    renderer.drawCenteredText(UI_12_FONT_ID, 340, tr(STR_LAYOUT_FONT_REVERTED_BODY), true, EpdFontFamily::REGULAR);
+    titleStr = tr(STR_LAYOUT_FONT_REVERTED_TITLE);
+    bodyStr = tr(STR_LAYOUT_FONT_REVERTED_BODY);
   } else {
-    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
-    renderer.drawCenteredText(UI_12_FONT_ID, 340, tr(STR_LAYOUT_LOW_MEMORY_BODY), true, EpdFontFamily::REGULAR);
+    titleStr = tr(STR_LAYOUT_LOW_MEMORY_TITLE);
+    bodyStr = tr(STR_LAYOUT_LOW_MEMORY_BODY);
   }
-  renderer.drawCenteredText(UI_12_FONT_ID, 420, tr(STR_LAYOUT_RETRY_HINT), true, EpdFontFamily::REGULAR);
+
+  auto drawWrapped = [&](int& y, const char* text) {
+    const auto lines = ReaderLayoutSafety::wrapText(renderer, UI_12_FONT_ID, text, maxWidth);
+    for (const auto& line : lines) {
+      renderer.drawCenteredText(UI_12_FONT_ID, y, line.c_str(), true, EpdFontFamily::REGULAR);
+      y += lineHeight;
+    }
+  };
+
+  int y = 300;
+  drawWrapped(y, titleStr);
+  y += kSectionGap;
+  drawWrapped(y, bodyStr);
+  y += kSectionGap;
+  drawWrapped(y, tr(STR_LAYOUT_RETRY_HINT));
   renderer.displayBuffer();
 }
 
