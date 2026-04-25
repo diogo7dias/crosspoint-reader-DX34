@@ -30,10 +30,8 @@
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
-#include "html/SettingsPageHtml.generated.h"
 #include "html/brutalistCss.generated.h"
 #include "html/js/jszip_minJs.generated.h"
-#include "network/SettingsGateway.h"
 #include "network/ws/WsUploadSession.h"
 #include "util/StringUtils.h"
 
@@ -69,11 +67,9 @@ String wsLastCompleteName;
 size_t wsLastCompleteSize = 0;
 unsigned long wsLastCompleteAt = 0;
 
-// RFC #24 globals. Session owns the WS upload state machine; gateway owns
-// the settings POST orchestration. Both created in begin(), destroyed in
-// stop().
+// RFC #24 globals. Session owns the WS upload state machine, created in
+// begin(), destroyed in stop().
 std::unique_ptr<crosspoint::ws::WsUploadSession> g_wsUploadSession;
-std::unique_ptr<crosspoint::network::SettingsGateway> g_settingsGateway;
 
 // Compute the cache directory path for a book file (returns empty if not a book).
 // Uses content-based fingerprint so the path is stable across file moves.
@@ -260,11 +256,6 @@ void CrossPointWebServer::begin() {
 
   server->on("/css/brutalist.css", HTTP_GET, [this] { handleBrutalistCss(); });
 
-  // Settings endpoints
-  server->on("/settings", HTTP_GET, [this] { handleSettingsPage(); });
-  server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
-  server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
-
   // Custom-font endpoints.
   // /upload takes the file body via multipart; the family / variant /
   // size tuple rides in query params because form fields aren't
@@ -357,74 +348,6 @@ void CrossPointWebServer::begin() {
     clearBookCacheIfNeeded(full);
   };
   g_wsUploadSession.reset(new crosspoint::ws::WsUploadSession(std::move(wsDeps)));
-
-  g_settingsGateway.reset(new crosspoint::network::SettingsGateway(
-      [](const JsonDocument& doc) {
-        auto settings = getSettingsList();
-        int applied = 0;
-        for (auto& s : settings) {
-          if (!s.key) continue;
-          if (!doc[s.key].is<JsonVariant>()) continue;
-          switch (s.type) {
-            case SettingType::TOGGLE: {
-              const int val = doc[s.key].as<int>() ? 1 : 0;
-              if (s.valuePtr) SETTINGS.*(s.valuePtr) = val;
-              applied++;
-              break;
-            }
-            case SettingType::ENUM: {
-              const int val = doc[s.key].as<int>();
-              const int maxEnumValue =
-                  (s.valuePtr == &CrossPointSettings::fontSize)
-                      ? static_cast<int>(CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily))
-                      : static_cast<int>(s.enumValues.size());
-              if (val >= 0 && val < maxEnumValue) {
-                if (s.valuePtr) {
-                  if (s.valuePtr == &CrossPointSettings::fontSize) {
-                    SETTINGS.fontSize =
-                        CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, static_cast<uint8_t>(val));
-                  } else if (s.valuePtr == &CrossPointSettings::fontFamily) {
-                    SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(val));
-                    SETTINGS.fontSize =
-                        CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-                    SETTINGS.lineSpacingPercent =
-                        CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
-                  } else {
-                    SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
-                  }
-                } else if (s.valueSetter) {
-                  s.valueSetter(static_cast<uint8_t>(val));
-                }
-                applied++;
-              }
-              break;
-            }
-            case SettingType::VALUE: {
-              const int val = doc[s.key].as<int>();
-              if (val >= s.valueRange.min && val <= s.valueRange.max) {
-                if (s.valuePtr) SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
-                applied++;
-              }
-              break;
-            }
-            case SettingType::STRING: {
-              const std::string val = doc[s.key].as<std::string>();
-              if (s.stringSetter) {
-                s.stringSetter(val);
-              } else if (s.stringPtr && s.stringMaxLen > 0) {
-                strncpy(s.stringPtr, val.c_str(), s.stringMaxLen - 1);
-                s.stringPtr[s.stringMaxLen - 1] = '\0';
-              }
-              applied++;
-              break;
-            }
-            default:
-              break;
-          }
-        }
-        return applied;
-      },
-      [] { return SETTINGS.saveToFile(); }));
 
   running = true;
 
@@ -530,10 +453,9 @@ void CrossPointWebServer::stop() {
     wsDownloadInProgress = false;
   }
 
-  // Release session + gateway before the WS server goes away, so any pending
-  // callbacks have no session to delegate to (checked at dispatch).
+  // Release session before the WS server goes away, so any pending callbacks
+  // have no session to delegate to (checked at dispatch).
   g_wsUploadSession.reset();
-  g_settingsGateway.reset();
 
   // Stop WebSocket server
   if (wsServer) {
@@ -1515,137 +1437,6 @@ void CrossPointWebServer::handleDelete() const {
   } else {
     server->send(500, "text/plain", "Failed to delete some items: " + failedItems);
   }
-}
-
-void CrossPointWebServer::handleSettingsPage() const {
-  sendHtmlContent(server.get(), SettingsPageHtml, sizeof(SettingsPageHtml));
-  LOG_DBG("WEB", "Served settings page");
-}
-
-void CrossPointWebServer::handleGetSettings() const {
-  auto settings = getSettingsList();
-
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, "application/json", "");
-  server->sendContent("[");
-
-  char output[512];
-  constexpr size_t outputSize = sizeof(output);
-  bool seenFirst = false;
-  JsonDocument doc;
-
-  for (const auto& s : settings) {
-    if (!s.key) continue;  // Skip ACTION-only entries
-    doc.clear();
-    doc["key"] = s.key;
-    doc["name"] = I18N.get(s.nameId);
-    doc["category"] = I18N.get(s.category);
-
-    switch (s.type) {
-      case SettingType::TOGGLE: {
-        doc["type"] = "toggle";
-        if (s.valuePtr) {
-          doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
-        }
-        break;
-      }
-      case SettingType::ENUM: {
-        doc["type"] = "enum";
-        if (s.valuePtr) {
-          if (s.valuePtr == &CrossPointSettings::fontFamily) {
-            doc["value"] = static_cast<int>(CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily));
-          } else {
-            doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
-          }
-        } else if (s.valueGetter) {
-          doc["value"] = static_cast<int>(s.valueGetter());
-        }
-        JsonArray options = doc["options"].to<JsonArray>();
-        if (s.valuePtr == &CrossPointSettings::fontSize) {
-          const uint8_t optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
-          for (uint8_t i = 0; i < optionCount; ++i) {
-            const uint8_t sizeValue = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, i);
-            options.add(String(CrossPointSettings::fontSizeToPointSize(SETTINGS.fontFamily, sizeValue)));
-          }
-          doc["value"] =
-              static_cast<int>(CrossPointSettings::fontSizeToDisplayIndex(SETTINGS.fontFamily, SETTINGS.fontSize));
-        } else {
-          for (const auto& opt : s.enumValues) {
-            options.add(I18N.get(opt));
-          }
-        }
-        break;
-      }
-      case SettingType::VALUE: {
-        doc["type"] = "value";
-        if (s.valuePtr) {
-          doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
-        }
-        doc["min"] = s.valueRange.min;
-        doc["max"] = s.valueRange.max;
-        doc["step"] = s.valueRange.step;
-        break;
-      }
-      case SettingType::STRING: {
-        doc["type"] = "string";
-        if (s.stringGetter) {
-          doc["value"] = s.stringGetter();
-        } else if (s.stringPtr) {
-          doc["value"] = s.stringPtr;
-        }
-        break;
-      }
-      default:
-        continue;
-    }
-
-    const size_t written = serializeJson(doc, output, outputSize);
-    if (written >= outputSize) {
-      LOG_DBG("WEB", "Skipping oversized setting JSON for: %s", s.key);
-      continue;
-    }
-
-    if (seenFirst) {
-      server->sendContent(",");
-    } else {
-      seenFirst = true;
-    }
-    server->sendContent(output);
-  }
-
-  server->sendContent("]");
-  server->sendContent("");
-  LOG_DBG("WEB", "Served settings API");
-}
-
-void CrossPointWebServer::handlePostSettings() {
-  if (!server->hasArg("plain")) {
-    server->send(400, "text/plain", "Missing JSON body");
-    return;
-  }
-
-  const String body = server->arg("plain");
-  JsonDocument doc;
-  const DeserializationError err = deserializeJson(doc, body);
-  if (err) {
-    server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
-    return;
-  }
-
-  if (!g_settingsGateway) {
-    server->send(500, "text/plain", "Settings gateway not initialized");
-    return;
-  }
-  const auto r = g_settingsGateway->applyJson(doc);
-  if (!r.persisted) {
-    // Return 500 on disk error so the browser UI doesn't falsely report
-    // "saved" while settings silently revert on the next boot.
-    LOG_ERR("WEB", "Settings save failed: %s", r.error.c_str());
-    server->send(500, "text/plain", String("Applied but not saved: ") + r.error.c_str());
-    return;
-  }
-  LOG_DBG("WEB", "Applied %d setting(s)", r.applied);
-  server->send(200, "text/plain", String("Applied ") + String(r.applied) + " setting(s)");
 }
 
 namespace {

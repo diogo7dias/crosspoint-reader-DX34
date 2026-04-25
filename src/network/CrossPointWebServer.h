@@ -123,11 +123,6 @@ class CrossPointWebServer {
   void handleBrutalistCss() const;
   void abortWsUpload(const char* tag);
 
-  // Settings handlers
-  void handleSettingsPage() const;
-  void handleGetSettings() const;
-  void handlePostSettings();
-
   // Font-management handlers.
   //  GET  /fonts              — FontsPage.html (placeholder until slice 2b)
   //  GET  /api/fonts          — JSON listing of installed families
