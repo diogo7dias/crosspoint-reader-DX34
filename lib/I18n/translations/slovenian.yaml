@@ -28,6 +28,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Pritisnite katero koli tipko za sprostitev pomnilni
 STR_LAYOUT_FONT_REVERTED_TITLE: "Preklopljeno na privzeto pisavo"
 STR_LAYOUT_FONT_REVERTED_BODY: "Pisava po meri se ne prilega temu poglavju."
 STR_LAYOUT_RETRY_HINT: "Pritisnite katero koli tipko za ponovni poskus."
+STR_FONT_LOAD_FAILED: "Pisava prevelika — ohranjena prejšnja"
 STR_EMPTY_FILE: "Prazna datoteka"
 STR_OUT_OF_BOUNDS: "Zunaj meja"
 STR_LOADING: "Nalaganje..."

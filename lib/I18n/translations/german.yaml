@@ -27,6 +27,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Taste drücken, um Speicher freizugeben und erneut 
 STR_LAYOUT_FONT_REVERTED_TITLE: "Auf Standardschrift gewechselt"
 STR_LAYOUT_FONT_REVERTED_BODY: "Eigene Schrift passt nicht in dieses Kapitel."
 STR_LAYOUT_RETRY_HINT: "Taste drücken zum erneuten Versuchen."
+STR_FONT_LOAD_FAILED: "Schrift zu groß — vorherige beibehalten"
 STR_EMPTY_FILE: "Leere Datei"
 STR_OUT_OF_BOUNDS: "Zu groß"
 STR_LOADING: "Laden…"

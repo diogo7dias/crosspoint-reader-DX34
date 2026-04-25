@@ -27,6 +27,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Toque em qualquer tecla para liberar memória e ten
 STR_LAYOUT_FONT_REVERTED_TITLE: "Voltou à fonte padrão"
 STR_LAYOUT_FONT_REVERTED_BODY: "A fonte personalizada não cabe neste capítulo."
 STR_LAYOUT_RETRY_HINT: "Toque em qualquer tecla para tentar de novo."
+STR_FONT_LOAD_FAILED: "Fonte muito grande — mantendo anterior"
 STR_EMPTY_FILE: "Arquivo vazio"
 STR_OUT_OF_BOUNDS: "Fora dos limites"
 STR_LOADING: "Carregando..."

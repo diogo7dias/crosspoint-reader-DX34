@@ -27,6 +27,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Pulsa cualquier tecla para liberar memoria y reinte
 STR_LAYOUT_FONT_REVERTED_TITLE: "Cambiada a fuente predeterminada"
 STR_LAYOUT_FONT_REVERTED_BODY: "La fuente personalizada no cabe en este capítulo."
 STR_LAYOUT_RETRY_HINT: "Pulsa cualquier tecla para reintentar."
+STR_FONT_LOAD_FAILED: "Fuente demasiado grande — manteniendo anterior"
 STR_EMPTY_FILE: "Archivo vacío"
 STR_OUT_OF_BOUNDS: "Fuera de límites"
 STR_LOADING: "Cargando..."

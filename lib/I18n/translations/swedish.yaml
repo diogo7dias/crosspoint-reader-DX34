@@ -27,6 +27,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Tryck på valfri tangent för att frigöra minne oc
 STR_LAYOUT_FONT_REVERTED_TITLE: "Bytte till standardtypsnitt"
 STR_LAYOUT_FONT_REVERTED_BODY: "Anpassat typsnitt får inte plats i kapitlet."
 STR_LAYOUT_RETRY_HINT: "Tryck på valfri tangent för att försöka igen."
+STR_FONT_LOAD_FAILED: "Typsnitt för stort — behåller föregående"
 STR_EMPTY_FILE: "Tom fil"
 STR_OUT_OF_BOUNDS: "Utanför gränserna"
 STR_LOADING: "Laddar…"

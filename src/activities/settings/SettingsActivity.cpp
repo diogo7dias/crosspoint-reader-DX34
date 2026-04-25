@@ -146,9 +146,24 @@ void SettingsActivity::applyFontSizeEdit() {
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
     const auto sizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
     if (!sizes.empty() && fontSizeEditDraftIndex < sizes.size()) {
-      SETTINGS.customFontSizePt = sizes[fontSizeEditDraftIndex];
+      const uint16_t trialSize = sizes[fontSizeEditDraftIndex];
+      const uint16_t prevSize = SETTINGS.customFontSizePt;
+      // activate() is atomic — on failure the previous active font
+      // stays registered in the renderer, so the only state to roll
+      // back is SETTINGS. Without this revert the persisted size moves
+      // to a font the renderer never accepted, every later
+      // ensureSectionLoaded re-attempts the failing activate, and
+      // fontId mismatches invalidate the section cache on each chapter.
+      if (!crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, trialSize)) {
+        SETTINGS.customFontSizePt = prevSize;
+        messagePopupText = tr(STR_FONT_LOAD_FAILED);
+        messagePopupOpen = true;
+        fontSizeEditMode = false;
+        requestUpdate();
+        return;
+      }
+      SETTINGS.customFontSizePt = trialSize;
     }
-    crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
   } else {
     SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
   }
@@ -559,6 +574,16 @@ void SettingsActivity::toggleCurrentSetting() {
         }
       }
       const size_t nextIndex = total == 0 ? 0 : (currentIndex + 1) % total;
+
+      // Snapshot before any mutation so we can revert atomically if the
+      // new family is a custom one whose tables don't fit the per-variant
+      // budget — without this revert, the persisted SETTINGS point at a
+      // font the renderer never accepted and ensureSectionLoaded re-tries
+      // the failing activate on every chapter.
+      const auto prevFamily = SETTINGS.fontFamily;
+      const auto prevName = SETTINGS.customFontName;
+      const auto prevSize = SETTINGS.customFontSizePt;
+
       if (nextIndex < builtinCount) {
         SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(nextIndex));
         SETTINGS.customFontName.clear();
@@ -578,9 +603,23 @@ void SettingsActivity::toggleCurrentSetting() {
         if (!keep) SETTINGS.customFontSizePt = sizes.empty() ? 0 : sizes.front();
       }
       auto& customBinFonts = crosspoint::fonts::CustomBinFontManager::instance();
-      customBinFonts.deactivate();
+      // activate() is atomic: on failure the previous active font stays
+      // registered. Try first, then deactivate only when the new state
+      // is a built-in family or the new custom activation succeeded.
+      bool ok = true;
       if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
-        customBinFonts.activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
+        ok = customBinFonts.activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
+      } else {
+        customBinFonts.deactivate();
+      }
+      if (!ok) {
+        SETTINGS.fontFamily = prevFamily;
+        SETTINGS.customFontName = prevName;
+        SETTINGS.customFontSizePt = prevSize;
+        messagePopupText = tr(STR_FONT_LOAD_FAILED);
+        messagePopupOpen = true;
+        requestUpdate();
+        return;
       }
     } else if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
       const uint8_t count = getLanguageCount();
@@ -1040,37 +1079,82 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       return fontSizeValueLabel(SETTINGS.fontFamily, fs);
     };
 
-    int totalItemsW = 0;
+    // Pre-measure each chip's width — reused for both the row-fitting
+    // pass and the draw pass.
+    std::vector<int> chipWidths(optionCount);
+    int singleRowW = 0;
     for (int i = 0; i < optionCount; i++) {
-      totalItemsW += renderer.getTextWidth(UI_12_FONT_ID, labelAt(i).c_str()) + kItemPadH * 2;
+      const int labelW = renderer.getTextWidth(UI_12_FONT_ID, labelAt(i).c_str());
+      chipWidths[i] = labelW + kItemPadH * 2;
+      singleRowW += chipWidths[i];
     }
-    totalItemsW += kItemGap * std::max(0, optionCount - 1);
+    singleRowW += kItemGap * std::max(0, optionCount - 1);
 
     const char* title = tr(STR_FONT_SIZE);
     const int titleW = renderer.getTextWidth(UI_10_FONT_ID, title);
-    const int contentW = std::max(totalItemsW, titleW);
-    const int popupW = std::min(pageWidth - 20, contentW + kPopupPad * 2);
-    const int popupH = 54;
+
+    // Decide popup width first, then wrap chips into rows that fit
+    // inside that width minus padding. Custom families can install up
+    // to 16 sizes (25..40) so the single-row layout previously ran the
+    // chips off both edges of the screen at small font sizes — the
+    // popupW was capped to the screen but curX kept advancing past it.
+    const int popupW = std::min(pageWidth - 20, std::max(singleRowW, titleW) + kPopupPad * 2);
+    const int rowMaxW = popupW - kPopupPad * 2;
+
+    // Pack chips into rows that fit rowMaxW, with a hard cap of
+    // kMaxChipsPerRow per row so the popup stays readable on narrow
+    // screens even when individual chips are tiny.
+    constexpr int kMaxChipsPerRow = 8;
+    std::vector<int> rowStarts;  // chip index where each row begins
+    std::vector<int> rowWidths;  // pixel width occupied by each row
+    rowStarts.push_back(0);
+    int curRowW = 0;
+    int curRowChips = 0;
+    for (int i = 0; i < optionCount; i++) {
+      const int addW = (curRowW == 0) ? chipWidths[i] : (kItemGap + chipWidths[i]);
+      const bool overflow = (curRowW != 0 && curRowW + addW > rowMaxW);
+      const bool capReached = (curRowChips >= kMaxChipsPerRow);
+      if (overflow || capReached) {
+        rowWidths.push_back(curRowW);
+        rowStarts.push_back(i);
+        curRowW = chipWidths[i];
+        curRowChips = 1;
+      } else {
+        curRowW += addW;
+        curRowChips++;
+      }
+    }
+    rowWidths.push_back(curRowW);
+
+    constexpr int kRowGap = 4;
+    const int chipsBlockH = static_cast<int>(rowWidths.size()) * (textH + kItemPadV * 2) +
+                            std::max(0, static_cast<int>(rowWidths.size()) - 1) * kRowGap;
+    constexpr int kTitleH = 16;
+    constexpr int kTitleToChipsGap = 6;
+    const int popupH = kPopupPad + kTitleH + kTitleToChipsGap + chipsBlockH + kPopupPad;
     const int popupX = (pageWidth - popupW) / 2;
     const int popupY = (pageHeight - popupH) / 2;
 
     renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);
     renderer.fillRect(popupX, popupY, popupW, popupH, false);
-    renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2, popupY + 6, title, true);
+    renderer.drawText(UI_10_FONT_ID, popupX + (popupW - titleW) / 2, popupY + kPopupPad - 10, title, true);
 
-    int curX = popupX + (popupW - totalItemsW) / 2;
-    const int itemY = popupY + 28;
-    for (int i = 0; i < optionCount; i++) {
-      const std::string label = labelAt(i);
-      const int labelW = renderer.getTextWidth(UI_12_FONT_ID, label.c_str());
-      const int chipW = labelW + kItemPadH * 2;
-      const bool isSelected = (i == static_cast<int>(fontSizeEditDraftIndex));
-
-      if (isSelected) {
-        renderer.fillRect(curX, itemY - kItemPadV, chipW, textH + kItemPadV * 2, true);
+    int rowY = popupY + kPopupPad + kTitleH + kTitleToChipsGap;
+    for (size_t r = 0; r < rowWidths.size(); r++) {
+      const int rowStart = rowStarts[r];
+      const int rowEnd = (r + 1 < rowStarts.size()) ? rowStarts[r + 1] : optionCount;
+      int curX = popupX + (popupW - rowWidths[r]) / 2;
+      for (int i = rowStart; i < rowEnd; i++) {
+        const std::string label = labelAt(i);
+        const int chipW = chipWidths[i];
+        const bool isSelected = (i == static_cast<int>(fontSizeEditDraftIndex));
+        if (isSelected) {
+          renderer.fillRect(curX, rowY, chipW, textH + kItemPadV * 2, true);
+        }
+        renderer.drawText(UI_12_FONT_ID, curX + kItemPadH, rowY + kItemPadV, label.c_str(), !isSelected);
+        curX += chipW + kItemGap;
       }
-      renderer.drawText(UI_12_FONT_ID, curX + kItemPadH, itemY, label.c_str(), !isSelected);
-      curX += chipW + kItemGap;
+      rowY += textH + kItemPadV * 2 + kRowGap;
     }
   }
 

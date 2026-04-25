@@ -53,9 +53,12 @@ constexpr uint32_t kMaxGroups = 2048;
 // cost so a four-variant family stays well under the EPUB-layout heap
 // budget. Computed as: glyphCount*10 + intervalCount*12 + groupCount*20
 // + sizeof(Header). Empirically a 40 pt Latin-1 face fits inside ~6 KB;
-// the 16 KB cap leaves headroom for larger Unicode ranges while still
-// refusing pathological uploads that would jeopardise EPUB layout.
-constexpr uint32_t kMaxTablesBytes = 16 * 1024;
+// EBgaramond and similar wider-coverage fonts run 18-22 KB. The 24 KB
+// cap covers those without committing too much BSS up-front (the static
+// regular-variant buffer in CustomBinFontManager.cpp follows this
+// constant). PR #96 moved that from 16 KB after hardware capture
+// rejected EBgaramond at the prior cap.
+constexpr uint32_t kMaxTablesBytes = 24 * 1024;
 
 }  // namespace binfont
 }  // namespace crosspoint
