@@ -274,23 +274,30 @@ void CrossPointWebServerActivity::loop() {
       dnsServer->processNextRequest();
     }
 
-    // STA mode: Monitor WiFi connection health
-    if (!isApMode && webServer && webServer->isRunning()) {
+    // STA mode: watch the link state for UX, never for an auto-exit.
+    // A flickering router or a user briefly moving out of range used
+    // to kick the session into SHUTTING_DOWN and hang the activity;
+    // we now just toggle a banner and let the WiFi stack auto-
+    // reconnect in the background. handleClient() below happily
+    // no-ops while the link is down.
+    if (!isApMode) {
       static unsigned long lastWifiCheck = 0;
-      if (millis() - lastWifiCheck > 2000) {  // Check every 2 seconds
+      if (millis() - lastWifiCheck > 2000) {
         lastWifiCheck = millis();
-        const wl_status_t wifiStatus = WiFi.status();
-        if (wifiStatus != WL_CONNECTED) {
-          LOG_DBG("WEBACT", "WiFi disconnected! Status: %d", wifiStatus);
-          // Show error and exit gracefully
-          state = WebServerActivityState::SHUTTING_DOWN;
+        const bool up = (WiFi.status() == WL_CONNECTED);
+        if (!up && !wifiDropped) {
+          LOG_DBG("WEBACT", "WiFi link lost; showing reconnect banner");
+          wifiDropped = true;
           requestUpdate();
-          return;
-        }
-        // Log weak signal warnings
-        const int rssi = WiFi.RSSI();
-        if (rssi < -75) {
-          LOG_DBG("WEBACT", "Warning: Weak WiFi signal: %d dBm", rssi);
+        } else if (up && wifiDropped) {
+          LOG_DBG("WEBACT", "WiFi link restored");
+          wifiDropped = false;
+          // IP may have changed on DHCP renewal — refresh the label.
+          const auto ip = WiFi.localIP();
+          char ipStr[16];
+          snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+          connectedIP = ipStr;
+          requestUpdate();
         }
       }
     }
@@ -439,4 +446,11 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
   const auto labels = mappedInput.mapLabels(tr(STR_EXIT), "", "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+
+  // STA-only link-loss banner. Sits under the title so it doesn't
+  // push the QR code around. Disappears automatically when the link
+  // comes back.
+  if (wifiDropped && !isApMode) {
+    renderer.drawCenteredText(SMALL_FONT_ID, 36, "Reconnecting to Wi-Fi...", true, EpdFontFamily::REGULAR);
+  }
 }

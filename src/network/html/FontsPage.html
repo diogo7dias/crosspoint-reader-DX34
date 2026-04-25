@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Fonts · CrossPoint Reader</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        color: #333;
+      }
+      h1 {
+        color: #2c3e50;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 10px;
+      }
+      h2 { color: #34495e; margin-top: 0; }
+      .card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .nav-links { margin: 20px 0; }
+      .nav-links a {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #3498db;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        margin-right: 10px;
+      }
+      .nav-links a:hover { background-color: #2980b9; }
+      .family-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #eee;
+      }
+      .family-row:last-child { border-bottom: none; }
+      .family-name { font-weight: 600; color: #2c3e50; }
+      .family-sizes { color: #7f8c8d; font-size: 0.9em; margin-left: 10px; }
+      .size-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0 4px 24px;
+        color: #555;
+      }
+      button {
+        padding: 6px 14px;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+      }
+      button:hover { background: #2980b9; }
+      button.danger { background: #c0392b; }
+      button.danger:hover { background: #962d22; }
+      button.primary { background: #27ae60; padding: 12px 24px; font-size: 1em; }
+      button.primary:hover { background: #1e8449; }
+      button:disabled { background: #95a5a6; cursor: not-allowed; }
+      .field { margin: 12px 0; }
+      .field label { display: block; font-weight: 600; margin-bottom: 4px; color: #34495e; }
+      .field input[type=text] {
+        width: 100%;
+        padding: 8px;
+        font-size: 1em;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .slot-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .slot {
+        border: 2px dashed #bdc3c7;
+        padding: 10px;
+        border-radius: 6px;
+      }
+      .slot.loaded { border-color: #27ae60; background: #eafaf1; }
+      .slot.required::after { content: " *"; color: #c0392b; }
+      .slot label { display: block; font-weight: 600; margin-bottom: 6px; color: #34495e; }
+      .slot small { display: block; color: #7f8c8d; margin-top: 4px; }
+      .size-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .size-grid label {
+        background: #ecf0f1;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .size-grid label:has(input:checked) { background: #3498db; color: white; }
+      .size-grid input { margin-right: 6px; }
+      .progress { margin: 12px 0; }
+      .progress-bar {
+        height: 14px;
+        background: #ecf0f1;
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        background: #27ae60;
+        width: 0;
+        transition: width 150ms ease;
+      }
+      .log {
+        max-height: 200px;
+        overflow-y: auto;
+        background: #2c3e50;
+        color: #ecf0f1;
+        padding: 10px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 0.85em;
+        border-radius: 4px;
+        white-space: pre-wrap;
+      }
+      .log .err { color: #e74c3c; }
+      .log .ok { color: #2ecc71; }
+      .help {
+        background: #fffbea;
+        padding: 12px;
+        border-radius: 4px;
+        border-left: 4px solid #f39c12;
+        font-size: 0.9em;
+      }
+      .banner-err {
+        background: #fdecea;
+        border-left: 4px solid #c0392b;
+        color: #922b21;
+        padding: 12px 14px;
+        border-radius: 4px;
+        margin: 15px 0;
+        font-weight: 600;
+      }
+      .banner-err code {
+        background: rgba(0, 0, 0, 0.06);
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-weight: 400;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Custom Fonts</h1>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/files">File Manager</a>
+      <a href="/settings">Settings</a>
+    </div>
+
+    <div id="cdn-banner" class="banner-err" hidden>
+      Couldn't load the font-baking libraries from the internet.
+      This page needs the <b>phone / laptop you're using right now</b> to
+      have an active internet connection (the device itself doesn't need
+      one). Fix the client's connection and reload this page.
+      Installing won't work until the libraries load.
+    </div>
+
+    <div class="card">
+      <h2>Installed Fonts</h2>
+      <div id="installed-list">Loading…</div>
+    </div>
+
+    <div class="card">
+      <h2>Install a New Font</h2>
+      <div class="help">
+        Drop a TTF or OTF for each variant you want. Only <b>Regular</b> is
+        required — Bold, Italic and Bold&nbsp;Italic are synthesised from
+        Regular when you leave them empty. Choose one or more sizes (9–16 pt);
+        the browser rasterises every glyph in the font at each size, compresses
+        the output and streams it to the device.
+      </div>
+      <div class="field">
+        <label for="family-name">Family name</label>
+        <input type="text" id="family-name" placeholder="e.g. inter" maxlength="32" />
+        <small>Letters, digits, <code>-</code> and <code>_</code>; must start with a letter or digit; max 32 chars.</small>
+      </div>
+      <div class="field">
+        <label>Variant files</label>
+        <div class="slot-grid">
+          <div class="slot required" id="slot-R">
+            <label>Regular</label>
+            <input type="file" accept=".ttf,.otf" data-variant="0" />
+            <small id="slot-R-info">No file</small>
+          </div>
+          <div class="slot" id="slot-B">
+            <label>Bold</label>
+            <input type="file" accept=".ttf,.otf" data-variant="1" />
+            <small id="slot-B-info">Will synthesise from Regular</small>
+          </div>
+          <div class="slot" id="slot-I">
+            <label>Italic</label>
+            <input type="file" accept=".ttf,.otf" data-variant="2" />
+            <small id="slot-I-info">Will synthesise from Regular</small>
+          </div>
+          <div class="slot" id="slot-Z">
+            <label>Bold Italic</label>
+            <input type="file" accept=".ttf,.otf" data-variant="3" />
+            <small id="slot-Z-info">Will synthesise from Regular</small>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Sizes (pt)</label>
+        <div class="size-grid" id="size-grid"></div>
+      </div>
+      <div class="field progress" id="progress-box" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div id="progress-label" style="margin-top:4px;color:#555;font-size:0.9em"></div>
+      </div>
+      <button class="primary" id="install-btn" type="button">Install</button>
+      <div class="field">
+        <div class="log" id="log" hidden></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script>
+/*
+ CPBN baker
+ ==========
+ Takes up to 4 TTF/OTF files (Regular required) and a list of point sizes,
+ rasterises every glyph in each variant to a 2-bit bitmap, synthesises
+ missing Bold / Italic / BoldItalic variants from Regular, DEFLATEs the
+ bitmap blob in per-group chunks, and POSTs one CPBN v1 file per
+ (variant, size) pair to /api/fonts/upload.
+
+ CPBN layout (matches lib/EpdFont/EpdBinFormat.h):
+   [Header 32 B]
+   [EpdGlyph[]         10 B each, packed]
+   [EpdUnicodeInterval[]  12 B each — {first u32, last u32, offset u32}]
+   [EpdFontGroup[]     20 B each — {compOff u32, compSize u32, uncompSize u32, glyphCount u16, pad u16, firstGlyph u32}]
+   [DEFLATE bitmap blob]
+*/
+
+(function () {
+  // Dependency check. Both libraries load from a public CDN so the
+  // firmware doesn't have to ship ~365 KB of minified JS. If the
+  // client's internet is down, surface that clearly rather than
+  // letting the Install button silently do nothing.
+  const cdnBanner = document.getElementById("cdn-banner");
+  const cdnOk = typeof window.opentype !== "undefined" && typeof window.pako !== "undefined";
+  if (!cdnBanner) return;
+  if (!cdnOk) {
+    cdnBanner.hidden = false;
+    const btn = document.getElementById("install-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Install (libraries missing)"; }
+    return; // skip everything else — form won't function without opentype.js + pako
+  }
+
+  const CPBN_MAGIC = 0x4e425043; // "CPBN" LE
+  const CPBN_VERSION = 1;
+  const BPP = 2;
+  const MAX_GROUP_UNCOMPRESSED = 4096; // ~4 KB per DEFLATE group (matches built-in)
+  const SIZES = [9, 10, 11, 12, 13, 14, 15, 16];
+
+  const files = [null, null, null, null]; // per-variant parsed opentype.Font
+  const fileNames = ["", "", "", ""];
+  const slotIds = ["R", "B", "I", "Z"];
+
+  const logEl = document.getElementById("log");
+  const progressBox = document.getElementById("progress-box");
+  const progressFill = document.getElementById("progress-fill");
+  const progressLabel = document.getElementById("progress-label");
+  const installBtn = document.getElementById("install-btn");
+
+  function log(msg, cls) {
+    logEl.hidden = false;
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setProgress(done, total, label) {
+    progressBox.hidden = false;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    progressFill.style.width = pct + "%";
+    progressLabel.textContent = label || done + " / " + total;
+  }
+
+  // -------------------- installed-list rendering --------------------
+
+  async function refreshInstalled() {
+    const el = document.getElementById("installed-list");
+    el.textContent = "Loading…";
+    try {
+      const r = await fetch("/api/fonts");
+      const j = await r.json();
+      if (!Array.isArray(j) || j.length === 0) {
+        el.textContent = "(none yet)";
+        return;
+      }
+      el.innerHTML = "";
+      for (const fam of j) {
+        const row = document.createElement("div");
+        row.className = "family-row";
+        const name = document.createElement("div");
+        name.innerHTML = '<span class="family-name">' + fam.name + "</span>" +
+          '<span class="family-sizes">' + fam.sizes.length + " size(s)</span>";
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.textContent = "Delete family";
+        del.onclick = () => doDelete(fam.name, null);
+        row.appendChild(name);
+        row.appendChild(del);
+        el.appendChild(row);
+        for (const sz of fam.sizes) {
+          const r2 = document.createElement("div");
+          r2.className = "size-row";
+          const desc = document.createElement("span");
+          desc.textContent = sz.size + "pt (" + (sz.variants || []).join("") + ")";
+          const delSz = document.createElement("button");
+          delSz.className = "danger";
+          delSz.textContent = "Delete size";
+          delSz.onclick = () => doDelete(fam.name, sz.size);
+          r2.appendChild(desc);
+          r2.appendChild(delSz);
+          el.appendChild(r2);
+        }
+      }
+    } catch (e) {
+      el.textContent = "Failed to load: " + e;
+    }
+  }
+
+  async function doDelete(family, sizeOrNull) {
+    const label = sizeOrNull == null ? family : family + " " + sizeOrNull + "pt";
+    if (!confirm("Delete " + label + "?")) return;
+    const body = new URLSearchParams();
+    body.set("family", family);
+    if (sizeOrNull != null) body.set("size", String(sizeOrNull));
+    try {
+      const r = await fetch("/api/fonts/delete", { method: "POST", body });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || r.status);
+      log("Deleted " + label + " (" + j.removed + " files)", "ok");
+      await refreshInstalled();
+    } catch (e) {
+      log("Delete failed: " + e.message, "err");
+    }
+  }
+
+  // -------------------- form setup --------------------
+
+  // Build the size checkbox grid.
+  const sizeGrid = document.getElementById("size-grid");
+  for (const s of SIZES) {
+    const lbl = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = String(s);
+    if (s === 14) cb.checked = true;
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(s + "pt"));
+    sizeGrid.appendChild(lbl);
+  }
+
+  // Wire the 4 file inputs to parse-on-select so we can show a friendly
+  // file-loaded badge and fail fast on corrupt TTFs.
+  document.querySelectorAll('input[type=file]').forEach((inp) => {
+    inp.addEventListener("change", async (ev) => {
+      const variant = parseInt(inp.dataset.variant, 10);
+      const file = ev.target.files[0];
+      const info = document.getElementById("slot-" + slotIds[variant] + "-info");
+      const slot = document.getElementById("slot-" + slotIds[variant]);
+      if (!file) {
+        files[variant] = null;
+        fileNames[variant] = "";
+        info.textContent = variant === 0 ? "No file" : "Will synthesise from Regular";
+        slot.classList.remove("loaded");
+        return;
+      }
+      info.textContent = "Loading " + file.name + "…";
+      try {
+        const buf = await file.arrayBuffer();
+        const font = opentype.parse(buf);
+        files[variant] = font;
+        fileNames[variant] = file.name;
+        const nGlyphs = font.glyphs && font.glyphs.length ? font.glyphs.length : 0;
+        info.textContent = file.name + " — " + nGlyphs + " glyphs";
+        slot.classList.add("loaded");
+      } catch (e) {
+        files[variant] = null;
+        fileNames[variant] = "";
+        info.textContent = "Parse failed: " + e.message;
+        slot.classList.remove("loaded");
+      }
+    });
+  });
+
+  // -------------------- rasterization --------------------
+
+  // Render one glyph from the given opentype.Font at `sizePx` (pixels per
+  // em) into a fresh ImageData alpha buffer. Returns {w, h, left, top,
+  // advance, alpha: Uint8Array} or null for empty glyphs.
+  function rasterGlyph(font, glyph, sizePx, ctx) {
+    const advance = (glyph.advanceWidth * sizePx) / font.unitsPerEm;
+    const bbox = glyph.getBoundingBox();
+    // Empty glyph (space, zero-width chars): return metrics-only.
+    if (!bbox || bbox.x1 === bbox.x2 || bbox.y1 === bbox.y2) {
+      return { w: 0, h: 0, left: 0, top: 0, advance, alpha: null };
+    }
+    const scale = sizePx / font.unitsPerEm;
+    // Pixel bounding box with 1px padding for anti-aliasing smear.
+    const xMin = Math.floor(bbox.x1 * scale) - 1;
+    const yMin = Math.floor(-bbox.y2 * scale) - 1; // flip: TTF Y-up → canvas Y-down
+    const xMax = Math.ceil(bbox.x2 * scale) + 1;
+    const yMax = Math.ceil(-bbox.y1 * scale) + 1;
+    const w = Math.max(1, xMax - xMin);
+    const h = Math.max(1, yMax - yMin);
+    if (w > 200 || h > 200) {
+      // Skip absurd outliers (likely emoji PUA range at large sizes).
+      return { w: 0, h: 0, left: 0, top: 0, advance, alpha: null };
+    }
+    ctx.canvas.width = w;
+    ctx.canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "black";
+    // Translate so the glyph origin lands at (-xMin, -yMin) in canvas px.
+    const path = glyph.getPath(-xMin, -yMin, sizePx);
+    path.fill = "black";
+    path.stroke = null;
+    path.draw(ctx);
+    const img = ctx.getImageData(0, 0, w, h);
+    // Extract alpha channel only.
+    const alpha = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) alpha[i] = img.data[i * 4 + 3];
+    // In BDF-style left/top used by EpdGlyph: left = x-offset from cursor,
+    // top = baseline distance (positive upward). BDF renderer expects top
+    // measured from baseline to bitmap TOP.
+    // canvas yMin is the top pixel row in our cropped bitmap, measured
+    // downward from baseline. Convert: top = -yMin
+    return {
+      w, h,
+      left: xMin,
+      top: -yMin,
+      advance,
+      alpha,
+    };
+  }
+
+  // Dilate alpha horizontally by 2 px + vertically by 1 px. Returns a new
+  // {w, h, left, top, alpha}. left shifts unchanged (we grow rightward),
+  // top grows by 1 (bitmap grows down by 1).
+  function dilateBold(g) {
+    if (!g.alpha || g.w === 0 || g.h === 0) return g;
+    const w2 = g.w + 2;
+    const h2 = g.h + 1;
+    const out = new Uint8Array(w2 * h2);
+    for (let y = 0; y < h2; y++) {
+      for (let x = 0; x < w2; x++) {
+        let v = 0;
+        for (let dy = 0; dy <= 1; dy++) {
+          const sy = y - dy;
+          if (sy < 0 || sy >= g.h) continue;
+          for (let dx = 0; dx <= 2; dx++) {
+            const sx = x - dx;
+            if (sx < 0 || sx >= g.w) continue;
+            const a = g.alpha[sy * g.w + sx];
+            if (a > v) v = a;
+          }
+        }
+        out[y * w2 + x] = v;
+      }
+    }
+    return { w: w2, h: h2, left: g.left, top: g.top, advance: g.advance + 2, alpha: out };
+  }
+
+  // Shear alpha to make a faux italic. For each scanline y (0 = top),
+  // shift right by (h - y) / 4 pixels. Resulting bitmap grows right.
+  function shearItalic(g) {
+    if (!g.alpha || g.w === 0 || g.h === 0) return g;
+    const maxShear = Math.floor(g.h / 4);
+    const w2 = g.w + maxShear;
+    const out = new Uint8Array(w2 * g.h);
+    for (let y = 0; y < g.h; y++) {
+      const shear = (g.h - y) >> 2;
+      for (let x = 0; x < g.w; x++) {
+        out[y * w2 + x + shear] = g.alpha[y * g.w + x];
+      }
+    }
+    return { w: w2, h: g.h, left: g.left, top: g.top, advance: g.advance, alpha: out };
+  }
+
+  // Quantize alpha 0..255 into 2-bit values 0..3 (0 = transparent,
+  // 3 = full). Pack 4 pixels per byte, row-major, MSB-first:
+  // pixel i in row: byte = (row * ((w+3)/4)) + (i>>2); shift = (3 - (i&3)) * 2
+  function pack2Bit(g) {
+    const rowBytes = (g.w + 3) >> 2;
+    const out = new Uint8Array(rowBytes * g.h);
+    for (let y = 0; y < g.h; y++) {
+      for (let x = 0; x < g.w; x++) {
+        const a = g.alpha[y * g.w + x];
+        // Map alpha 0..255 → 0..3 with a mid-point threshold ladder.
+        const q = a < 64 ? 0 : a < 128 ? 1 : a < 192 ? 2 : 3;
+        if (q === 0) continue;
+        const bi = y * rowBytes + (x >> 2);
+        const sh = (3 - (x & 3)) * 2;
+        out[bi] |= q << sh;
+      }
+    }
+    return out;
+  }
+
+  // -------------------- CPBN encoding --------------------
+
+  // Given a sorted array of {codepoint, glyphBytes, width, height, advance,
+  // left, top} build the interval table (runs of consecutive codepoints),
+  // the EpdGlyph table, the DEFLATE group table and the concatenated
+  // compressed blob. Returns {header fields, glyphs: Uint8Array,
+  // intervals: Uint8Array, groups: Uint8Array, blob: Uint8Array}.
+  function buildTables(glyphs) {
+    // Build interval table: maximal runs of consecutive codepoints, each
+    // run records the index into the glyph array where that run begins.
+    const intervals = [];
+    let i = 0;
+    while (i < glyphs.length) {
+      const first = glyphs[i].codepoint;
+      let j = i + 1;
+      while (j < glyphs.length && glyphs[j].codepoint === glyphs[j - 1].codepoint + 1) j++;
+      intervals.push({ first, last: glyphs[j - 1].codepoint, offset: i });
+      i = j;
+    }
+
+    // Serialise glyph table (10 B each) and per-glyph bitmap bytes
+    // packed contiguously. Groups are built by slicing that flat
+    // per-group uncompressed buffer and DEFLATEing each slice.
+    const glyphBytes = new Uint8Array(glyphs.length * 10);
+    const glyphBytesDv = new DataView(glyphBytes.buffer);
+
+    // Split glyphs into groups whose uncompressed bitmap size stays
+    // under MAX_GROUP_UNCOMPRESSED. Each group's bitmaps are
+    // concatenated (byte-aligned) into one buffer, then DEFLATEd.
+    const groupDescs = []; // {firstGlyph, count, uncompressedSize, compressed}
+    let cur = { firstGlyph: 0, buffers: [], uncompressedSize: 0 };
+    for (let gi = 0; gi < glyphs.length; gi++) {
+      const g = glyphs[gi];
+      const bmp = g.bitmap || new Uint8Array(0);
+      if (cur.buffers.length > 0 &&
+          cur.uncompressedSize + bmp.length > MAX_GROUP_UNCOMPRESSED) {
+        // close current group
+        const combined = new Uint8Array(cur.uncompressedSize);
+        let off = 0;
+        for (const b of cur.buffers) { combined.set(b.data, off); off += b.data.length; }
+        const compressed = pako.deflateRaw(combined, { level: 9 });
+        groupDescs.push({
+          firstGlyph: cur.firstGlyph,
+          count: cur.buffers.length,
+          uncompressedSize: cur.uncompressedSize,
+          compressed,
+        });
+        cur = { firstGlyph: gi, buffers: [], uncompressedSize: 0 };
+      }
+      const dataOffset = cur.uncompressedSize;
+      cur.buffers.push({ data: bmp, glyphIndex: gi, dataOffset });
+      cur.uncompressedSize += bmp.length;
+      // Write EpdGlyph (packed 10 bytes).
+      const o = gi * 10;
+      glyphBytesDv.setUint8(o + 0, Math.min(255, g.width));
+      glyphBytesDv.setUint8(o + 1, Math.min(255, g.height));
+      // advanceX is 12.4 fixed-point pixels (uint16).
+      const adv = Math.max(0, Math.min(65535, Math.round(g.advance * 16)));
+      glyphBytesDv.setUint16(o + 2, adv, true);
+      glyphBytesDv.setInt8(o + 4, Math.max(-128, Math.min(127, g.left)));
+      glyphBytesDv.setInt8(o + 5, Math.max(-128, Math.min(127, g.top)));
+      glyphBytesDv.setUint16(o + 6, Math.min(65535, bmp.length), true);
+      glyphBytesDv.setUint16(o + 8, Math.min(65535, dataOffset), true);
+    }
+    if (cur.buffers.length > 0) {
+      const combined = new Uint8Array(cur.uncompressedSize);
+      let off = 0;
+      for (const b of cur.buffers) { combined.set(b.data, off); off += b.data.length; }
+      const compressed = pako.deflateRaw(combined, { level: 9 });
+      groupDescs.push({
+        firstGlyph: cur.firstGlyph,
+        count: cur.buffers.length,
+        uncompressedSize: cur.uncompressedSize,
+        compressed,
+      });
+    }
+
+    // Assemble group table bytes. 20 B per entry (natural alignment;
+    // glyphCount u16 is followed by 2 pad bytes before firstGlyphIndex).
+    const groupsBytes = new Uint8Array(groupDescs.length * 20);
+    const gdv = new DataView(groupsBytes.buffer);
+    let compOff = 0;
+    let totalBlob = 0;
+    for (const gd of groupDescs) totalBlob += gd.compressed.length;
+    const blob = new Uint8Array(totalBlob);
+    for (let i = 0; i < groupDescs.length; i++) {
+      const gd = groupDescs[i];
+      const o = i * 20;
+      gdv.setUint32(o + 0, compOff, true);
+      gdv.setUint32(o + 4, gd.compressed.length, true);
+      gdv.setUint32(o + 8, gd.uncompressedSize, true);
+      gdv.setUint16(o + 12, gd.count, true);
+      gdv.setUint16(o + 14, 0, true); // pad
+      gdv.setUint32(o + 16, gd.firstGlyph, true);
+      blob.set(gd.compressed, compOff);
+      compOff += gd.compressed.length;
+    }
+
+    // Assemble interval table bytes (12 B each: first, last, offset u32).
+    const intervalsBytes = new Uint8Array(intervals.length * 12);
+    const idv = new DataView(intervalsBytes.buffer);
+    for (let i = 0; i < intervals.length; i++) {
+      const o = i * 12;
+      idv.setUint32(o + 0, intervals[i].first, true);
+      idv.setUint32(o + 4, intervals[i].last, true);
+      idv.setUint32(o + 8, intervals[i].offset, true);
+    }
+
+    return {
+      glyphs: glyphBytes,
+      intervals: intervalsBytes,
+      intervalCount: intervals.length,
+      groups: groupsBytes,
+      groupCount: groupDescs.length,
+      blob,
+    };
+  }
+
+  function encodeCPBN(sizePt, variant, ascent, descent, advanceY, tables) {
+    const header = new Uint8Array(32);
+    const dv = new DataView(header.buffer);
+    dv.setUint32(0, CPBN_MAGIC, true);
+    dv.setUint8(4, CPBN_VERSION);
+    dv.setUint8(5, BPP);
+    dv.setUint8(6, sizePt);
+    dv.setUint8(7, variant);
+    dv.setInt16(8, ascent, true);
+    dv.setInt16(10, descent, true);
+    dv.setUint16(12, advanceY, true);
+    dv.setUint16(14, 0, true); // reserved0
+    dv.setUint32(16, tables.glyphs.length / 10, true);
+    dv.setUint32(20, tables.intervalCount, true);
+    dv.setUint32(24, tables.groupCount, true);
+    dv.setUint32(28, tables.blob.length, true);
+    const out = new Uint8Array(
+      32 + tables.glyphs.length + tables.intervals.length + tables.groups.length + tables.blob.length
+    );
+    let off = 0;
+    out.set(header, off); off += 32;
+    out.set(tables.glyphs, off); off += tables.glyphs.length;
+    out.set(tables.intervals, off); off += tables.intervals.length;
+    out.set(tables.groups, off); off += tables.groups.length;
+    out.set(tables.blob, off);
+    return out;
+  }
+
+  // Collect every codepoint the font's cmap resolves. opentype.js
+  // exposes font.glyphs as a GlyphSet; we walk all glyphs and collect
+  // their unicode codepoints (skipping the synthetic .notdef).
+  function enumerateCodepoints(font) {
+    const cps = new Set();
+    const n = font.glyphs && font.glyphs.length ? font.glyphs.length : 0;
+    for (let i = 1; i < n; i++) { // 0 is .notdef
+      const g = font.glyphs.get(i);
+      if (!g) continue;
+      if (Array.isArray(g.unicodes) && g.unicodes.length) {
+        for (const cp of g.unicodes) cps.add(cp);
+      } else if (typeof g.unicode === "number") {
+        cps.add(g.unicode);
+      }
+    }
+    return Array.from(cps).sort((a, b) => a - b);
+  }
+
+  // Bake ONE (variant, size) pair into a CPBN ArrayBuffer. `synthFrom`
+  // is the opentype.Font used when the direct variant slot is empty;
+  // synth flags tell us which transforms to apply.
+  async function bakeOne(variant, sizePt) {
+    const directFont = files[variant];
+    const needsSynth = !directFont;
+    const srcFont = directFont || files[0];
+    if (!srcFont) throw new Error("regular font missing");
+    const synthBold = needsSynth && (variant === 1 || variant === 3);
+    const synthItalic = needsSynth && (variant === 2 || variant === 3);
+
+    // Reuse a single offscreen canvas across every glyph to avoid GC churn.
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const sizePx = sizePt; // reader convention: 1 pt = 1 px
+    const cps = enumerateCodepoints(srcFont);
+    if (cps.length === 0) throw new Error("no glyphs in source");
+
+    // Font-wide metrics. OS/2 ascender/descender live in font.tables.os2
+    // but opentype.js exposes ascender/descender at the top level.
+    const unitsPerEm = srcFont.unitsPerEm;
+    const scale = sizePx / unitsPerEm;
+    const ascent = Math.round((srcFont.ascender || 0) * scale);
+    const descent = Math.round(-(srcFont.descender || 0) * scale);
+    const advanceY = Math.max(1, Math.round(ascent + descent + Math.max(1, Math.round(sizePx * 0.15))));
+
+    const glyphs = [];
+    for (const cp of cps) {
+      const g = srcFont.charToGlyph(String.fromCodePoint(cp));
+      if (!g) continue;
+      let raster = rasterGlyph(srcFont, g, sizePx, ctx);
+      if (!raster) continue;
+      if (synthBold) raster = dilateBold(raster);
+      if (synthItalic) raster = shearItalic(raster);
+      const bitmap = raster.alpha ? pack2Bit(raster) : new Uint8Array(0);
+      glyphs.push({
+        codepoint: cp,
+        width: raster.w,
+        height: raster.h,
+        advance: raster.advance,
+        left: raster.left,
+        top: raster.top,
+        bitmap,
+      });
+    }
+    if (glyphs.length === 0) throw new Error("no glyphs rasterised");
+
+    const tables = buildTables(glyphs);
+    return encodeCPBN(sizePt, variant, ascent, descent, advanceY, tables);
+  }
+
+  async function uploadOne(family, variant, sizePt, bytes) {
+    const url = "/api/fonts/upload?family=" + encodeURIComponent(family) +
+      "&variant=" + slotIds[variant] + "&size=" + sizePt;
+    const fd = new FormData();
+    fd.append("file", new Blob([bytes], { type: "application/octet-stream" }), "font.bin");
+    const r = await fetch(url, { method: "POST", body: fd });
+    if (!r.ok) {
+      let msg = r.status + " " + r.statusText;
+      try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+      throw new Error(msg);
+    }
+  }
+
+  async function install() {
+    const family = document.getElementById("family-name").value.trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(family)) {
+      log("Family name invalid (letters/digits/_/-, max 32, no leading hyphen)", "err");
+      return;
+    }
+    if (!files[0]) { log("Regular slot is required", "err"); return; }
+    const sizes = Array.from(document.querySelectorAll("#size-grid input:checked"))
+      .map((c) => parseInt(c.value, 10));
+    if (sizes.length === 0) { log("Pick at least one size", "err"); return; }
+
+    installBtn.disabled = true;
+    logEl.hidden = false;
+    logEl.innerHTML = "";
+
+    // Per size × 4 variants → total N jobs.
+    const jobs = [];
+    for (const s of sizes) {
+      for (let v = 0; v < 4; v++) jobs.push({ variant: v, size: s });
+    }
+    setProgress(0, jobs.length, "Preparing…");
+    let done = 0;
+    try {
+      for (const j of jobs) {
+        const tag = "[" + slotIds[j.variant] + " " + j.size + "pt]";
+        setProgress(done, jobs.length, "Baking " + tag);
+        log("Baking " + tag + "…");
+        const t0 = performance.now();
+        const bytes = await bakeOne(j.variant, j.size);
+        log("  baked " + bytes.length + " B in " + Math.round(performance.now() - t0) + " ms");
+        setProgress(done, jobs.length, "Uploading " + tag);
+        await uploadOne(family, j.variant, j.size, bytes);
+        done++;
+        setProgress(done, jobs.length, tag + " ok");
+      }
+      log("Install complete", "ok");
+      setProgress(jobs.length, jobs.length, "Done");
+      await refreshInstalled();
+    } catch (e) {
+      log("Install failed: " + e.message, "err");
+    } finally {
+      installBtn.disabled = false;
+    }
+  }
+
+  installBtn.addEventListener("click", install);
+  refreshInstalled();
+})();
+    </script>
+  </body>
+</html>

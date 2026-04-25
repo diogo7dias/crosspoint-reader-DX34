@@ -7,12 +7,12 @@
 #include "activities/ActivityWithSubactivity.h"
 #include "util/ButtonNavigator.h"
 
-// Settings sub-screen that lists every custom font installed under
-// /custom-font/ and offers a Delete action on the selected family. The
-// list is rebuilt every time onEnter fires so Slice-2 per-variant
-// additions surface without reboot. Reinstall is not surfaced here — it
-// happens automatically when the user re-drops the .bdf on SD and
-// reboots, via the existing CustomFontPromptActivity flow.
+// Settings sub-screen that lists every .bin custom font installed under
+// /custom-font/<family>/ and offers Delete Size / Delete Family actions
+// on the selected row. The list is rebuilt every time onEnter fires so
+// newly-uploaded fonts from the web UI surface without reboot.
+// Installation is entirely web-server driven (POST /api/fonts/upload);
+// there is no device-side install flow.
 class CustomFontsSettingsActivity final : public ActivityWithSubactivity {
  public:
   explicit CustomFontsSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,

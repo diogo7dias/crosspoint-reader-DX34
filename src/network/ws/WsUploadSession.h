@@ -55,7 +55,11 @@ class WsUploadSession {
  public:
   enum class Result { Ok, Rejected, Completed, Aborted };
 
-  static constexpr uint32_t kIdleTimeoutMs = 30000;
+  // Generous idle cap so a brief client stall or slow network won't
+  // kill a running upload, but a truly crashed browser still
+  // eventually releases the SD file descriptor. User-facing session
+  // stays up regardless.
+  static constexpr uint32_t kIdleTimeoutMs = 10u * 60u * 1000u;  // 10 minutes
   static constexpr size_t kProgressIntervalBytes = 65536;  // 64 KiB
   static constexpr uint8_t kNoClient = 255;
 

@@ -11,8 +11,8 @@
 
 #include "Paths.h"
 #include "fontIds.h"
-#include "fonts/CustomFontIds.h"
-#include "fonts/CustomFontManager.h"
+#include "fonts/CustomBinFontIds.h"
+#include "fonts/CustomBinFontManager.h"
 #include "util/StringUtils.h"
 
 // Initialize the static instance
@@ -532,9 +532,10 @@ uint8_t CrossPointSettings::resetLineSpacingPercentForFamily(const uint8_t famil
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
-  // Custom BDF: whichever size the user dropped as unifont_<size>.bdf is
-  // rendered natively. The fontSize enum is meaningless here (the picker
-  // pins to a single option); keep a stable value.
+  // Custom .bin: the source-of-truth size is customFontSizePt (9..16),
+  // not the fontSize enum. Enum value is unused by the reader path for
+  // custom families; return a stable enum so callers that compare/round
+  // it stay deterministic.
   if (family == CUSTOM_FAMILY) {
     (void)fontSize;
     return SIZE_16;
@@ -753,11 +754,13 @@ int CrossPointSettings::getReaderFontId() const {
     // main.cpp persists a real reset on next reboot; this path is the
     // runtime guard.
     if (!customFontName.empty()) {
-      const auto& families = crosspoint::fonts::CustomFontManager::instance().families();
-      for (const auto& g : families) {
-        if (g.variantEntryIdx[0] < 0) continue;
-        if (g.fontName == customFontName && g.sizePt == customFontSizePt) {
-          return crosspoint::fonts::idForFamily(customFontName, customFontSizePt);
+      const auto& families = crosspoint::fonts::CustomBinFontManager::instance().families();
+      for (const auto& fam : families) {
+        if (fam.name != customFontName) continue;
+        for (const auto& sz : fam.sizes) {
+          if (sz.hasRegular && sz.sizePt == customFontSizePt) {
+            return crosspoint::fonts::idForFamily(customFontName, customFontSizePt);
+          }
         }
       }
     }

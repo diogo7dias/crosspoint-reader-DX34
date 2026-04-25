@@ -49,6 +49,10 @@ class CrossPointWebServerActivity final : public ActivityWithSubactivity {
   // Performance monitoring
   unsigned long lastHandleClientTime = 0;
 
+  // STA-only: set when the WiFi link drops; cleared when it recovers.
+  // Drives the "Reconnecting…" overlay but never exits the activity.
+  bool wifiDropped = false;
+
   void renderServerRunning() const;
 
   void onNetworkModeSelected(NetworkMode mode);
@@ -66,5 +70,10 @@ class CrossPointWebServerActivity final : public ActivityWithSubactivity {
   void loop() override;
   void render(Activity::RenderLock&&) override;
   bool skipLoopDelay() override { return webServer && webServer->isRunning(); }
-  bool preventAutoSleep() override { return webServer && webServer->isRunning(); }
+  // User explicitly asked for no implicit session ending: while this
+  // activity is foreground we block auto-sleep regardless of whether
+  // the web server happens to be running right now (transient WiFi
+  // drops, mid-start window, etc.). Only Back or power-button-hold
+  // exits.
+  bool preventAutoSleep() override { return true; }
 };

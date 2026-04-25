@@ -11,7 +11,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomFontManager.h"
+#include "fonts/CustomBinFontManager.h"
 
 namespace {
 constexpr int kActionDeleteSize = 0;
@@ -33,16 +33,20 @@ void CustomFontsSettingsActivity::onExit() { ActivityWithSubactivity::onExit(); 
 
 void CustomFontsSettingsActivity::rebuildRows() {
   rows.clear();
-  const auto& mgr = crosspoint::fonts::CustomFontManager::instance();
-  for (const auto& fg : mgr.families()) {
-    Row r;
-    r.fontName = fg.fontName;
-    r.sizePt = fg.sizePt;
-    r.hasRegular = fg.variantEntryIdx[0] >= 0;
-    r.hasBold = fg.variantEntryIdx[1] >= 0;
-    r.hasItalic = fg.variantEntryIdx[2] >= 0;
-    r.hasBoldItalic = fg.variantEntryIdx[3] >= 0;
-    rows.push_back(std::move(r));
+  const auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
+  // Flatten (family, size) pairs into one row each so the existing list UI
+  // and the per-size/per-family delete actions map cleanly.
+  for (const auto& fam : mgr.families()) {
+    for (const auto& sz : fam.sizes) {
+      Row r;
+      r.fontName = fam.name;
+      r.sizePt = sz.sizePt;
+      r.hasRegular = sz.hasRegular;
+      r.hasBold = sz.hasBold;
+      r.hasItalic = sz.hasItalic;
+      r.hasBoldItalic = sz.hasBoldItalic;
+      rows.push_back(std::move(r));
+    }
   }
 }
 
@@ -128,7 +132,7 @@ void CustomFontsSettingsActivity::runDeleteSize() {
       renderer, mappedInput, prompt,
       [this, name, sizePt]() {
         const size_t removed =
-            crosspoint::fonts::CustomFontManager::instance().deleteFamilySize(name, sizePt, renderer);
+            crosspoint::fonts::CustomBinFontManager::instance().deleteFamilySize(name, sizePt);
         LOG_INF("CFONT", "UI deleted size %s %upt (%u files)", name.c_str(), static_cast<unsigned>(sizePt),
                 static_cast<unsigned>(removed));
         exitActivity();
@@ -153,7 +157,7 @@ void CustomFontsSettingsActivity::runDeleteFamily() {
   enterNewActivity(new ConfirmDialogActivity(
       renderer, mappedInput, prompt,
       [this, name]() {
-        const size_t removed = crosspoint::fonts::CustomFontManager::instance().deleteFamily(name, renderer);
+        const size_t removed = crosspoint::fonts::CustomBinFontManager::instance().deleteFamily(name);
         LOG_INF("CFONT", "UI deleted family %s (%u files)", name.c_str(), static_cast<unsigned>(removed));
         exitActivity();
         rebuildRows();
