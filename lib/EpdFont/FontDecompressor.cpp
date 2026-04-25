@@ -62,8 +62,26 @@ bool FontDecompressor::decompressGroup(const EpdFontData* fontData, uint16_t gro
   const EpdFontGroup& group = fontData->groups[groupIndex];
 
   const uint32_t tDecomp = millis();
+  const uint8_t* src = nullptr;
+  if (fontData->readBitmapBytes) {
+    // SD-backed font: pull this group's compressed bytes off disk
+    // into the reusable scratch, then point inflate at the scratch.
+    if (sdCompressedScratch.size() < group.compressedSize) {
+      sdCompressedScratch.resize(group.compressedSize);
+    }
+    const int got = fontData->readBitmapBytes(fontData->bitmapCtx, group.compressedOffset, sdCompressedScratch.data(),
+                                              group.compressedSize);
+    if (got != static_cast<int>(group.compressedSize)) {
+      stats.decompressTimeMs += millis() - tDecomp;
+      LOG_ERR("FDC", "SD read failed for group %u (got %d / %u)", groupIndex, got, group.compressedSize);
+      return false;
+    }
+    src = sdCompressedScratch.data();
+  } else {
+    src = &fontData->bitmap[group.compressedOffset];
+  }
   inflateReader.init(false);
-  inflateReader.setSource(&fontData->bitmap[group.compressedOffset], group.compressedSize);
+  inflateReader.setSource(src, group.compressedSize);
   if (!inflateReader.read(outBuf, outSize)) {
     stats.decompressTimeMs += millis() - tDecomp;
     LOG_ERR("FDC", "Decompression failed for group %u", groupIndex);

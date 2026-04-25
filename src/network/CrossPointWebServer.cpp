@@ -1726,8 +1726,8 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
       return;
     }
     const long sz = sizeStr.toInt();
-    if (sz < 9 || sz > 16) {
-      state.error = "size must be 9..16";
+    if (sz < 25 || sz > 40) {
+      state.error = "size must be 25..40";
       return;
     }
     state.family = family;
@@ -1848,8 +1848,8 @@ void CrossPointWebServer::handleDeleteFont() {
   size_t removed = 0;
   if (server->hasArg("size")) {
     const long sz = server->arg("size").toInt();
-    if (sz < 9 || sz > 16) {
-      server->send(400, "application/json", "{\"ok\":false,\"error\":\"size must be 9..16\"}");
+    if (sz < 25 || sz > 40) {
+      server->send(400, "application/json", "{\"ok\":false,\"error\":\"size must be 25..40\"}");
       return;
     }
     removed = mgr.deleteFamilySize(familyStd, static_cast<uint16_t>(sz));

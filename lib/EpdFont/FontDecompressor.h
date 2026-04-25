@@ -75,6 +75,11 @@ class FontDecompressor {
   // Valid until the next getBitmap() call.
   std::vector<uint8_t> hotGlyphBuf;
 
+  // Scratch for compressed group bytes when the font is SD-backed
+  // (EpdFontData::readBitmapBytes is set). Reused across decompress
+  // calls so we don't churn the heap. Empty for built-in fonts.
+  std::vector<uint8_t> sdCompressedScratch;
+
   void freePageBuffer();
   void freeHotGroup();
   uint16_t getGroupIndex(const EpdFontData* fontData, uint32_t glyphIndex);

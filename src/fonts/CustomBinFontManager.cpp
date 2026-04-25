@@ -85,6 +85,12 @@ const char* variantPrefix(uint8_t v) {
   return v <= binfont::kVariantBoldItalic ? kTags[v].prefix : "regular_";
 }
 
+// Configured legal point-size range. Files outside this range get
+// auto-deleted by scan() so a firmware revision can't leave stale
+// files that the current build's picker won't offer.
+constexpr uint16_t kMinSizePt = 25;
+constexpr uint16_t kMaxSizePt = 40;
+
 bool parseVariantFile(const char* name, uint8_t& outVariant, uint16_t& outSize) {
   for (const auto& t : kTags) {
     const size_t pl = std::strlen(t.prefix);
@@ -94,10 +100,27 @@ bool parseVariantFile(const char* name, uint8_t& outVariant, uint16_t& outSize) 
     const long sz = std::strtol(rest, &end, 10);
     if (end == rest) return false;
     if (strcasecmp(end, ".bin") != 0) return false;
-    if (sz < 9 || sz > 16) return false;
+    if (sz < kMinSizePt || sz > kMaxSizePt) return false;
     outVariant = t.variant;
     outSize = static_cast<uint16_t>(sz);
     return true;
+  }
+  return false;
+}
+
+// Returns true when `name` looks like a variant file but its parsed
+// size sits outside [kMinSizePt, kMaxSizePt]. Used by scan() to
+// auto-delete leftover files from a wider-range firmware.
+bool isStaleSizeFile(const char* name) {
+  for (const auto& t : kTags) {
+    const size_t pl = std::strlen(t.prefix);
+    if (strncasecmp(name, t.prefix, pl) != 0) continue;
+    const char* rest = name + pl;
+    char* end = nullptr;
+    const long sz = std::strtol(rest, &end, 10);
+    if (end == rest) return false;
+    if (strcasecmp(end, ".bin") != 0) return false;
+    return sz < kMinSizePt || sz > kMaxSizePt;
   }
   return false;
 }
@@ -190,6 +213,16 @@ void CustomBinFontManager::scan() {
       const bool vfIsDir = vf.isDirectory();
       vf.close();
       if (vfIsDir) continue;
+      // Stale files from a previous, wider-range firmware are deleted
+      // here so the inventory only ever lists sizes the current build
+      // can actually render.
+      if (isStaleSizeFile(varName)) {
+        const std::string p = subDirPath + "/" + varName;
+        if (Storage.remove(p.c_str())) {
+          LOG_INF(kModule, "scan: deleted out-of-range %s", p.c_str());
+        }
+        continue;
+      }
       uint8_t variant; uint16_t sizePt;
       if (!parseVariantFile(varName, variant, sizePt)) continue;
       insertVariant(fam.sizes, variant, sizePt);
@@ -272,23 +305,19 @@ bool CustomBinFontManager::activate(const std::string& name, uint16_t sizePt) {
 
   if (!openSlot(binfont::kVariantRegular)) return false;
   openSlot(binfont::kVariantBold);
-  // Italic + BoldItalic intentionally NOT loaded into heap. With four
-  // variants resident, the resulting fragmentation starves the ZIP
-  // inflator (which needs ~32 KB contiguous) during EPUB section
-  // layout — observed as `Failed to allocate memory for inflator`
-  // followed by an OOM panic on page-turn. Italic glyphs synthesise
-  // via the renderer's existing shear path; users still get a
-  // visible difference between regular and italic text without the
-  // heap cost.
+  openSlot(binfont::kVariantItalic);
+  openSlot(binfont::kVariantBoldItalic);
 
   if (!fresh->fonts[binfont::kVariantRegular]) return false;
 
+  // SD-streamed loaders only hold a few KB of tables in heap each,
+  // so the four-variant load is back to being the default. Bold +
+  // italic + boldItalic uploaded by the browser display verbatim;
+  // missing slots fall back via EpdFontFamily::getFont.
   EpdFontFamily family(fresh->fonts[binfont::kVariantRegular].get(),
                        fresh->fonts[binfont::kVariantBold].get(),
-                       /*italic=*/nullptr, /*boldItalic=*/nullptr,
-                       /*syntheticRegularBoldPasses=*/0,
-                       /*syntheticBoldExtraPasses=*/0,
-                       /*syntheticItalic=*/true);
+                       fresh->fonts[binfont::kVariantItalic].get(),
+                       fresh->fonts[binfont::kVariantBoldItalic].get());
 
   clearActive();
   renderer_->insertFont(fresh->fontId, family);
