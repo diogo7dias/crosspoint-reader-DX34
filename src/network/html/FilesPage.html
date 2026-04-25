@@ -1348,76 +1348,12 @@
     .log-summary-table .saved { color: #27ae60; }
     .log-summary-table .increased { color: #f39c12; }
 
-    /* ===================================================================
-       Dashed-border restyle — white bg, black text, 2px dashed action color.
-       Appended last so it overrides earlier rules via source order (!important
-       only where prior rules hardcode gradient/shadow).
-       =================================================================== */
-    :root {
-      --acc-upload:  #27ae60;
-      --acc-folder:  #f39c12;
-      --acc-danger:  #c0392b;
-      --acc-primary: #2980b9;
-      --acc-teal:    #16a085;
-      --acc-neutral: #555;
-    }
-    button,
-    .action-btn,
-    .upload-action-btn, .folder-action-btn,
-    .delete-btn, .rename-btn, .move-btn,
-    .delete-btn-confirm, .delete-btn-cancel,
-    .rename-btn-confirm, .move-btn-confirm,
-    .nav-links a, .save-btn {
-      background: #fff !important;
-      color: #000 !important;
-      border: 2px dashed var(--btn-acc, var(--acc-neutral)) !important;
-      box-shadow: none !important;
-      text-shadow: none !important;
-    }
-    .upload-action-btn                { --btn-acc: var(--acc-upload);  }
-    .folder-action-btn                { --btn-acc: var(--acc-folder);  }
-    .delete-btn, .delete-btn-confirm  { --btn-acc: var(--acc-danger);  }
-    .rename-btn, .rename-btn-confirm,
-    .nav-links a, .save-btn           { --btn-acc: var(--acc-primary); }
-    .move-btn,   .move-btn-confirm    { --btn-acc: var(--acc-teal);    }
-    .delete-btn-cancel                { --btn-acc: var(--acc-neutral); }
-
-    /* Hover: subtle bg tint, keep dashed border */
-    button:hover,
-    .action-btn:hover,
-    .upload-action-btn:hover, .folder-action-btn:hover,
-    .delete-btn:hover, .rename-btn:hover, .move-btn:hover,
-    .delete-btn-confirm:hover, .delete-btn-cancel:hover,
-    .rename-btn-confirm:hover, .move-btn-confirm:hover,
-    .nav-links a:hover, .save-btn:hover {
-      background: #f2f2f2 !important;
-      color: #000 !important;
-    }
-
-    /* Inputs + selects */
-    input[type=text], input[type=password], input[type=number],
-    input[type=search], input[type=email], input[type=url],
-    select, textarea {
-      background: #fff !important;
-      color: #000 !important;
-      border: 2px dashed var(--acc-neutral) !important;
-      box-shadow: none !important;
-    }
-    input[type=text]:focus, input[type=password]:focus,
-    input[type=number]:focus, input[type=search]:focus,
-    input[type=email]:focus, input[type=url]:focus,
-    select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--acc-primary) !important;
-    }
-
-    /* Containers */
-    .card, .modal {
-      background: #fff !important;
-      color: #000 !important;
-      border: 2px dashed #333 !important;
-      box-shadow: none !important;
-    }
+    /* The legacy "Dashed-border restyle" block (--acc-upload/folder/danger/
+       primary/teal/neutral CSS variables and the button / input / .card
+       overrides that referenced them) used to live here. It was a previous
+       attempt at a dashed-border theme; every rule it defined is now
+       superseded by /css/brutalist.css plus the brutalist override block
+       below, so removing it is a no-visual-change pruning. */
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
