@@ -43,8 +43,11 @@ void OpdsBookBrowserActivity::onExit() {
   // Turn off WiFi when exiting
   WiFi.mode(WIFI_OFF);
 
-  entries.clear();
-  navigationHistory.clear();
+  // Drop allocated capacity, not just size — large OPDS feeds can leave
+  // 5-10 KB of unused vector capacity per browse session that the next
+  // activity can't use until the next browse overwrites it.
+  std::vector<OpdsEntry>().swap(entries);
+  std::vector<std::string>().swap(navigationHistory);
 }
 
 void OpdsBookBrowserActivity::loop() {
