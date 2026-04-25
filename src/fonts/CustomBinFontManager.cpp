@@ -6,6 +6,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 #include <strings.h>
 
@@ -26,6 +27,15 @@ constexpr const char* kCustomFontDir = "/custom-font";
 constexpr size_t kLegacyScanCap = 2000;
 constexpr size_t kFamilyScanCap = 64;
 constexpr size_t kVariantScanCap = 64;  // 16 sizes × 4 variants
+
+// BSS-resident tables buffer for the regular variant. Sized to the
+// per-variant cap enforced by EpdBinFontLoader::validateHeader so any
+// admissible font fits. Keeps the ~10 KB tables block out of the
+// general-purpose heap, where it would otherwise bisect the largest
+// free region every time a custom font activates and permanently push
+// EPUB layout's pre-flight gate (largest >= 36 KB) below threshold on
+// devices with a fragmented heap. See PR #96 for the trace.
+alignas(uint32_t) uint8_t kRegularVariantTablesBuf[binfont::kMaxTablesBytes];
 
 bool endsWithCI(const char* name, const char* suffix) {
   if (!name || !suffix) return false;
@@ -320,7 +330,14 @@ bool CustomBinFontManager::activate(const std::string& name, uint16_t sizePt) {
     const std::string p = variantPath(name, variant, sizePt);
     if (!Storage.exists(p.c_str())) return true;
     auto loader = std::make_unique<binfont::EpdBinFontLoader>();
-    if (!loader->openFromFile(p)) {
+    // Regular variant goes into a BSS-resident static buffer so its
+    // ~10 KB tables block never enters the heap and never fragments
+    // the largest free region. Other variants are best-effort and use
+    // the heap normally.
+    const bool ok = (variant == binfont::kVariantRegular)
+                        ? loader->openFromFileExternalBuf(p, kRegularVariantTablesBuf, sizeof(kRegularVariantTablesBuf))
+                        : loader->openFromFile(p);
+    if (!ok) {
       LOG_ERR(kModule, "open %s failed: %s", p.c_str(), loader->lastError().c_str());
       return variant == binfont::kVariantRegular ? false : true;
     }
@@ -330,16 +347,30 @@ bool CustomBinFontManager::activate(const std::string& name, uint16_t sizePt) {
   };
 
   if (!openSlot(binfont::kVariantRegular)) return false;
-  openSlot(binfont::kVariantBold);
-  openSlot(binfont::kVariantItalic);
-  openSlot(binfont::kVariantBoldItalic);
+
+  // Best-effort load of bold/italic/bolditalic. Each variant's tables
+  // are ~10 KB in heap and stay resident as long as the font is active,
+  // so loading all four can permanently bracket the heap into ~9 KB
+  // islands on a fragmented device — the failure mode PR #95 added the
+  // pre-flight gate for. Skip variants whose load would push the largest
+  // free block below the layout headroom; missing slots fall back to
+  // regular via EpdFontFamily::getFont.
+  constexpr uint32_t kVariantLoadHeadroomBytes = 49152;
+  auto tryOpenOptional = [&](uint8_t variant) {
+    const uint32_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (largest < kVariantLoadHeadroomBytes) {
+      LOG_DIAG(kModule, "skip variant %u: largest=%u below %u headroom", static_cast<unsigned>(variant),
+               static_cast<unsigned>(largest), static_cast<unsigned>(kVariantLoadHeadroomBytes));
+      return;
+    }
+    openSlot(variant);
+  };
+  tryOpenOptional(binfont::kVariantBold);
+  tryOpenOptional(binfont::kVariantItalic);
+  tryOpenOptional(binfont::kVariantBoldItalic);
 
   if (!fresh->fonts[binfont::kVariantRegular]) return false;
 
-  // SD-streamed loaders only hold a few KB of tables in heap each,
-  // so the four-variant load is back to being the default. Bold +
-  // italic + boldItalic uploaded by the browser display verbatim;
-  // missing slots fall back via EpdFontFamily::getFont.
   EpdFontFamily family(fresh->fonts[binfont::kVariantRegular].get(), fresh->fonts[binfont::kVariantBold].get(),
                        fresh->fonts[binfont::kVariantItalic].get(), fresh->fonts[binfont::kVariantBoldItalic].get());
 

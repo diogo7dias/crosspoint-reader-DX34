@@ -34,6 +34,14 @@ class EpdBinFontLoader {
 
   bool openFromFile(const std::string& path);
 
+  // Same as openFromFile but writes the tables into a caller-owned
+  // buffer instead of mallocing. Used by CustomBinFontManager for the
+  // regular variant: a static BSS-resident buffer keeps the ~10 KB
+  // tables block out of the heap, so it can never bracket the largest
+  // free region during EPUB layout. The buffer must outlive the loader
+  // and be at least kMaxTablesBytes wide.
+  bool openFromFileExternalBuf(const std::string& path, uint8_t* externalBuf, uint32_t externalBufCap);
+
   // Header-only precheck without holding the file open. Used by the
   // upload endpoint before the atomic rename commits the new file.
   static bool validateFile(const std::string& path, std::string* error = nullptr);
@@ -46,9 +54,12 @@ class EpdBinFontLoader {
 
  private:
   // Heap buffer holding header + glyph table + interval table + group
-  // table only. fontData_ pointers all index into this region.
+  // table only. fontData_ pointers all index into this region. When
+  // ownsTablesBuf_ is false the buffer is caller-owned (BSS / static)
+  // and release() leaves it alone.
   uint8_t* tablesBuf_ = nullptr;
   uint32_t tablesBytes_ = 0;
+  bool ownsTablesBuf_ = false;
 
   // SD-resident bitmap blob. The HalFile stays open for the lifetime
   // of the loader; readBitmapBytes seeks + reads on each call.
