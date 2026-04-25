@@ -40,6 +40,14 @@ class ChapterHtmlSlimParser {
   std::unique_ptr<ParsedText> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
+  // Sticky OOM flag. Set when a `new (nothrow) Page()` returns null
+  // inside one of the parse callbacks, where we can't propagate a
+  // return value through expat. The parse loop polls this between
+  // XML_ParseBuffer calls and bails to the cleanup-and-return-false
+  // branch as if the buffer alloc itself had failed. Without this, the
+  // pre-PR-#97 code used bare `new Page()` and let bad_alloc panic the
+  // ESP32 (no exceptions enabled in firmware build).
+  bool parseFailed = false;
   int fontId;
   float lineCompression;
   uint8_t extraParagraphSpacingLevel;

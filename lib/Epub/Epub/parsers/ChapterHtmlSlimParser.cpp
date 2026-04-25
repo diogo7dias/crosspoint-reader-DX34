@@ -144,9 +144,16 @@ void ChapterHtmlSlimParser::bindPendingAnchorsToCurrentPage() {
   if (pendingAnchors.empty()) {
     return;
   }
+  if (parseFailed) return;
 
   if (!currentPage) {
-    currentPage.reset(new Page());
+    currentPage.reset(new (std::nothrow) Page());
+    if (!currentPage) {
+      LOG_DIAG("EHP", "OOM new Page (bindPendingAnchors) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+      parseFailed = true;
+      return;
+    }
     currentPageNextY = 0;
   }
 
@@ -173,8 +180,14 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
 
     makePages();
   }
-  currentTextBlock.reset(new ParsedText(extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle,
-                                        wordSpacingPercent, firstLineIndentMode, usePublisherStyles));
+  currentTextBlock.reset(new (std::nothrow) ParsedText(extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle,
+                                                       wordSpacingPercent, firstLineIndentMode, usePublisherStyles));
+  if (!currentTextBlock) {
+    LOG_DIAG("EHP", "OOM new ParsedText free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+    parseFailed = true;
+    return;
+  }
   wordsExtractedInBlock = 0;
 }
 
@@ -303,20 +316,33 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
 
               LOG_DBG("EHP", "Display size: %dx%d (scale %.2f)", displayWidth, displayHeight, scale);
 
-              // Create page for image - only break if image won't fit remaining space
+              // Create page for image - only break if image won't fit remaining space.
+              // The pre-existing `new Page()` calls below were bare and would
+              // throw bad_alloc on a fragmented heap; with exceptions disabled
+              // in the firmware build that aborts. Switch to nothrow and treat
+              // a null result as a parse-aborting OOM (poll the flag from the
+              // outer parse loop to bail with the standard cleanup path).
               if (self->currentPage && !self->currentPage->elements.empty() &&
                   (self->currentPageNextY + displayHeight > self->viewportHeight)) {
                 self->completeCurrentPage();
-                self->currentPage.reset(new Page());
+                self->currentPage.reset(new (std::nothrow) Page());
                 if (!self->currentPage) {
-                  LOG_ERR("EHP", "Failed to create new page");
+                  LOG_DIAG("EHP", "OOM new Page (image overflow) free=%u largest=%u min=%u",
+                           (unsigned)ESP.getFreeHeap(),
+                           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+                           (unsigned)ESP.getMinFreeHeap());
+                  self->parseFailed = true;
                   return;
                 }
                 self->currentPageNextY = 0;
               } else if (!self->currentPage) {
-                self->currentPage.reset(new Page());
+                self->currentPage.reset(new (std::nothrow) Page());
                 if (!self->currentPage) {
-                  LOG_ERR("EHP", "Failed to create initial page");
+                  LOG_DIAG("EHP", "OOM new Page (image initial) free=%u largest=%u min=%u",
+                           (unsigned)ESP.getFreeHeap(),
+                           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+                           (unsigned)ESP.getMinFreeHeap());
+                  self->parseFailed = true;
                   return;
                 }
                 self->currentPageNextY = 0;
@@ -324,18 +350,29 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
 
               self->bindPendingAnchorsToCurrentPage();
 
-              // Create ImageBlock and add to page
-              auto imageBlock = std::make_shared<ImageBlock>(cachedImagePath, displayWidth, displayHeight);
-              if (!imageBlock) {
-                LOG_ERR("EHP", "Failed to create ImageBlock");
+              // Create ImageBlock and add to page. make_shared without nothrow
+              // throws bad_alloc on heap exhaustion → ESP32 panic. Use the
+              // explicit shared_ptr(new (nothrow) ...) form so we can detect
+              // and bail.
+              auto* rawImageBlock = new (std::nothrow) ImageBlock(cachedImagePath, displayWidth, displayHeight);
+              if (!rawImageBlock) {
+                LOG_DIAG("EHP", "OOM new ImageBlock free=%u largest=%u",
+                         (unsigned)ESP.getFreeHeap(),
+                         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+                self->parseFailed = true;
                 return;
               }
+              std::shared_ptr<ImageBlock> imageBlock(rawImageBlock);
               int xPos = (self->viewportWidth - displayWidth) / 2;
-              auto pageImage = std::make_shared<PageImage>(imageBlock, xPos, self->currentPageNextY);
-              if (!pageImage) {
-                LOG_ERR("EHP", "Failed to create PageImage");
+              auto* rawPageImage = new (std::nothrow) PageImage(imageBlock, xPos, self->currentPageNextY);
+              if (!rawPageImage) {
+                LOG_DIAG("EHP", "OOM new PageImage free=%u largest=%u",
+                         (unsigned)ESP.getFreeHeap(),
+                         (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+                self->parseFailed = true;
                 return;
               }
+              std::shared_ptr<PageImage> pageImage(rawPageImage);
               self->currentPage->elements.push_back(pageImage);
               self->currentPageNextY += displayHeight;
 
@@ -880,6 +917,18 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       file.close();
       return false;
     }
+    // A `new (nothrow) Page()` inside a callback may have set parseFailed.
+    // expat callbacks are void-returning so the only way to short-circuit
+    // is to poll the flag here and bail with the same cleanup as the
+    // XML_GetBuffer / XML_ParseBuffer error paths.
+    if (parseFailed) {
+      XML_StopParser(parser, XML_FALSE);
+      XML_SetElementHandler(parser, nullptr, nullptr);
+      XML_SetCharacterDataHandler(parser, nullptr);
+      XML_ParserFree(parser);
+      file.close();
+      return false;
+    }
   } while (!done);
 
   XML_StopParser(parser, XML_FALSE);                // Stop any pending processing
@@ -903,21 +952,51 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     currentPage.reset();
   }
 
+  // Final makePages() call above may have hit OOM after the parse loop
+  // already exited cleanly. Surface the failure to the caller.
+  if (parseFailed) {
+    return false;
+  }
+
   return true;
 }
 
 void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
+  if (parseFailed) return;
+  // ParsedText signals an OOM during TextBlock construction by passing
+  // a null shared_ptr through the processLine callback. Treat that the
+  // same as our own internal allocation failures.
+  if (!line) {
+    LOG_DIAG("EHP", "OOM upstream null TextBlock free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
+    parseFailed = true;
+    return;
+  }
   const int baseLineHeight = renderer.getLineHeight(fontId) * lineCompression;
   const int lineHeight = line->getBlockStyle().resolveLineHeight(baseLineHeight);
 
   if (!currentPage) {
-    currentPage.reset(new Page());
+    currentPage.reset(new (std::nothrow) Page());
+    if (!currentPage) {
+      LOG_DIAG("EHP", "OOM new Page (addLineToPage entry) free=%u largest=%u min=%u fontId=%d",
+               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+               (unsigned)ESP.getMinFreeHeap(), fontId);
+      parseFailed = true;
+      return;
+    }
     currentPageNextY = 0;
   }
 
   if (currentPageNextY + lineHeight > viewportHeight) {
     completeCurrentPage();
-    currentPage.reset(new Page());
+    currentPage.reset(new (std::nothrow) Page());
+    if (!currentPage) {
+      LOG_DIAG("EHP", "OOM new Page (addLineToPage overflow) free=%u largest=%u min=%u fontId=%d",
+               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+               (unsigned)ESP.getMinFreeHeap(), fontId);
+      parseFailed = true;
+      return;
+    }
     currentPageNextY = 0;
   }
 
@@ -934,18 +1013,33 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
 
   // Apply horizontal left inset (margin + padding) as x position offset
   const int16_t xOffset = line->getBlockStyle().leftInset();
-  currentPage->elements.push_back(std::make_shared<PageLine>(line, xOffset, currentPageNextY));
+  auto* rawPageLine = new (std::nothrow) PageLine(line, xOffset, currentPageNextY);
+  if (!rawPageLine) {
+    LOG_DIAG("EHP", "OOM new PageLine free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
+    parseFailed = true;
+    return;
+  }
+  currentPage->elements.push_back(std::shared_ptr<PageLine>(rawPageLine));
   currentPageNextY += lineHeight;
 }
 
 void ChapterHtmlSlimParser::makePages() {
+  if (parseFailed) return;
   if (!currentTextBlock) {
     LOG_ERR("EHP", "!! No text block to make pages for !!");
     return;
   }
 
   if (!currentPage) {
-    currentPage.reset(new Page());
+    currentPage.reset(new (std::nothrow) Page());
+    if (!currentPage) {
+      LOG_DIAG("EHP", "OOM new Page (makePages entry) free=%u largest=%u min=%u fontId=%d",
+               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+               (unsigned)ESP.getMinFreeHeap(), fontId);
+      parseFailed = true;
+      return;
+    }
     currentPageNextY = 0;
   }
 

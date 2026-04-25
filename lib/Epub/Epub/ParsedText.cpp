@@ -588,6 +588,10 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     lineWords.back().push_back('-');
   }
 
-  processLine(
-      std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), blockStyle));
+  // make_shared throws bad_alloc on OOM, which the firmware build can't
+  // catch (exceptions disabled) and panics. Use the explicit form so the
+  // call returns a null shared_ptr that processLine handles cleanly.
+  auto* rawBlock =
+      new (std::nothrow) TextBlock(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), blockStyle);
+  processLine(std::shared_ptr<TextBlock>(rawBlock));
 }
