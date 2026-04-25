@@ -75,6 +75,14 @@ bool validateHeader(const Header& h, uint32_t fileBytes, std::string* error) {
     if (error) *error = "tables + blob do not match file size";
     return false;
   }
+  // Reject uploads whose table footprint would crowd the EPUB layout
+  // heap budget. The bitmap blob doesn't count — it streams from SD —
+  // but the tables sit in heap for the lifetime of activation.
+  const uint64_t tablesBytes = sizeof(Header) + glyphsBytes + intervalsBytes + groupsBytes;
+  if (tablesBytes > kMaxTablesBytes) {
+    if (error) *error = "tables exceed per-variant heap budget";
+    return false;
+  }
   return true;
 }
 

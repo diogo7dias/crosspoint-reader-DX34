@@ -257,6 +257,49 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
   return true;
 }
 
+// static
+size_t Section::pruneStaleCachesForFont(const std::string& cachePath, int currentFontId) {
+  const std::string sectionsDir = cachePath + "/sections";
+  auto dir = Storage.open(sectionsDir.c_str());
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return 0;
+  }
+  size_t removed = 0;
+  char entryName[256];
+  for (auto e = dir.openNextFile(); e; e = dir.openNextFile()) {
+    e.getName(entryName, sizeof(entryName));
+    const bool isDir = e.isDirectory();
+    e.close();
+    if (isDir) continue;
+    const size_t nameLen = strlen(entryName);
+    if (nameLen < 5 || strcmp(entryName + nameLen - 4, ".bin") != 0) continue;
+    const std::string fullPath = sectionsDir + "/" + entryName;
+    FsFile peek;
+    if (!Storage.openFileForRead("SCT", fullPath, peek)) continue;
+    uint8_t version = 0;
+    int storedFontId = 0;
+    bool ok = false;
+    if (peek.read(&version, sizeof(version)) == sizeof(version) &&
+        peek.read(reinterpret_cast<uint8_t*>(&storedFontId), sizeof(storedFontId)) == sizeof(storedFontId)) {
+      ok = true;
+    }
+    peek.close();
+    if (!ok) continue;
+    if (storedFontId != currentFontId) {
+      if (Storage.remove(fullPath.c_str())) {
+        ++removed;
+      }
+    }
+  }
+  dir.close();
+  if (removed > 0) {
+    LOG_DBG("SCT", "pruneStaleCachesForFont: removed %u stale files (fontId now %d)", (unsigned)removed,
+            currentFontId);
+  }
+  return removed;
+}
+
 // Your updated class method (assuming you are using the 'SD' object, which is a wrapper for a specific filesystem)
 bool Section::clearCache() const {
   if (!Storage.exists(filePath.c_str())) {
@@ -279,9 +322,21 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
                                 const uint8_t wordSpacingPercent, const uint8_t firstLineIndentMode,
                                 const uint8_t readerStyleMode, const uint8_t textRenderMode, const bool readerBoldSwap,
                                 const std::function<void(int)>& progressFn) {
-  LOG_DBG("HEAP", "SCT createSectionFile:start spine=%d free=%u largest=%u min=%u", spineIndex,
-          (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-          (unsigned)ESP.getMinFreeHeap());
+  {
+    const unsigned freeHeap = ESP.getFreeHeap();
+    const unsigned largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    const unsigned minHeap = ESP.getMinFreeHeap();
+    LOG_DBG("HEAP", "SCT createSectionFile:start spine=%d free=%u largest=%u min=%u", spineIndex, freeHeap,
+            largestBlock, minHeap);
+    // Snapshot to crash_report.txt only when the heap is already
+    // suspiciously fragmented at the start of layout — keeps the 16-line
+    // RTC ring usable for the actual failure breadcrumb instead of crowding
+    // it with healthy-open noise.
+    if (largestBlock < 64 * 1024) {
+      LOG_DIAG("SCT", "createSectionFile:start (low heap) spine=%d fontId=%d free=%u largest=%u min=%u", spineIndex,
+               fontId, freeHeap, largestBlock, minHeap);
+    }
+  }
   const auto localPath = epub->getSpineItem(spineIndex).href;
   const auto tmpHtmlPath = epub->getCachePath() + "/.tmp_" + std::to_string(spineIndex) + ".html";
 
@@ -329,13 +384,18 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
 
   if (!success) {
-    LOG_ERR("SCT", "Failed to stream item contents to temp file after retries");
+    LOG_DIAG("SCT", "stream extract fail spine=%d free=%u largest=%u min=%u",
+             spineIndex, (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
     return false;
   }
 
   LOG_DBG("SCT", "Streamed temp HTML to %s (%d bytes)", tmpHtmlPath.c_str(), fileSize);
 
   if (!Storage.openFileForWrite("SCT", filePath, file)) {
+    LOG_DIAG("SCT", "open section file fail path=%s free=%u largest=%u",
+             filePath.c_str(), (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return false;
   }
   writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment, viewportWidth,
@@ -349,27 +409,34 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   std::string contentBase = (lastSlash != std::string::npos) ? localPath.substr(0, lastSlash + 1) : "";
   std::string imageBasePath = epub->getCachePath() + "/img_" + std::to_string(spineIndex) + "_";
 
-  CssParser* cssParser = nullptr;
-  if (readerStyleMode != 0) {
-    cssParser = epub->getCssParser();
-    if (cssParser) {
-      if (!cssParser->loadFromCache()) {
-        LOG_ERR("SCT", "Failed to load CSS from cache");
-      }
-    }
-  }
-
+  // The visitor's ctor only stashes the cssParser pointer; it isn't
+  // dereferenced until parseAndBuildPages() walks element callbacks. So
+  // we can construct the visitor first and only reload the CSS rules
+  // dictionary (~100 KB) immediately before the parser starts traversing.
+  // Doing it this way flattens the heap-peak: previously the CSS reload
+  // happened before the parser was constructed, holding both peaks
+  // simultaneously and crowding out other allocations.
+  CssParser* cssParser = (readerStyleMode != 0) ? epub->getCssParser() : nullptr;
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment,
       viewportWidth, viewportHeight, hyphenationEnabled, wordSpacingPercent, firstLineIndentMode, readerStyleMode != 0,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },
       [&anchors](const std::string& anchor, const uint16_t pageIndex) { anchors.emplace_back(anchor, pageIndex); },
       contentBase, imageBasePath, progressFn, cssParser);
+
+  if (cssParser) {
+    if (!cssParser->loadFromCache()) {
+      LOG_ERR("SCT", "Failed to load CSS from cache");
+    }
+  }
+
   success = visitor.parseAndBuildPages();
 
   Storage.remove(tmpHtmlPath.c_str());
   if (!success) {
-    LOG_ERR("SCT", "Failed to parse XML and build pages");
+    LOG_DIAG("SCT", "parseAndBuildPages fail spine=%d fontId=%d free=%u largest=%u min=%u",
+             spineIndex, fontId, (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
     file.close();
     Storage.remove(filePath.c_str());
     if (cssParser) {
@@ -402,7 +469,9 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
 
   if (hasFailedLutRecords) {
-    LOG_ERR("SCT", "Failed to write LUT due to invalid page positions");
+    LOG_DIAG("SCT", "LUT write fail (invalid page positions) spine=%d pageCount=%u free=%u largest=%u",
+             spineIndex, (unsigned)pageCount, (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     file.close();
     Storage.remove(filePath.c_str());
     return false;

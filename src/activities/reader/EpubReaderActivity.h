@@ -94,6 +94,17 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // at a safe point. The direct section.reset() calls in onExit / restoreSavedPosition / goto-href
   // are only safe because those paths are already running on the loop task under a RenderLock.
   bool pendingSectionReset = false;
+  // While true, normal reader input (page turns, menu) is suppressed and
+  // the next button release re-enters layout via a pendingSectionReset.
+  // Set when ensureSectionLoaded paints the recoverable error screen
+  // (pre-flight low-memory abort or post-revert "switched to default font"
+  // notice). See EpubReaderActivity::loop for the dispatch.
+  enum class LayoutRecoveryState : uint8_t {
+    None = 0,
+    AwaitingRetryAfterRevert,  // we already reverted to default font; tap re-enters
+    AwaitingRetryNoRevert,     // pre-flight gate fired; tap will run defrag and retry without revert
+  };
+  LayoutRecoveryState layoutRecoveryState_ = LayoutRecoveryState::None;
   // Memoized status-bar title wrap results. Two sub-caches with distinct keys:
   //   - reserve: max TOC-title wrap height for the current spine (input to budget resolution).
   //   - titleLines: wrapped lines for the currently-displayed title (input to the paint step).
@@ -178,6 +189,23 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // construction, or createSectionFile failed to persist layout to SD. On false the caller has
   // already had an error dialog painted by this function and should just return.
   bool ensureSectionLoaded(uint16_t viewportWidth, uint16_t viewportHeight);
+  // Free every releasable cache that competes with the EPUB-layout heap
+  // budget: in-RAM page cache, CSS rules dictionary, built-in font glyph
+  // cache, status-bar title caches. Run before retrying createSectionFile
+  // when a fragmentation-driven OOM drops layout, and from the pre-flight
+  // gate when the largest free block is below the safety threshold. Also
+  // calls heap_caps_check_integrity_all to nudge the allocator into
+  // coalescing freed regions.
+  void releaseMaxResources();
+  // Returns true if the heap looks healthy enough to attempt layout, false
+  // if the pre-flight gate ran a defrag pass and is still below the hard
+  // floor (caller should paint the low-memory error screen with a retry
+  // button instead of attempting createSectionFile).
+  bool heapHeadroomOkForLayout();
+  // Helpers for the two recovery error screens. Both paint a centered
+  // two-line message + retry hint and set layoutRecoveryState_ so the
+  // next button release re-enters layout.
+  void showLayoutRecoveryScreen(LayoutRecoveryState newState);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuBack(uint8_t orientation);

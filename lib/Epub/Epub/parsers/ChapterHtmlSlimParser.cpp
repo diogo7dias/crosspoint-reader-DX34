@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 #include <expat.h>
 
@@ -790,7 +791,9 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   int done;
 
   if (!parser) {
-    LOG_ERR("EHP", "Couldn't allocate memory for parser");
+    LOG_DIAG("EHP", "OOM XML_ParserCreate free=%u largest=%u min=%u fontId=%d",
+             (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+             (unsigned)ESP.getMinFreeHeap(), fontId);
     return false;
   }
 
@@ -800,6 +803,9 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 
   FsFile file;
   if (!Storage.openFileForRead("EHP", filepath, file)) {
+    LOG_DIAG("EHP", "open temp HTML failed path=%s free=%u largest=%u min=%u",
+             filepath.c_str(), (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
     XML_ParserFree(parser);
     return false;
   }
@@ -820,7 +826,12 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     esp_task_wdt_reset();
     void* const buf = XML_GetBuffer(parser, 1024);
     if (!buf) {
-      LOG_ERR("EHP", "Couldn't allocate memory for buffer");
+      // Reset wdt before the cleanup-and-return branch so a slow SD on the
+      // failure path doesn't compound an OOM with a watchdog reset.
+      esp_task_wdt_reset();
+      LOG_DIAG("EHP", "OOM XML_GetBuffer req=1024 free=%u largest=%u min=%u fontId=%d pos=%u/%u",
+               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+               (unsigned)ESP.getMinFreeHeap(), fontId, (unsigned)file.position(), (unsigned)fileSize);
       XML_StopParser(parser, XML_FALSE);                // Stop any pending processing
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
@@ -832,7 +843,8 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     const size_t len = file.read(buf, 1024);
 
     if (len == 0 && file.available() > 0) {
-      LOG_ERR("EHP", "File read error");
+      LOG_DIAG("EHP", "File read error pos=%u/%u free=%u",
+               (unsigned)file.position(), (unsigned)fileSize, (unsigned)ESP.getFreeHeap());
       XML_StopParser(parser, XML_FALSE);                // Stop any pending processing
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
@@ -858,8 +870,10 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     }
 
     if (XML_ParseBuffer(parser, static_cast<int>(len), done) == XML_STATUS_ERROR) {
-      LOG_ERR("EHP", "Parse error at line %lu:\n%s", XML_GetCurrentLineNumber(parser),
-              XML_ErrorString(XML_GetErrorCode(parser)));
+      const auto errCode = XML_GetErrorCode(parser);
+      LOG_DIAG("EHP", "XML parse error code=%d line=%lu free=%u largest=%u msg=%s",
+               (int)errCode, XML_GetCurrentLineNumber(parser), (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), XML_ErrorString(errCode));
       XML_StopParser(parser, XML_FALSE);                // Stop any pending processing
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
