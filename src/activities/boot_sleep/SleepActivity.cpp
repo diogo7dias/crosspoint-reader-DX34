@@ -92,6 +92,18 @@ void SleepActivity::onEnter() {
   // "Going to sleep..." banner on the power-button path, and a second
   // popup on top of it was read as duplicate noise.
 
+  // Heap-budget gate: weak-WiFi sessions have tipped the device into abort()
+  // during sleep wallpaper / cover render with Min Free observed at 4352 bytes.
+  // If the heap is already pressured when sleep is entered, fall back to a
+  // blank sleep screen — render fragments + bitmap parsing on top of a tight
+  // heap is the documented crash signature.
+  constexpr uint32_t kMinFreeHeapForRichSleep = 30 * 1024;
+  const uint32_t freeHeap = ESP.getFreeHeap();
+  if (freeHeap < kMinFreeHeapForRichSleep) {
+    LOG_DBG("SLP", "Free heap %u < %u, suppressing wallpaper/cover render", freeHeap, kMinFreeHeapForRichSleep);
+    return renderBlankSleepScreen();
+  }
+
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
       return renderBlankSleepScreen();
