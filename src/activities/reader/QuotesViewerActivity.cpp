@@ -110,6 +110,11 @@ void QuotesViewerActivity::loadQuotes() {
     if (!entry.text.empty()) quotes.push_back(std::move(entry));
     if (sep == std::string::npos) break;
   }
+  // The whole-file buffer (up to ~65 KB) lingers in heap until the next
+  // loadQuotes overwrites it, even though we only needed it during the
+  // parse loop above. Free its capacity now so subsequent activity
+  // transitions or book opens see the real heap state.
+  std::string().swap(buf);
 }
 
 bool QuotesViewerActivity::saveQuotes() const {
