@@ -1676,6 +1676,7 @@
       background: rgba(0, 0, 0, 0.78) !important;
     }
     .modal {
+      position: relative !important;
       background: var(--bg) !important;
       color: var(--fg) !important;
       border: 1px dashed var(--dash) !important;
@@ -1684,16 +1685,21 @@
       padding: var(--pad) !important;
     }
     .modal h3 {
-      margin: 0 0 14px 0 !important;
+      margin: 0 50px 16px 0 !important;
       color: var(--fg) !important;
-      font-size: 11px !important;
-      letter-spacing: 0.3em !important;
+      font-size: 18px !important;
+      letter-spacing: 0.12em !important;
       text-transform: uppercase !important;
-      font-weight: 400 !important;
+      font-weight: 700 !important;
       border-bottom: 1px dashed rgba(255, 255, 255, 0.15) !important;
-      padding-bottom: 10px !important;
+      padding-bottom: 12px !important;
+      line-height: 1.2;
     }
     .modal-close {
+      position: absolute !important;
+      top: 14px !important;
+      right: 14px !important;
+      float: none !important;
       background: transparent !important;
       color: var(--muted) !important;
       border: 1px dashed var(--dash) !important;
@@ -1704,6 +1710,7 @@
       padding: 0 !important;
       font-size: 18px !important;
       line-height: 1 !important;
+      z-index: 1;
     }
     .modal-close:hover {
       background: var(--red) !important;
@@ -1715,11 +1722,12 @@
     .modal .file-info,
     .modal .modal-hint {
       color: var(--muted) !important;
-      font-size: 11px !important;
-      letter-spacing: 0.06em;
-      line-height: 1.5;
+      font-size: 13px !important;
+      letter-spacing: 0.04em;
+      line-height: 1.6;
+      margin: 8px 0 12px 0 !important;
     }
-    .modal .file-info strong { color: var(--fg) !important; }
+    .modal .file-info strong { color: var(--fg) !important; font-weight: 700; }
     .modal .delete-warning {
       color: var(--red) !important;
       border: 1px dashed var(--red) !important;
@@ -1758,15 +1766,16 @@
     /* Modal file input */
     .modal input[type="file"] {
       background: var(--bg) !important;
-      color: var(--muted) !important;
+      color: var(--fg) !important;
       border: 1px dashed var(--dash) !important;
       border-radius: 0 !important;
-      padding: 10px !important;
+      padding: 12px !important;
       font-family: inherit !important;
-      font-size: 11px !important;
+      font-size: 13px !important;
       box-shadow: none !important;
       width: 100% !important;
       box-sizing: border-box;
+      margin: 8px 0 14px 0 !important;
     }
     .modal input[type="file"]::file-selector-button {
       background: transparent !important;
