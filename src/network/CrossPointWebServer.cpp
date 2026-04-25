@@ -27,6 +27,8 @@
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
 #endif
+#include "I18n.h"
+#include "WebI18nDict.generated.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
@@ -256,6 +258,9 @@ void CrossPointWebServer::begin() {
 
   server->on("/css/brutalist.css", HTTP_GET, [this] { handleBrutalistCss(); });
 
+  // Web UI translation dict — picks language from SETTINGS.uiLanguage at request time.
+  server->on("/api/i18n.json", HTTP_GET, [this] { handleI18nDict(); });
+
   // Custom-font endpoints.
   // /upload takes the file body via multipart; the family / variant /
   // size tuple rides in query params because form fields aren't
@@ -433,6 +438,19 @@ void CrossPointWebServer::handleBrutalistCss() const {
   server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "text/css", brutalistCss, brutalistCssCompressedSize);
   LOG_DBG("WEB", "Served brutalist.css");
+}
+
+void CrossPointWebServer::handleI18nDict() const {
+  // Pick the current device UI language. Cache disabled because the same URL
+  // returns different bytes when the user changes language on the device.
+  const auto lang = static_cast<Language>(SETTINGS.uiLanguage);
+  const WebI18nBlob blob = getWebI18nBlob(lang);
+  server->sendHeader("Content-Encoding", "gzip");
+  server->sendHeader("Cache-Control", "no-cache");
+  server->send_P(200, "application/json",
+                 reinterpret_cast<const char*>(blob.data), blob.size);
+  LOG_DBG("WEB", "Served /api/i18n.json (lang=%u, %u B gz)",
+          static_cast<unsigned>(lang), static_cast<unsigned>(blob.size));
 }
 
 void CrossPointWebServer::stop() {

@@ -121,6 +121,7 @@ class CrossPointWebServer {
   void handleDelete() const;
   void handleJszip() const;
   void handleBrutalistCss() const;
+  void handleI18nDict() const;
   void abortWsUpload(const char* tag);
 
   // Font-management handlers.

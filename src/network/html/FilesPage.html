@@ -2170,42 +2170,42 @@
 </head>
 <body>
 <nav class="nav-links" aria-label="Primary">
-  <a href="/"><span class="k">[1]</span>HOME</a>
-  <a href="/files" class="on"><span class="k">[2]</span>FILES</a>
-  <a href="/fonts"><span class="k">[3]</span>FONTS</a>
+  <a href="/"><span class="k">[1]</span><span data-i18n="STR_WEB_HOME">HOME</span></a>
+  <a href="/files" class="on"><span class="k">[2]</span><span data-i18n="STR_WEB_FILES">FILES</span></a>
+  <a href="/fonts"><span class="k">[3]</span><span data-i18n="STR_WEB_FONTS">FONTS</span></a>
 </nav>
 
 <div class="page-header">
   <div class="page-header-left">
-    <h1>📁 File Manager</h1>
+    <h1>📁 <span data-i18n="STR_WEB_FILE_MANAGER">File Manager</span></h1>
     <div class="breadcrumb-inline" id="directory-breadcrumbs"></div>
   </div>
 
   <div class="action-buttons">
-    <button class="action-btn upload-action-btn" onclick="openUploadModal()">📤 Upload</button>
-    <button class="action-btn folder-action-btn" onclick="openFolderModal()">📁 New Folder</button>
-    <button class="action-btn" style="background-color:#2980b9" onclick="downloadSelected()">💾 Download Selected</button>
-    <button class="action-btn" style="background-color:#e74c3c" onclick="openDeleteSelectedModal()">🗑️ Delete Selected</button>
+    <button class="action-btn upload-action-btn" onclick="openUploadModal()">📤 <span data-i18n="STR_UPLOAD">Upload</span></button>
+    <button class="action-btn folder-action-btn" onclick="openFolderModal()">📁 <span data-i18n="STR_WEB_NEW_FOLDER">New Folder</span></button>
+    <button class="action-btn" style="background-color:#2980b9" onclick="downloadSelected()">💾 <span data-i18n="STR_WEB_DOWNLOAD_SELECTED">Download Selected</span></button>
+    <button class="action-btn" style="background-color:#e74c3c" onclick="openDeleteSelectedModal()">🗑️ <span data-i18n="STR_WEB_DELETE_SELECTED">Delete Selected</span></button>
   </div>
 </div>
 
 <!-- Failed Uploads Banner -->
 <div class="failed-uploads-banner" id="failedUploadsBanner">
   <div class="failed-uploads-header">
-    <h3 class="failed-uploads-title">⚠️ Some files failed to upload</h3>
-    <button class="dismiss-btn" onclick="dismissFailedUploads()" title="Dismiss">&times;</button>
+    <h3 class="failed-uploads-title">⚠️ <span data-i18n="STR_WEB_FAILED_UPLOADS_TITLE">Some files failed to upload</span></h3>
+    <button class="dismiss-btn" onclick="dismissFailedUploads()" title="Dismiss" data-i18n-attr="title:STR_WEB_DISMISS">&times;</button>
   </div>
   <div id="failedFilesList"></div>
-  <button class="retry-all-btn" onclick="retryAllFailedUploads()">Retry All Failed Uploads</button>
+  <button class="retry-all-btn" onclick="retryAllFailedUploads()" data-i18n="STR_WEB_RETRY_ALL_FAILED">Retry All Failed Uploads</button>
 </div>
 
 <div class="card" id="folderContentsCard">
   <div class="contents-header">
-    <h2 class="contents-title">Contents</h2>
+    <h2 class="contents-title" data-i18n="STR_WEB_CONTENTS">Contents</h2>
     <span class="summary-inline" id="folder-summary"></span>
   </div>
 
-  <div class="info-banner">ℹ️ Downloads work on mobile browsers and Safari. Other browsers may not support it. Easiest alternative: download on device via QR code.</div>
+  <div class="info-banner">ℹ️ <span data-i18n="STR_WEB_DOWNLOADS_INFO">Downloads work on mobile browsers and Safari. Other browsers may not support it. Easiest alternative: download on device via QR code.</span></div>
 
   <div id="file-table">
     <div class="loader-container">
@@ -2224,21 +2224,21 @@
 <div class="modal-overlay" id="uploadModal">
   <div class="modal">
     <button class="modal-close" id="uploadModalClose" onclick="closeUploadModal()">&times;</button>
-    <h3>📤 Upload file</h3>
+    <h3>📤 <span data-i18n="STR_WEB_UPLOAD_FILE">Upload file</span></h3>
     <div class="upload-form">
-      <p class="file-info">Select a file to upload to <strong id="uploadPathDisplay"></strong></p>
+      <p class="file-info"><span data-i18n="STR_WEB_SELECT_FILE_TO_UPLOAD">Select a file to upload to</span> <strong id="uploadPathDisplay"></strong></p>
       <input type="file" id="fileInput" onchange="validateFile()" multiple>
       <div class="picker-columns" id="pickerColumns">
         <div class="convert-options" id="convertOptions" style="display:none;">
           <div class="convert-row">
             <label class="convert-checkbox">
               <input type="checkbox" id="convertBeforeUpload" onchange="toggleConvertOptions()">
-              <span>Optimize EPUB</span>
+              <span data-i18n="STR_WEB_OPTIMIZE_EPUB">Optimize EPUB</span>
             </label>
             <span class="convert-separator">&mdash;</span>
             <span class="advanced-options-toggle" id="advancedOptionsToggle" onclick="toggleAdvancedOptions()">
               <span class="advanced-options-arrow" id="advancedOptionsArrow">&#9654;</span>
-              <span class="advanced-options-text">Advanced Mode</span>
+              <span class="advanced-options-text" data-i18n="STR_WEB_ADVANCED_MODE">Advanced Mode</span>
             </span>
           </div>
 
@@ -2246,30 +2246,30 @@
           </div>
 
           <div class="convert-settings" id="convertSettings" style="display:block;">
-            <span>&#9899; True-Grayscale</span>
-            <span>&#128207; Max 480x800px</span>
-            <span>&#128230; 85% JPEG</span>
-            <span>&#128295; Fix SVG</span>
+            <span>&#9899; <span data-i18n="STR_WEB_TRUE_GRAYSCALE">True-Grayscale</span></span>
+            <span>&#128207; <span data-i18n="STR_WEB_MAX_RESOLUTION">Max 480x800px</span></span>
+            <span>&#128230; <span data-i18n="STR_WEB_85_JPEG">85% JPEG</span></span>
+            <span>&#128295; <span data-i18n="STR_WEB_FIX_SVG">Fix SVG</span></span>
           </div>
           <!-- Advanced Settings Content -->
           <div class="advanced-settings-content" id="advancedSettingsContent">
             <!-- JPEG Quality -->
             <div class="advanced-setting-row quality-row">
-              <div class="setting-title">&#128230; JPEG Quality</div>
+              <div class="setting-title">&#128230; <span data-i18n="STR_WEB_JPEG_QUALITY">JPEG Quality</span></div>
               <div class="quality-presets">
-                <button class="quality-preset" data-value="30" onclick="setQualityPreset(30)" title="Minimum quality">30%</button>
-                <button class="quality-preset" data-value="45" onclick="setQualityPreset(45)" title="Low quality">45%</button>
-                <button class="quality-preset" data-value="60" onclick="setQualityPreset(60)" title="Medium-low quality">60%</button>
-                <button class="quality-preset" data-value="75" onclick="setQualityPreset(75)" title="Medium quality">75%</button>
-                <button class="quality-preset active" data-value="85" onclick="setQualityPreset(85)" title="High quality">85%</button>
-                <button class="quality-preset" data-value="95" onclick="setQualityPreset(95)" title="Maximum quality">95%</button>
+                <button class="quality-preset" data-value="30" onclick="setQualityPreset(30)" title="Minimum quality" data-i18n-attr="title:STR_WEB_QUALITY_MIN">30%</button>
+                <button class="quality-preset" data-value="45" onclick="setQualityPreset(45)" title="Low quality" data-i18n-attr="title:STR_WEB_QUALITY_LOW">45%</button>
+                <button class="quality-preset" data-value="60" onclick="setQualityPreset(60)" title="Medium-low quality" data-i18n-attr="title:STR_WEB_QUALITY_MED_LOW">60%</button>
+                <button class="quality-preset" data-value="75" onclick="setQualityPreset(75)" title="Medium quality" data-i18n-attr="title:STR_WEB_QUALITY_MED">75%</button>
+                <button class="quality-preset active" data-value="85" onclick="setQualityPreset(85)" title="High quality" data-i18n-attr="title:STR_WEB_QUALITY_HIGH">85%</button>
+                <button class="quality-preset" data-value="95" onclick="setQualityPreset(95)" title="Maximum quality" data-i18n-attr="title:STR_WEB_QUALITY_MAX">95%</button>
               </div>
               <input type="hidden" id="qualitySlider" value="85">
               <input type="hidden" id="qualityInput" value="85">
             </div>
             <!-- Rotation Direction -->
             <div class="advanced-setting-row" id="rotationSettingRow">
-              <div class="setting-title">&#8635; Rotation Direction</div>
+              <div class="setting-title">&#8635; <span data-i18n="STR_WEB_ROTATION_DIRECTION">Rotation Direction</span></div>
               <div class="setting-controls">
                 <div class="rotation-buttons">
                   <button class="rotation-btn" id="rotationCCW" onclick="setHandedness('left')">
@@ -2283,7 +2283,7 @@
             </div>
             <!-- Overlap Settings -->
             <div class="advanced-setting-row" id="overlapSettingRow">
-              <div class="setting-title">&#128208; Min Overlap</div>
+              <div class="setting-title">&#128208; <span data-i18n="STR_WEB_MIN_OVERLAP">Min Overlap</span></div>
               <div class="setting-controls">
                 <div class="overlap-selector">
                   <button class="overlap-btn active" data-value="5" onclick="setOverlap(5)">5%</button>
@@ -2295,8 +2295,8 @@
             <!-- Conversion Log Export -->
             <div class="advanced-setting-row">
               <div class="setting-label">
-                <div class="setting-title">&#128229; Auto-download Log</div>
-                <div class="setting-desc">Export detailed log with statistics</div>
+                <div class="setting-title">&#128229; <span data-i18n="STR_WEB_AUTO_DOWNLOAD_LOG">Auto-download Log</span></div>
+                <div class="setting-desc" data-i18n="STR_WEB_AUTO_DOWNLOAD_LOG_DESC">Export detailed log with statistics</div>
               </div>
               <div class="setting-controls">
                 <label class="toggle-switch">
@@ -2310,33 +2310,33 @@
         <!-- Image Picker Section -->
         <div class="image-picker-section" id="imagePickerSection" style="display:none;">
           <div class="image-picker-header">
-            <span class="image-picker-title">&#128444;&#65039; Image Processing Options</span>
+            <span class="image-picker-title">&#128444;&#65039; <span data-i18n="STR_WEB_IMAGE_PROCESSING">Image Processing Options</span></span>
             <span class="image-picker-count" id="imagePickerCount">0 images</span>
           </div>
           <div class="state-legend">
             <div class="legend-item locked">
               <span>&#128274;</span>
-              <span>Cover</span>
+              <span data-i18n="STR_WEB_COVER">Cover</span>
             </div>
             <div class="legend-item locked">
               <span style="color:#1abc9c">&#10022;</span>
-              <span>Separator</span>
+              <span data-i18n="STR_WEB_SEPARATOR">Separator</span>
             </div>
             <button class="legend-btn" style="--btn-color:var(--label-color)" onclick="applyStateToAll(0)">
               <div class="legend-color"></div>
-              <span>Normal</span>
+              <span data-i18n="STR_WEB_NORMAL">Normal</span>
             </button>
             <button class="legend-btn" style="--btn-color:#3498db" onclick="applyStateToAll(1)">
               <div class="legend-color"></div>
-              <span>H-Split</span>
+              <span data-i18n="STR_WEB_H_SPLIT">H-Split</span>
             </button>
             <button class="legend-btn" style="--btn-color:#e74c3c" onclick="applyStateToAll(2)">
               <div class="legend-color"></div>
-              <span>V-Split</span>
+              <span data-i18n="STR_WEB_V_SPLIT">V-Split</span>
             </button>
             <button class="legend-btn" style="--btn-color:#9b59b6" onclick="applyStateToAll(3)">
               <div class="legend-color"></div>
-              <span>Rotate</span>
+              <span data-i18n="STR_WEB_ROTATE">Rotate</span>
             </button>
           </div>
           <div class="image-grid" id="imageGrid"></div>
@@ -2344,20 +2344,20 @@
       </div><!-- end picker-columns -->
       <!-- Sync compatibility warning -->
       <div class="convert-warning" id="convertWarning" style="display:none;" role="alert" aria-live="polite">
-        &#9888;&#65039; Converting will modify files and can break hash-based sync. &#9888;&#65039;<br>
-        Please back up or disable sync before proceeding.
+        &#9888;&#65039; <span data-i18n="STR_WEB_CONVERT_WARNING">Converting will modify files and can break hash-based sync.</span> &#9888;&#65039;<br>
+        <span data-i18n="STR_WEB_BACKUP_OR_DISABLE_SYNC">Please back up or disable sync before proceeding.</span>
       </div>
       <!-- Optimize & Upload button -->
-      <button id="startConversionBtn" class="upload-btn optimize" style="display:none;" onclick="startConversionWithImageStates()">Optimize &amp; Upload</button>
-      <button id="uploadBtn" class="upload-btn" onclick="uploadFile()" disabled>Upload</button>
-      <button class="delete-btn-cancel" onclick="handleCancelUploadModal()">Cancel</button>
+      <button id="startConversionBtn" class="upload-btn optimize" style="display:none;" onclick="startConversionWithImageStates()" data-i18n="STR_WEB_OPTIMIZE_AND_UPLOAD">Optimize &amp; Upload</button>
+      <button id="uploadBtn" class="upload-btn" onclick="uploadFile()" disabled data-i18n="STR_UPLOAD">Upload</button>
+      <button class="delete-btn-cancel" onclick="handleCancelUploadModal()" data-i18n="STR_CANCEL">Cancel</button>
       <div id="progress-container">
         <div id="progress-bar"><div id="progress-fill"></div></div>
         <div id="progress-text"></div>
       </div>
       <div class="log-section" id="log-section">
         <div class="log-header">
-          <div class="log-title">&#128203; Conversion Log</div>
+          <div class="log-title">&#128203; <span data-i18n="STR_WEB_CONVERSION_LOG">Conversion Log</span></div>
         </div>
         <div class="log-container" id="log-container"></div>
       </div>
@@ -2369,11 +2369,11 @@
 <div class="modal-overlay" id="folderModal">
   <div class="modal">
     <button class="modal-close" onclick="closeFolderModal()">&times;</button>
-    <h3>📁 New Folder</h3>
+    <h3>📁 <span data-i18n="STR_WEB_NEW_FOLDER">New Folder</span></h3>
     <div class="folder-form">
-      <p class="file-info">Create a new folder in <strong id="folderPathDisplay"></strong></p>
-      <input type="text" id="folderName" class="folder-input" placeholder="Folder name...">
-      <button class="folder-btn" onclick="createFolder()">Create Folder</button>
+      <p class="file-info"><span data-i18n="STR_WEB_CREATE_NEW_FOLDER_IN">Create a new folder in</span> <strong id="folderPathDisplay"></strong></p>
+      <input type="text" id="folderName" class="folder-input" placeholder="Folder name..." data-i18n-attr="placeholder:STR_WEB_FOLDER_NAME_PLACEHOLDER">
+      <button class="folder-btn" onclick="createFolder()" data-i18n="STR_WEB_CREATE_FOLDER">Create Folder</button>
     </div>
   </div>
 </div>
@@ -2382,13 +2382,13 @@
 <div class="modal-overlay" id="deleteModal">
   <div class="modal">
     <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
-    <h3>🗑️ Delete Item(s)</h3>
+    <h3>🗑️ <span data-i18n="STR_WEB_DELETE_ITEMS">Delete Item(s)</span></h3>
     <div class="folder-form">
-      <p class="delete-warning">⚠️ This action cannot be undone!</p>
-      <p class="file-info">Are you sure you want to delete the following item(s)?</p>
+      <p class="delete-warning">⚠️ <span data-i18n="STR_WEB_DELETE_UNDONE_WARNING">This action cannot be undone!</span></p>
+      <p class="file-info" data-i18n="STR_WEB_CONFIRM_DELETE_ITEMS">Are you sure you want to delete the following item(s)?</p>
       <div id="deleteItemList" style="max-height:240px; overflow:auto; margin-bottom:10px;"></div>
-      <button class="delete-btn-confirm" onclick="confirmDelete()">Delete</button>
-      <button class="delete-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+      <button class="delete-btn-confirm" onclick="confirmDelete()" data-i18n="STR_WEB_DELETE">Delete</button>
+      <button class="delete-btn-cancel" onclick="closeDeleteModal()" data-i18n="STR_CANCEL">Cancel</button>
     </div>
   </div>
 </div>
@@ -2397,14 +2397,14 @@
 <div class="modal-overlay" id="renameModal">
   <div class="modal">
     <button class="modal-close" onclick="closeRenameModal()">&times;</button>
-    <h3>✏️ Rename File</h3>
+    <h3>✏️ <span data-i18n="STR_WEB_RENAME_FILE">Rename File</span></h3>
     <div class="folder-form">
-      <p class="file-info">Renaming <strong id="renameItemName"></strong></p>
-      <input type="text" id="renameNewName" class="folder-input" placeholder="New file name...">
+      <p class="file-info"><span data-i18n="STR_WEB_RENAMING">Renaming</span> <strong id="renameItemName"></strong></p>
+      <input type="text" id="renameNewName" class="folder-input" placeholder="New file name..." data-i18n-attr="placeholder:STR_WEB_NEW_FILE_NAME_PLACEHOLDER">
       <input type="hidden" id="renameItemPath">
-      <p class="modal-hint">Reading progress and book settings are preserved when renaming.</p>
-      <button class="rename-btn-confirm" onclick="confirmRename()">Rename</button>
-      <button class="delete-btn-cancel" onclick="closeRenameModal()">Cancel</button>
+      <p class="modal-hint" data-i18n="STR_WEB_RENAME_PROGRESS_PRESERVED">Reading progress and book settings are preserved when renaming.</p>
+      <button class="rename-btn-confirm" onclick="confirmRename()" data-i18n="STR_WEB_RENAME">Rename</button>
+      <button class="delete-btn-cancel" onclick="closeRenameModal()" data-i18n="STR_CANCEL">Cancel</button>
     </div>
   </div>
 </div>
@@ -2413,17 +2413,17 @@
 <div class="modal-overlay" id="imagePreviewModal">
   <div class="modal" style="max-width:95vw;width:auto;">
     <button class="modal-close" onclick="closeImagePreview()">&times;</button>
-    <h3 id="previewTitle">🖼️ Image Preview</h3>
+    <h3 id="previewTitle">🖼️ <span data-i18n="STR_WEB_IMAGE_PREVIEW">Image Preview</span></h3>
     <div style="text-align:center;margin:10px 0;">
       <img id="previewImg" style="max-width:100%;max-height:60vh;border:1px solid #ddd;border-radius:4px;background:#eee;" alt="BMP Preview">
-      <div id="previewLoading" style="padding:30px;color:#888;">Loading image...</div>
+      <div id="previewLoading" style="padding:30px;color:#888;" data-i18n="STR_WEB_LOADING_IMAGE">Loading image...</div>
     </div>
     <div id="previewInfo" style="text-align:center;color:#666;font-size:0.85em;margin-bottom:12px;"></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
-      <button class="action-btn" style="background-color:#27ae60" onclick="previewAction('sleep')">😴 Move to Sleep</button>
-      <button class="action-btn" style="background-color:#f39c12" onclick="previewAction('pause')">⏸️ Move to Sleep Pause</button>
-      <button class="action-btn" style="background-color:#2980b9" onclick="previewAction('download')">💾 Download</button>
-      <button class="action-btn" style="background-color:#e74c3c" onclick="previewAction('delete')">🗑️ Delete</button>
+      <button class="action-btn" style="background-color:#27ae60" onclick="previewAction('sleep')">😴 <span data-i18n="STR_WEB_MOVE_TO_SLEEP">Move to Sleep</span></button>
+      <button class="action-btn" style="background-color:#f39c12" onclick="previewAction('pause')">⏸️ <span data-i18n="STR_WEB_MOVE_TO_SLEEP_PAUSE">Move to Sleep Pause</span></button>
+      <button class="action-btn" style="background-color:#2980b9" onclick="previewAction('download')">💾 <span data-i18n="STR_DOWNLOAD">Download</span></button>
+      <button class="action-btn" style="background-color:#e74c3c" onclick="previewAction('delete')">🗑️ <span data-i18n="STR_WEB_DELETE">Delete</span></button>
     </div>
   </div>
 </div>
@@ -2431,20 +2431,53 @@
 <div class="modal-overlay" id="moveModal">
   <div class="modal">
     <button class="modal-close" onclick="closeMoveModal()">&times;</button>
-    <h3>📂 Move File</h3>
+    <h3>📂 <span data-i18n="STR_WEB_MOVE_FILE">Move File</span></h3>
     <div class="folder-form">
-      <p class="file-info">Moving <strong id="moveItemName"></strong></p>
-      <input type="text" id="moveDestPath" class="folder-input" list="moveFolderOptions" placeholder="/Destination/Folder">
+      <p class="file-info"><span data-i18n="STR_WEB_MOVING">Moving</span> <strong id="moveItemName"></strong></p>
+      <input type="text" id="moveDestPath" class="folder-input" list="moveFolderOptions" placeholder="/Destination/Folder" data-i18n-attr="placeholder:STR_WEB_MOVE_DEST_PLACEHOLDER">
       <datalist id="moveFolderOptions"></datalist>
       <input type="hidden" id="moveItemPath">
-      <p class="modal-hint">Reading progress and book settings are preserved when moving.</p>
-      <button class="move-btn-confirm" onclick="confirmMove()">Move</button>
-      <button class="delete-btn-cancel" onclick="closeMoveModal()">Cancel</button>
+      <p class="modal-hint" data-i18n="STR_WEB_MOVE_PROGRESS_PRESERVED">Reading progress and book settings are preserved when moving.</p>
+      <button class="move-btn-confirm" onclick="confirmMove()" data-i18n="STR_WEB_MOVE">Move</button>
+      <button class="delete-btn-cancel" onclick="closeMoveModal()" data-i18n="STR_CANCEL">Cancel</button>
     </div>
   </div>
 </div>
 
 <script>
+  // i18n bootstrap — fetches the device-language dict and swaps text on
+  // [data-i18n] / attribute spec on [data-i18n-attr]="attr:KEY,attr:KEY".
+  // Exposes window.tr(KEY) for use in dynamic JS-emitted strings.
+  window.__i18nReady = (async function() {
+    try {
+      const r = await fetch('/api/i18n.json', { cache: 'no-cache' });
+      if (!r.ok) throw new Error('i18n fetch failed: ' + r.status);
+      const dict = await r.json();
+      window.__i18nDict = dict;
+      window.tr = (k) => (dict && dict[k]) || k;
+      const apply = () => {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+          const k = el.dataset.i18n;
+          if (dict[k]) el.textContent = dict[k];
+        });
+        document.querySelectorAll('[data-i18n-attr]').forEach(el => {
+          el.dataset.i18nAttr.split(',').forEach(pair => {
+            const [a, k] = pair.split(':').map(s => s.trim());
+            if (a && k && dict[k]) el.setAttribute(a, dict[k]);
+          });
+        });
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', apply, { once: true });
+      } else {
+        apply();
+      }
+    } catch (e) {
+      window.tr = (k) => k;
+      console.warn('i18n init failed, using English fallback:', e);
+    }
+  })();
+
   // get current path from query parameter
   const currentPath = decodeURIComponent(new URLSearchParams(window.location.search).get('path') || '/');
 
