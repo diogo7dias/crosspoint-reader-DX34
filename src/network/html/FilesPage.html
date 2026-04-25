@@ -2226,8 +2226,12 @@
     <button class="modal-close" id="uploadModalClose" onclick="closeUploadModal()">&times;</button>
     <h3>📤 <span data-i18n="STR_WEB_UPLOAD_FILE">Upload file</span></h3>
     <div class="upload-form">
-      <p class="file-info"><span data-i18n="STR_WEB_SELECT_FILE_TO_UPLOAD">Select a file to upload to</span> <strong id="uploadPathDisplay"></strong></p>
-      <input type="file" id="fileInput" onchange="validateFile()" multiple>
+      <p class="file-info"><span data-i18n="STR_WEB_SELECT_FILE_TO_UPLOAD">Select a file to upload to</span>&nbsp;<strong id="uploadPathDisplay"></strong></p>
+      <div class="file-picker-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        <button type="button" class="action-btn" onclick="document.getElementById('fileInput').click()" data-i18n="STR_WEB_CHOOSE_FILES">Choose files</button>
+        <span id="filePickerInfo" data-i18n="STR_WEB_NO_FILE_CHOSEN" style="color:#888;font-size:0.9em;">No file chosen</span>
+      </div>
+      <input type="file" id="fileInput" onchange="validateFile()" multiple style="display:none">
       <div class="picker-columns" id="pickerColumns">
         <div class="convert-options" id="convertOptions" style="display:none;">
           <div class="convert-row">
@@ -2371,7 +2375,7 @@
     <button class="modal-close" onclick="closeFolderModal()">&times;</button>
     <h3>📁 <span data-i18n="STR_WEB_NEW_FOLDER">New Folder</span></h3>
     <div class="folder-form">
-      <p class="file-info"><span data-i18n="STR_WEB_CREATE_NEW_FOLDER_IN">Create a new folder in</span> <strong id="folderPathDisplay"></strong></p>
+      <p class="file-info"><span data-i18n="STR_WEB_CREATE_NEW_FOLDER_IN">Create a new folder in</span>&nbsp;<strong id="folderPathDisplay"></strong></p>
       <input type="text" id="folderName" class="folder-input" placeholder="Folder name..." data-i18n-attr="placeholder:STR_WEB_FOLDER_NAME_PLACEHOLDER">
       <button class="folder-btn" onclick="createFolder()" data-i18n="STR_WEB_CREATE_FOLDER">Create Folder</button>
     </div>
@@ -2399,7 +2403,7 @@
     <button class="modal-close" onclick="closeRenameModal()">&times;</button>
     <h3>✏️ <span data-i18n="STR_WEB_RENAME_FILE">Rename File</span></h3>
     <div class="folder-form">
-      <p class="file-info"><span data-i18n="STR_WEB_RENAMING">Renaming</span> <strong id="renameItemName"></strong></p>
+      <p class="file-info"><span data-i18n="STR_WEB_RENAMING">Renaming</span>&nbsp;<strong id="renameItemName"></strong></p>
       <input type="text" id="renameNewName" class="folder-input" placeholder="New file name..." data-i18n-attr="placeholder:STR_WEB_NEW_FILE_NAME_PLACEHOLDER">
       <input type="hidden" id="renameItemPath">
       <p class="modal-hint" data-i18n="STR_WEB_RENAME_PROGRESS_PRESERVED">Reading progress and book settings are preserved when renaming.</p>
@@ -2433,7 +2437,7 @@
     <button class="modal-close" onclick="closeMoveModal()">&times;</button>
     <h3>📂 <span data-i18n="STR_WEB_MOVE_FILE">Move File</span></h3>
     <div class="folder-form">
-      <p class="file-info"><span data-i18n="STR_WEB_MOVING">Moving</span> <strong id="moveItemName"></strong></p>
+      <p class="file-info"><span data-i18n="STR_WEB_MOVING">Moving</span>&nbsp;<strong id="moveItemName"></strong></p>
       <input type="text" id="moveDestPath" class="folder-input" list="moveFolderOptions" placeholder="/Destination/Folder" data-i18n-attr="placeholder:STR_WEB_MOVE_DEST_PLACEHOLDER">
       <datalist id="moveFolderOptions"></datalist>
       <input type="hidden" id="moveItemPath">
@@ -2675,10 +2679,11 @@
     const fileInput = document.getElementById('fileInput');
     fileInput.value = '';
     fileInput.classList.remove('has-files');
+    updateFilePickerLabel();
     const uploadBtn = document.getElementById('uploadBtn');
     uploadBtn.disabled = true;
     uploadBtn.style.display = 'block';
-    uploadBtn.textContent = 'Upload';
+    uploadBtn.textContent = (window.tr ? window.tr('STR_UPLOAD') : 'Upload');
     uploadBtn.classList.remove('optimize');
     document.getElementById('startConversionBtn').style.display = 'none';
     document.getElementById('progress-container').style.display = 'none';
@@ -3104,12 +3109,28 @@
     if (overlapRow) overlapRow.style.display = isBatch ? 'none' : '';
   }
 
+  function updateFilePickerLabel() {
+    const fileInput = document.getElementById('fileInput');
+    const info = document.getElementById('filePickerInfo');
+    if (!fileInput || !info) return;
+    const n = fileInput.files.length;
+    if (n === 0) {
+      info.textContent = (window.tr ? window.tr('STR_WEB_NO_FILE_CHOSEN') : 'No file chosen');
+    } else if (n === 1) {
+      info.textContent = fileInput.files[0].name;
+    } else {
+      const suffix = (window.tr ? window.tr('STR_WEB_FILES_SELECTED') : 'files selected');
+      info.textContent = n + ' ' + suffix;
+    }
+  }
+
   function validateFile() {
     const fileInput = document.getElementById('fileInput');
     const uploadBtn = document.getElementById('uploadBtn');
     const files = fileInput.files;
     const convertOptions = document.getElementById('convertOptions');
     fileInput.classList.toggle('has-files', files.length > 0);
+    updateFilePickerLabel();
 
     // Show/hide convert options based on file selection
     if (files.length > 0) {
