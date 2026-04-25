@@ -132,10 +132,9 @@ void EpubReaderActivity::onEnter() {
   // bricked the device on broken-DEFLATE fonts.
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
     const bool ok = crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName,
-                                                                                  SETTINGS.customFontSizePt);
+                                                                                 SETTINGS.customFontSizePt);
     if (!ok) {
-      LOG_ERR("ERS", "custom font '%s' failed to activate; reverting to CHAREINK 12",
-              SETTINGS.customFontName.c_str());
+      LOG_ERR("ERS", "custom font '%s' failed to activate; reverting to CHAREINK 12", SETTINGS.customFontName.c_str());
       SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
       SETTINGS.fontSize = CrossPointSettings::SIZE_12;
       SETTINGS.customFontName.clear();

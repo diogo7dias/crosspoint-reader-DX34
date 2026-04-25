@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 #include <BookFingerprint.h>
+#include <EpdBinFontLoader.h>
+#include <EpdBinFormat.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
@@ -15,15 +17,12 @@
 #include <functional>
 #include <memory>
 
-#include <EpdBinFontLoader.h>
-#include <EpdBinFormat.h>
-
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
-#include "fonts/CustomBinFontManager.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
+#include "fonts/CustomBinFontManager.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
@@ -1649,10 +1648,14 @@ uint8_t parseVariantTag(const String& v) {
 
 const char* variantTagFor(uint8_t v) {
   switch (v) {
-    case 0: return "regular";
-    case 1: return "bold";
-    case 2: return "italic";
-    case 3: return "bolditalic";
+    case 0:
+      return "regular";
+    case 1:
+      return "bold";
+    case 2:
+      return "italic";
+    case 3:
+      return "bolditalic";
   }
   return "regular";
 }
@@ -1726,8 +1729,8 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
       return;
     }
     const long sz = sizeStr.toInt();
-    if (sz < 9 || sz > 16) {
-      state.error = "size must be 9..16";
+    if (sz < 25 || sz > 40) {
+      state.error = "size must be 25..40";
       return;
     }
     state.family = family;
@@ -1848,8 +1851,8 @@ void CrossPointWebServer::handleDeleteFont() {
   size_t removed = 0;
   if (server->hasArg("size")) {
     const long sz = server->arg("size").toInt();
-    if (sz < 9 || sz > 16) {
-      server->send(400, "application/json", "{\"ok\":false,\"error\":\"size must be 9..16\"}");
+    if (sz < 25 || sz > 40) {
+      server->send(400, "application/json", "{\"ok\":false,\"error\":\"size must be 25..40\"}");
       return;
     }
     removed = mgr.deleteFamilySize(familyStd, static_cast<uint16_t>(sz));

@@ -184,9 +184,10 @@
       <div class="help">
         Drop a TTF or OTF for each variant you want. Only <b>Regular</b> is
         required — Bold, Italic and Bold&nbsp;Italic are synthesised from
-        Regular when you leave them empty. Choose one or more sizes (9–16 pt);
+        Regular when you leave them empty. Choose one or more sizes (25–40 pt);
         the browser rasterises every glyph in the font at each size, compresses
-        the output and streams it to the device.
+        the output and streams it to the device. The device reads glyphs from
+        the SD card on demand, so even big sizes don't pin RAM.
       </div>
       <div class="field">
         <label for="family-name">Family name</label>
@@ -271,7 +272,12 @@
   const CPBN_VERSION = 1;
   const BPP = 2;
   const MAX_GROUP_UNCOMPRESSED = 4096; // ~4 KB per DEFLATE group (matches built-in)
-  const SIZES = [9, 10, 11, 12, 13, 14, 15, 16];
+  // Reader-comfortable pt range. Calibrated empirically against the
+  // built-in fonts: a contemporary serif/sans-serif at 25 pt reads
+  // similar to the built-in ChareInk 12. C++ side validates the same
+  // bounds in CustomBinFontManager and the upload handler; anything
+  // outside 25..40 is rejected before it lands on SD.
+  const SIZES = [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40];
 
   const files = [null, null, null, null]; // per-variant parsed opentype.Font
   const fileNames = ["", "", "", ""];

@@ -84,16 +84,14 @@ void CustomFontsSettingsActivity::loop() {
       }
       return;
     }
-    buttonNavigator.onPressAndContinuous(
-        {MappedInputManager::Button::Down, MappedInputManager::Button::Right}, [this] {
-          actionIndex = (actionIndex + 1) % kActionCount;
-          requestUpdate();
-        });
-    buttonNavigator.onPressAndContinuous(
-        {MappedInputManager::Button::Up, MappedInputManager::Button::Left}, [this] {
-          actionIndex = (actionIndex + kActionCount - 1) % kActionCount;
-          requestUpdate();
-        });
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down, MappedInputManager::Button::Right}, [this] {
+      actionIndex = (actionIndex + 1) % kActionCount;
+      requestUpdate();
+    });
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up, MappedInputManager::Button::Left}, [this] {
+      actionIndex = (actionIndex + kActionCount - 1) % kActionCount;
+      requestUpdate();
+    });
     return;
   }
 
@@ -131,8 +129,7 @@ void CustomFontsSettingsActivity::runDeleteSize() {
   enterNewActivity(new ConfirmDialogActivity(
       renderer, mappedInput, prompt,
       [this, name, sizePt]() {
-        const size_t removed =
-            crosspoint::fonts::CustomBinFontManager::instance().deleteFamilySize(name, sizePt);
+        const size_t removed = crosspoint::fonts::CustomBinFontManager::instance().deleteFamilySize(name, sizePt);
         LOG_INF("CFONT", "UI deleted size %s %upt (%u files)", name.c_str(), static_cast<unsigned>(sizePt),
                 static_cast<unsigned>(removed));
         exitActivity();

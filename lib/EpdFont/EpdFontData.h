@@ -2,6 +2,7 @@
 // https://github.com/vroland/epdiy/blob/c61e9e923ce2418150d54f88cea5d196cdc40c54/src/epd_internals.h
 
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 /// Font metrics use "fixed-point 4" (4 fractional bits, i.e. 1/16-pixel
@@ -132,4 +133,15 @@ typedef struct {
   uint8_t kernRightClassCount = 0;                 ///< Number of distinct right classes (CSR columns)
   const EpdLigaturePair* ligaturePairs = nullptr;  ///< Sorted ligature pair table (nullptr if none)
   uint32_t ligaturePairCount = 0;                  ///< Number of entries in ligaturePairs
+
+  /// Optional read-bitmap callback. When non-null, FontDecompressor invokes
+  /// this instead of reading `bitmap[offset]` directly — used by SD-backed
+  /// custom fonts to keep the compressed glyph blob on disk rather than
+  /// pinning ~30 KB per variant in heap. Implementations must read exactly
+  /// `len` bytes starting at `offset` (relative to the start of the blob)
+  /// into `dst` and return `len` on success, anything else on failure.
+  /// Built-in fonts leave this null and the decompressor uses the embedded
+  /// PROGMEM pointer as before.
+  void* bitmapCtx = nullptr;
+  int (*readBitmapBytes)(void* ctx, uint32_t offset, uint8_t* dst, size_t len) = nullptr;
 } EpdFontData;
