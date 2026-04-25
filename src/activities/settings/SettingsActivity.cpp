@@ -23,7 +23,6 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomFontManager.h"
 #include "util/TransitionFeedback.h"
 
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
@@ -249,7 +248,6 @@ void SettingsActivity::buildSettingsList() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_MANAGE_CUSTOM_FONTS, SettingAction::ManageCustomFonts));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_RESCAN_CUSTOM_FONTS, SettingAction::RescanCustomFonts));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_REFRESH_HOME_STATS, SettingAction::RefreshHomeStats));
 
@@ -568,27 +566,6 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::ManageCustomFonts:
         enterSubActivity(new CustomFontsSettingsActivity(renderer, mappedInput, onComplete));
         break;
-      case SettingAction::RescanCustomFonts: {
-        // Re-run boot-time scan so BDFs dropped onto SD after boot become
-        // prompt-able without a cold reboot. scanAndQueuePrompts already
-        // honours seenCustomFonts / skippedCustomFonts, so "install" and
-        // "skip forever" choices carry over. registerWithRenderer is
-        // re-called to pick up any new .idx that showed up since boot.
-        auto& customFonts = crosspoint::fonts::CustomFontManager::instance();
-        customFonts.scanAndQueuePrompts();
-        customFonts.registerWithRenderer(renderer);
-        if (customFonts.hasPendingPrompt()) {
-          // Install-chain takes over via enterNewActivity — SettingsActivity
-          // is replaced. No onAllDismissed needed; user lands on the final
-          // install-result screen and can navigate back from there.
-          customFonts.showNextPromptIfAny(renderer, mappedInput, {});
-        } else {
-          auto* msg = new FullScreenMessageActivity(renderer, mappedInput, tr(STR_NO_NEW_CUSTOM_FONTS));
-          msg->setOnDismiss(onComplete);
-          enterSubActivity(msg);
-        }
-        break;
-      }
       case SettingAction::CheckForUpdates:
         enterSubActivity(new OtaUpdateActivity(renderer, mappedInput, onComplete));
         break;

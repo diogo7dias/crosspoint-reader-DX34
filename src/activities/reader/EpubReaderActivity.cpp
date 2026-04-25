@@ -35,7 +35,7 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomFontManager.h"
+#include "fonts/CustomBinFontManager.h"
 #include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
 #include "util/FavoriteBmp.h"
@@ -124,14 +124,24 @@ void EpubReaderActivity::onEnter() {
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
   ImageBlock::setDitherMode(SETTINGS.imageDither);
 
-  // Register the active custom font with the renderer BEFORE any drawText can
-  // run. Chrome elements (page counter, header) draw during onEnter, well
-  // before ensureSectionLoaded — if the font isn't registered yet, every
-  // glyph logs "Font not found" and the render path aborts after spam.
-  // The late re-register inside ensureSectionLoaded is kept for per-book
-  // theme changes; the cost of registering twice is bounded by the clear
-  // pass at the top of registerWithRenderer.
-  crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+  // Activate the custom font before the first drawText — chrome (page
+  // counter, header) draws in onEnter, which would otherwise log
+  // "Font not found" with a broken glyph on the first paint. If the
+  // font is corrupt or unloadable, fall back to the default built-in
+  // and persist so the next boot doesn't repeat the OOM dance that
+  // bricked the device on broken-DEFLATE fonts.
+  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
+    const bool ok = crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName,
+                                                                                 SETTINGS.customFontSizePt);
+    if (!ok) {
+      LOG_ERR("ERS", "custom font '%s' failed to activate; reverting to CHAREINK 12", SETTINGS.customFontName.c_str());
+      SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
+      SETTINGS.fontSize = CrossPointSettings::SIZE_12;
+      SETTINGS.customFontName.clear();
+      SETTINGS.customFontSizePt = 0;
+      SETTINGS.saveToFile();
+    }
+  }
 
   epub->setupCacheDir();
 
@@ -1264,11 +1274,11 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
   const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());
 
-  // Single-active custom-font registration. Per-book ReadingThemes can
-  // change SETTINGS.customFontName after boot-time setup, so re-register
-  // here — unconditionally, since the cache-hit path still needs the font
-  // resolvable when drawText runs.
-  crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+  // Per-book ReadingThemes can change SETTINGS.customFontName, so
+  // re-activate before layout reads the font id.
+  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
+    crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
+  }
 
   if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                 SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
@@ -1288,7 +1298,6 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     // layout, and on a fragmented heap that malloc routinely failed.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
-    crosspoint::fonts::CustomFontManager::logHeapSnapshot("createSectionFile-pre");
 
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
     const bool sectionOk = section->createSectionFile(
@@ -1296,16 +1305,26 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
         SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
         SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
         boldSwapEnabled, layoutProgressTick);
-    crosspoint::fonts::CustomFontManager::logHeapSnapshot(sectionOk ? "createSectionFile-post-ok"
-                                                                    : "createSectionFile-post-fail");
     if (!sectionOk) {
       LOG_ERR("ERS", "Failed to persist page data to SD");
+      // Boot-loop safety net: when section layout fails AND a custom
+      // font is the active family, the user is heading toward a
+      // crash-on-every-page-turn pattern (custom font heap + ZIP
+      // inflator can't both fit). Revert to the default built-in
+      // font and persist so the next reopen has the heap headroom
+      // it needs to lay out the chapter.
+      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
+        LOG_ERR("ERS", "section layout failed under custom font; reverting to CHAREINK 12");
+        crosspoint::fonts::CustomBinFontManager::instance().deactivate();
+        SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
+        SETTINGS.fontSize = CrossPointSettings::SIZE_12;
+        SETTINGS.customFontName.clear();
+        SETTINGS.customFontSizePt = 0;
+        SETTINGS.saveToFile();
+      }
       clearPageCache();
       section.reset();
       renderer.clearScreen();
-      // Friendlier copy. "REBOOT DEVICE" read like the firmware had crashed
-      // and scared users. The actual situation is recoverable: go home so
-      // the reader activity tears down + heap coalesces, then reopen.
       renderer.drawCenteredText(UI_12_FONT_ID, 300, "Couldn't lay out this section", true, EpdFontFamily::REGULAR);
       renderer.drawCenteredText(UI_12_FONT_ID, 340, "(memory fragmented)", true, EpdFontFamily::REGULAR);
       renderer.drawCenteredText(UI_12_FONT_ID, 400, "Go back to home", true, EpdFontFamily::REGULAR);
@@ -2006,8 +2025,6 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Two-pass font prewarm: scan pass collects text, then decompress needed glyphs.
   // The actual render must happen inside the scope so page buffers stay alive.
   auto* fcm = renderer.getFontCacheManager();
-  auto& cfMgr = crosspoint::fonts::CustomFontManager::instance();
-  cfMgr.logAndResetCacheStats("frame-start", renderer);
   const uint32_t tFrameStart = millis();
   if (fcm) {
     auto scope = fcm->createPrewarmScope();
@@ -2015,7 +2032,6 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // scan pass
     const uint32_t tScanEnd = millis();
     scope.endScanAndPrewarm();
-    cfMgr.logAndResetCacheStats("after-scan-pass", renderer);
     const uint32_t tRenderStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // actual render
     const uint32_t tRenderEnd = millis();
@@ -2025,7 +2041,6 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   } else {
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
   }
-  cfMgr.logAndResetCacheStats("frame-end", renderer);
   // Render highlight overlay and border if in highlight/quote selection mode
   if (highlights_.state() != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);

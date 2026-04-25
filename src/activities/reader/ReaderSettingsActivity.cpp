@@ -10,7 +10,7 @@
 #include "MappedInputManager.h"
 #include "ReadingThemeStore.h"
 #include "components/themes/BaseTheme.h"
-#include "fonts/CustomFontManager.h"
+#include "fonts/CustomBinFontManager.h"
 
 namespace {
 const StrId kCategoryNames[] = {StrId::STR_CAT_READER, StrId::STR_STATUS_BAR};
@@ -94,7 +94,7 @@ void ReaderSettingsActivity::startFontSizeEdit() {
     // built-in enum table. Snaps to 0 if the currently-persisted size
     // isn't in the list (e.g. the family was re-scanned and that size
     // was deleted between reader opens).
-    const auto sizes = crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
+    const auto sizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
     fontSizeEditDraftIndex = 0;
     for (size_t i = 0; i < sizes.size(); ++i) {
       if (sizes[i] == SETTINGS.customFontSizePt) {
@@ -111,7 +111,7 @@ void ReaderSettingsActivity::adjustFontSizeEdit(const int delta) {
   int optionCount = 0;
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
     optionCount = static_cast<int>(
-        crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName).size());
+        crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName).size());
     if (optionCount == 0) optionCount = 1;  // avoid clamp to [0, -1]
   } else {
     optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
@@ -122,13 +122,11 @@ void ReaderSettingsActivity::adjustFontSizeEdit(const int delta) {
 
 void ReaderSettingsActivity::applyFontSizeEdit() {
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    const auto sizes = crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
+    const auto sizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
     if (!sizes.empty() && fontSizeEditDraftIndex < sizes.size()) {
       SETTINGS.customFontSizePt = sizes[fontSizeEditDraftIndex];
     }
-    // Registration is single-active — re-register so the renderer has
-    // the new (name, size) pair before the next draw.
-    crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+    crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
   } else {
     SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
   }
@@ -256,7 +254,7 @@ void ReaderSettingsActivity::buildSettingsList() {
     ReaderSettingInfo familyPicker = ReaderSettingInfo::Enum(
         StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
         {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN, StrId::STR_GALMURI, StrId::STR_BITTER});
-    const auto names = crosspoint::fonts::CustomFontManager::instance().uniqueFamilyNames();
+    const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
     for (const auto& name : names) {
       std::string label = std::string(I18N.get(StrId::STR_CUSTOM_PREFIX)) + name;
       familyPicker.dynamicLabels.push_back(std::move(label));
@@ -422,7 +420,7 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
       // fontFamily=CUSTOM_FAMILY + customFontName + customFontSizePt
       // (smallest available for that name, preserving prior choice if
       // still valid for the new family).
-      const auto names = crosspoint::fonts::CustomFontManager::instance().uniqueFamilyNames();
+      const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
       const size_t builtinCount = setting.enumValues.size();  // 6
       const size_t customCount = names.size();
       const size_t total = builtinCount + customCount;
@@ -445,7 +443,8 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
         SETTINGS.fontFamily = CrossPointSettings::CUSTOM_FAMILY;
         const size_t customSlot = nextIndex - builtinCount;
         SETTINGS.customFontName = names[customSlot];
-        const auto sizes = crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
+        const auto sizes =
+            crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
         // Keep the previously-selected size if it still exists for the
         // new family; otherwise pick the smallest so the picker has a
         // valid default.
@@ -461,10 +460,11 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
       SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
       SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
       SETTINGS.lineSpacingPercent = CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
-      // Single-active registration: drop the previously-active custom font
-      // and register the new one (if any) so the renderer has the right
-      // glyph source before the next draw.
-      crosspoint::fonts::CustomFontManager::instance().registerWithRenderer(renderer);
+      auto& customBinFonts = crosspoint::fonts::CustomBinFontManager::instance();
+      customBinFonts.deactivate();
+      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
+        customBinFonts.activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
+      }
       buildSettingsList();
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {
@@ -699,7 +699,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
         v = fontSizeValueLabel(SETTINGS.fontFamily, size);
       } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
         if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-          const auto names = crosspoint::fonts::CustomFontManager::instance().uniqueFamilyNames();
+          const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
           bool matched = false;
           for (size_t k = 0; k < names.size(); ++k) {
             if (names[k] == SETTINGS.customFontName) {
@@ -862,7 +862,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
     const bool customFamily = (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY);
     std::vector<uint8_t> customSizes;
     if (customFamily) {
-      customSizes = crosspoint::fonts::CustomFontManager::instance().sizesForFamily(SETTINGS.customFontName);
+      customSizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
     }
     const int optionCount = customFamily ? static_cast<int>(customSizes.size())
                                          : CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);

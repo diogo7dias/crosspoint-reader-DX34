@@ -28,12 +28,12 @@ class CrossPointState {
   std::string lastShownSleepFilename;
   std::string lastSleepWallpaperPath;
   std::vector<std::string> favoriteBmpPaths;
-  // Phase 1 BDF custom-font tracking. Filenames (basename only, e.g.
-  // "unifont_16.bdf") of custom fonts the user has acknowledged via the
-  // boot prompt. seen = "Install" tapped (Phase 1 = log-only). skipped =
-  // "Skip forever" tapped (never prompt again).
-  std::vector<std::string> seenCustomFonts;
-  std::vector<std::string> skippedCustomFonts;
+  // One-shot flag: set to 1 the first time the firmware successfully
+  // walks /custom-font/ and deletes every leftover .bdf/.idx from the
+  // previous BDF pipeline. Once flipped, the cleanup scan is skipped on
+  // every subsequent boot. Stored as a small int rather than a bool so
+  // future migrations can bump the value to re-trigger the cleanup.
+  uint8_t customFontLegacyCleanupDone = 0;
   uint8_t readerActivityLoadCount = 0;
   uint32_t sessionPagesRead = 0;
   bool lastSleepFromReader = false;

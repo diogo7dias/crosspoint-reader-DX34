@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 #include <BookFingerprint.h>
+#include <EpdBinFontLoader.h>
+#include <EpdBinFormat.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
@@ -20,11 +22,13 @@
 #include "Paths.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
+#include "fonts/CustomBinFontManager.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
 #endif
 #include "html/FilesPageHtml.generated.h"
+#include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
 #include "html/brutalistCss.generated.h"
@@ -210,6 +214,12 @@ void CrossPointWebServer::begin() {
   // This is critical for reliable web server operation on ESP32.
   WiFi.setSleep(false);
 
+  // Ensure the SDK reconnects the STA link if the router flickers or
+  // the client device briefly drops. Keeps the web session alive
+  // across the blip; the activity's render path only shows a
+  // "Reconnecting…" banner rather than exiting.
+  if (!apMode) WiFi.setAutoReconnect(true);
+
   // Note: WebServer class doesn't have setNoDelay() in the standard ESP32 library.
   // We rely on disabling WiFi sleep for responsiveness.
 
@@ -254,6 +264,17 @@ void CrossPointWebServer::begin() {
   server->on("/settings", HTTP_GET, [this] { handleSettingsPage(); });
   server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
   server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
+
+  // Custom-font endpoints.
+  // /upload takes the file body via multipart; the family / variant /
+  // size tuple rides in query params because form fields aren't
+  // parsed until after the upload callback finishes.
+  server->on("/fonts", HTTP_GET, [this] { handleFontsPage(); });
+  server->on("/api/fonts", HTTP_GET, [this] { handleGetFonts(); });
+  server->on(
+      "/api/fonts/upload", HTTP_POST, [this] { handleUploadFontPost(fontUpload); },
+      [this] { handleUploadFont(fontUpload); });
+  server->on("/api/fonts/delete", HTTP_POST, [this] { handleDeleteFont(); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
@@ -1624,6 +1645,236 @@ void CrossPointWebServer::handlePostSettings() {
   }
   LOG_DBG("WEB", "Applied %d setting(s)", r.applied);
   server->send(200, "text/plain", String("Applied ") + String(r.applied) + " setting(s)");
+}
+
+namespace {
+
+// Accept "R" / "B" / "I" / "Z" as browser-side variant tags and map
+// them to the enum the manager uses. Returns UINT8_MAX on mismatch.
+uint8_t parseVariantTag(const String& v) {
+  if (v.equalsIgnoreCase("R") || v.equalsIgnoreCase("regular")) return 0;
+  if (v.equalsIgnoreCase("B") || v.equalsIgnoreCase("bold")) return 1;
+  if (v.equalsIgnoreCase("I") || v.equalsIgnoreCase("italic")) return 2;
+  if (v.equalsIgnoreCase("Z") || v.equalsIgnoreCase("bolditalic")) return 3;
+  return 0xFFu;
+}
+
+const char* variantTagFor(uint8_t v) {
+  switch (v) {
+    case 0:
+      return "regular";
+    case 1:
+      return "bold";
+    case 2:
+      return "italic";
+    case 3:
+      return "bolditalic";
+  }
+  return "regular";
+}
+
+}  // namespace
+
+void CrossPointWebServer::handleFontsPage() const {
+  sendHtmlContent(server.get(), FontsPageHtml, sizeof(FontsPageHtml));
+  LOG_DBG("WEB", "Served fonts page");
+}
+
+void CrossPointWebServer::handleGetFonts() const {
+  const auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("[");
+  bool firstFamily = true;
+  for (const auto& fam : mgr.families()) {
+    if (!firstFamily) server->sendContent(",");
+    firstFamily = false;
+    JsonDocument doc;
+    doc["name"] = fam.name;
+    JsonArray sizes = doc["sizes"].to<JsonArray>();
+    for (const auto& sz : fam.sizes) {
+      JsonObject o = sizes.add<JsonObject>();
+      o["size"] = sz.sizePt;
+      JsonArray variants = o["variants"].to<JsonArray>();
+      if (sz.hasRegular) variants.add("R");
+      if (sz.hasBold) variants.add("B");
+      if (sz.hasItalic) variants.add("I");
+      if (sz.hasBoldItalic) variants.add("Z");
+    }
+    std::string out;
+    serializeJson(doc, out);
+    server->sendContent(out.c_str());
+  }
+  server->sendContent("]");
+  server->sendContent("");  // flush
+}
+
+void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
+  esp_task_wdt_reset();
+  if (!running || !server) return;
+
+  const HTTPUpload& upload = server->upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    esp_task_wdt_reset();
+    state.size = 0;
+    state.success = false;
+    state.error = "";
+    state.bufferPos = 0;
+    state.family = "";
+    state.tmpPath = "";
+    state.finalPath = "";
+
+    // Extract (family, variant, size) from the query string — multipart
+    // form fields aren't parsed until after the upload callback runs.
+    const String family = server->hasArg("family") ? server->arg("family") : String();
+    const String variant = server->hasArg("variant") ? server->arg("variant") : String();
+    const String sizeStr = server->hasArg("size") ? server->arg("size") : String();
+
+    const std::string familyStd = std::string(family.c_str());
+    if (!crosspoint::fonts::isValidFamilyName(familyStd)) {
+      state.error = "invalid family name";
+      return;
+    }
+    const uint8_t v = parseVariantTag(variant);
+    if (v > 3) {
+      state.error = "invalid variant (want R/B/I/Z)";
+      return;
+    }
+    const long sz = sizeStr.toInt();
+    if (sz < 25 || sz > 40) {
+      state.error = "size must be 25..40";
+      return;
+    }
+    state.family = family;
+    state.variant = v;
+    state.sizePt = static_cast<uint16_t>(sz);
+
+    const String dir = "/custom-font/" + family;
+    Storage.mkdir(dir.c_str());  // idempotent
+    state.finalPath = dir + "/" + variantTagFor(v) + "_" + String(state.sizePt) + ".bin";
+    state.tmpPath = state.finalPath + ".tmp";
+
+    // Clean up any stale .tmp from a previous interrupted upload.
+    if (Storage.exists(state.tmpPath.c_str())) {
+      Storage.remove(state.tmpPath.c_str());
+    }
+    if (!Storage.openFileForWrite("FONTUP", state.tmpPath, state.file)) {
+      state.error = "failed to create temp file";
+      return;
+    }
+    LOG_DBG("FONTUP", "START %s variant=%u size=%u → %s", family.c_str(), v, static_cast<unsigned>(state.sizePt),
+            state.tmpPath.c_str());
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!state.file || !state.error.isEmpty()) return;
+    const uint8_t* data = upload.buf;
+    size_t remaining = upload.currentSize;
+    while (remaining > 0) {
+      const size_t space = FontUploadState::UPLOAD_BUFFER_SIZE - state.bufferPos;
+      const size_t toCopy = (remaining < space) ? remaining : space;
+      memcpy(state.buffer.data() + state.bufferPos, data, toCopy);
+      state.bufferPos += toCopy;
+      data += toCopy;
+      remaining -= toCopy;
+      if (state.bufferPos >= FontUploadState::UPLOAD_BUFFER_SIZE) {
+        const int written = state.file.write(state.buffer.data(), state.bufferPos);
+        if (written != static_cast<int>(state.bufferPos)) {
+          state.error = "write failed";
+          state.file.close();
+          return;
+        }
+        state.bufferPos = 0;
+      }
+    }
+    state.size += upload.currentSize;
+    // Reject oversized payloads mid-stream so we don't waste SD on garbage.
+    if (state.size > crosspoint::binfont::kMaxFileBytes) {
+      state.error = "file too large";
+      state.file.close();
+      Storage.remove(state.tmpPath.c_str());
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (state.file) {
+      if (state.bufferPos > 0 && state.error.isEmpty()) {
+        const int written = state.file.write(state.buffer.data(), state.bufferPos);
+        if (written != static_cast<int>(state.bufferPos)) {
+          state.error = "final write failed";
+        }
+        state.bufferPos = 0;
+      }
+      state.file.close();
+    }
+    if (!state.error.isEmpty()) return;
+
+    // Validate the CPBN header before committing with the rename.
+    std::string verr;
+    if (!crosspoint::binfont::EpdBinFontLoader::validateFile(std::string(state.tmpPath.c_str()), &verr)) {
+      state.error = String("invalid CPBN file: ") + verr.c_str();
+      Storage.remove(state.tmpPath.c_str());
+      return;
+    }
+
+    // Atomic publish: remove any existing same-name file, then rename.
+    if (Storage.exists(state.finalPath.c_str())) Storage.remove(state.finalPath.c_str());
+    if (!Storage.rename(state.tmpPath.c_str(), state.finalPath.c_str())) {
+      state.error = "rename failed";
+      Storage.remove(state.tmpPath.c_str());
+      return;
+    }
+    crosspoint::fonts::CustomBinFontManager::instance().scan();
+    state.success = true;
+    LOG_INF("FONTUP", "installed %s (%u bytes)", state.finalPath.c_str(), static_cast<unsigned>(state.size));
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    if (state.file) state.file.close();
+    if (!state.tmpPath.isEmpty()) Storage.remove(state.tmpPath.c_str());
+    state.error = "upload aborted";
+    LOG_DBG("FONTUP", "aborted");
+  }
+}
+
+void CrossPointWebServer::handleUploadFontPost(FontUploadState& state) {
+  if (state.success) {
+    String body = "{\"ok\":true,\"family\":\"" + state.family + "\",\"variant\":\"" +
+                  String(variantTagFor(state.variant)) + "\",\"size\":" + String(state.sizePt) +
+                  ",\"bytes\":" + String((uint32_t)state.size) + "}";
+    server->send(201, "application/json", body);
+  } else {
+    const String err = state.error.isEmpty() ? "unknown error" : state.error;
+    String body = "{\"ok\":false,\"error\":\"";
+    // Escape quotes and backslashes for JSON.
+    for (size_t i = 0; i < err.length(); ++i) {
+      const char c = err[i];
+      if (c == '"' || c == '\\') body += '\\';
+      body += c;
+    }
+    body += "\"}";
+    server->send(400, "application/json", body);
+  }
+}
+
+void CrossPointWebServer::handleDeleteFont() {
+  const String family = server->hasArg("family") ? server->arg("family") : String();
+  const std::string familyStd = std::string(family.c_str());
+  if (!crosspoint::fonts::isValidFamilyName(familyStd)) {
+    server->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid family\"}");
+    return;
+  }
+
+  auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
+  size_t removed = 0;
+  if (server->hasArg("size")) {
+    const long sz = server->arg("size").toInt();
+    if (sz < 25 || sz > 40) {
+      server->send(400, "application/json", "{\"ok\":false,\"error\":\"size must be 25..40\"}");
+      return;
+    }
+    removed = mgr.deleteFamilySize(familyStd, static_cast<uint16_t>(sz));
+  } else {
+    removed = mgr.deleteFamily(familyStd);
+  }
+
+  String body = "{\"ok\":true,\"removed\":" + String((uint32_t)removed) + "}";
+  server->send(200, "application/json", body);
 }
 
 // WebSocket callback trampoline — check both pointer and running flag.

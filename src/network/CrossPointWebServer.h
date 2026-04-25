@@ -127,4 +127,33 @@ class CrossPointWebServer {
   void handleSettingsPage() const;
   void handleGetSettings() const;
   void handlePostSettings();
+
+  // Font-management handlers.
+  //  GET  /fonts              — FontsPage.html (placeholder until slice 2b)
+  //  GET  /api/fonts          — JSON listing of installed families
+  //  POST /api/fonts/upload   — multipart: writes one CPBN .bin to
+  //                             /custom-font/<family>/<variant>_<size>.bin
+  //                             atomically via a .tmp sidecar.
+  //  POST /api/fonts/delete   — form fields: family [, size]
+  struct FontUploadState {
+    HalFile file;
+    String family;  // validated family name (subdir under /custom-font/)
+    String tmpPath;
+    String finalPath;
+    uint8_t variant = 0;
+    uint16_t sizePt = 0;
+    size_t size = 0;
+    bool success = false;
+    String error;
+    static constexpr size_t UPLOAD_BUFFER_SIZE = 4096;
+    std::vector<uint8_t> buffer;
+    size_t bufferPos = 0;
+    FontUploadState() { buffer.resize(UPLOAD_BUFFER_SIZE); }
+  } fontUpload;
+
+  void handleFontsPage() const;
+  void handleGetFonts() const;
+  void handleUploadFont(FontUploadState& state);
+  void handleUploadFontPost(FontUploadState& state);
+  void handleDeleteFont();
 };

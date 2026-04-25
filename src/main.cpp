@@ -49,8 +49,8 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomFontIds.h"
-#include "fonts/CustomFontManager.h"
+#include "fonts/CustomBinFontIds.h"
+#include "fonts/CustomBinFontManager.h"
 #include "lifecycle/ActivityRouter.h"
 #include "persist/AppStateStore.h"
 #include "persist/PersistManager.h"
@@ -683,47 +683,36 @@ void setup() {
     }
   };
 
-  // Ensure /custom-font/ exists so the user can drop BDF files via the web
-  // server / file transfer without first creating the directory by hand.
+  // Ensure /custom-font/ exists so the web UI can drop freshly-baked
+  // .bin files there without first creating the directory by hand.
   // mkdir is idempotent; harmless when the dir already exists.
   Storage.mkdir("/custom-font");
 
-  auto& customFonts = crosspoint::fonts::CustomFontManager::instance();
+  // One-shot: on the first boot after updating to the .bin pipeline, wipe
+  // any leftover .bdf / .idx files from the previous BDF pipeline. A flag
+  // in state.json keeps this from re-running every boot.
+  crosspoint::fonts::cleanupLegacyBdfFiles();
 
-  if (Storage.exists("/custom-font/.lock")) {
-    // Previous boot crashed while scanning/registering custom fonts. Skip
-    // the whole path this boot so the device can at least reach the home
-    // screen; the fallback logic below reverts the active-font setting.
-    LOG_INF("MAIN", "stale /custom-font/.lock present — skipping custom fonts this boot (recovery)");
-    Storage.remove("/custom-font/.lock");
-  } else {
-    // Write + verify. On SD failure (full, flaky, slow) the lock will not
-    // persist, and we would fail to detect the next boot-loop. Treat a
-    // missing lock after write as "SD not reliable" and skip fonts.
-    Storage.writeFile("/custom-font/.lock", "1");
-    if (!Storage.exists("/custom-font/.lock")) {
-      LOG_ERR("MAIN", "failed to write /custom-font/.lock — skipping custom fonts (SD unreliable)");
-    } else {
-      customFonts.scanAndQueuePrompts();
-      // Register any BDF whose .idx is already on SD so the reader text path can
-      // dispatch to it. Runs BEFORE showing the install prompt so that if the
-      // user chose "Skip (this boot)" on a previously-installed font they can
-      // still read with it today.
-      customFonts.registerWithRenderer(renderer);
-      Storage.remove("/custom-font/.lock");
-    }
-  }
+  auto& customFonts = crosspoint::fonts::CustomBinFontManager::instance();
+  customFonts.setRenderer(&renderer);
+  customFonts.scan();
 
-  // Safety net: if SETTINGS picks a custom family whose named BDF is not
-  // actually registered (e.g. user deleted the file off SD externally),
-  // fall back to the default built-in family so the reader doesn't
-  // silently render empty text. A log-only warning would leave the user
-  // with an invisible page and no obvious cause.
+  // Safety net: if SETTINGS picks a custom family whose named .bin is
+  // not actually installed (e.g. deleted via the web UI, SD pulled,
+  // etc.), fall back to the default built-in family so the reader
+  // doesn't silently render empty text.
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    const int id = SETTINGS.customFontName.empty()
-                       ? 0
-                       : crosspoint::fonts::idForFamily(SETTINGS.customFontName, SETTINGS.customFontSizePt);
-    if (id == 0 || renderer.findCustomFont(id) == nullptr) {
+    bool found = false;
+    if (!SETTINGS.customFontName.empty()) {
+      const auto sizes = customFonts.installedSizesFor(SETTINGS.customFontName);
+      for (uint8_t s : sizes) {
+        if (s == SETTINGS.customFontSizePt) {
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
       LOG_INF("CFONT", "active custom font '%s' size=%u missing at boot; reverting to CHAREINK 12 crisp",
               SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt));
       SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
@@ -734,11 +723,7 @@ void setup() {
       SETTINGS.saveToFile();
     }
   }
-  if (customFonts.hasPendingPrompt()) {
-    customFonts.showNextPromptIfAny(renderer, mappedInputManager, launchBootDestination);
-  } else {
-    launchBootDestination();
-  }
+  launchBootDestination();
 
   // Ensure we're not still holding the power button before leaving setup
   waitForPowerRelease();
