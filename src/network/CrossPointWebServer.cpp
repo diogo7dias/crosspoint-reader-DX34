@@ -680,6 +680,7 @@ void CrossPointWebServer::handleFileList() const {
 }
 
 void CrossPointWebServer::handleFileListData() const {
+  LOG_DBG("WEB", "[diag] /api/files entry, free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   // Get current path from query string (default to root)
   String currentPath = "/";
   if (server->hasArg("path")) {
@@ -867,6 +868,8 @@ void CrossPointWebServer::handleDownload() const {
 }
 
 void CrossPointWebServer::handlePreview() const {
+  LOG_DBG("WEB", "[diag] /preview entry, free=%u min=%u path=%s", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+          server->hasArg("path") ? server->arg("path").c_str() : "(none)");
   if (!server->hasArg("path")) {
     server->send(400, "text/plain", "Missing path");
     return;
@@ -1089,6 +1092,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
 }
 
 void CrossPointWebServer::handleUploadPost(UploadState& state) const {
+  LOG_DBG("WEB", "[diag] /upload POST entry, free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   if (state.success) {
     server->send(200, "text/plain", "File uploaded successfully: " + state.fileName);
   } else {
@@ -1473,6 +1477,7 @@ void CrossPointWebServer::handleFontsPage() const {
 }
 
 void CrossPointWebServer::handleGetFonts() const {
+  LOG_DBG("WEB", "[diag] /api/fonts entry, free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   const auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
