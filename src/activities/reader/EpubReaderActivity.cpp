@@ -266,6 +266,16 @@ void EpubReaderActivity::releaseMaxResources() {
   // pages for built-in fonts; pages re-decompress cheaply on next render.
   // Status-bar title caches are byte-trivial but their fragmentation
   // contribution at the top of the heap is worth dropping.
+  //
+  // ESP-IDF's heap allocator coalesces adjacent free blocks inside free()
+  // itself, so by the time the clears below return the largest contiguous
+  // block already reflects the merged regions. There is no explicit
+  // defrag/compact API to call — heap is non-moving.
+  //
+  // No global wallpaper / cover bitmap cache exists in this codebase
+  // (sleep wallpapers are rendered one-shot per cycle), so nothing to
+  // drop on that front. If a long-lived bitmap cache is added later
+  // (e.g. for home-screen covers), drop it here too.
   clearPageCache();
   if (epub) {
     auto* css = epub->getCssParser();
@@ -274,17 +284,6 @@ void EpubReaderActivity::releaseMaxResources() {
   auto* fcm = renderer.getFontCacheManager();
   if (fcm) fcm->clearCache();
   invalidateStatusBarCaches();
-  // No global wallpaper / cover bitmap cache exists in this codebase — those
-  // are rendered one-shot per sleep cycle and freed before the reader
-  // returns. If a long-lived bitmap cache is added later (e.g. for
-  // home-screen covers), drop it here too.
-#ifdef ESP_PLATFORM
-  // Walks the heap allocator's free lists, validates them, and gives the
-  // allocator an opportunity to coalesce adjacent free regions. This is
-  // best-effort — heap_caps doesn't expose an explicit defrag API — but
-  // it's the closest thing we can do without forking the allocator.
-  heap_caps_check_integrity_all(true);
-#endif
 }
 
 bool EpubReaderActivity::heapHeadroomOkForLayout() {
@@ -563,8 +562,13 @@ void EpubReaderActivity::loop() {
       return;
     }
     if (mappedInput.wasAnyReleased()) {
+      // Don't set pendingSectionReset here: section was already reset to
+      // null by ensureSectionLoaded before showLayoutRecoveryScreen was
+      // called, and render() bails on pendingSectionReset, so setting it
+      // would make the very requestUpdate we issue here a no-op.
+      // The next render() will see section == null and call
+      // ensureSectionLoaded, which is what we want.
       layoutRecoveryState_ = LayoutRecoveryState::None;
-      pendingSectionReset = true;  // ensures the next render rebuilds Section
       requestUpdate();
     }
     return;

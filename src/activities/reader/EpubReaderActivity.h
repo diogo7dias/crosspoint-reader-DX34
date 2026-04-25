@@ -193,9 +193,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // budget: in-RAM page cache, CSS rules dictionary, built-in font glyph
   // cache, status-bar title caches. Run before retrying createSectionFile
   // when a fragmentation-driven OOM drops layout, and from the pre-flight
-  // gate when the largest free block is below the safety threshold. Also
-  // calls heap_caps_check_integrity_all to nudge the allocator into
-  // coalescing freed regions.
+  // gate when the largest free block is below the safety threshold.
   void releaseMaxResources();
   // Returns true if the heap looks healthy enough to attempt layout, false
   // if the pre-flight gate ran a defrag pass and is still below the hard

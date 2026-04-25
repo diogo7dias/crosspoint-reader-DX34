@@ -18,23 +18,28 @@ namespace {
 // comment inside the DEFLATE branch.
 constexpr size_t kZipReadChunkBytes = 4096;
 uint8_t zipReadChunkBuffer[kZipReadChunkBytes];
+
+// Shared static decompressor used by readFileToStream's DEFLATE branch
+// and inflateOneShot (the readFileToMemory path). Sharing one struct is
+// safe because ZIP decompression is single-threaded — the main loop
+// serialises every caller — and each entry memsets + tinfl_init's the
+// struct before use, so residual state from a prior call is wiped.
+tinfl_decompressor staticInflator;
 }  // namespace
 
 bool inflateOneShot(const uint8_t* inputBuf, const size_t deflatedSize, uint8_t* outputBuf, const size_t inflatedSize) {
-  // Setup inflator
-  const auto inflator = static_cast<tinfl_decompressor*>(malloc(sizeof(tinfl_decompressor)));
-  if (!inflator) {
-    LOG_ERR("ZIP", "Failed to allocate memory for inflator");
-    return false;
-  }
-  memset(inflator, 0, sizeof(tinfl_decompressor));
+  // Reuse the shared BSS decompressor instead of allocating ~11 KB on
+  // the heap. Same single-threaded justification as the staticInflator
+  // declaration above. The memset+tinfl_init at the top of every entry
+  // wipes any residual state from the previous caller.
+  tinfl_decompressor* const inflator = &staticInflator;
+  memset(inflator, 0, sizeof(*inflator));
   tinfl_init(inflator);
 
   size_t inBytes = deflatedSize;
   size_t outBytes = inflatedSize;
   const tinfl_status status = tinfl_decompress(inflator, inputBuf, &inBytes, nullptr, outputBuf, &outBytes,
                                                TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
-  free(inflator);
 
   if (status != TINFL_STATUS_DONE) {
     LOG_ERR("ZIP", "tinfl_decompress() failed with status %d", status);
@@ -563,8 +568,8 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   }
 
   if (fileStat.method == MZ_DEFLATED) {
-    // BSS rationale (applies to outputBuffer, staticInflator, and the
-    // shared zipReadChunkBuffer at file scope):
+    // BSS rationale (applies to outputBuffer here, and to staticInflator
+    // and zipReadChunkBuffer at file scope):
     //
     // The 32 KB sliding-window dictionary, the ~11 KB tinfl_decompressor
     // struct, and the per-call file read buffer all used to come from
@@ -582,7 +587,6 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     static uint8_t outputBuffer[TINFL_LZ_DICT_SIZE];
     memset(outputBuffer, 0, TINFL_LZ_DICT_SIZE);
 
-    static tinfl_decompressor staticInflator;
     tinfl_decompressor* const inflator = &staticInflator;
     memset(inflator, 0, sizeof(*inflator));
     tinfl_init(inflator);

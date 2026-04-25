@@ -266,8 +266,13 @@ size_t Section::pruneStaleCachesForFont(const std::string& cachePath, int curren
     return 0;
   }
   size_t removed = 0;
+  size_t iterations = 0;
   char entryName[256];
   for (auto e = dir.openNextFile(); e; e = dir.openNextFile()) {
+    // Each iteration does up to one openFileForRead + one remove, both
+    // ~ms on slow SD. Long sections/ dirs (or churned histories) could
+    // approach the 5 s task watchdog without periodic feeding.
+    if ((++iterations & 0x1F) == 0) esp_task_wdt_reset();
     e.getName(entryName, sizeof(entryName));
     const bool isDir = e.isDirectory();
     e.close();
