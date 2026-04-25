@@ -2538,7 +2538,8 @@
       files = await response.json();
     } catch (e) {
       console.error(e);
-      fileTable.innerHTML = '<div class="no-files">An error occurred while loading the files</div>';
+      const t = window.tr || ((k) => k);
+      fileTable.innerHTML = '<div class="no-files">' + escapeHtml(t('STR_WEB_LOAD_FILES_ERROR')) + '</div>';
       return;
     }
 
@@ -2549,15 +2550,16 @@
       totalSize += file.size;
     });
 
-    document.getElementById('folder-summary').innerHTML = `${folderCount} folders, ${files.length - folderCount} files, ${formatFileSize(totalSize)}`;
+    const t = window.tr || ((k) => k);
+    document.getElementById('folder-summary').innerHTML = `${folderCount} ${escapeHtml(t('STR_WEB_FOLDERS'))}, ${files.length - folderCount} ${escapeHtml(t('STR_WEB_FILES_LOWER'))}, ${formatFileSize(totalSize)}`;
 
     if (files.length === 0) {
-      fileTable.innerHTML = '<div class="no-files">This folder is empty</div>';
+      fileTable.innerHTML = '<div class="no-files">' + escapeHtml(t('STR_WEB_EMPTY_FOLDER')) + '</div>';
     } else {
       let fileTableContent = '<table class="file-table">';
 
 				// Add select-all checkbox column
-      fileTableContent += '<tr><th style="width:40px"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)"></th><th>Name</th><th>Type</th><th>Size</th><th class="actions-col">Actions</th></tr>';
+      fileTableContent += `<tr><th style="width:40px"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)"></th><th>${escapeHtml(t('STR_WEB_TBL_NAME'))}</th><th>${escapeHtml(t('STR_WEB_TBL_TYPE'))}</th><th>${escapeHtml(t('STR_WEB_TBL_SIZE'))}</th><th class="actions-col">${escapeHtml(t('STR_WEB_TBL_ACTIONS'))}</th></tr>`;
 
 
       const sortedFiles = files.sort((a, b) => {
@@ -2579,9 +2581,9 @@
           fileTableContent += `<tr class="folder-row">`;
           fileTableContent += `<td><input type="checkbox" class="select-item" data-path="${encodeURIComponent(folderPath)}" data-name="${escapeHtml(file.name)}" data-type="folder"></td>`;
           fileTableContent += `<td><span class="file-icon">📁</span><a href="/files?path=${encodeURIComponent(folderPath)}" class="folder-link">${escapeHtml(file.name)}</a><span class="folder-badge">FOLDER</span></td>`;
-          fileTableContent += '<td>Folder</td>';
+          fileTableContent += `<td>${escapeHtml(t('STR_WEB_FOLDER'))}</td>`;
           fileTableContent += '<td>-</td>';
-          fileTableContent += `<td class="actions-col"><div class="action-icon-group"><button class="delete-btn" onclick="openDeleteModal('${file.name.replaceAll("'", "\\'")}', '${folderPath.replaceAll("'", "\\'")}', true)" title="Delete folder">🗑️</button></div></td>`;
+          fileTableContent += `<td class="actions-col"><div class="action-icon-group"><button class="delete-btn" onclick="openDeleteModal('${file.name.replaceAll("'", "\\'")}', '${folderPath.replaceAll("'", "\\'")}', true)" title="${escapeHtml(t('STR_WEB_DELETE_FOLDER_TITLE'))}">🗑️</button></div></td>`;
           fileTableContent += '</tr>';
         } else {
           let filePath = currentPath;
@@ -2606,9 +2608,9 @@
           fileTableContent += `<td>${file.name.split('.').pop().toUpperCase()}</td>`;
           fileTableContent += `<td>${formatFileSize(file.size)}</td>`;
           fileTableContent += `<td class="actions-col"><div class="action-icon-group">`;
-          fileTableContent += `<button class="move-btn" onclick="openMoveModal('${file.name.replaceAll("'", "\\'")}', '${filePath.replaceAll("'", "\\'")}' )" title="Move file">📂</button>`;
-          fileTableContent += `<button class="rename-btn" onclick="openRenameModal('${file.name.replaceAll("'", "\\'")}', '${filePath.replaceAll("'", "\\'")}' )" title="Rename file">✏️</button>`;
-          fileTableContent += `<button class="delete-btn" onclick="openDeleteModal('${file.name.replaceAll("'", "\\'")}', '${filePath.replaceAll("'", "\\'")}', false)" title="Delete file">🗑️</button>`;
+          fileTableContent += `<button class="move-btn" onclick="openMoveModal('${file.name.replaceAll("'", "\\'")}', '${filePath.replaceAll("'", "\\'")}' )" title="${escapeHtml(t('STR_WEB_MOVE_FILE_TITLE'))}">📂</button>`;
+          fileTableContent += `<button class="rename-btn" onclick="openRenameModal('${file.name.replaceAll("'", "\\'")}', '${filePath.replaceAll("'", "\\'")}' )" title="${escapeHtml(t('STR_WEB_RENAME_FILE_TITLE'))}">✏️</button>`;
+          fileTableContent += `<button class="delete-btn" onclick="openDeleteModal('${file.name.replaceAll("'", "\\'")}', '${filePath.replaceAll("'", "\\'")}', false)" title="${escapeHtml(t('STR_WEB_DELETE_FILE_TITLE'))}">🗑️</button>`;
           fileTableContent += `</div></td>`;
           fileTableContent += '</tr>';
         }
@@ -3002,7 +3004,7 @@
   async function downloadSelected() {
     const items = getSelectedItems().filter(it => !it.isFolder);
     if (items.length === 0) {
-      alert('Please select at least one file to download.');
+      alert((window.tr || ((k)=>k))('STR_WEB_SELECT_FILES_DOWNLOAD'));
       return;
     }
 
@@ -3040,7 +3042,7 @@
   function openDeleteSelectedModal() {
     const items = getSelectedItems();
     if (items.length === 0) {
-      alert('Please select at least one item to delete.');
+      alert((window.tr || ((k)=>k))('STR_WEB_SELECT_ITEMS_DELETE'));
       return;
     }
     openDeleteModalForItems(items);
@@ -3093,11 +3095,11 @@
         window.location.reload();
       } else {
         const text = await res.text();
-        alert('Failed to delete: ' + text);
+        alert(((window.tr || ((k)=>k))('STR_WEB_DELETE_FAILED_PREFIX')) + ' ' + text);
         closeDeleteModal();
       }
     }).catch(() => {
-      alert('Failed to delete - network error');
+      alert((window.tr || ((k)=>k))('STR_WEB_DELETE_FAILED_NETWORK'));
       closeDeleteModal();
     });
   }
@@ -4297,7 +4299,7 @@ function uploadFile() {
   const files = Array.from(fileInput.files);
   const convertEnabled = document.getElementById('convertBeforeUpload').checked;
 
-  if (files.length === 0) { alert('Please select at least one file!'); return; }
+  if (files.length === 0) { alert((window.tr || ((k)=>k))('STR_WEB_SELECT_FILES_UPLOAD')); return; }
 
   isUploadInProgress = true;
   uploadGeneration++;
@@ -4511,14 +4513,14 @@ function retryAllFailedUploads() {
     const folderName = document.getElementById('folderName').value.trim();
 
     if (!folderName) {
-      alert('Please enter a folder name!');
+      alert((window.tr || ((k)=>k))('STR_WEB_FOLDER_NAME_REQUIRED'));
       return;
     }
 
     // Validate folder name
     const validName = /^(?!\.{1,2}$)[^"*:<>?\/\\|]+$/.test(folderName);
     if (!validName) {
-      alert('Folder name cannot contain \" * : < > ? / \\ | and must not be . or ..');
+      alert((window.tr || ((k)=>k))('STR_WEB_FOLDER_NAME_INVALID'));
       return;
     }
 
@@ -4533,12 +4535,12 @@ function retryAllFailedUploads() {
       if (xhr.status === 200) {
         window.location.reload();
       } else {
-        alert('Failed to create folder: ' + xhr.responseText);
+        alert(((window.tr || ((k)=>k))('STR_WEB_CREATE_FOLDER_FAILED_PREFIX')) + ' ' + xhr.responseText);
       }
     };
 
     xhr.onerror = function() {
-      alert('Failed to create folder - network error');
+      alert((window.tr || ((k)=>k))('STR_WEB_CREATE_FOLDER_FAILED_NETWORK'));
     };
 
     xhr.send(formData);
@@ -4566,11 +4568,11 @@ function retryAllFailedUploads() {
     const newName = document.getElementById('renameNewName').value.trim();
 
     if (!newName) {
-      alert('Please enter a new name.');
+      alert((window.tr || ((k)=>k))('STR_WEB_NEW_NAME_REQUIRED'));
       return;
     }
     if (newName.includes('/') || newName.includes('\\')) {
-      alert('File name cannot include slashes.');
+      alert((window.tr || ((k)=>k))('STR_WEB_NAME_NO_SLASHES'));
       return;
     }
 
