@@ -362,7 +362,7 @@
       </nav>
 
       <!-- CDN-missing banner -->
-      <div id="cdn-banner" class="banner-err" hidden>
+      <div id="cdn-banner" class="banner-err" hidden data-i18n-html="STR_WEB_CDN_MISSING">
         Couldn't load the font-baking libraries from the internet.
         This page needs the <b>phone / laptop you're using right now</b> to
         have an active internet connection (the device itself doesn't need
@@ -379,7 +379,7 @@
       <!-- Install new -->
       <div class="card">
         <h2 data-i18n="STR_WEB_INSTALL_NEW_FONT">Install a New Font</h2>
-        <div class="help">
+        <div class="help" data-i18n-html="STR_WEB_INSTALL_HELP">
           Drop a TTF or OTF for each variant you want. Only <b>Regular</b> is
           required — Bold, Italic and Bold&nbsp;Italic are synthesised from
           Regular when you leave them empty. Choose one or more sizes (25–40 pt);
@@ -390,8 +390,8 @@
 
         <div class="field">
           <label for="family-name" data-i18n="STR_WEB_FAMILY_NAME">Family name</label>
-          <input type="text" id="family-name" placeholder="e.g. inter" maxlength="32" />
-          <small>Letters, digits, <code>-</code> and <code>_</code>; must start with a letter or digit; max 32 chars.</small>
+          <input type="text" id="family-name" placeholder="e.g. inter" maxlength="32" data-i18n-attr="placeholder:STR_WEB_FAMILY_NAME_EXAMPLE" />
+          <small data-i18n-html="STR_WEB_FAMILY_NAME_HINT">Letters, digits, <code>-</code> and <code>_</code>; must start with a letter or digit; max 32 chars.</small>
         </div>
 
         <div class="field">
@@ -462,6 +462,10 @@ window.__i18nReady = (async function() {
         const k = el.dataset.i18n;
         if (dict[k]) el.textContent = dict[k];
       });
+      document.querySelectorAll('[data-i18n-html]').forEach(el => {
+        const k = el.dataset.i18nHtml;
+        if (dict[k]) el.innerHTML = dict[k];
+      });
       document.querySelectorAll('[data-i18n-attr]').forEach(el => {
         el.dataset.i18nAttr.split(',').forEach(pair => {
           const [a, k] = pair.split(':').map(s => s.trim());
@@ -507,7 +511,7 @@ window.__i18nReady = (async function() {
   if (!cdnOk) {
     cdnBanner.hidden = false;
     const btn = document.getElementById("install-btn");
-    if (btn) { btn.disabled = true; btn.textContent = "Install (libraries missing)"; }
+    if (btn) { btn.disabled = true; btn.textContent = (window.tr || ((k)=>k))("STR_WEB_INSTALL_LIBS_MISSING"); }
     return; // skip everything else — form won't function without opentype.js + pako
   }
 
@@ -603,10 +607,10 @@ window.__i18nReady = (async function() {
       const r = await fetch("/api/fonts/delete", { method: "POST", body });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || r.status);
-      log("Deleted " + label + " (" + j.removed + " files)", "ok");
+      { const t = window.tr || ((k)=>k); log(t("STR_WEB_FONT_DELETED") + " " + label + " (" + j.removed + " " + t("STR_WEB_FILES_LOWER") + ")", "ok"); }
       await refreshInstalled();
     } catch (e) {
-      log("Delete failed: " + e.message, "err");
+      log((window.tr || ((k)=>k))("STR_WEB_DELETE_FAILED_PREFIX") + " " + e.message, "err");
     }
   }
 
@@ -640,7 +644,7 @@ window.__i18nReady = (async function() {
         slot.classList.remove("loaded");
         return;
       }
-      info.textContent = "Loading " + file.name + "…";
+      info.textContent = (window.tr || ((k)=>k))("STR_WEB_LOADING_FILE") + " " + file.name + "…";
       try {
         const buf = await file.arrayBuffer();
         const font = opentype.parse(buf);
@@ -1004,13 +1008,13 @@ window.__i18nReady = (async function() {
   async function install() {
     const family = document.getElementById("family-name").value.trim();
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(family)) {
-      log("Family name invalid (letters/digits/_/-, max 32, no leading hyphen)", "err");
+      log((window.tr || ((k)=>k))("STR_WEB_FAMILY_NAME_INVALID"), "err");
       return;
     }
-    if (!files[0]) { log("Regular slot is required", "err"); return; }
+    if (!files[0]) { log((window.tr || ((k)=>k))("STR_WEB_REGULAR_REQUIRED"), "err"); return; }
     const sizes = Array.from(document.querySelectorAll("#size-grid input:checked"))
       .map((c) => parseInt(c.value, 10));
-    if (sizes.length === 0) { log("Pick at least one size", "err"); return; }
+    if (sizes.length === 0) { log((window.tr || ((k)=>k))("STR_WEB_PICK_AT_LEAST_ONE_SIZE"), "err"); return; }
 
     installBtn.disabled = true;
     logEl.hidden = false;
@@ -1027,7 +1031,7 @@ window.__i18nReady = (async function() {
       for (const j of jobs) {
         const tag = "[" + slotIds[j.variant] + " " + j.size + "pt]";
         setProgress(done, jobs.length, "Baking " + tag);
-        log("Baking " + tag + "…");
+        log((window.tr || ((k)=>k))("STR_WEB_BAKING") + " " + tag + "…");
         const t0 = performance.now();
         const bytes = await bakeOne(j.variant, j.size);
         log("  baked " + bytes.length + " B in " + Math.round(performance.now() - t0) + " ms");
@@ -1036,11 +1040,11 @@ window.__i18nReady = (async function() {
         done++;
         setProgress(done, jobs.length, tag + " ok");
       }
-      log("Install complete", "ok");
+      log((window.tr || ((k)=>k))("STR_WEB_INSTALL_COMPLETE"), "ok");
       setProgress(jobs.length, jobs.length, "Done");
       await refreshInstalled();
     } catch (e) {
-      log("Install failed: " + e.message, "err");
+      log((window.tr || ((k)=>k))("STR_WEB_INSTALL_FAILED_PREFIX") + " " + e.message, "err");
     } finally {
       installBtn.disabled = false;
     }

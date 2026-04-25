@@ -2464,6 +2464,12 @@
           const k = el.dataset.i18n;
           if (dict[k]) el.textContent = dict[k];
         });
+        // data-i18n-html: innerHTML variant; lets translations keep <b>/<code> emphasis.
+        // Safe because translations are author-controlled (yamls in repo, not user input).
+        document.querySelectorAll('[data-i18n-html]').forEach(el => {
+          const k = el.dataset.i18nHtml;
+          if (dict[k]) el.innerHTML = dict[k];
+        });
         document.querySelectorAll('[data-i18n-attr]').forEach(el => {
           el.dataset.i18nAttr.split(',').forEach(pair => {
             const [a, k] = pair.split(':').map(s => s.trim());

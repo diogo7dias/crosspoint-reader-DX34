@@ -240,6 +240,10 @@
               const k = el.dataset.i18n;
               if (dict[k]) el.textContent = dict[k];
             });
+            document.querySelectorAll('[data-i18n-html]').forEach(el => {
+              const k = el.dataset.i18nHtml;
+              if (dict[k]) el.innerHTML = dict[k];
+            });
             document.querySelectorAll('[data-i18n-attr]').forEach(el => {
               el.dataset.i18nAttr.split(',').forEach(pair => {
                 const [a, k] = pair.split(':').map(s => s.trim());
