@@ -101,7 +101,11 @@ nav.nav {
   grid-template-columns: 1fr;
   gap: 8px;
 }
-@media (min-width: 500px) { nav.nav { grid-template-columns: repeat(3, 1fr); } }
+/* 1 col on phones; 2 cols on small tablets / large phones; auto-fit
+   on real screens so 3-slot and 4-slot navs share the same rules
+   without a per-page override. */
+@media (min-width: 500px) { nav.nav { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 760px) { nav.nav { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
 nav.nav a {
   border: 1px dashed var(--dash);
   padding: 18px 12px;
