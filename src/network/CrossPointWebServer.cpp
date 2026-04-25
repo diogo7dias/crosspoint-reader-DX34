@@ -31,6 +31,7 @@
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
+#include "html/brutalistCss.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "network/SettingsGateway.h"
 #include "network/ws/WsUploadSession.h"
@@ -256,6 +257,8 @@ void CrossPointWebServer::begin() {
 
   // JSZip library for EPUB optimizer
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
+
+  server->on("/css/brutalist.css", HTTP_GET, [this] { handleBrutalistCss(); });
 
   // Settings endpoints
   server->on("/settings", HTTP_GET, [this] { handleSettingsPage(); });
@@ -494,8 +497,19 @@ void CrossPointWebServer::pumpWsDownload() {
 
 void CrossPointWebServer::handleJszip() const {
   server->sendHeader("Content-Encoding", "gzip");
+  server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "application/javascript", jszip_minJs, jszip_minJsCompressedSize);
   LOG_DBG("WEB", "Served jszip.min.js");
+}
+
+void CrossPointWebServer::handleBrutalistCss() const {
+  // Long cache lets pages share this asset across navigations without
+  // re-fetching. Bumped by the build pipeline whenever the .generated.h
+  // changes, so etag-style invalidation isn't needed.
+  server->sendHeader("Content-Encoding", "gzip");
+  server->sendHeader("Cache-Control", "public, max-age=86400");
+  server->send_P(200, "text/css", brutalistCss, brutalistCssCompressedSize);
+  LOG_DBG("WEB", "Served brutalist.css");
 }
 
 void CrossPointWebServer::stop() {

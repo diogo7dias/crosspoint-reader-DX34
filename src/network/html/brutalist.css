@@ -1,0 +1,164 @@
+/* CrossPoint brutalist 8-bit shared design system.
+   Loaded by every web UI page via <link rel="stylesheet" href="/css/brutalist.css">.
+   Tokens, reset, grid overlay, and reusable .chip/.nav/.foot primitives.
+   Page-specific layout stays inlined per page. */
+
+:root {
+  --bg: #0d0d10;
+  --fg: #f4f4f4;
+  --muted: #9a9aa0;
+  --dash: #ffffff;
+  --red: #ff2e3c;
+  --yellow: #ffe14a;
+  --green: #3cff8f;
+  --blue: #4dc0ff;
+
+  --pad: clamp(14px, 3vw, 28px);
+  --gap: clamp(8px, 1.6vw, 14px);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { background: var(--bg); }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Space Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  image-rendering: pixelated;
+}
+
+/* Faint 48px grid overlay — signature chrome for every page. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px) 0 0 / 48px 48px;
+}
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--pad);
+}
+
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font-family: inherit; }
+
+/* ── Status chip ────────────────────────────────────────────
+   Label-over-value tile. Color variants tint the value only. */
+.chip {
+  border: 1px dashed var(--dash);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 56px;
+  overflow: hidden;
+}
+.chip b {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 400;
+}
+.chip em {
+  font-style: normal;
+  font-size: clamp(14px, 1.8vw, 18px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.chip em small {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 2px;
+}
+.chip.green em { color: var(--green); }
+.chip.yellow em { color: var(--yellow); }
+.chip.blue em { color: var(--blue); }
+.chip.red em { color: var(--red); }
+
+/* ── Primary nav ────────────────────────────────────────────
+   <nav class="nav"> with <a> children. Each <a> may include
+   <span class="k">[N]</span> as a keyboard-hint badge. */
+nav.nav {
+  margin-top: var(--gap);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+/* 1 col on phones; 2 cols on small tablets / large phones; auto-fit
+   on real screens so 3-slot and 4-slot navs share the same rules
+   without a per-page override. */
+@media (min-width: 500px) { nav.nav { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 760px) { nav.nav { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
+nav.nav a {
+  border: 1px dashed var(--dash);
+  padding: 18px 12px;
+  text-align: center;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  position: relative;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+nav.nav a .k {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  font-weight: 400;
+}
+nav.nav a.on { background: var(--yellow); color: #000; }
+nav.nav a.on .k { color: #000; }
+nav.nav a:hover:not(.on) { background: rgba(255,255,255,.05); }
+nav.nav a:active { background: rgba(255,255,255,.1); }
+
+/* ── Footer meta strip ─────────────────────────────────────── */
+.foot {
+  margin-top: var(--gap);
+  border: 1px dashed var(--dash);
+  padding: 12px var(--pad);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+.foot b { color: var(--fg); font-weight: 400; }
+.foot .heart { color: var(--red); }
+
+/* Reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Tighter spacing on tiny screens. */
+@media (max-width: 380px) {
+  .wrap { padding: 12px; }
+  nav.nav a { padding: 14px 10px; font-size: 13px; }
+  .chip { padding: 8px 10px; min-height: 48px; }
+}
