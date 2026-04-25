@@ -55,6 +55,12 @@ void logPrintf(const char* level, const char* origin, const char* format, ...);
 #define LOG_INF(origin, format, ...)
 #endif
 
+// LOG_DIAG: always-on diagnostic line, ignores ENABLE_SERIAL_LOG / LOG_LEVEL.
+// Writes to the RTC ring buffer in every build so the entry is preserved in
+// /crash_report.txt after a panic, even on production firmware. Use sparingly:
+// the ring is only 16 lines, so unconditional logging crowds out other context.
+#define LOG_DIAG(origin, format, ...) logPrintf("DIAG", origin, format "\n", ##__VA_ARGS__)
+
 std::string getLastLogs();
 void clearLastLogs();
 // Validates the RTC log state (magic word + logHead range). Returns true if
