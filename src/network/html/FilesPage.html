@@ -1419,13 +1419,699 @@
       box-shadow: none !important;
     }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/brutalist.css" />
+  <style>
+    /* Phase 3a chrome overrides — page header / nav / file-table /
+       failed-uploads banner / footer all adopt the brutalist palette.
+       Modals (.modal, .modal-overlay) and their internals are
+       deliberately left in the existing light-theme styling and will
+       be addressed in Phase 3b. */
+
+    body {
+      background: var(--bg) !important;
+      color: var(--fg) !important;
+      font-family: "Space Mono", ui-monospace, Menlo, Consolas, monospace !important;
+      max-width: 1200px !important;
+      padding: var(--pad) !important;
+    }
+
+    h1 {
+      color: var(--fg) !important;
+      border-bottom: none !important;
+      padding-bottom: 0 !important;
+    }
+
+    /* ── Top nav ──────────────────────────────────────────── */
+    .nav-links {
+      margin-top: 0 !important;
+      margin-bottom: var(--gap) !important;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    @media (min-width: 500px) {
+      .nav-links { grid-template-columns: repeat(4, 1fr); }
+    }
+    .nav-links a {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 18px 12px !important;
+      text-align: center !important;
+      letter-spacing: 0.2em !important;
+      font-weight: 700 !important;
+      font-size: 14px !important;
+      text-transform: uppercase !important;
+      position: relative;
+      min-height: 56px;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a .k {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      font-weight: 400;
+    }
+    .nav-links a.on {
+      background: var(--yellow) !important;
+      color: #000 !important;
+    }
+    .nav-links a.on .k { color: #000; }
+    .nav-links a:hover:not(.on) { background: rgba(255, 255, 255, 0.05) !important; }
+
+    /* ── Masthead (page-header) ──────────────────────────── */
+    .page-header {
+      background: transparent !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: var(--pad) !important;
+      margin-top: 0 !important;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--pad);
+    }
+    @media (min-width: 760px) {
+      .page-header {
+        grid-template-columns: 1fr auto;
+        align-items: end;
+      }
+    }
+    .page-header-left { padding: 0 !important; }
+    .page-header-left h1 {
+      margin: 0 !important;
+      font-weight: 700 !important;
+      font-size: clamp(36px, 9vw, 72px) !important;
+      line-height: 0.9 !important;
+      letter-spacing: -0.04em !important;
+      text-transform: uppercase !important;
+      color: var(--fg) !important;
+    }
+
+    /* ── Breadcrumbs ──────────────────────────────────────── */
+    .breadcrumb-inline {
+      margin-top: 12px !important;
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      color: var(--muted) !important;
+      text-transform: uppercase !important;
+    }
+    .breadcrumb-inline a {
+      color: var(--blue) !important;
+      border-bottom: 1px dashed transparent;
+    }
+    .breadcrumb-inline a:hover { border-bottom-color: var(--blue); }
+    .breadcrumb-inline .sep { color: var(--muted) !important; margin: 0 6px; }
+    .breadcrumb-inline .current { color: var(--fg) !important; }
+
+    /* ── Action buttons ──────────────────────────────────── */
+    .action-buttons {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 !important;
+    }
+    .action-btn {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 12px 18px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.2em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      min-height: 56px;
+    }
+    .action-btn:hover { background: var(--yellow) !important; color: #000 !important; }
+    .action-btn.upload-action-btn:hover { background: var(--green) !important; }
+    .action-btn.folder-action-btn:hover { background: var(--blue) !important; }
+    .action-btn[onclick*="downloadSelected"]:hover { background: var(--blue) !important; }
+    .action-btn[onclick*="DeleteSelected"]:hover { background: var(--red) !important; color: #000 !important; }
+
+    /* ── Failed-uploads banner ──────────────────────────── */
+    .failed-uploads-banner {
+      background: transparent !important;
+      border: 1px dashed var(--red) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      color: var(--red) !important;
+      padding: 14px var(--pad) !important;
+      margin-top: var(--gap) !important;
+    }
+    .failed-uploads-title { color: var(--red) !important; }
+    .dismiss-btn,
+    .retry-all-btn {
+      background: transparent !important;
+      color: var(--red) !important;
+      border: 1px dashed var(--red) !important;
+      border-radius: 0 !important;
+    }
+    .dismiss-btn:hover,
+    .retry-all-btn:hover { background: var(--red) !important; color: #000 !important; }
+
+    /* ── Folder contents card ────────────────────────────── */
+    #folderContentsCard {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      margin-top: var(--gap) !important;
+      padding: var(--pad) !important;
+    }
+    #folderContentsCard .contents-header { color: var(--fg) !important; }
+    #folderContentsCard .contents-title {
+      margin: 0 !important;
+      font-size: 11px !important;
+      letter-spacing: 0.3em !important;
+      color: var(--muted) !important;
+      text-transform: uppercase !important;
+      font-weight: 400 !important;
+    }
+    #folderContentsCard .summary-inline {
+      color: var(--muted) !important;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── File table ──────────────────────────────────────── */
+    #folderContentsCard .file-table th,
+    #folderContentsCard .file-table td {
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.12) !important;
+      color: var(--fg) !important;
+    }
+    #folderContentsCard .file-table th {
+      background: transparent !important;
+      color: var(--muted) !important;
+      font-size: 10px !important;
+      letter-spacing: 0.24em !important;
+      text-transform: uppercase !important;
+      font-weight: 400 !important;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.25) !important;
+    }
+    #folderContentsCard .file-table tr:hover {
+      background: rgba(255, 255, 255, 0.03) !important;
+    }
+    #folderContentsCard .folder-link,
+    #folderContentsCard .file-link {
+      color: var(--fg) !important;
+    }
+    #folderContentsCard .folder-link:hover,
+    #folderContentsCard .file-link:hover { color: var(--yellow) !important; }
+    #folderContentsCard .folder-row:hover { background: rgba(77, 192, 255, 0.06) !important; }
+
+    /* ── Loader ──────────────────────────────────────────── */
+    #folderContentsCard .loader {
+      width: 32px !important;
+      height: 32px !important;
+      border: 2px dashed var(--dash) !important;
+      border-bottom-color: transparent !important;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .brut-foot {
+      margin-top: var(--gap);
+      border: 1px dashed var(--dash);
+      padding: 12px var(--pad);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 24px;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+    .brut-foot b { color: var(--fg); font-weight: 400; }
+    .brut-foot .heart { color: var(--red); }
+
+    /* ── Mobile ──────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      body { padding: 12px !important; }
+      .nav-links { grid-template-columns: repeat(2, 1fr); }
+      .action-buttons { width: 100%; }
+      .action-btn { flex: 1 1 calc(50% - 4px); }
+    }
+    @media (max-width: 380px) {
+      .nav-links a { padding: 14px 10px !important; font-size: 13px !important; }
+    }
+
+    /* ── Phase 3b: modals ──────────────────────────────────── */
+    .modal-overlay {
+      background: rgba(0, 0, 0, 0.78) !important;
+    }
+    .modal {
+      background: var(--bg) !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: var(--pad) !important;
+    }
+    .modal h3 {
+      margin: 0 0 14px 0 !important;
+      color: var(--fg) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.3em !important;
+      text-transform: uppercase !important;
+      font-weight: 400 !important;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.15) !important;
+      padding-bottom: 10px !important;
+    }
+    .modal-close {
+      background: transparent !important;
+      color: var(--muted) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      width: 32px !important;
+      height: 32px !important;
+      padding: 0 !important;
+      font-size: 18px !important;
+      line-height: 1 !important;
+    }
+    .modal-close:hover {
+      background: var(--red) !important;
+      color: #000 !important;
+      border-color: var(--red) !important;
+    }
+
+    /* Modal text */
+    .modal .file-info,
+    .modal .modal-hint {
+      color: var(--muted) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.06em;
+      line-height: 1.5;
+    }
+    .modal .file-info strong { color: var(--fg) !important; }
+    .modal .delete-warning {
+      color: var(--red) !important;
+      border: 1px dashed var(--red) !important;
+      padding: 10px var(--pad) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+      margin: 10px 0 !important;
+    }
+
+    /* Modal text inputs */
+    .modal input[type="text"],
+    .modal input[type="number"],
+    .modal input[type="password"],
+    .modal .folder-input {
+      background: var(--bg) !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 10px !important;
+      font-family: inherit !important;
+      font-size: 14px !important;
+      letter-spacing: 0.02em !important;
+      box-shadow: none !important;
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    .modal input[type="text"]:focus,
+    .modal input[type="number"]:focus,
+    .modal input[type="password"]:focus,
+    .modal .folder-input:focus {
+      outline: none !important;
+      border-color: var(--yellow) !important;
+    }
+
+    /* Modal file input */
+    .modal input[type="file"] {
+      background: var(--bg) !important;
+      color: var(--muted) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 10px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      box-shadow: none !important;
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    .modal input[type="file"]::file-selector-button {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 6px 12px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+      margin-right: 10px !important;
+      cursor: pointer;
+    }
+    .modal input[type="file"]::file-selector-button:hover {
+      background: var(--blue) !important;
+      color: #000 !important;
+    }
+    .modal input[type="file"].has-files::file-selector-button {
+      border-color: var(--green) !important;
+      color: var(--green) !important;
+    }
+
+    /* Modal action buttons */
+    .modal .upload-btn,
+    .modal .folder-btn,
+    .modal .delete-btn-confirm,
+    .modal .rename-btn-confirm,
+    .modal .move-btn-confirm,
+    .modal .delete-btn-cancel {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 14px 28px !important;
+      font-family: inherit !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.24em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      min-height: 56px;
+      margin-top: 12px;
+    }
+    .modal .upload-btn:hover:not(:disabled),
+    .modal .folder-btn:hover:not(:disabled) {
+      background: var(--green) !important;
+      color: #000 !important;
+      border-color: var(--green) !important;
+    }
+    .modal .upload-btn.optimize:hover:not(:disabled) {
+      background: var(--blue) !important;
+      border-color: var(--blue) !important;
+    }
+    .modal .delete-btn-confirm:hover:not(:disabled),
+    .modal .rename-btn-confirm:hover:not(:disabled),
+    .modal .move-btn-confirm:hover:not(:disabled) {
+      background: var(--red) !important;
+      color: #000 !important;
+      border-color: var(--red) !important;
+    }
+    .modal .rename-btn-confirm:hover:not(:disabled),
+    .modal .move-btn-confirm:hover:not(:disabled) {
+      background: var(--yellow) !important;
+      border-color: var(--yellow) !important;
+    }
+    .modal .delete-btn-cancel:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.05) !important;
+    }
+    .modal .upload-btn:disabled,
+    .modal .folder-btn:disabled,
+    .modal .delete-btn-confirm:disabled {
+      opacity: 0.35 !important;
+      cursor: not-allowed;
+      background: transparent !important;
+      color: var(--fg) !important;
+    }
+
+    /* Image preview modal action buttons (override inline bg-colors) */
+    #imagePreviewModal .action-btn {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 12px 18px !important;
+      letter-spacing: 0.2em !important;
+      text-transform: uppercase !important;
+    }
+    #imagePreviewModal .action-btn:hover { background: var(--yellow) !important; color: #000 !important; }
+    #imagePreviewModal img {
+      border: 1px dashed var(--dash) !important;
+      background: var(--bg) !important;
+      border-radius: 0 !important;
+    }
+
+    /* Convert options + advanced settings */
+    .modal .convert-options { color: var(--fg) !important; }
+    .modal .convert-row {
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .modal .convert-checkbox {
+      color: var(--fg) !important;
+      font-size: 12px !important;
+      letter-spacing: 0.06em !important;
+    }
+    .modal .convert-checkbox input[type="checkbox"] {
+      accent-color: var(--yellow);
+    }
+    .modal .convert-warning {
+      background: transparent !important;
+      border: 1px dashed var(--yellow) !important;
+      border-radius: 0 !important;
+      color: var(--yellow) !important;
+      padding: 12px var(--pad) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.06em;
+      line-height: 1.5;
+    }
+    .modal .convert-info {
+      color: var(--muted) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.04em;
+    }
+    .modal .convert-settings {
+      color: var(--muted) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.06em;
+    }
+    .modal .convert-separator {
+      color: var(--muted) !important;
+    }
+    .modal .advanced-options-toggle {
+      color: var(--blue) !important;
+      letter-spacing: 0.16em !important;
+      text-transform: uppercase;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .modal .advanced-options-toggle:hover { color: var(--yellow) !important; }
+    .modal .advanced-options-arrow { color: var(--blue) !important; }
+    .modal .advanced-options-text { color: var(--blue) !important; }
+    .modal .advanced-settings-content {
+      border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+      padding: 12px !important;
+      margin-top: 10px;
+    }
+    .modal .advanced-setting-row {
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.12) !important;
+      padding: 10px 0;
+    }
+    .modal .advanced-setting-row:last-child { border-bottom: none !important; }
+    .modal .setting-title,
+    .modal .setting-label .setting-title {
+      color: var(--fg) !important;
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+      font-weight: 700;
+    }
+    .modal .setting-desc {
+      color: var(--muted) !important;
+      font-size: 10px !important;
+      letter-spacing: 0.08em;
+    }
+    .modal .setting-value {
+      color: var(--yellow) !important;
+      font-weight: 700;
+    }
+
+    /* Quality presets / rotation / overlap — chip-style toggle row */
+    .modal .quality-presets,
+    .modal .rotation-buttons,
+    .modal .overlap-selector {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 6px !important;
+    }
+    .modal .quality-preset,
+    .modal .rotation-btn,
+    .modal .overlap-btn {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 8px 12px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.14em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+      cursor: pointer;
+    }
+    .modal .quality-preset:hover:not(.active),
+    .modal .rotation-btn:hover:not(.active),
+    .modal .overlap-btn:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.05) !important;
+    }
+    .modal .quality-preset.active,
+    .modal .rotation-btn.active,
+    .modal .overlap-btn.active {
+      background: var(--yellow) !important;
+      color: #000 !important;
+      border-color: var(--yellow) !important;
+    }
+
+    /* Toggle switch (within modals) */
+    .modal .toggle-switch {
+      position: relative !important;
+      display: inline-block !important;
+      width: 56px !important;
+      height: 28px !important;
+    }
+    .modal .toggle-switch input { opacity: 0 !important; width: 0 !important; height: 0 !important; }
+    .modal .toggle-slider {
+      position: absolute !important;
+      inset: 0 !important;
+      background: transparent !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .modal .toggle-slider:before {
+      content: "" !important;
+      position: absolute !important;
+      top: 3px !important;
+      left: 3px !important;
+      width: 20px !important;
+      height: 20px !important;
+      background: var(--muted) !important;
+      border-radius: 0 !important;
+      transition: transform 0.15s, background 0.15s;
+    }
+    .modal .toggle-switch input:checked + .toggle-slider {
+      background: var(--yellow) !important;
+    }
+    .modal .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(28px) !important;
+      background: var(--bg) !important;
+    }
+
+    /* Image picker section */
+    .modal .image-picker-section {
+      border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+      padding: 10px !important;
+    }
+    .modal .image-picker-header {
+      color: var(--fg) !important;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.15) !important;
+      padding-bottom: 8px !important;
+    }
+    .modal .image-picker-title {
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+    }
+    .modal .image-picker-count {
+      color: var(--muted) !important;
+      font-size: 10px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+    }
+    .modal .state-legend {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 6px !important;
+      margin: 8px 0 !important;
+    }
+    .modal .legend-item,
+    .modal .legend-btn {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 6px 10px !important;
+      font-family: inherit !important;
+      font-size: 10px !important;
+      letter-spacing: 0.14em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+    }
+    .modal .legend-btn:hover { background: rgba(255, 255, 255, 0.05) !important; }
+    .modal .legend-color { display: none !important; }
+
+    /* Progress bar (inside modal) */
+    .modal #progress-bar {
+      border: 1px dashed var(--dash) !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+      height: 14px !important;
+      overflow: hidden;
+    }
+    .modal #progress-fill {
+      background: var(--blue) !important;
+      border-radius: 0 !important;
+    }
+    .modal #progress-text {
+      color: var(--muted) !important;
+      font-size: 10px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+      margin-top: 6px;
+    }
+
+    /* Conversion log section */
+    .modal .log-section {
+      border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+      background: transparent !important;
+      border-radius: 0 !important;
+      margin-top: 10px;
+    }
+    .modal .log-header {
+      color: var(--fg) !important;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.15) !important;
+      padding: 8px var(--pad) !important;
+    }
+    .modal .log-title {
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+    }
+    .modal .log-container {
+      background: rgba(0, 0, 0, 0.4) !important;
+      color: var(--fg) !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      line-height: 1.5 !important;
+      padding: 10px var(--pad) !important;
+    }
+  </style>
 </head>
 <body>
-<div class="nav-links">
-  <a href="/">Home</a>
-  <a href="/files">File Manager</a>
-  <a href="/settings">Settings</a>
-</div>
+<nav class="nav-links" aria-label="Primary">
+  <a href="/"><span class="k">[1]</span>HOME</a>
+  <a href="/files" class="on"><span class="k">[2]</span>FILES</a>
+  <a href="/settings"><span class="k">[3]</span>SETTINGS</a>
+  <a href="/fonts"><span class="k">[4]</span>FONTS</a>
+</nav>
 
 <div class="page-header">
   <div class="page-header-left">
@@ -1466,11 +2152,11 @@
   </div>
 </div>
 
-<div class="card">
-  <p style="text-align: center; color: #95a5a6; margin: 0;">
-    CrossPoint E-Reader • Open Source
-  </p>
-</div>
+<footer class="brut-foot">
+  <span><b>Host</b> crosspoint.local</span>
+  <span><b>Endpoint</b> /api/files</span>
+  <span class="heart">&bull; Open-source &middot; MIT</span>
+</footer>
 
 <!-- Upload Modal -->
 <div class="modal-overlay" id="uploadModal">
