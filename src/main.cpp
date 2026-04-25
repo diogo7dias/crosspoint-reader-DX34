@@ -24,6 +24,7 @@
 #include <Logging.h>
 #include <SPI.h>
 #include <builtinFonts/all.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <cstring>
@@ -383,6 +384,32 @@ static void openHomeInline() {
 
 void onGoHome() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""}); }
 
+// Heap allocator failure hook. ESP-IDF invokes this synchronously on
+// the failing task before deciding whether to retry the allocation.
+// Bare requirements: must not allocate (would re-enter), must be fast,
+// must be callable from any task.
+//
+// We use it as the firmware's last-line defence against mid-render OOM
+// — the FontDecompressor's hot-group buffer (~10 KB) and the section-
+// rebuild parser are the two hot consumers that stress this path. By
+// dropping the FCM cache here we hand back ~30-150 KB of hot-group +
+// page-slot capacity that the failing allocation can then reuse on
+// ESP-IDF's automatic retry.
+//
+// We do NOT touch CSS / page cache / activity-local state from here:
+// those need locks and accessor pointers we can't safely take from
+// arbitrary task context. FCM is a single-instance subsystem reachable
+// through `renderer`, both globals at file scope, both fully
+// constructed by the time the heap allocator is in use.
+extern "C" void onHeapAllocFailed(size_t requested, uint32_t caps, const char* function_name) {
+  // No std::string / no LOG_DIAG here — Logging may itself allocate.
+  ets_printf("[DIAG] [HEAP] alloc-fail size=%u caps=%lu fn=%s\n", static_cast<unsigned>(requested),
+             static_cast<unsigned long>(caps), function_name ? function_name : "?");
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    fcm->clearCache();
+  }
+}
+
 void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
@@ -422,6 +449,15 @@ void setupDisplayAndFonts() {
   static FontCacheManager fontCacheManager(renderer.getFontMap());
   fontCacheManager.setFontDecompressor(&fontDecompressor);
   renderer.setFontCacheManager(&fontCacheManager);
+
+  // Register the heap allocator failure hook now that FCM is reachable
+  // via renderer. Idempotent: a re-call replaces the previous handler.
+  // ESP-IDF's documented contract — runs on the failing task, retries
+  // the allocation once after we return — is what makes this useful as
+  // a defragmentation trigger rather than just a logging hook.
+  if (heap_caps_register_failed_alloc_callback(&onHeapAllocFailed) != ESP_OK) {
+    LOG_ERR("MAIN", "heap_caps_register_failed_alloc_callback failed");
+  }
   LOG_DBG("MAIN", "Fonts setup");
 }
 
