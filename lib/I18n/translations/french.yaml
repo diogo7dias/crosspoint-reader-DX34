@@ -27,6 +27,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Appuyez sur une touche pour libérer la mémoire et
 STR_LAYOUT_FONT_REVERTED_TITLE: "Police par défaut rétablie"
 STR_LAYOUT_FONT_REVERTED_BODY: "La police personnalisée ne tient pas dans ce chapitre."
 STR_LAYOUT_RETRY_HINT: "Appuyez sur une touche pour réessayer."
+STR_FONT_LOAD_FAILED: "Police trop grande — précédente conservée"
 STR_EMPTY_FILE: "Fichier vide"
 STR_OUT_OF_BOUNDS: "Dépassement de mémoire"
 STR_LOADING: "Chargement…"

@@ -27,6 +27,7 @@ STR_LAYOUT_LOW_MEMORY_BODY: "Stiskněte libovolnou klávesu pro uvolnění pamě
 STR_LAYOUT_FONT_REVERTED_TITLE: "Přepnuto na výchozí písmo"
 STR_LAYOUT_FONT_REVERTED_BODY: "Vlastní písmo se nevejde do této kapitoly."
 STR_LAYOUT_RETRY_HINT: "Stiskněte libovolnou klávesu pro opakování."
+STR_FONT_LOAD_FAILED: "Písmo příliš velké — zachováno předchozí"
 STR_EMPTY_FILE: "Prázdný soubor"
 STR_OUT_OF_BOUNDS: "Mimo hranice"
 STR_LOADING: "Načítání..."

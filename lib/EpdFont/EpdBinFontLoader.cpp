@@ -91,18 +91,31 @@ bool validateHeader(const Header& h, uint32_t fileBytes, std::string* error) {
 EpdBinFontLoader::~EpdBinFontLoader() { release(); }
 
 void EpdBinFontLoader::release() {
-  if (tablesBuf_) {
+  if (tablesBuf_ && ownsTablesBuf_) {
     free(tablesBuf_);
-    tablesBuf_ = nullptr;
   }
+  tablesBuf_ = nullptr;
   tablesBytes_ = 0;
+  ownsTablesBuf_ = false;
   if (file_.isOpen()) file_.close();
   bitmapBlobFileOffset_ = 0;
   fontData_ = {};
   header_ = {};
 }
 
+namespace {
+// Shared open path. If externalBuf is non-null the caller owns it and
+// it must be at least externalBufCap bytes; otherwise the loader
+// mallocs. Returns the new buffer + ownership flag via out-params on
+// success.
+}  // namespace
+
 bool EpdBinFontLoader::openFromFile(const std::string& path) {
+  return openFromFileExternalBuf(path, nullptr, 0);
+}
+
+bool EpdBinFontLoader::openFromFileExternalBuf(const std::string& path, uint8_t* externalBuf,
+                                               uint32_t externalBufCap) {
   release();
 
   HalFile f;
@@ -132,16 +145,29 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
   // groups. The bitmap blob stays on SD.
   const uint32_t tablesBytes = sizeof(Header) + hdr.glyphCount * sizeof(EpdGlyph) +
                                hdr.intervalCount * sizeof(EpdUnicodeInterval) + hdr.groupCount * sizeof(EpdFontGroup);
-  uint8_t* buf = static_cast<uint8_t*>(malloc(tablesBytes));
-  if (!buf) {
-    lastError_ = "tables malloc failed";
-    f.close();
-    return false;
+  uint8_t* buf = nullptr;
+  bool ownsBuf = false;
+  if (externalBuf) {
+    if (tablesBytes > externalBufCap) {
+      lastError_ = "tables exceed external buffer capacity";
+      f.close();
+      return false;
+    }
+    buf = externalBuf;
+    ownsBuf = false;
+  } else {
+    buf = static_cast<uint8_t*>(malloc(tablesBytes));
+    if (!buf) {
+      lastError_ = "tables malloc failed";
+      f.close();
+      return false;
+    }
+    ownsBuf = true;
   }
   std::memcpy(buf, &hdr, sizeof(hdr));
   if (!readExact(f, buf + sizeof(hdr), tablesBytes - sizeof(hdr))) {
     lastError_ = "tables read failed";
-    free(buf);
+    if (ownsBuf) free(buf);
     f.close();
     return false;
   }
@@ -158,7 +184,7 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
     if (!compressed || !probe) {
       free(compressed);
       free(probe);
-      free(buf);
+      if (ownsBuf) free(buf);
       f.close();
       lastError_ = "probe alloc failed";
       return false;
@@ -166,7 +192,7 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
     if (!f.seekSet(tablesBytes + g0.compressedOffset) || !readExact(f, compressed, g0.compressedSize)) {
       free(compressed);
       free(probe);
-      free(buf);
+      if (ownsBuf) free(buf);
       f.close();
       lastError_ = "probe SD read failed";
       return false;
@@ -178,7 +204,7 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
     free(compressed);
     free(probe);
     if (!ok) {
-      free(buf);
+      if (ownsBuf) free(buf);
       f.close();
       lastError_ = "group 0 inflate failed (likely zlib-wrapped, want raw deflate)";
       return false;
@@ -190,6 +216,7 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
   // re-open per request.
   tablesBuf_ = buf;
   tablesBytes_ = tablesBytes;
+  ownsTablesBuf_ = ownsBuf;
   file_ = std::move(f);
   bitmapBlobFileOffset_ = tablesBytes;
   header_ = hdr;

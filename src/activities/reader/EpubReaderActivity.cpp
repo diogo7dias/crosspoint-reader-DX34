@@ -252,11 +252,17 @@ namespace {
 // remaining contiguous demands during layout come from CSS rule storage,
 // expat's growing read buffer, the page LUT, and per-paragraph word tables.
 // Empirically those rarely exceed 12 KB each; 48 KB headroom comfortably
-// covers them with safety margin. The hard floor (36 KB) is the level below
-// which even after a defrag pass we shouldn't try — better to surface a
-// clear retry prompt than to waste seconds in a doomed createSectionFile.
+// covers them with safety margin and is what we target via the defrag pass.
+// The hard floor (20 KB) is below which even after a defrag pass the next
+// big malloc is essentially guaranteed to fail. Hardware capture (PR #96)
+// showed devices with persistent boot-state fragmentation can sit at
+// largest~25 KB indefinitely; 36 KB was too aggressive and turned a
+// would-pass layout into a permanent recovery-screen dead-end. The
+// retry-once + auto-revert path in ensureSectionLoaded handles a real
+// mid-layout malloc failure cleanly, so a 20 KB floor optimizes for "try
+// and let the failure path catch it" over "block proactively".
 constexpr size_t kMinLargestBlockForLayout = 48 * 1024;
-constexpr size_t kMinLargestBlockHardFloor = 36 * 1024;
+constexpr size_t kMinLargestBlockHardFloor = 20 * 1024;
 }  // namespace
 
 void EpubReaderActivity::releaseMaxResources() {
@@ -1407,12 +1413,17 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
     crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
   }
+  LOG_DBG("HEAP", "ERS ensureSection:after-activate free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
 
   if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                 SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                 viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                 SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
                                 boldSwapEnabled)) {
+    LOG_DBG("HEAP", "ERS ensureSection:after-loadSectionFile-fail free=%u largest=%u min=%u",
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+            (unsigned)ESP.getMinFreeHeap());
     LOG_DBG("ERS", "Cache not found, building...");
 
     // Pre-flight gate: if the heap's largest contiguous block is below the
