@@ -1,236 +1,449 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Custom Fonts · CrossPoint Reader</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0d10" />
+    <title>CrossPoint Reader · Fonts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/brutalist.css" />
     <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, sans-serif;
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #f5f5f5;
-        color: #333;
+      /* Page-specific layout. Tokens, reset, .wrap, nav.nav, .foot, and
+         small-screen / reduced-motion rules live in /css/brutalist.css. */
+
+      /* ── Masthead ───────────────────────────────────────────── */
+      .mast {
+        border: 1px dashed var(--dash);
+        padding: var(--pad);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--pad);
       }
-      h1 {
-        color: #2c3e50;
-        border-bottom: 2px solid #3498db;
+      @media (min-width: 760px) {
+        .mast { grid-template-columns: 1fr 1fr; }
+        .mast .rt {
+          border-left: 1px dashed var(--dash);
+          padding-left: var(--pad);
+          display: flex;
+          align-items: center;
+        }
+      }
+      .mast h1 {
+        margin: 0;
+        font-weight: 700;
+        font-size: clamp(36px, 9vw, 72px);
+        line-height: 0.9;
+        letter-spacing: -0.04em;
+        text-transform: uppercase;
+      }
+      .mast h1 em { font-style: normal; color: var(--blue); }
+      .mast .sub {
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.28em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .mast .meta {
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .mast .meta b { color: var(--blue); font-weight: 700; }
+
+      /* ── Cards ──────────────────────────────────────────────── */
+      .card {
+        margin-top: var(--gap);
+        border: 1px dashed var(--dash);
+        padding: var(--pad);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .card h2 {
+        margin: 0 0 14px 0;
+        font-size: 11px;
+        letter-spacing: 0.3em;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-weight: 400;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
         padding-bottom: 10px;
       }
-      h2 { color: #34495e; margin-top: 0; }
-      .card {
-        background: white;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 15px 0;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+      /* ── CDN-missing banner ────────────────────────────────── */
+      .banner-err {
+        margin-top: var(--gap);
+        border: 1px dashed var(--red);
+        padding: 14px var(--pad);
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        line-height: 1.6;
+        color: var(--red);
+        text-transform: uppercase;
       }
-      .nav-links { margin: 20px 0; }
-      .nav-links a {
-        display: inline-block;
-        padding: 10px 20px;
-        background-color: #3498db;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        margin-right: 10px;
+      .banner-err b { color: var(--fg); }
+      .banner-err code {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 6px;
+        font-family: inherit;
+        text-transform: none;
+        letter-spacing: 0.04em;
       }
-      .nav-links a:hover { background-color: #2980b9; }
+
+      /* ── Installed-fonts list ──────────────────────────────── */
       .family-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid #eee;
+        padding: 12px 0;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+        gap: 14px;
       }
       .family-row:last-child { border-bottom: none; }
-      .family-name { font-weight: 600; color: #2c3e50; }
-      .family-sizes { color: #7f8c8d; font-size: 0.9em; margin-left: 10px; }
+      .family-name {
+        font-weight: 700;
+        font-size: 14px;
+        letter-spacing: 0.06em;
+      }
+      .family-sizes {
+        margin-left: 10px;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
       .size-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 4px 0 4px 24px;
-        color: #555;
+        padding: 6px 0 6px 24px;
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
       }
+      .size-row:last-child { border-bottom: none; }
+
+      /* ── Buttons ────────────────────────────────────────────── */
       button {
-        padding: 6px 14px;
-        background: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
+        background: transparent;
+        color: var(--fg);
+        border: 1px dashed var(--dash);
+        padding: 8px 14px;
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
         cursor: pointer;
-        font-size: 0.9em;
       }
-      button:hover { background: #2980b9; }
-      button.danger { background: #c0392b; }
-      button.danger:hover { background: #962d22; }
-      button.primary { background: #27ae60; padding: 12px 24px; font-size: 1em; }
-      button.primary:hover { background: #1e8449; }
-      button:disabled { background: #95a5a6; cursor: not-allowed; }
-      .field { margin: 12px 0; }
-      .field label { display: block; font-weight: 600; margin-bottom: 4px; color: #34495e; }
-      .field input[type=text] {
+      button:hover:not(:disabled) {
+        background: var(--yellow);
+        color: #000;
+      }
+      button:disabled { opacity: 0.35; cursor: not-allowed; }
+      button.danger { border-color: var(--red); color: var(--red); }
+      button.danger:hover:not(:disabled) {
+        background: var(--red);
+        color: #000;
+      }
+      button.primary {
+        padding: 16px 36px;
+        font-size: 13px;
+        letter-spacing: 0.28em;
+        min-height: 56px;
+      }
+      button.primary:hover:not(:disabled) {
+        background: var(--blue);
+        color: #000;
+      }
+
+      /* ── Form fields ───────────────────────────────────────── */
+      .field { margin: 14px 0; }
+      .field label {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+      .field input[type="text"] {
         width: 100%;
-        padding: 8px;
-        font-size: 1em;
-        border: 1px solid #bdc3c7;
-        border-radius: 4px;
+        padding: 10px;
+        background: var(--bg);
+        color: var(--fg);
+        border: 1px dashed var(--dash);
+        font-family: inherit;
+        font-size: 14px;
+        letter-spacing: 0.02em;
+        outline: none;
         box-sizing: border-box;
       }
+      .field input[type="text"]:focus { border-color: var(--blue); }
+      .field small {
+        display: block;
+        margin-top: 6px;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+      }
+      .field small code {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 5px;
+        font-family: inherit;
+      }
+
+      /* ── Slot grid (font variants) ────────────────────────── */
       .slot-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: 10px;
       }
-      .slot {
-        border: 2px dashed #bdc3c7;
-        padding: 10px;
-        border-radius: 6px;
+      @media (min-width: 600px) {
+        .slot-grid { grid-template-columns: 1fr 1fr; }
       }
-      .slot.loaded { border-color: #27ae60; background: #eafaf1; }
-      .slot.required::after { content: " *"; color: #c0392b; }
-      .slot label { display: block; font-weight: 600; margin-bottom: 6px; color: #34495e; }
-      .slot small { display: block; color: #7f8c8d; margin-top: 4px; }
+      .slot {
+        border: 1px dashed var(--dash);
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .slot label {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+      }
+      .slot input[type="file"] {
+        display: block;
+        width: 100%;
+        margin: 6px 0;
+        font-family: inherit;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .slot input[type="file"]::file-selector-button {
+        background: transparent;
+        color: var(--fg);
+        border: 1px dashed var(--dash);
+        padding: 6px 12px;
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        cursor: pointer;
+        margin-right: 8px;
+      }
+      .slot input[type="file"]::file-selector-button:hover {
+        background: var(--blue);
+        color: #000;
+      }
+      .slot small {
+        display: block;
+        margin-top: 6px;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+      }
+      .slot.loaded { border-color: var(--green); }
+      .slot.loaded label { color: var(--green); }
+      .slot.required label::after { content: " *"; color: var(--red); }
+
+      /* ── Size grid (pt checkboxes) ─────────────────────────── */
       .size-grid {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 6px;
       }
       .size-grid label {
-        background: #ecf0f1;
-        padding: 6px 12px;
-        border-radius: 4px;
+        background: transparent;
+        border: 1px dashed var(--dash);
+        padding: 8px 12px;
         cursor: pointer;
-        font-weight: 600;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--fg);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 0;
       }
-      .size-grid label:has(input:checked) { background: #3498db; color: white; }
-      .size-grid input { margin-right: 6px; }
-      .progress { margin: 12px 0; }
+      .size-grid label:hover { background: rgba(255, 255, 255, 0.05); }
+      .size-grid label:has(input:checked) {
+        background: var(--yellow);
+        color: #000;
+        border-color: var(--yellow);
+      }
+      .size-grid input { margin: 0; accent-color: var(--yellow); }
+
+      /* ── Help box ───────────────────────────────────────────── */
+      .help {
+        border: 1px dashed rgba(255, 225, 74, 0.5);
+        padding: 12px var(--pad);
+        font-size: 11px;
+        line-height: 1.6;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .help b { color: var(--yellow); }
+      .help code {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 5px;
+        font-family: inherit;
+      }
+
+      /* ── Progress ──────────────────────────────────────────── */
+      .progress { margin: 14px 0; }
       .progress-bar {
         height: 14px;
-        background: #ecf0f1;
-        border-radius: 7px;
+        border: 1px dashed var(--dash);
+        background: transparent;
         overflow: hidden;
       }
       .progress-fill {
         height: 100%;
-        background: #27ae60;
+        background: var(--blue);
         width: 0;
         transition: width 150ms ease;
       }
+      #progress-label {
+        margin-top: 6px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      /* ── Log ───────────────────────────────────────────────── */
       .log {
-        max-height: 200px;
+        max-height: 220px;
         overflow-y: auto;
-        background: #2c3e50;
-        color: #ecf0f1;
-        padding: 10px;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-size: 0.85em;
-        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.4);
+        color: var(--fg);
+        border: 1px dashed var(--dash);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        line-height: 1.55;
         white-space: pre-wrap;
       }
-      .log .err { color: #e74c3c; }
-      .log .ok { color: #2ecc71; }
-      .help {
-        background: #fffbea;
-        padding: 12px;
-        border-radius: 4px;
-        border-left: 4px solid #f39c12;
-        font-size: 0.9em;
-      }
-      .banner-err {
-        background: #fdecea;
-        border-left: 4px solid #c0392b;
-        color: #922b21;
-        padding: 12px 14px;
-        border-radius: 4px;
-        margin: 15px 0;
-        font-weight: 600;
-      }
-      .banner-err code {
-        background: rgba(0, 0, 0, 0.06);
-        padding: 1px 6px;
-        border-radius: 3px;
-        font-weight: 400;
-      }
+      .log .err { color: var(--red); }
+      .log .ok { color: var(--green); }
     </style>
   </head>
   <body>
-    <h1>Custom Fonts</h1>
-    <div class="nav-links">
-      <a href="/">Home</a>
-      <a href="/files">File Manager</a>
-      <a href="/settings">Settings</a>
-    </div>
+    <div class="wrap">
+      <!-- Masthead -->
+      <header class="mast">
+        <div class="lt">
+          <h1>FO<br /><em>NTS</em></h1>
+          <div class="sub">CrossPoint · Custom Fonts · /api/fonts</div>
+        </div>
+        <div class="rt">
+          <div class="meta">Browser bakes &middot; <b>device serves</b> from SD</div>
+        </div>
+      </header>
 
-    <div id="cdn-banner" class="banner-err" hidden>
-      Couldn't load the font-baking libraries from the internet.
-      This page needs the <b>phone / laptop you're using right now</b> to
-      have an active internet connection (the device itself doesn't need
-      one). Fix the client's connection and reload this page.
-      Installing won't work until the libraries load.
-    </div>
+      <!-- Nav -->
+      <nav class="nav" aria-label="Primary">
+        <a href="/"><span class="k">[1]</span>HOME</a>
+        <a href="/files"><span class="k">[2]</span>FILES</a>
+        <a href="/settings"><span class="k">[3]</span>SETTINGS</a>
+        <a href="/fonts" class="on"><span class="k">[4]</span>FONTS</a>
+      </nav>
 
-    <div class="card">
-      <h2>Installed Fonts</h2>
-      <div id="installed-list">Loading…</div>
-    </div>
-
-    <div class="card">
-      <h2>Install a New Font</h2>
-      <div class="help">
-        Drop a TTF or OTF for each variant you want. Only <b>Regular</b> is
-        required — Bold, Italic and Bold&nbsp;Italic are synthesised from
-        Regular when you leave them empty. Choose one or more sizes (25–40 pt);
-        the browser rasterises every glyph in the font at each size, compresses
-        the output and streams it to the device. The device reads glyphs from
-        the SD card on demand, so even big sizes don't pin RAM.
+      <!-- CDN-missing banner -->
+      <div id="cdn-banner" class="banner-err" hidden>
+        Couldn't load the font-baking libraries from the internet.
+        This page needs the <b>phone / laptop you're using right now</b> to
+        have an active internet connection (the device itself doesn't need
+        one). Fix the client's connection and reload this page.
+        Installing won't work until the libraries load.
       </div>
-      <div class="field">
-        <label for="family-name">Family name</label>
-        <input type="text" id="family-name" placeholder="e.g. inter" maxlength="32" />
-        <small>Letters, digits, <code>-</code> and <code>_</code>; must start with a letter or digit; max 32 chars.</small>
+
+      <!-- Installed fonts -->
+      <div class="card">
+        <h2>Installed Fonts</h2>
+        <div id="installed-list">Loading…</div>
       </div>
-      <div class="field">
-        <label>Variant files</label>
-        <div class="slot-grid">
-          <div class="slot required" id="slot-R">
-            <label>Regular</label>
-            <input type="file" accept=".ttf,.otf" data-variant="0" />
-            <small id="slot-R-info">No file</small>
-          </div>
-          <div class="slot" id="slot-B">
-            <label>Bold</label>
-            <input type="file" accept=".ttf,.otf" data-variant="1" />
-            <small id="slot-B-info">Will synthesise from Regular</small>
-          </div>
-          <div class="slot" id="slot-I">
-            <label>Italic</label>
-            <input type="file" accept=".ttf,.otf" data-variant="2" />
-            <small id="slot-I-info">Will synthesise from Regular</small>
-          </div>
-          <div class="slot" id="slot-Z">
-            <label>Bold Italic</label>
-            <input type="file" accept=".ttf,.otf" data-variant="3" />
-            <small id="slot-Z-info">Will synthesise from Regular</small>
+
+      <!-- Install new -->
+      <div class="card">
+        <h2>Install a New Font</h2>
+        <div class="help">
+          Drop a TTF or OTF for each variant you want. Only <b>Regular</b> is
+          required — Bold, Italic and Bold&nbsp;Italic are synthesised from
+          Regular when you leave them empty. Choose one or more sizes (25–40 pt);
+          the browser rasterises every glyph in the font at each size, compresses
+          the output and streams it to the device. The device reads glyphs from
+          the SD card on demand, so even big sizes don't pin RAM.
+        </div>
+
+        <div class="field">
+          <label for="family-name">Family name</label>
+          <input type="text" id="family-name" placeholder="e.g. inter" maxlength="32" />
+          <small>Letters, digits, <code>-</code> and <code>_</code>; must start with a letter or digit; max 32 chars.</small>
+        </div>
+
+        <div class="field">
+          <label>Variant files</label>
+          <div class="slot-grid">
+            <div class="slot required" id="slot-R">
+              <label>Regular</label>
+              <input type="file" accept=".ttf,.otf" data-variant="0" />
+              <small id="slot-R-info">No file</small>
+            </div>
+            <div class="slot" id="slot-B">
+              <label>Bold</label>
+              <input type="file" accept=".ttf,.otf" data-variant="1" />
+              <small id="slot-B-info">Will synthesise from Regular</small>
+            </div>
+            <div class="slot" id="slot-I">
+              <label>Italic</label>
+              <input type="file" accept=".ttf,.otf" data-variant="2" />
+              <small id="slot-I-info">Will synthesise from Regular</small>
+            </div>
+            <div class="slot" id="slot-Z">
+              <label>Bold Italic</label>
+              <input type="file" accept=".ttf,.otf" data-variant="3" />
+              <small id="slot-Z-info">Will synthesise from Regular</small>
+            </div>
           </div>
         </div>
+
+        <div class="field">
+          <label>Sizes (pt)</label>
+          <div class="size-grid" id="size-grid"></div>
+        </div>
+
+        <div class="field progress" id="progress-box" hidden>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <div id="progress-label"></div>
+        </div>
+
+        <button class="primary" id="install-btn" type="button">Install</button>
+
+        <div class="field">
+          <div class="log" id="log" hidden></div>
+        </div>
       </div>
-      <div class="field">
-        <label>Sizes (pt)</label>
-        <div class="size-grid" id="size-grid"></div>
-      </div>
-      <div class="field progress" id="progress-box" hidden>
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        <div id="progress-label" style="margin-top:4px;color:#555;font-size:0.9em"></div>
-      </div>
-      <button class="primary" id="install-btn" type="button">Install</button>
-      <div class="field">
-        <div class="log" id="log" hidden></div>
-      </div>
+
+      <!-- Footer -->
+      <footer class="foot">
+        <span><b>Host</b> crosspoint.local</span>
+        <span><b>Endpoint</b> /api/fonts</span>
+        <span class="heart">&bull; Open-source &middot; MIT</span>
+      </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
