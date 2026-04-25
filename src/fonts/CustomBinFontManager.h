@@ -65,6 +65,15 @@ class CustomBinFontManager {
   // loader heap buffers. Idempotent.
   void deactivate();
 
+  // Validate the on-SD CPBN header for the regular variant of (name,
+  // sizePt) without opening it persistently. Used by the boot-time scan
+  // to refuse a corrupt active font before any reader open is attempted.
+  // True iff the file exists, parses as a valid CPBN v1 header, and
+  // reports a sensible glyph/group count. The italic/bold variants are
+  // not checked here — they fall back to regular at render time, so a
+  // corrupt non-regular variant cannot brick the reader.
+  static bool validateInstalledRegular(const std::string& name, uint16_t sizePt);
+
   // Delete every .bin under /custom-font/<name>/ (and the dir if
   // empty). If the active family was this one, deactivate first.
   size_t deleteFamily(const std::string& name);

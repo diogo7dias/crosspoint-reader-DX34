@@ -243,6 +243,111 @@ void EpubReaderActivity::invalidateStatusBarCaches() { statusBarCache_.clear(); 
 
 void EpubReaderActivity::clearPageCache() { cache_.detach(); }
 
+namespace {
+// Pre-flight largest-block thresholds. Tuned conservatively so we trigger
+// the defrag pass on any opening where a fragmented heap is plausibly going
+// to break layout, and abort outright only when there's no realistic path to
+// success. The 32 KB DEFLATE dictionary, the 11 KB inflator struct, and the
+// 4 KB ZIP read buffer all live in BSS now (lib/ZipFile/ZipFile.cpp), so the
+// remaining contiguous demands during layout come from CSS rule storage,
+// expat's growing read buffer, the page LUT, and per-paragraph word tables.
+// Empirically those rarely exceed 12 KB each; 48 KB headroom comfortably
+// covers them with safety margin. The hard floor (36 KB) is the level below
+// which even after a defrag pass we shouldn't try — better to surface a
+// clear retry prompt than to waste seconds in a doomed createSectionFile.
+constexpr size_t kMinLargestBlockForLayout = 48 * 1024;
+constexpr size_t kMinLargestBlockHardFloor = 36 * 1024;
+}  // namespace
+
+void EpubReaderActivity::releaseMaxResources() {
+  // Drop everything that competes with the EPUB layout heap budget. The
+  // page cache and CSS parser are the two biggest wins (~3 KB and ~100 KB
+  // respectively). The font cache manager retains decompressed glyph
+  // pages for built-in fonts; pages re-decompress cheaply on next render.
+  // Status-bar title caches are byte-trivial but their fragmentation
+  // contribution at the top of the heap is worth dropping.
+  //
+  // ESP-IDF's heap allocator coalesces adjacent free blocks inside free()
+  // itself, so by the time the clears below return the largest contiguous
+  // block already reflects the merged regions. There is no explicit
+  // defrag/compact API to call — heap is non-moving.
+  //
+  // No global wallpaper / cover bitmap cache exists in this codebase
+  // (sleep wallpapers are rendered one-shot per cycle), so nothing to
+  // drop on that front. If a long-lived bitmap cache is added later
+  // (e.g. for home-screen covers), drop it here too.
+  clearPageCache();
+  if (epub) {
+    auto* css = epub->getCssParser();
+    if (css) css->clear();
+  }
+  auto* fcm = renderer.getFontCacheManager();
+  if (fcm) fcm->clearCache();
+  invalidateStatusBarCaches();
+}
+
+bool EpubReaderActivity::heapHeadroomOkForLayout() {
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if (largest >= kMinLargestBlockForLayout) {
+    return true;
+  }
+  LOG_DIAG("ERS", "pre-flight gate: largest=%u below %u, running defrag pass", (unsigned)largest,
+           (unsigned)kMinLargestBlockForLayout);
+  releaseMaxResources();
+  const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)after, (unsigned)largest);
+  if (after < kMinLargestBlockHardFloor) {
+    LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u), aborting layout", (unsigned)after,
+             (unsigned)kMinLargestBlockHardFloor);
+    return false;
+  }
+  return true;
+}
+
+void EpubReaderActivity::showLayoutRecoveryScreen(LayoutRecoveryState newState) {
+  layoutRecoveryState_ = newState;
+  // Suppress the in-flight Confirm release that opened this screen so the
+  // user has to tap *again* to retry — otherwise a long-press on Confirm
+  // (which dispatched ensureSection in the first place) would immediately
+  // be consumed as the retry trigger and produce a no-op flicker.
+  mappedInput.suppressUntilAllReleased();
+  renderer.clearScreen();
+
+  // Body strings (e.g. "Tap any key to free memory and try again.") are wider
+  // than the screen at UI_12_FONT_ID, so drawCenteredText alone overflows both
+  // edges. Wrap to multiple lines and stack vertically.
+  constexpr int kSideMargin = 30;
+  constexpr int kSectionGap = 20;
+  const int maxWidth = renderer.getScreenWidth() - 2 * kSideMargin;
+  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+
+  const char* titleStr;
+  const char* bodyStr;
+  if (newState == LayoutRecoveryState::AwaitingRetryAfterRevert) {
+    titleStr = tr(STR_LAYOUT_FONT_REVERTED_TITLE);
+    bodyStr = tr(STR_LAYOUT_FONT_REVERTED_BODY);
+  } else {
+    titleStr = tr(STR_LAYOUT_LOW_MEMORY_TITLE);
+    bodyStr = tr(STR_LAYOUT_LOW_MEMORY_BODY);
+  }
+
+  auto drawWrapped = [&](int& y, const char* text) {
+    const auto lines = ReaderLayoutSafety::wrapText(renderer, UI_12_FONT_ID, text, maxWidth);
+    for (const auto& line : lines) {
+      renderer.drawCenteredText(UI_12_FONT_ID, y, line.c_str(), true, EpdFontFamily::REGULAR);
+      y += lineHeight;
+    }
+  };
+
+  int y = 300;
+  drawWrapped(y, titleStr);
+  y += kSectionGap;
+  drawWrapped(y, bodyStr);
+  y += kSectionGap;
+  drawWrapped(y, tr(STR_LAYOUT_RETRY_HINT));
+  renderer.displayBuffer();
+}
+
 std::shared_ptr<Page> EpubReaderActivity::getCachedPage(const int pageIndex) const {
   return cache_.get(pageIndex, currentSpineIndex);
 }
@@ -467,6 +572,29 @@ void EpubReaderActivity::loop() {
   if (pendingSectionReset) {
     pendingSectionReset = false;
     section.reset();
+  }
+
+  // Layout-recovery dialog active: any button release re-enters layout.
+  // Suppress all other reader input (page turns, menu) until the user
+  // either taps to retry or BACK to go home. Going home falls through to
+  // the BACK handler below, which also clears the recovery state.
+  if (layoutRecoveryState_ != LayoutRecoveryState::None) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      layoutRecoveryState_ = LayoutRecoveryState::None;
+      onGoHome();
+      return;
+    }
+    if (mappedInput.wasAnyReleased()) {
+      // Don't set pendingSectionReset here: section was already reset to
+      // null by ensureSectionLoaded before showLayoutRecoveryScreen was
+      // called, and render() bails on pendingSectionReset, so setting it
+      // would make the very requestUpdate we issue here a no-op.
+      // The next render() will see section == null and call
+      // ensureSectionLoaded, which is what we want.
+      layoutRecoveryState_ = LayoutRecoveryState::None;
+      requestUpdate();
+    }
+    return;
   }
 
   // Highlight mode intercepts all input while active
@@ -1287,6 +1415,18 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                 boldSwapEnabled)) {
     LOG_DBG("ERS", "Cache not found, building...");
 
+    // Pre-flight gate: if the heap's largest contiguous block is below the
+    // safety threshold, run a defrag pass first; if still below the hard
+    // floor, surface a low-memory retry screen instead of attempting a
+    // doomed createSectionFile. The user keeps their custom font selection
+    // — only the second-failure path below auto-reverts.
+    if (!heapHeadroomOkForLayout()) {
+      clearPageCache();
+      section.reset();
+      showLayoutRecoveryScreen(LayoutRecoveryState::AwaitingRetryNoRevert);
+      return false;
+    }
+
     // Clear built-in font cache; its pages decompress again cheaply on next
     // render. The custom-font slab no longer needs releasing — the ZIP dict
     // lives in BSS (lib/ZipFile/ZipFile.cpp) and the bitmap slab lives in
@@ -1299,20 +1439,57 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
 
+    // Cache-miss means we're about to spend hundreds of ms in
+    // createSectionFile anyway, so the per-section-cleanup-walk cost
+    // (~5 ms × stale .bin files) is hidden behind that. On cache hits
+    // we skip both — orphans stay on SD until the next rebuild. The
+    // existing fontId-mismatch detection in loadSectionFile already
+    // protects correctness; this pass is purely SD janitorial.
+    Section::pruneStaleCachesForFont(epub->getCachePath(), SETTINGS.getReaderFontId());
+
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
-    const bool sectionOk = section->createSectionFile(
-        SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacingLevel,
-        SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
-        SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-        boldSwapEnabled, layoutProgressTick);
+    auto runLayout = [&]() {
+      return section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                                        SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
+                                        viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
+                                        SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
+                                        boldSwapEnabled, layoutProgressTick);
+    };
+
+    bool sectionOk = runLayout();
     if (!sectionOk) {
-      LOG_ERR("ERS", "Failed to persist page data to SD");
-      // Boot-loop safety net: when section layout fails AND a custom
+      // First failure: try once more after releasing every heap-resident
+      // cache that competes with layout. The retry is safe because
+      // Section::createSectionFile removes any partial /.tmp_<spine>.html
+      // before re-attempting stream extraction (Section.cpp:312-314).
+      // Most fragmentation-driven failures recover on this retry; only
+      // genuine over-budget cases fall through to the auto-revert below.
+      LOG_DIAG(
+          "ERS",
+          "createSectionFile fail (1st) spine=%d fontId=%d family=%d sizePt=%u customFont=%s "
+          "free=%u largest=%u min=%u",
+          currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)SETTINGS.customFontSizePt,
+          SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(), (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+      releaseMaxResources();
+      LOG_DIAG("ERS", "retrying layout after defrag: largest=%u",
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+      sectionOk = runLayout();
+    }
+    if (!sectionOk) {
+      LOG_DIAG(
+          "ERS",
+          "createSectionFile fail (2nd, terminal) spine=%d fontId=%d family=%d sizePt=%u "
+          "customFont=%s free=%u largest=%u min=%u",
+          currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)SETTINGS.customFontSizePt,
+          SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(), (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+      // Boot-loop safety net: when section layout fails twice AND a custom
       // font is the active family, the user is heading toward a
-      // crash-on-every-page-turn pattern (custom font heap + ZIP
-      // inflator can't both fit). Revert to the default built-in
-      // font and persist so the next reopen has the heap headroom
-      // it needs to lay out the chapter.
+      // crash-on-every-page-turn pattern (custom font heap + ZIP inflator
+      // can't both fit). Revert to the default built-in font and persist
+      // so the retry below — and the next reopen — have the heap headroom
+      // they need to lay out the chapter.
       if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
         LOG_ERR("ERS", "section layout failed under custom font; reverting to CHAREINK 12");
         crosspoint::fonts::CustomBinFontManager::instance().deactivate();
@@ -1324,12 +1501,12 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
       }
       clearPageCache();
       section.reset();
-      renderer.clearScreen();
-      renderer.drawCenteredText(UI_12_FONT_ID, 300, "Couldn't lay out this section", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 340, "(memory fragmented)", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 400, "Go back to home", true, EpdFontFamily::REGULAR);
-      renderer.drawCenteredText(UI_12_FONT_ID, 430, "and reopen the book", true, EpdFontFamily::REGULAR);
-      renderer.displayBuffer();
+      // The font has already been reverted (if it was custom). The next
+      // ensureSectionLoaded — triggered by the user tapping any key per
+      // showLayoutRecoveryScreen — will use getReaderFontId() returning
+      // the built-in CHAREINK 12 id, which has full heap headroom and
+      // succeeds without further intervention.
+      showLayoutRecoveryScreen(LayoutRecoveryState::AwaitingRetryAfterRevert);
       return false;
     }
   } else {

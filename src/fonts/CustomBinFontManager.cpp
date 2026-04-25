@@ -352,6 +352,20 @@ bool CustomBinFontManager::activate(const std::string& name, uint16_t sizePt) {
 
 void CustomBinFontManager::deactivate() { clearActive(); }
 
+// static
+bool CustomBinFontManager::validateInstalledRegular(const std::string& name, uint16_t sizePt) {
+  if (!isValidFamilyName(name)) return false;
+  const std::string p = variantPath(name, binfont::kVariantRegular, sizePt);
+  if (!Storage.exists(p.c_str())) return false;
+  std::string err;
+  const bool ok = binfont::EpdBinFontLoader::validateFile(p, &err);
+  if (!ok) {
+    LOG_DIAG(kModule, "validateInstalledRegular fail name=%s size=%u err=%s", name.c_str(),
+             static_cast<unsigned>(sizePt), err.c_str());
+  }
+  return ok;
+}
+
 size_t CustomBinFontManager::deleteFamilySize(const std::string& name, uint16_t sizePt) {
   if (!isValidFamilyName(name)) return 0;
   if (active_ && active_->name == name && active_->sizePt == sizePt) clearActive();

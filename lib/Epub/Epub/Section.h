@@ -41,6 +41,15 @@ class Section {
                        bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
                        uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap);
   bool clearCache() const;
+  // Walk <cachePath>/sections/*.bin and delete every file whose stored
+  // fontId differs from currentFontId. Cheap: peeks only the first 5
+  // bytes of each file (version + fontId). Returns the number of files
+  // deleted. Used after a font switch so orphaned per-fontId caches
+  // don't accumulate on SD. Doesn't affect correctness — the existing
+  // fontId-mismatch detection in loadSectionFile already triggers a
+  // rebuild — but it reclaims SD space and avoids stale-cache races
+  // when a future build introduces a new fontId for a renamed font.
+  static size_t pruneStaleCachesForFont(const std::string& cachePath, int currentFontId);
   bool createSectionFile(int fontId, float lineCompression, uint8_t extraParagraphSpacingLevel,
                          uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
                          bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,

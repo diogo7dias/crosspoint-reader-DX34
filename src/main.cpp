@@ -699,22 +699,35 @@ void setup() {
 
   // Safety net: if SETTINGS picks a custom family whose named .bin is
   // not actually installed (e.g. deleted via the web UI, SD pulled,
-  // etc.), fall back to the default built-in family so the reader
-  // doesn't silently render empty text.
+  // etc.), or the regular variant exists but its CPBN header is
+  // malformed (corrupted upload, FW format change), fall back to the
+  // default built-in family so the reader doesn't silently render empty
+  // text. The header validation runs once at boot via the static
+  // validateFile helper — no file is held open afterward.
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    bool found = false;
+    bool ok = false;
+    const char* failReason = "missing";
     if (!SETTINGS.customFontName.empty()) {
+      bool sizeInstalled = false;
       const auto sizes = customFonts.installedSizesFor(SETTINGS.customFontName);
       for (uint8_t s : sizes) {
         if (s == SETTINGS.customFontSizePt) {
-          found = true;
+          sizeInstalled = true;
           break;
         }
       }
+      if (sizeInstalled) {
+        if (crosspoint::fonts::CustomBinFontManager::validateInstalledRegular(SETTINGS.customFontName,
+                                                                              SETTINGS.customFontSizePt)) {
+          ok = true;
+        } else {
+          failReason = "invalid CPBN header";
+        }
+      }
     }
-    if (!found) {
-      LOG_INF("CFONT", "active custom font '%s' size=%u missing at boot; reverting to CHAREINK 12 crisp",
-              SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt));
+    if (!ok) {
+      LOG_DIAG("CFONT", "boot revert: active custom font '%s' size=%u %s; falling back to CHAREINK 12 crisp",
+               SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt), failReason);
       SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
       SETTINGS.fontSize = CrossPointSettings::SIZE_12;
       SETTINGS.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
