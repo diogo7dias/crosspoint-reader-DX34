@@ -1627,13 +1627,131 @@
     #folderContentsCard .file-table tr:hover {
       background: rgba(255, 255, 255, 0.03) !important;
     }
+    /* Override the per-row file-type background tints — the original CSS
+       coloured EPUB rows light-green, folders cream, BMPs light-blue with
+       !important, which read as a giant white block on the dark page. */
+    #folderContentsCard .folder-row,
+    #folderContentsCard .epub-file,
+    #folderContentsCard .bmp-file {
+      background: transparent !important;
+    }
+    #folderContentsCard .folder-row:hover {
+      background: rgba(77, 192, 255, 0.06) !important;
+    }
+    #folderContentsCard .epub-file:hover {
+      background: rgba(60, 255, 143, 0.06) !important;
+    }
+    #folderContentsCard .bmp-file:hover {
+      background: rgba(77, 192, 255, 0.06) !important;
+    }
     #folderContentsCard .folder-link,
     #folderContentsCard .file-link {
       color: var(--fg) !important;
     }
     #folderContentsCard .folder-link:hover,
     #folderContentsCard .file-link:hover { color: var(--yellow) !important; }
-    #folderContentsCard .folder-row:hover { background: rgba(77, 192, 255, 0.06) !important; }
+
+    /* ── Per-row action buttons (delete / rename / move) ── */
+    #folderContentsCard .delete-btn,
+    #folderContentsCard .rename-btn,
+    #folderContentsCard .move-btn {
+      background: transparent !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 6px 8px !important;
+      font-size: 14px !important;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #folderContentsCard .delete-btn { color: var(--red) !important; border-color: var(--red) !important; }
+    #folderContentsCard .delete-btn:hover { background: var(--red) !important; color: #000 !important; }
+    #folderContentsCard .rename-btn { color: var(--blue) !important; border-color: var(--blue) !important; }
+    #folderContentsCard .rename-btn:hover { background: var(--blue) !important; color: #000 !important; }
+    #folderContentsCard .move-btn { color: var(--green) !important; border-color: var(--green) !important; }
+    #folderContentsCard .move-btn:hover { background: var(--green) !important; color: #000 !important; }
+    #folderContentsCard .action-icon-group { gap: 6px !important; }
+
+    /* ── Failed-uploads banner sub-elements ─────────────── */
+    .failed-uploads-banner .failed-file-item {
+      border-bottom: 1px dashed rgba(255, 46, 60, 0.25) !important;
+      color: var(--muted) !important;
+    }
+    .failed-uploads-banner .failed-file-name { color: var(--fg) !important; }
+    .failed-uploads-banner .failed-file-error,
+    .failed-uploads-banner .failed-file-info small { color: var(--muted) !important; }
+    .retry-btn {
+      background: transparent !important;
+      color: var(--red) !important;
+      border: 1px dashed var(--red) !important;
+      border-radius: 0 !important;
+      padding: 8px 14px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.18em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+      cursor: pointer;
+    }
+    .retry-btn:hover { background: var(--red) !important; color: #000 !important; }
+    .dismiss-btn { width: 32px !important; height: 32px !important; padding: 0 !important; }
+
+    /* ── Info banner (Downloads-only-on-Safari notice) ───── */
+    #folderContentsCard .info-banner {
+      border: 1px dashed var(--yellow) !important;
+      background: transparent !important;
+      color: var(--yellow) !important;
+      padding: 12px var(--pad) !important;
+      margin: 0 0 12px 0 !important;
+      font-size: 11px !important;
+      letter-spacing: 0.06em !important;
+      line-height: 1.5;
+      text-align: center;
+      font-weight: 400 !important;
+      border-radius: 0 !important;
+    }
+
+    /* ── Custom checkboxes ──────────────────────────────── */
+    /* Drop the OS-native UI; render a dashed-border square that
+       fills yellow with a black tick when checked. Applies inside
+       the folder contents table and in modals (upload form). */
+    #folderContentsCard input[type="checkbox"],
+    .modal input[type="checkbox"]:not(.toggle-switch input) {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border: 1px dashed var(--dash);
+      background: transparent;
+      cursor: pointer;
+      position: relative;
+      vertical-align: middle;
+      margin: 0;
+      flex-shrink: 0;
+    }
+    #folderContentsCard input[type="checkbox"]:hover,
+    .modal input[type="checkbox"]:not(.toggle-switch input):hover {
+      border-color: var(--yellow);
+    }
+    #folderContentsCard input[type="checkbox"]:checked,
+    .modal input[type="checkbox"]:not(.toggle-switch input):checked {
+      background: var(--yellow);
+      border-color: var(--yellow);
+    }
+    /* Black tick drawn with a CSS pseudo-element so it scales with
+       font-size and stays crisp on e-ink-style displays. */
+    #folderContentsCard input[type="checkbox"]:checked::after,
+    .modal input[type="checkbox"]:not(.toggle-switch input):checked::after {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 0px;
+      width: 6px;
+      height: 11px;
+      border-right: 2px solid #000;
+      border-bottom: 2px solid #000;
+      transform: rotate(45deg);
+    }
 
     /* ── Loader ──────────────────────────────────────────── */
     #folderContentsCard .loader {
@@ -1710,7 +1828,7 @@
     <span class="summary-inline" id="folder-summary"></span>
   </div>
 
-  <div style="background:#e67e22;color:#fff;padding:10px 16px;border-radius:6px;margin-bottom:12px;text-align:center;font-weight:bold;">ℹ️ Downloads work on mobile browsers and Safari. Other browsers may not support it. Easiest alternative: download on device via QR code.</div>
+  <div class="info-banner">ℹ️ Downloads work on mobile browsers and Safari. Other browsers may not support it. Easiest alternative: download on device via QR code.</div>
 
   <div id="file-table">
     <div class="loader-container">
