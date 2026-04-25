@@ -31,6 +31,12 @@ struct SettingInfo {
   SettingType type;
   uint8_t CrossPointSettings::* valuePtr = nullptr;
   std::vector<StrId> enumValues;
+  // Free-string labels appended after enumValues for ENUM types whose
+  // option list grows at runtime — e.g. installed custom font names
+  // discovered from /custom-font/. Display indices [0, enumValues.size())
+  // resolve via I18N; [enumValues.size(), enumValues.size()+dynamicLabels.size())
+  // resolve directly from this vector.
+  std::vector<std::string> dynamicLabels;
   SettingAction action = SettingAction::None;
 
   struct ValueRange {
