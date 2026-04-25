@@ -60,7 +60,7 @@ class WsUploadSession {
   // eventually releases the SD file descriptor. User-facing session
   // stays up regardless.
   static constexpr uint32_t kIdleTimeoutMs = 10u * 60u * 1000u;  // 10 minutes
-  static constexpr size_t kProgressIntervalBytes = 65536;  // 64 KiB
+  static constexpr size_t kProgressIntervalBytes = 65536;        // 64 KiB
   static constexpr uint8_t kNoClient = 255;
 
   explicit WsUploadSession(WsUploadDeps deps);

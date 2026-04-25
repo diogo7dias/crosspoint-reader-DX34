@@ -34,23 +34,47 @@ bool readExact(HalFile& f, void* dst, size_t count) {
 }
 
 bool validateHeader(const Header& h, uint32_t fileBytes, std::string* error) {
-  if (h.magic != kMagic) { if (error) *error = "bad magic (not CPBN)"; return false; }
-  if (h.version != kVersion) { if (error) *error = "unsupported version"; return false; }
-  if (h.bitsPerPixel != 2) { if (error) *error = "only 2 bits/pixel supported"; return false; }
+  if (h.magic != kMagic) {
+    if (error) *error = "bad magic (not CPBN)";
+    return false;
+  }
+  if (h.version != kVersion) {
+    if (error) *error = "unsupported version";
+    return false;
+  }
+  if (h.bitsPerPixel != 2) {
+    if (error) *error = "only 2 bits/pixel supported";
+    return false;
+  }
   if (h.sizePt < kMinSizePt || h.sizePt > kMaxSizePt) {
     if (error) *error = "size outside 25..40";
     return false;
   }
-  if (h.variant > kVariantBoldItalic) { if (error) *error = "bad variant"; return false; }
-  if (h.glyphCount == 0 || h.glyphCount > kMaxGlyphs) { if (error) *error = "bad glyphCount"; return false; }
-  if (h.intervalCount == 0) { if (error) *error = "no unicode intervals"; return false; }
-  if (h.groupCount == 0 || h.groupCount > kMaxGroups) { if (error) *error = "bad groupCount"; return false; }
+  if (h.variant > kVariantBoldItalic) {
+    if (error) *error = "bad variant";
+    return false;
+  }
+  if (h.glyphCount == 0 || h.glyphCount > kMaxGlyphs) {
+    if (error) *error = "bad glyphCount";
+    return false;
+  }
+  if (h.intervalCount == 0) {
+    if (error) *error = "no unicode intervals";
+    return false;
+  }
+  if (h.groupCount == 0 || h.groupCount > kMaxGroups) {
+    if (error) *error = "bad groupCount";
+    return false;
+  }
 
   const uint64_t glyphsBytes = static_cast<uint64_t>(h.glyphCount) * sizeof(EpdGlyph);
   const uint64_t intervalsBytes = static_cast<uint64_t>(h.intervalCount) * sizeof(EpdUnicodeInterval);
   const uint64_t groupsBytes = static_cast<uint64_t>(h.groupCount) * sizeof(EpdFontGroup);
   const uint64_t expected = sizeof(Header) + glyphsBytes + intervalsBytes + groupsBytes + h.bitmapBlobSize;
-  if (expected != fileBytes) { if (error) *error = "tables + blob do not match file size"; return false; }
+  if (expected != fileBytes) {
+    if (error) *error = "tables + blob do not match file size";
+    return false;
+  }
   return true;
 }
 
@@ -99,8 +123,7 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
   // Allocate just the tables: header + glyph metadata + intervals +
   // groups. The bitmap blob stays on SD.
   const uint32_t tablesBytes = sizeof(Header) + hdr.glyphCount * sizeof(EpdGlyph) +
-                               hdr.intervalCount * sizeof(EpdUnicodeInterval) +
-                               hdr.groupCount * sizeof(EpdFontGroup);
+                               hdr.intervalCount * sizeof(EpdUnicodeInterval) + hdr.groupCount * sizeof(EpdFontGroup);
   uint8_t* buf = static_cast<uint8_t*>(malloc(tablesBytes));
   if (!buf) {
     lastError_ = "tables malloc failed";
@@ -132,8 +155,7 @@ bool EpdBinFontLoader::openFromFile(const std::string& path) {
       lastError_ = "probe alloc failed";
       return false;
     }
-    if (!f.seekSet(tablesBytes + g0.compressedOffset) ||
-        !readExact(f, compressed, g0.compressedSize)) {
+    if (!f.seekSet(tablesBytes + g0.compressedOffset) || !readExact(f, compressed, g0.compressedSize)) {
       free(compressed);
       free(probe);
       free(buf);

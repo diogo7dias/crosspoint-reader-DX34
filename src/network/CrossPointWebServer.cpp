@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 #include <BookFingerprint.h>
+#include <EpdBinFontLoader.h>
+#include <EpdBinFormat.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
@@ -15,15 +17,12 @@
 #include <functional>
 #include <memory>
 
-#include <EpdBinFontLoader.h>
-#include <EpdBinFormat.h>
-
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
-#include "fonts/CustomBinFontManager.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
+#include "fonts/CustomBinFontManager.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
@@ -1649,10 +1648,14 @@ uint8_t parseVariantTag(const String& v) {
 
 const char* variantTagFor(uint8_t v) {
   switch (v) {
-    case 0: return "regular";
-    case 1: return "bold";
-    case 2: return "italic";
-    case 3: return "bolditalic";
+    case 0:
+      return "regular";
+    case 1:
+      return "bold";
+    case 2:
+      return "italic";
+    case 3:
+      return "bolditalic";
   }
   return "regular";
 }

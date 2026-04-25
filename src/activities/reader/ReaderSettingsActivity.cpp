@@ -443,7 +443,8 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
         SETTINGS.fontFamily = CrossPointSettings::CUSTOM_FAMILY;
         const size_t customSlot = nextIndex - builtinCount;
         SETTINGS.customFontName = names[customSlot];
-        const auto sizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
+        const auto sizes =
+            crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
         // Keep the previously-selected size if it still exists for the
         // new family; otherwise pick the smallest so the picker has a
         // valid default.

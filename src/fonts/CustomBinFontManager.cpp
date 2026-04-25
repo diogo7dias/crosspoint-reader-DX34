@@ -34,9 +34,7 @@ bool endsWithCI(const char* name, const char* suffix) {
   return n >= s && strcasecmp(name + n - s, suffix) == 0;
 }
 
-bool isLegacyFontName(const char* name) {
-  return endsWithCI(name, ".bdf") || endsWithCI(name, ".idx");
-}
+bool isLegacyFontName(const char* name) { return endsWithCI(name, ".bdf") || endsWithCI(name, ".idx"); }
 
 size_t walkAndDeleteLegacy(const char* dirPath, int depth) {
   if (depth > 1) return 0;
@@ -81,9 +79,7 @@ constexpr VariantTag kTags[] = {
     {"bolditalic_", binfont::kVariantBoldItalic},
 };
 
-const char* variantPrefix(uint8_t v) {
-  return v <= binfont::kVariantBoldItalic ? kTags[v].prefix : "regular_";
-}
+const char* variantPrefix(uint8_t v) { return v <= binfont::kVariantBoldItalic ? kTags[v].prefix : "regular_"; }
 
 // Configured legal point-size range. Files outside this range get
 // auto-deleted by scan() so a firmware revision can't leave stale
@@ -128,17 +124,28 @@ bool isStaleSizeFile(const char* name) {
 void insertVariant(std::vector<CustomBinFontSize>& sizes, uint8_t variant, uint16_t sizePt) {
   CustomBinFontSize* target = nullptr;
   for (auto& s : sizes) {
-    if (s.sizePt == sizePt) { target = &s; break; }
+    if (s.sizePt == sizePt) {
+      target = &s;
+      break;
+    }
   }
   if (!target) {
     sizes.push_back({sizePt, false, false, false, false});
     target = &sizes.back();
   }
   switch (variant) {
-    case binfont::kVariantRegular:    target->hasRegular = true; break;
-    case binfont::kVariantBold:       target->hasBold = true; break;
-    case binfont::kVariantItalic:     target->hasItalic = true; break;
-    case binfont::kVariantBoldItalic: target->hasBoldItalic = true; break;
+    case binfont::kVariantRegular:
+      target->hasRegular = true;
+      break;
+    case binfont::kVariantBold:
+      target->hasBold = true;
+      break;
+    case binfont::kVariantItalic:
+      target->hasItalic = true;
+      break;
+    case binfont::kVariantBoldItalic:
+      target->hasBoldItalic = true;
+      break;
   }
 }
 
@@ -155,14 +162,20 @@ std::string variantPath(const std::string& name, uint8_t variant, uint16_t sizeP
 void rmdirIfEmpty(const std::string& name) {
   const std::string dirPath = familyDir(name);
   auto dir = Storage.open(dirPath.c_str());
-  if (!dir || !dir.isDirectory()) { if (dir) dir.close(); return; }
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return;
+  }
   bool empty = true;
   char entryName[256];
   for (auto e = dir.openNextFile(); e; e = dir.openNextFile()) {
     e.getName(entryName, sizeof(entryName));
     const bool isDot = entryName[0] == '.' && (entryName[1] == '\0' || (entryName[1] == '.' && entryName[2] == '\0'));
     e.close();
-    if (!isDot) { empty = false; break; }
+    if (!isDot) {
+      empty = false;
+      break;
+    }
   }
   dir.close();
   if (empty) Storage.rmdir(dirPath.c_str());
@@ -188,7 +201,10 @@ CustomBinFontManager& CustomBinFontManager::instance() {
 void CustomBinFontManager::scan() {
   families_.clear();
   auto root = Storage.open(kCustomFontDir);
-  if (!root || !root.isDirectory()) { if (root) root.close(); return; }
+  if (!root || !root.isDirectory()) {
+    if (root) root.close();
+    return;
+  }
 
   char name[256];
   size_t familyCount = 0;
@@ -204,7 +220,10 @@ void CustomBinFontManager::scan() {
     fam.name = name;
     const std::string subDirPath = familyDir(fam.name);
     auto subDir = Storage.open(subDirPath.c_str());
-    if (!subDir || !subDir.isDirectory()) { if (subDir) subDir.close(); continue; }
+    if (!subDir || !subDir.isDirectory()) {
+      if (subDir) subDir.close();
+      continue;
+    }
 
     char varName[256];
     size_t seen = 0;
@@ -223,11 +242,15 @@ void CustomBinFontManager::scan() {
         }
         continue;
       }
-      uint8_t variant; uint16_t sizePt;
+      uint8_t variant;
+      uint16_t sizePt;
       if (!parseVariantFile(varName, variant, sizePt)) continue;
       insertVariant(fam.sizes, variant, sizePt);
       if (++seen > kVariantScanCap) break;
-      if (seen % 16 == 0) { esp_task_wdt_reset(); yield(); }
+      if (seen % 16 == 0) {
+        esp_task_wdt_reset();
+        yield();
+      }
     }
     subDir.close();
 
@@ -275,7 +298,10 @@ void CustomBinFontManager::clearActive() {
 }
 
 bool CustomBinFontManager::activate(const std::string& name, uint16_t sizePt) {
-  if (!renderer_) { LOG_ERR(kModule, "activate before setRenderer()"); return false; }
+  if (!renderer_) {
+    LOG_ERR(kModule, "activate before setRenderer()");
+    return false;
+  }
   if (!isValidFamilyName(name)) return false;
   if (active_ && active_->name == name && active_->sizePt == sizePt) return true;
 
@@ -314,10 +340,8 @@ bool CustomBinFontManager::activate(const std::string& name, uint16_t sizePt) {
   // so the four-variant load is back to being the default. Bold +
   // italic + boldItalic uploaded by the browser display verbatim;
   // missing slots fall back via EpdFontFamily::getFont.
-  EpdFontFamily family(fresh->fonts[binfont::kVariantRegular].get(),
-                       fresh->fonts[binfont::kVariantBold].get(),
-                       fresh->fonts[binfont::kVariantItalic].get(),
-                       fresh->fonts[binfont::kVariantBoldItalic].get());
+  EpdFontFamily family(fresh->fonts[binfont::kVariantRegular].get(), fresh->fonts[binfont::kVariantBold].get(),
+                       fresh->fonts[binfont::kVariantItalic].get(), fresh->fonts[binfont::kVariantBoldItalic].get());
 
   clearActive();
   renderer_->insertFont(fresh->fontId, family);
@@ -346,7 +370,10 @@ size_t CustomBinFontManager::deleteFamily(const std::string& name) {
   if (active_ && active_->name == name) clearActive();
   const std::string dirPath = familyDir(name);
   auto dir = Storage.open(dirPath.c_str());
-  if (!dir || !dir.isDirectory()) { if (dir) dir.close(); return 0; }
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return 0;
+  }
   size_t removed = 0;
   char entryName[256];
   for (auto e = dir.openNextFile(); e; e = dir.openNextFile()) {

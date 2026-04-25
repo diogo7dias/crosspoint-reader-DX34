@@ -34,8 +34,8 @@ struct __attribute__((packed)) Header {
   uint8_t variant;       // Variant enum
   int16_t ascent;
   int16_t descent;
-  uint16_t advanceY;     // line height in px
-  uint16_t reserved0;    // MBZ
+  uint16_t advanceY;   // line height in px
+  uint16_t reserved0;  // MBZ
   uint32_t glyphCount;
   uint32_t intervalCount;
   uint32_t groupCount;
