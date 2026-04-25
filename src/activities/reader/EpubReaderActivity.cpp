@@ -145,13 +145,6 @@ void EpubReaderActivity::onEnter() {
 
   epub->setupCacheDir();
 
-  // Stale section caches accumulate when a book is reopened with a
-  // different font (or a custom font is renamed mid-life). loadSectionFile
-  // already detects fontId mismatch and triggers a rebuild, but the orphan
-  // .bin files sit on SD forever otherwise. Cheap one-shot prune at open
-  // time, after the active font is fixed for this session.
-  Section::pruneStaleCachesForFont(epub->getCachePath(), SETTINGS.getReaderFontId());
-
   int32_t loadedPageCount = -1;
   FsFile f;
   const std::string progPath = epub->getCachePath() + "/progress.bin";
@@ -1418,6 +1411,14 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     // layout, and on a fragmented heap that malloc routinely failed.
     auto* fcm = renderer.getFontCacheManager();
     if (fcm) fcm->clearCache();
+
+    // Cache-miss means we're about to spend hundreds of ms in
+    // createSectionFile anyway, so the per-section-cleanup-walk cost
+    // (~5 ms × stale .bin files) is hidden behind that. On cache hits
+    // we skip both — orphans stay on SD until the next rebuild. The
+    // existing fontId-mismatch detection in loadSectionFile already
+    // protects correctness; this pass is purely SD janitorial.
+    Section::pruneStaleCachesForFont(epub->getCachePath(), SETTINGS.getReaderFontId());
 
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
     auto runLayout = [&]() {

@@ -10,14 +10,15 @@
 #include <esp_heap_caps.h>
 #endif
 
+namespace {
 // Single static read buffer for both stored-method and DEFLATE paths in
-// readFileToStream. ZIP decompression is single-threaded — the main loop
-// serialises every caller — so sharing one buffer across calls is safe
-// without locking. Sized at 4 KB: large enough to keep SD I/O efficient,
-// small enough to keep per-buffer SRAM cost modest. Callers that pass
-// chunkSize > kZipReadChunkBytes are clamped to this size.
+// readFileToStream. Sized at 4 KB — every existing caller passes
+// chunkSize <= 4 KB (Epub.cpp / Section.cpp / parsers). Callers that
+// would pass more are clamped at the use site. See the BSS rationale
+// comment inside the DEFLATE branch.
 constexpr size_t kZipReadChunkBytes = 4096;
-static uint8_t zipReadChunkBuffer[kZipReadChunkBytes];
+uint8_t zipReadChunkBuffer[kZipReadChunkBytes];
+}  // namespace
 
 bool inflateOneShot(const uint8_t* inputBuf, const size_t deflatedSize, uint8_t* outputBuf, const size_t inflatedSize) {
   // Setup inflator
@@ -562,33 +563,25 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   }
 
   if (fileStat.method == MZ_DEFLATED) {
-    // The 32 KB sliding-window dictionary used to come from malloc here,
-    // which meant every call into the DEFLATE path needed a fresh 32 KB
-    // contiguous block. Hardware capture 2026-04-24 caught the failure
-    // mode: user switches fonts mid-book, layout re-runs, largest free
-    // block has fragmented to ~29 KB from normal activity, malloc(32 KB)
-    // returns null, section build fails, user sees "Couldn't lay out this
-    // section". 32 KB contiguous was unreliable at best — the single
-    // biggest contiguous demand the reader makes.
+    // BSS rationale (applies to outputBuffer, staticInflator, and the
+    // shared zipReadChunkBuffer at file scope):
     //
-    // Reserve it as BSS (function-scope static) so it's allocated once at
-    // boot, never fragments, and is always available regardless of
-    // mid-session heap state. Trade: 32 KB of SRAM dedicated permanently
-    // (~10% of the ESP32-C3's 320 KB). Worth it — this is the allocation
-    // that has caused the majority of "REBOOT DEVICE" reports. Single-
-    // threaded ZIP decompression (main loop serialises every caller) so
-    // sharing one buffer is safe without locking.
+    // The 32 KB sliding-window dictionary, the ~11 KB tinfl_decompressor
+    // struct, and the per-call file read buffer all used to come from
+    // malloc. Hardware capture 2026-04-24 caught the failure mode: user
+    // switches fonts mid-book, layout re-runs, largest free block has
+    // fragmented below 32 KB, malloc returns null, section build fails,
+    // user sees "Couldn't lay out this section (memory fragmented)".
+    //
+    // Reserving these as BSS (function-scope or file-scope statics) costs
+    // ~47 KB of permanent SRAM (~15% of the ESP32-C3's 320 KB) but
+    // removes every contiguous demand the EPUB-open path makes on the
+    // heap. ZIP decompression is single-threaded — the main loop
+    // serialises every caller — so sharing the statics across calls is
+    // safe without locking.
     static uint8_t outputBuffer[TINFL_LZ_DICT_SIZE];
     memset(outputBuffer, 0, TINFL_LZ_DICT_SIZE);
 
-    // Same BSS rationale as outputBuffer above, applied to the inflator
-    // struct (~11 KB) and the per-call file read buffer. The previous
-    // mallocs failed under fragmentation when a custom font was active,
-    // surfacing as the "Couldn't lay out this section (memory fragmented)"
-    // error. Reserving these here costs ~15 KB of permanent SRAM but
-    // removes the last contiguous demands the EPUB-open path made on the
-    // heap. ZIP decompression is single-threaded (main loop serialises),
-    // so sharing the same statics across calls is safe without locking.
     static tinfl_decompressor staticInflator;
     tinfl_decompressor* const inflator = &staticInflator;
     memset(inflator, 0, sizeof(*inflator));
