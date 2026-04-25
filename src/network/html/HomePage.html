@@ -181,8 +181,8 @@
             <small id="date">—</small>
           </div>
           <div class="chips">
-            <div class="chip green"><b>Firmware</b><em id="chip-fw">—</em></div>
-            <div class="chip yellow"><b>Heap</b><em id="chip-heap">—</em></div>
+            <div class="chip green"><b data-i18n="STR_WEB_FIRMWARE">Firmware</b><em id="chip-fw">—</em></div>
+            <div class="chip yellow"><b data-i18n="STR_WEB_HEAP_FREE">Heap</b><em id="chip-heap">—</em></div>
             <div class="chip blue"><b>WiFi</b><em id="chip-rssi">—</em></div>
             <div class="chip red"><b>IP</b><em id="chip-ip">—</em></div>
           </div>
@@ -191,25 +191,25 @@
 
       <!-- Nav -->
       <nav class="nav" aria-label="Primary">
-        <a href="/" class="on"><span class="k">[1]</span>HOME</a>
-        <a href="/files"><span class="k">[2]</span>FILES</a>
-        <a href="/fonts"><span class="k">[3]</span>FONTS</a>
+        <a href="/" class="on"><span class="k">[1]</span><span data-i18n="STR_WEB_HOME">HOME</span></a>
+        <a href="/files"><span class="k">[2]</span><span data-i18n="STR_WEB_FILES">FILES</span></a>
+        <a href="/fonts"><span class="k">[3]</span><span data-i18n="STR_WEB_FONTS">FONTS</span></a>
       </nav>
 
       <!-- Numerals board -->
       <section class="board" aria-label="Device status">
         <div class="tile a">
-          <div class="lbl">Uptime</div>
+          <div class="lbl" data-i18n="STR_WEB_UPTIME">Uptime</div>
           <div class="num" id="tile-uptime">—</div>
           <div class="foot"><b id="uptime-detail">—</b></div>
         </div>
         <div class="tile b">
-          <div class="lbl">Heap Free</div>
+          <div class="lbl" data-i18n="STR_WEB_HEAP_FREE">Heap Free</div>
           <div class="num" id="tile-heap">—<small>KB</small></div>
-          <div class="foot"><b id="heap-detail">—</b> bytes</div>
+          <div class="foot"><b id="heap-detail">—</b> <span data-i18n="STR_WEB_BYTES">bytes</span></div>
         </div>
         <div class="tile c">
-          <div class="lbl">WiFi Signal</div>
+          <div class="lbl" data-i18n="STR_WEB_WIFI_SIGNAL">WiFi Signal</div>
           <div class="num" id="tile-rssi">—<small>dBm</small></div>
           <div class="bars" id="bars" aria-hidden="true"></div>
           <div class="foot"><b id="rssi-detail">—</b></div>
@@ -218,14 +218,44 @@
 
       <!-- Footer -->
       <footer class="foot">
-        <span><b>Host</b> crosspoint.local</span>
+        <span><b data-i18n="STR_WEB_HOST">Host</b> crosspoint.local</span>
         <span><b>IP</b> <span id="foot-ip">—</span></span>
-        <span><b>Mode</b> <span id="foot-mode">—</span></span>
+        <span><b data-i18n="STR_WEB_MODE">Mode</b> <span id="foot-mode">—</span></span>
         <span class="heart">&bull; Open-source &middot; MIT</span>
       </footer>
     </div>
 
     <script>
+      // i18n bootstrap — fetches device-language dict, swaps [data-i18n] / [data-i18n-attr]
+      // Exposes window.tr(KEY) for use in dynamic JS-emitted strings.
+      window.__i18nReady = (async function() {
+        try {
+          const r = await fetch('/api/i18n.json', { cache: 'no-cache' });
+          if (!r.ok) throw new Error('i18n fetch failed: ' + r.status);
+          const dict = await r.json();
+          window.__i18nDict = dict;
+          window.tr = (k) => (dict && dict[k]) || k;
+          const apply = () => {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+              const k = el.dataset.i18n;
+              if (dict[k]) el.textContent = dict[k];
+            });
+            document.querySelectorAll('[data-i18n-attr]').forEach(el => {
+              el.dataset.i18nAttr.split(',').forEach(pair => {
+                const [a, k] = pair.split(':').map(s => s.trim());
+                if (a && k && dict[k]) el.setAttribute(a, dict[k]);
+              });
+            });
+          };
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', apply, { once: true });
+          } else { apply(); }
+        } catch (e) {
+          window.tr = (k) => k;
+          console.warn('i18n init failed, using English fallback:', e);
+        }
+      })();
+
       // ── tiny pixel-art sprite (16 × 12) ──────────────────────
       (function () {
         var pat = [
@@ -293,11 +323,12 @@
       }
       function rssiLabel(rssi) {
         if (rssi === 0 || rssi === undefined || rssi === null) return "—";
-        if (rssi >= -50) return "EXCELLENT";
-        if (rssi >= -60) return "GOOD";
-        if (rssi >= -70) return "FAIR";
-        if (rssi >= -80) return "WEAK";
-        return "POOR";
+        const t = window.tr || ((k) => k);
+        if (rssi >= -50) return t("STR_WEB_RSSI_EXCELLENT");
+        if (rssi >= -60) return t("STR_WEB_RSSI_GOOD");
+        if (rssi >= -70) return t("STR_WEB_RSSI_FAIR");
+        if (rssi >= -80) return t("STR_WEB_RSSI_WEAK");
+        return t("STR_WEB_RSSI_POOR");
       }
 
       // ── pixel bars for signal ──────────────────────────────
@@ -347,7 +378,7 @@
               setText("chip-rssi", "AP");
               var tileRssi = document.getElementById("tile-rssi");
               if (tileRssi) tileRssi.innerHTML = "AP<small>mode</small>";
-              setText("rssi-detail", "ACCESS POINT HOST");
+              setText("rssi-detail", (window.tr || ((k)=>k))("STR_WEB_AP_HOST"));
               setBars(-50);
             } else {
               setText("chip-rssi", rssi + " dBm");
@@ -369,7 +400,7 @@
               tileUp.innerHTML = val + "<small>" + unit + "</small>";
             }
             setText("uptime-detail",
-              pad(u.d) + "d " + pad(u.h) + "h " + pad(u.m) + "m " + pad(u.s) + "s · stable");
+              pad(u.d) + "d " + pad(u.h) + "h " + pad(u.m) + "m " + pad(u.s) + "s · " + (window.tr || ((k)=>k))("STR_WEB_STABLE"));
           }
         } catch (err) {
           console.error("status fetch failed", err);
