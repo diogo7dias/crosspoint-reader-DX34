@@ -1523,7 +1523,10 @@ void CrossPointWebServer::handleSettingsPage() const {
 }
 
 void CrossPointWebServer::handleGetSettings() const {
+  const unsigned long t0 = millis();
   auto settings = getSettingsList();
+  const unsigned long tListed = millis();
+  LOG_DBG("WEB", "[diag] getSettingsList() built %u entries in %lu ms", settings.size(), tListed - t0);
 
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
@@ -1534,8 +1537,12 @@ void CrossPointWebServer::handleGetSettings() const {
   bool seenFirst = false;
   JsonDocument doc;
 
+  unsigned long slowestEntryMs = 0;
+  const char* slowestEntryKey = "(none)";
+
   for (const auto& s : settings) {
     if (!s.key) continue;  // Skip ACTION-only entries
+    const unsigned long entryStart = millis();
     doc.clear();
     doc["key"] = s.key;
     doc["name"] = I18N.get(s.nameId);
@@ -1611,11 +1618,19 @@ void CrossPointWebServer::handleGetSettings() const {
       seenFirst = true;
     }
     server->sendContent(output);
+
+    const unsigned long entryMs = millis() - entryStart;
+    if (entryMs > slowestEntryMs) {
+      slowestEntryMs = entryMs;
+      slowestEntryKey = s.key;
+    }
   }
 
   server->sendContent("]");
   server->sendContent("");
-  LOG_DBG("WEB", "Served settings API");
+  const unsigned long total = millis() - t0;
+  LOG_DBG("WEB", "[diag] /api/settings served in %lu ms (slowest entry: %s = %lu ms)", total, slowestEntryKey,
+          slowestEntryMs);
 }
 
 void CrossPointWebServer::handlePostSettings() {
