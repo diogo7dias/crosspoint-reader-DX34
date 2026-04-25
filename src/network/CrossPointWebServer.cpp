@@ -497,6 +497,7 @@ void CrossPointWebServer::pumpWsDownload() {
 
 void CrossPointWebServer::handleJszip() const {
   server->sendHeader("Content-Encoding", "gzip");
+  server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "application/javascript", jszip_minJs, jszip_minJsCompressedSize);
   LOG_DBG("WEB", "Served jszip.min.js");
 }
