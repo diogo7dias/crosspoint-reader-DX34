@@ -1419,13 +1419,266 @@
       box-shadow: none !important;
     }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/brutalist.css" />
+  <style>
+    /* Phase 3a chrome overrides — page header / nav / file-table /
+       failed-uploads banner / footer all adopt the brutalist palette.
+       Modals (.modal, .modal-overlay) and their internals are
+       deliberately left in the existing light-theme styling and will
+       be addressed in Phase 3b. */
+
+    body {
+      background: var(--bg) !important;
+      color: var(--fg) !important;
+      font-family: "Space Mono", ui-monospace, Menlo, Consolas, monospace !important;
+      max-width: 1200px !important;
+      padding: var(--pad) !important;
+    }
+
+    h1 {
+      color: var(--fg) !important;
+      border-bottom: none !important;
+      padding-bottom: 0 !important;
+    }
+
+    /* ── Top nav ──────────────────────────────────────────── */
+    .nav-links {
+      margin-top: 0 !important;
+      margin-bottom: var(--gap) !important;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    @media (min-width: 500px) {
+      .nav-links { grid-template-columns: repeat(4, 1fr); }
+    }
+    .nav-links a {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 18px 12px !important;
+      text-align: center !important;
+      letter-spacing: 0.2em !important;
+      font-weight: 700 !important;
+      font-size: 14px !important;
+      text-transform: uppercase !important;
+      position: relative;
+      min-height: 56px;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a .k {
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      font-weight: 400;
+    }
+    .nav-links a.on {
+      background: var(--yellow) !important;
+      color: #000 !important;
+    }
+    .nav-links a.on .k { color: #000; }
+    .nav-links a:hover:not(.on) { background: rgba(255, 255, 255, 0.05) !important; }
+
+    /* ── Masthead (page-header) ──────────────────────────── */
+    .page-header {
+      background: transparent !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: var(--pad) !important;
+      margin-top: 0 !important;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--pad);
+    }
+    @media (min-width: 760px) {
+      .page-header {
+        grid-template-columns: 1fr auto;
+        align-items: end;
+      }
+    }
+    .page-header-left { padding: 0 !important; }
+    .page-header-left h1 {
+      margin: 0 !important;
+      font-weight: 700 !important;
+      font-size: clamp(36px, 9vw, 72px) !important;
+      line-height: 0.9 !important;
+      letter-spacing: -0.04em !important;
+      text-transform: uppercase !important;
+      color: var(--fg) !important;
+    }
+
+    /* ── Breadcrumbs ──────────────────────────────────────── */
+    .breadcrumb-inline {
+      margin-top: 12px !important;
+      font-size: 11px !important;
+      letter-spacing: 0.18em !important;
+      color: var(--muted) !important;
+      text-transform: uppercase !important;
+    }
+    .breadcrumb-inline a {
+      color: var(--blue) !important;
+      border-bottom: 1px dashed transparent;
+    }
+    .breadcrumb-inline a:hover { border-bottom-color: var(--blue); }
+    .breadcrumb-inline .sep { color: var(--muted) !important; margin: 0 6px; }
+    .breadcrumb-inline .current { color: var(--fg) !important; }
+
+    /* ── Action buttons ──────────────────────────────────── */
+    .action-buttons {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 !important;
+    }
+    .action-btn {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      padding: 12px 18px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.2em !important;
+      text-transform: uppercase !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      min-height: 56px;
+    }
+    .action-btn:hover { background: var(--yellow) !important; color: #000 !important; }
+    .action-btn.upload-action-btn:hover { background: var(--green) !important; }
+    .action-btn.folder-action-btn:hover { background: var(--blue) !important; }
+    .action-btn[onclick*="downloadSelected"]:hover { background: var(--blue) !important; }
+    .action-btn[onclick*="DeleteSelected"]:hover { background: var(--red) !important; color: #000 !important; }
+
+    /* ── Failed-uploads banner ──────────────────────────── */
+    .failed-uploads-banner {
+      background: transparent !important;
+      border: 1px dashed var(--red) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      color: var(--red) !important;
+      padding: 14px var(--pad) !important;
+      margin-top: var(--gap) !important;
+    }
+    .failed-uploads-title { color: var(--red) !important; }
+    .dismiss-btn,
+    .retry-all-btn {
+      background: transparent !important;
+      color: var(--red) !important;
+      border: 1px dashed var(--red) !important;
+      border-radius: 0 !important;
+    }
+    .dismiss-btn:hover,
+    .retry-all-btn:hover { background: var(--red) !important; color: #000 !important; }
+
+    /* ── Folder contents card ────────────────────────────── */
+    #folderContentsCard {
+      background: transparent !important;
+      color: var(--fg) !important;
+      border: 1px dashed var(--dash) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      margin-top: var(--gap) !important;
+      padding: var(--pad) !important;
+    }
+    #folderContentsCard .contents-header { color: var(--fg) !important; }
+    #folderContentsCard .contents-title {
+      margin: 0 !important;
+      font-size: 11px !important;
+      letter-spacing: 0.3em !important;
+      color: var(--muted) !important;
+      text-transform: uppercase !important;
+      font-weight: 400 !important;
+    }
+    #folderContentsCard .summary-inline {
+      color: var(--muted) !important;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── File table ──────────────────────────────────────── */
+    #folderContentsCard .file-table th,
+    #folderContentsCard .file-table td {
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.12) !important;
+      color: var(--fg) !important;
+    }
+    #folderContentsCard .file-table th {
+      background: transparent !important;
+      color: var(--muted) !important;
+      font-size: 10px !important;
+      letter-spacing: 0.24em !important;
+      text-transform: uppercase !important;
+      font-weight: 400 !important;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.25) !important;
+    }
+    #folderContentsCard .file-table tr:hover {
+      background: rgba(255, 255, 255, 0.03) !important;
+    }
+    #folderContentsCard .folder-link,
+    #folderContentsCard .file-link {
+      color: var(--fg) !important;
+    }
+    #folderContentsCard .folder-link:hover,
+    #folderContentsCard .file-link:hover { color: var(--yellow) !important; }
+    #folderContentsCard .folder-row:hover { background: rgba(77, 192, 255, 0.06) !important; }
+
+    /* ── Loader ──────────────────────────────────────────── */
+    #folderContentsCard .loader {
+      width: 32px !important;
+      height: 32px !important;
+      border: 2px dashed var(--dash) !important;
+      border-bottom-color: transparent !important;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .brut-foot {
+      margin-top: var(--gap);
+      border: 1px dashed var(--dash);
+      padding: 12px var(--pad);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 24px;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+    .brut-foot b { color: var(--fg); font-weight: 400; }
+    .brut-foot .heart { color: var(--red); }
+
+    /* ── Mobile ──────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      body { padding: 12px !important; }
+      .nav-links { grid-template-columns: repeat(2, 1fr); }
+      .action-buttons { width: 100%; }
+      .action-btn { flex: 1 1 calc(50% - 4px); }
+    }
+    @media (max-width: 380px) {
+      .nav-links a { padding: 14px 10px !important; font-size: 13px !important; }
+    }
+  </style>
 </head>
 <body>
-<div class="nav-links">
-  <a href="/">Home</a>
-  <a href="/files">File Manager</a>
-  <a href="/settings">Settings</a>
-</div>
+<nav class="nav-links" aria-label="Primary">
+  <a href="/"><span class="k">[1]</span>HOME</a>
+  <a href="/files" class="on"><span class="k">[2]</span>FILES</a>
+  <a href="/settings"><span class="k">[3]</span>SETTINGS</a>
+  <a href="/fonts"><span class="k">[4]</span>FONTS</a>
+</nav>
 
 <div class="page-header">
   <div class="page-header-left">
@@ -1466,11 +1719,11 @@
   </div>
 </div>
 
-<div class="card">
-  <p style="text-align: center; color: #95a5a6; margin: 0;">
-    CrossPoint E-Reader • Open Source
-  </p>
-</div>
+<footer class="brut-foot">
+  <span><b>Host</b> crosspoint.local</span>
+  <span><b>Endpoint</b> /api/files</span>
+  <span class="heart">&bull; Open-source &middot; MIT</span>
+</footer>
 
 <!-- Upload Modal -->
 <div class="modal-overlay" id="uploadModal">
