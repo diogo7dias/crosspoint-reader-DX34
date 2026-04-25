@@ -299,8 +299,7 @@ size_t Section::pruneStaleCachesForFont(const std::string& cachePath, int curren
   }
   dir.close();
   if (removed > 0) {
-    LOG_DBG("SCT", "pruneStaleCachesForFont: removed %u stale files (fontId now %d)", (unsigned)removed,
-            currentFontId);
+    LOG_DBG("SCT", "pruneStaleCachesForFont: removed %u stale files (fontId now %d)", (unsigned)removed, currentFontId);
   }
   return removed;
 }
@@ -389,8 +388,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
 
   if (!success) {
-    LOG_DIAG("SCT", "stream extract fail spine=%d free=%u largest=%u min=%u",
-             spineIndex, (unsigned)ESP.getFreeHeap(),
+    LOG_DIAG("SCT", "stream extract fail spine=%d free=%u largest=%u min=%u", spineIndex, (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
     return false;
   }
@@ -398,8 +396,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   LOG_DBG("SCT", "Streamed temp HTML to %s (%d bytes)", tmpHtmlPath.c_str(), fileSize);
 
   if (!Storage.openFileForWrite("SCT", filePath, file)) {
-    LOG_DIAG("SCT", "open section file fail path=%s free=%u largest=%u",
-             filePath.c_str(), (unsigned)ESP.getFreeHeap(),
+    LOG_DIAG("SCT", "open section file fail path=%s free=%u largest=%u", filePath.c_str(), (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return false;
   }
@@ -439,9 +436,9 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
 
   Storage.remove(tmpHtmlPath.c_str());
   if (!success) {
-    LOG_DIAG("SCT", "parseAndBuildPages fail spine=%d fontId=%d free=%u largest=%u min=%u",
-             spineIndex, fontId, (unsigned)ESP.getFreeHeap(),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+    LOG_DIAG("SCT", "parseAndBuildPages fail spine=%d fontId=%d free=%u largest=%u min=%u", spineIndex, fontId,
+             (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+             (unsigned)ESP.getMinFreeHeap());
     file.close();
     Storage.remove(filePath.c_str());
     if (cssParser) {
@@ -474,8 +471,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
 
   if (hasFailedLutRecords) {
-    LOG_DIAG("SCT", "LUT write fail (invalid page positions) spine=%d pageCount=%u free=%u largest=%u",
-             spineIndex, (unsigned)pageCount, (unsigned)ESP.getFreeHeap(),
+    LOG_DIAG("SCT", "LUT write fail (invalid page positions) spine=%d pageCount=%u free=%u largest=%u", spineIndex,
+             (unsigned)pageCount, (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     file.close();
     Storage.remove(filePath.c_str());

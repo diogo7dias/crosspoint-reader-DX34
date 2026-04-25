@@ -297,8 +297,8 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
   const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
   LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)after, (unsigned)largest);
   if (after < kMinLargestBlockHardFloor) {
-    LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u), aborting layout",
-             (unsigned)after, (unsigned)kMinLargestBlockHardFloor);
+    LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u), aborting layout", (unsigned)after,
+             (unsigned)kMinLargestBlockHardFloor);
     return false;
   }
   return true;
@@ -313,10 +313,8 @@ void EpubReaderActivity::showLayoutRecoveryScreen(LayoutRecoveryState newState) 
   mappedInput.suppressUntilAllReleased();
   renderer.clearScreen();
   if (newState == LayoutRecoveryState::AwaitingRetryAfterRevert) {
-    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_FONT_REVERTED_TITLE), true,
-                              EpdFontFamily::REGULAR);
-    renderer.drawCenteredText(UI_12_FONT_ID, 340, tr(STR_LAYOUT_FONT_REVERTED_BODY), true,
-                              EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_FONT_REVERTED_TITLE), true, EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(UI_12_FONT_ID, 340, tr(STR_LAYOUT_FONT_REVERTED_BODY), true, EpdFontFamily::REGULAR);
   } else {
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
     renderer.drawCenteredText(UI_12_FONT_ID, 340, tr(STR_LAYOUT_LOW_MEMORY_BODY), true, EpdFontFamily::REGULAR);
@@ -1426,11 +1424,11 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
 
     auto layoutProgressTick = [this](int) { TransitionFeedback::maybeShowStillWorkingToast(renderer); };
     auto runLayout = [&]() {
-      return section->createSectionFile(
-          SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacingLevel,
-          SETTINGS.paragraphAlignment, viewportWidth, viewportHeight, SETTINGS.hyphenationEnabled != 0,
-          SETTINGS.wordSpacingPercent, SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-          boldSwapEnabled, layoutProgressTick);
+      return section->createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                                        SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
+                                        viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
+                                        SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
+                                        boldSwapEnabled, layoutProgressTick);
     };
 
     bool sectionOk = runLayout();
@@ -1441,26 +1439,26 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
       // before re-attempting stream extraction (Section.cpp:312-314).
       // Most fragmentation-driven failures recover on this retry; only
       // genuine over-budget cases fall through to the auto-revert below.
-      LOG_DIAG("ERS", "createSectionFile fail (1st) spine=%d fontId=%d family=%d sizePt=%u customFont=%s "
-                      "free=%u largest=%u min=%u",
-               currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily,
-               (unsigned)SETTINGS.customFontSizePt,
-               SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(),
-               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-               (unsigned)ESP.getMinFreeHeap());
+      LOG_DIAG(
+          "ERS",
+          "createSectionFile fail (1st) spine=%d fontId=%d family=%d sizePt=%u customFont=%s "
+          "free=%u largest=%u min=%u",
+          currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)SETTINGS.customFontSizePt,
+          SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(), (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
       releaseMaxResources();
       LOG_DIAG("ERS", "retrying layout after defrag: largest=%u",
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
       sectionOk = runLayout();
     }
     if (!sectionOk) {
-      LOG_DIAG("ERS", "createSectionFile fail (2nd, terminal) spine=%d fontId=%d family=%d sizePt=%u "
-                      "customFont=%s free=%u largest=%u min=%u",
-               currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily,
-               (unsigned)SETTINGS.customFontSizePt,
-               SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(),
-               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-               (unsigned)ESP.getMinFreeHeap());
+      LOG_DIAG(
+          "ERS",
+          "createSectionFile fail (2nd, terminal) spine=%d fontId=%d family=%d sizePt=%u "
+          "customFont=%s free=%u largest=%u min=%u",
+          currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)SETTINGS.customFontSizePt,
+          SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(), (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
       // Boot-loop safety net: when section layout fails twice AND a custom
       // font is the active family, the user is heading toward a
       // crash-on-every-page-turn pattern (custom font heap + ZIP inflator

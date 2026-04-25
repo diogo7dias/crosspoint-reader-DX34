@@ -538,13 +538,12 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
 
     size_t remaining = inflatedDataSize;
     while (remaining > 0) {
-      const size_t dataRead =
-          file.read(zipReadChunkBuffer, remaining < effectiveChunk ? remaining : effectiveChunk);
+      const size_t dataRead = file.read(zipReadChunkBuffer, remaining < effectiveChunk ? remaining : effectiveChunk);
       if (dataRead == 0) {
 #ifdef ESP_PLATFORM
-        LOG_DIAG("ZIP", "OOM/IO stored read: free=%u largest=%u min=%u remaining=%u",
-                 (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-                 (unsigned)ESP.getMinFreeHeap(), (unsigned)remaining);
+        LOG_DIAG("ZIP", "OOM/IO stored read: free=%u largest=%u min=%u remaining=%u", (unsigned)ESP.getFreeHeap(),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(),
+                 (unsigned)remaining);
 #else
         LOG_ERR("ZIP", "Stored-method read failure remaining=%u", (unsigned)remaining);
 #endif
@@ -649,10 +648,9 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
 
       if (status < 0) {
 #ifdef ESP_PLATFORM
-        LOG_DIAG("ZIP", "tinfl_decompress fail status=%d free=%u largest=%u min=%u processed=%u",
-                 status, (unsigned)ESP.getFreeHeap(),
-                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(),
-                 (unsigned)processedOutputBytes);
+        LOG_DIAG("ZIP", "tinfl_decompress fail status=%d free=%u largest=%u min=%u processed=%u", status,
+                 (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+                 (unsigned)ESP.getMinFreeHeap(), (unsigned)processedOutputBytes);
 #else
         LOG_ERR("ZIP", "tinfl_decompress fail status=%d processed=%u", status, (unsigned)processedOutputBytes);
 #endif

@@ -791,9 +791,8 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   int done;
 
   if (!parser) {
-    LOG_DIAG("EHP", "OOM XML_ParserCreate free=%u largest=%u min=%u fontId=%d",
-             (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-             (unsigned)ESP.getMinFreeHeap(), fontId);
+    LOG_DIAG("EHP", "OOM XML_ParserCreate free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
     return false;
   }
 
@@ -803,9 +802,9 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 
   FsFile file;
   if (!Storage.openFileForRead("EHP", filepath, file)) {
-    LOG_DIAG("EHP", "open temp HTML failed path=%s free=%u largest=%u min=%u",
-             filepath.c_str(), (unsigned)ESP.getFreeHeap(),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+    LOG_DIAG("EHP", "open temp HTML failed path=%s free=%u largest=%u min=%u", filepath.c_str(),
+             (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+             (unsigned)ESP.getMinFreeHeap());
     XML_ParserFree(parser);
     return false;
   }
@@ -843,8 +842,8 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     const size_t len = file.read(buf, 1024);
 
     if (len == 0 && file.available() > 0) {
-      LOG_DIAG("EHP", "File read error pos=%u/%u free=%u",
-               (unsigned)file.position(), (unsigned)fileSize, (unsigned)ESP.getFreeHeap());
+      LOG_DIAG("EHP", "File read error pos=%u/%u free=%u", (unsigned)file.position(), (unsigned)fileSize,
+               (unsigned)ESP.getFreeHeap());
       XML_StopParser(parser, XML_FALSE);                // Stop any pending processing
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
       XML_SetCharacterDataHandler(parser, nullptr);
@@ -871,8 +870,8 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 
     if (XML_ParseBuffer(parser, static_cast<int>(len), done) == XML_STATUS_ERROR) {
       const auto errCode = XML_GetErrorCode(parser);
-      LOG_DIAG("EHP", "XML parse error code=%d line=%lu free=%u largest=%u msg=%s",
-               (int)errCode, XML_GetCurrentLineNumber(parser), (unsigned)ESP.getFreeHeap(),
+      LOG_DIAG("EHP", "XML parse error code=%d line=%lu free=%u largest=%u msg=%s", (int)errCode,
+               XML_GetCurrentLineNumber(parser), (unsigned)ESP.getFreeHeap(),
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), XML_ErrorString(errCode));
       XML_StopParser(parser, XML_FALSE);                // Stop any pending processing
       XML_SetElementHandler(parser, nullptr, nullptr);  // Clear callbacks
