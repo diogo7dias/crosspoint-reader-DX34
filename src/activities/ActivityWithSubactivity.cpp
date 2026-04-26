@@ -75,7 +75,7 @@ void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
     exitActivity();
     return;
   }
-  oom->setOnDismiss([this] { this->exitActivity(); });
+  oom->setOnDismiss([this] { this->onSubactivityEntryFailedFatally(); });
   mappedInput.suppressUntilAllReleased();
   subActivity.reset(oom);
   subActivity->onEnter();

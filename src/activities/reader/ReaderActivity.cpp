@@ -57,7 +57,15 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
 
   LOG_DBG("HEAP", "READER loadEpub:before free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
-  if (epub->load(true, readerStyleMode == CrossPointSettings::READER_STYLE_USER)) {
+  // Always skip CSS load here. Loading the CSS index eagerly (Wolfe = 33 KB)
+  // before the EpubReaderActivity render task is even spawned was the source
+  // of the post-PR-#100 OOM screen on heavy books: by the time xTaskCreate
+  // runs, largest_free_block has already collapsed below the 8 KB stack.
+  // EpubReaderActivity::onEnter calls ensureCssCache() after acquiring its
+  // task, so the 33 KB pressure is sequential with the stack alloc rather
+  // than simultaneous.
+  (void)readerStyleMode;
+  if (epub->load(true, /*skipLoadingCss=*/true)) {
     LOG_DBG("HEAP", "READER loadEpub:after-ok free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
     return epub;

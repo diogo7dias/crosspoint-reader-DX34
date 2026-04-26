@@ -106,6 +106,25 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
+  // PR #101: ReaderActivity::loadEpub now always skips CSS, so the heap is
+  // still fat when the base class's xTaskCreate runs. Pull the CSS index in
+  // here, after the 8 KB stack is acquired. For USER style mode the CSS
+  // rules aren't consulted, so we skip the work entirely. ensureCssCache
+  // failure is non-fatal — Section.cpp will fall back to layout without
+  // CSS rules and the user gets a stylistically degraded but readable page.
+  if (didEntryFail()) {
+    return;
+  }
+  if (SETTINGS.readerStyleMode != CrossPointSettings::READER_STYLE_USER) {
+    LOG_DBG("HEAP", "EPUB onEnter:before-css free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    if (!epub->ensureCssCache(nullptr)) {
+      LOG_ERR("EPUB", "Deferred CSS cache load failed — book renders without CSS");
+    }
+    LOG_DBG("HEAP", "EPUB onEnter:after-css free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  }
+
   // Full refresh on book enter. The v1.2.0 experiment downgraded this to
   // requestHalfRefresh() to shave ~1 s off open time, but hardware capture
   // 2026-04-24 caught the failure mode the original author warned about:
