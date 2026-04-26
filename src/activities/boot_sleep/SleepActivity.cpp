@@ -18,6 +18,9 @@
 #include "persist/BackupMirror.h"
 #include "persist/PersistManager.h"
 #include "sleep/WallpaperPlaylist.h"
+#if FEATURE_WALLPAPER_V2
+#include "sleep/WallpaperPlaylistV2.h"
+#endif
 #include "util/FavoriteBmp.h"
 #include "util/StringUtils.h"
 
@@ -166,7 +169,11 @@ void SleepActivity::renderCustomSleepScreen() const {
   std::string selectedImage;
   bool rendered = false;
   for (int attempt = 0; attempt < kMaxParseRetries && !rendered; ++attempt) {
+#if FEATURE_WALLPAPER_V2
+    selectedImage = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().advance();
+#else
     selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
+#endif
     if (selectedImage.empty()) break;
     const auto filename = "/sleep/" + selectedImage;
     FsFile file;
@@ -215,16 +222,37 @@ void SleepActivity::renderCustomSleepScreen() const {
 }
 
 bool SleepActivity::randomizeSleepImagePlaylist() {
+#if FEATURE_WALLPAPER_V2
+  return crosspoint::sleep::v2::WallpaperPlaylistV2::instance().reshuffle();
+#else
   return crosspoint::sleep::WallpaperPlaylist::instance().reshuffle();
+#endif
 }
 
 size_t SleepActivity::cachedSleepFavoriteCount() {
+#if FEATURE_WALLPAPER_V2
+  // PR2: V2 will track cached favorite count via its trim path.
+  return 0;
+#else
   return crosspoint::sleep::WallpaperPlaylist::instance().cachedFavoriteCount();
+#endif
 }
 
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   (void)popupRenderer;  // No caller passes a non-null renderer today.
+#if FEATURE_WALLPAPER_V2
+  // V2: only mark dirty. Calling reconcile() inline here (e.g. from
+  // MyLibraryActivity move-to-sleep) runs on the file-browser heap which is
+  // fragmented enough that the buffer_.insert() string growth (~28 KB
+  // observed allocation fail) throws bad_alloc → terminate. Reconcile fires
+  // safely on next sleep entry from advance(), under the rich-sleep heap-
+  // budget gate (30 KB free required). Net effect: file moved to /sleep is
+  // visible on the user's next sleep cycle, which is the natural moment
+  // they care about.
+  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
+#else
   crosspoint::sleep::WallpaperPlaylist::instance().trimToLimit();
+#endif
 }
 
 void SleepActivity::renderDefaultSleepScreen() const {

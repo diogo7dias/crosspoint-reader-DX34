@@ -9,6 +9,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -18,6 +20,13 @@ namespace sleep {
 struct NextBmpResult {
   std::string next;  // lex-smallest > after, or lex-min if wrap; empty on no files
   size_t count;      // total .bmp count, capped at scanCap
+};
+
+// Filename + last-modify time (FAT date/time packed). Used by V2 wallpaper
+// rotation for new-on-top insertion ordering and oldest-first trim selection.
+struct SleepBmpEntry {
+  std::string name;
+  uint32_t mtime;
 };
 
 struct ISleepFs {
@@ -54,6 +63,29 @@ struct ISleepFs {
     r.count = countSleepBmps(scanCap);
     r.next = nextSleepBmpAfter(after);
     return r;
+  }
+
+  // V2 rotation: collect up to maxEntries .bmp basenames + mtimes in directory
+  // iteration order. Default impl falls back to listSleepBmps + mtime=0 so
+  // existing fakes still link.
+  virtual std::vector<SleepBmpEntry> listSleepBmpsWithMtime(size_t maxEntries) {
+    std::vector<SleepBmpEntry> out;
+    auto names = listSleepBmps(maxEntries);
+    out.reserve(names.size());
+    for (auto& n : names) out.push_back({std::move(n), 0});
+    return out;
+  }
+
+  // V2 streaming walk: invoke `cb(name, mtime)` once per .bmp under /sleep, in
+  // SD iteration order. Caller decides what to retain — typically only NEW
+  // files vs. an existing buffer set, keeping peak heap proportional to the
+  // delta (usually 0-3 entries) rather than the full /sleep listing.
+  // Required for the boot/home-route reconcile path where materializing all
+  // 500 entries as a vector trips bad_alloc on a fragmented heap.
+  // Default impl falls back to listSleepBmpsWithMtime so existing fakes link.
+  virtual void walkSleepBmps(const std::function<void(const std::string& /*name*/, uint32_t /*mtime*/)>& cb) {
+    auto entries = listSleepBmpsWithMtime(1024);
+    for (const auto& e : entries) cb(e.name, e.mtime);
   }
 
   // Generic storage ops used during trim / rename bookkeeping.

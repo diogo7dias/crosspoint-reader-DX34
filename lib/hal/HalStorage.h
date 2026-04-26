@@ -96,6 +96,9 @@ class HalFile : public Print {
   bool close();
   HalFile openNextFile();
   bool isOpen() const;
+  // FAT modify date+time. Used by V2 wallpaper rotation to order new files for
+  // new-on-top insertion.
+  bool getModifyDateTime(uint16_t* pdate, uint16_t* ptime);
   operator bool() const;
 };
 
