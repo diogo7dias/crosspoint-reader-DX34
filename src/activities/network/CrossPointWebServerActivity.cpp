@@ -34,7 +34,7 @@ constexpr uint16_t DNS_PORT = 53;
 void CrossPointWebServerActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
-  LOG_DBG("WEBACT", "Free heap at onEnter: %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEBACT", "[HEAP] onEnter free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Reset state
   state = WebServerActivityState::MODE_SELECTION;
@@ -56,7 +56,7 @@ void CrossPointWebServerActivity::onEnter() {
 void CrossPointWebServerActivity::onExit() {
   ActivityWithSubactivity::onExit();
 
-  LOG_DBG("WEBACT", "Free heap at onExit start: %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEBACT", "[HEAP] onExit start free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   state = WebServerActivityState::SHUTTING_DOWN;
 
@@ -90,7 +90,7 @@ void CrossPointWebServerActivity::onExit() {
   WiFi.mode(WIFI_OFF);
   delay(30);  // Allow WiFi hardware to power down
 
-  LOG_DBG("WEBACT", "Free heap at onExit end: %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEBACT", "[HEAP] onExit end free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }
 
 void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) {
