@@ -148,12 +148,14 @@ void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) 
 
     exitActivity();
 
+    LOG_DIAG("WEBACT", "[HEAP] sta0_after_wifi_connect free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
     // Start mDNS for hostname resolution
     if (MDNS.begin(AP_HOSTNAME)) {
       MDNS.addService("http", "tcp", 80);
       MDNS.addService("ws", "tcp", 81);
       LOG_DBG("WEBACT", "mDNS started: http://%s.local/", AP_HOSTNAME);
     }
+    LOG_DIAG("WEBACT", "[HEAP] sta1_after_mdns_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
     // Start the web server
     startWebServer();
@@ -202,6 +204,7 @@ void CrossPointWebServerActivity::startAccessPoint() {
   LOG_DBG("WEBACT", "Access Point started!");
   LOG_DBG("WEBACT", "SSID: %s", AP_SSID);
   LOG_DBG("WEBACT", "IP: %s", connectedIP.c_str());
+  LOG_DIAG("WEBACT", "[HEAP] a0_after_softAP free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start mDNS for hostname resolution
   if (MDNS.begin(AP_HOSTNAME)) {
@@ -211,15 +214,14 @@ void CrossPointWebServerActivity::startAccessPoint() {
   } else {
     LOG_DBG("WEBACT", "WARNING: mDNS failed to start");
   }
+  LOG_DIAG("WEBACT", "[HEAP] a1_after_mdns_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start DNS server for captive portal behavior
   // This redirects all DNS queries to our IP, making any domain typed resolve to us
   dnsServer.reset(new DNSServer());
   dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer->start(DNS_PORT, "*", apIP);
-  LOG_DBG("WEBACT", "DNS server started for captive portal");
-
-  LOG_DBG("WEBACT", "Free heap after AP start: %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEBACT", "[HEAP] a2_after_dnsServer_start free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start the web server
   startWebServer();
