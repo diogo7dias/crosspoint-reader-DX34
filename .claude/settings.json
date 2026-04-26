@@ -9,7 +9,22 @@
       "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-addr2line:*)",
       "Bash(~/.platformio/packages/toolchain-riscv32-esp/bin/riscv32-esp-elf-nm:*)",
       "Bash(shasum:*)",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "Bash(bash scripts/serial_monitor_bg.sh)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command'); case \"$cmd\" in *\"pio run -e debug -t upload\"*) bash scripts/serial_monitor_bg.sh ;; esac",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
