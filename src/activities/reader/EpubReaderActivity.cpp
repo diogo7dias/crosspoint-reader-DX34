@@ -281,16 +281,20 @@ namespace {
 // mid-layout malloc failure cleanly, so a 20 KB floor optimizes for "try
 // and let the failure path catch it" over "block proactively".
 constexpr size_t kMinLargestBlockForLayout = 48 * 1024;
-// Hard floor for attempting a section *rebuild*. Below this, the parser
-// pipeline will reliably hit bad_alloc deep inside expat callbacks and
-// terminate(). Hardware testing on Wolfe (216-spine, dense prose) shows
-// rebuilds at largest=25588 still overflow on big sections; 28 KB is the
-// observed safe boundary where books known to fit (Lydia Davis 53 pages,
-// Shadow Slave 18 pages) all open and known-too-big books (Wolfe section
-// 26) get the recovery screen instead of a reset. Future work: streaming
-// section build that doesn't hold full per-page elements in heap during
-// parseAndBuildPages -- that fix lifts this floor back down.
-constexpr size_t kMinLargestBlockHardFloor = 28 * 1024;
+// Hard floor for attempting a section *rebuild*. Devices with persistent
+// boot-state fragmentation sit at largest~25 KB indefinitely (PR #96
+// hardware capture). PR #95 set this to 36 KB and PR #100 raised it to
+// 28 KB to give Wolfe-class books (216-spine, dense prose) a recovery
+// screen instead of a bad_alloc->terminate() reset; both values bounced
+// every modest book on this device because the post-defrag largest never
+// climbed above the gate. Reverted to PR #96's 20 KB: the retry-once +
+// auto-revert path in ensureSectionLoaded plus the OOM screen escape
+// hatch added in PR #100 handle a real mid-layout malloc failure cleanly,
+// so the floor optimizes for "try and let the failure path catch it"
+// over "block proactively". Wolfe still cannot complete its layout under
+// any current floor; that needs the streaming-layout work tracked as
+// follow-up to PR #100, not a higher gate.
+constexpr size_t kMinLargestBlockHardFloor = 20 * 1024;
 }  // namespace
 
 void EpubReaderActivity::releaseMaxResources() {

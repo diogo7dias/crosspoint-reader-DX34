@@ -78,7 +78,7 @@ void HomeActivity::refreshSleepFavoriteWarning() {
   // Use the count cached by trimSleepFolderToLimit() (called in onGoHome)
   // instead of re-scanning the /sleep directory.
   protectedSleepFavoriteCount = SleepActivity::cachedSleepFavoriteCount();
-  sleepFavoritesFull = protectedSleepFavoriteCount >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
+  sleepFavoritesFull = protectedSleepFavoriteCount >= CrossPointState::SLEEP_FAVORITES_MAX;
 }
 
 void HomeActivity::loadRecentBooks(int maxBooks) {

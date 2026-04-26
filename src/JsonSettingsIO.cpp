@@ -273,6 +273,7 @@ static bool safeWriteFile(const char* path, const String& json) {
     LOG_ERR("JSN", "safeWriteFile: failed to write tmp %s", activeTmp);
     return false;
   }
+  LOG_DIAG("JSN", "safeWriteFile step1 wrote tmp=%s bytes=%u", activeTmp, (unsigned)json.length());
 
   // 2. Remove stale backup
   if (Storage.exists(bakPath)) {
@@ -280,6 +281,7 @@ static bool safeWriteFile(const char* path, const String& json) {
       LOG_ERR("JSN", "safeWriteFile: failed to remove stale bak %s", bakPath);
     }
   }
+  LOG_DIAG("JSN", "safeWriteFile step2 bak_exists_after=%d", Storage.exists(bakPath) ? 1 : 0);
 
   // 3. Rotate current to backup
   if (Storage.exists(path)) {
@@ -289,6 +291,8 @@ static bool safeWriteFile(const char* path, const String& json) {
       return false;
     }
   }
+  LOG_DIAG("JSN", "safeWriteFile step3 primary_exists_after=%d bak_exists_after=%d", Storage.exists(path) ? 1 : 0,
+           Storage.exists(bakPath) ? 1 : 0);
 
   // 4. Promote tmp to current
   if (!Storage.rename(activeTmp, path)) {
@@ -305,6 +309,7 @@ static bool safeWriteFile(const char* path, const String& json) {
     }
     return false;
   }
+  LOG_DIAG("JSN", "safeWriteFile step4 promoted tmp->%s ok primary_exists=%d", path, Storage.exists(path) ? 1 : 0);
 
   return true;
 }
@@ -314,7 +319,10 @@ static bool safeWriteFile(const char* path, const String& json) {
 String JsonSettingsIO::safeReadFile(const char* path) {
   if (Storage.exists(path)) {
     String json = Storage.readFile(path);
-    if (!json.isEmpty()) return json;
+    if (!json.isEmpty()) {
+      LOG_DIAG("JSN", "safeReadFile: source=primary path=%s bytes=%u", path, (unsigned)json.length());
+      return json;
+    }
   }
 
   // Primary failed/empty. Try backup (which means crash happened during step 4
@@ -324,7 +332,7 @@ String JsonSettingsIO::safeReadFile(const char* path) {
   if (Storage.exists(bakPath)) {
     String json = Storage.readFile(bakPath);
     if (!json.isEmpty()) {
-      LOG_DBG("JSN", "safeReadFile: Recovered %s from .bak", path);
+      LOG_DIAG("JSN", "safeReadFile: source=bak path=%s bytes=%u", bakPath, (unsigned)json.length());
       return json;
     }
   }
@@ -336,17 +344,21 @@ String JsonSettingsIO::safeReadFile(const char* path) {
   if (Storage.exists(tmpPath)) {
     String json = Storage.readFile(tmpPath);
     if (!json.isEmpty()) {
-      LOG_DBG("JSN", "safeReadFile: Recovered %s from .tmp", path);
+      LOG_DIAG("JSN", "safeReadFile: source=tmp path=%s bytes=%u", tmpPath, (unsigned)json.length());
       return json;
     }
   }
 
+  LOG_DIAG("JSN", "safeReadFile: source=none path=%s (no readable source)", path);
   return "";
 }
 
 // ---- CrossPointSettings ----
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
+  LOG_DIAG("CPS", "saveSettings: enter ff=%u fs=%u lsp=%u customFont='%s' cfsPt=%u path=%s", (unsigned)s.fontFamily,
+           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, s.customFontName.c_str(), (unsigned)s.customFontSizePt,
+           path);
   JsonDocument doc;
 
   doc["homeLayout"] = s.homeLayout;
@@ -442,7 +454,10 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
   String json;
   serializeJson(doc, json);
-  return safeWriteFile(path, json);
+  const bool ok = safeWriteFile(path, json);
+  LOG_DIAG("CPS", "saveSettings: exit ok=%d ff=%u fs=%u lsp=%u path=%s", ok ? 1 : 0, (unsigned)s.fontFamily,
+           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, path);
+  return ok;
 }
 
 bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool* needsResave) {
@@ -650,8 +665,13 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.frontButtonRight = clampEnum(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT,
                                  S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
+  const bool ffPresent = !doc["fontFamily"].isNull();
+  const int ffRaw = ffPresent ? (int)(doc["fontFamily"] | (uint8_t)S::CHAREINK) : -1;
   s.fontFamily = clampEnum(doc["fontFamily"] | (uint8_t)S::CHAREINK, S::FONT_FAMILY_COUNT, S::CHAREINK);
+  const uint8_t ffClamped = s.fontFamily;
   s.fontFamily = S::normalizeFontFamily(s.fontFamily);
+  LOG_DIAG("CPS", "loadSettings: ff_present=%d ff_raw=%d ff_clamped=%u ff_normalized=%u", ffPresent ? 1 : 0, ffRaw,
+           (unsigned)ffClamped, (unsigned)s.fontFamily);
   s.fontSize = clampEnum(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT, S::SIZE_16);
   s.fontSize = S::normalizeFontSizeForFamily(s.fontFamily, s.fontSize);
   // customFontName is optional; absent → empty (old settings.json migrates
@@ -762,7 +782,9 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     if (!pass.empty() && needsResave) *needsResave = true;
   }
   StringUtils::safeStrncpy(s.opdsPassword, pass.c_str());
-  LOG_DBG("CPS", "Settings loaded from file");
+  LOG_DIAG("CPS", "loadSettings: ff=%u fs=%u lsp=%u customFont='%s' cfsPt=%u", (unsigned)s.fontFamily,
+           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, s.customFontName.c_str(),
+           (unsigned)s.customFontSizePt);
   return true;
 }
 
