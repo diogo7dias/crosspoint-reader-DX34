@@ -103,7 +103,21 @@ bool WallpaperPlaylistV2::loadFromDisk() {
 
 bool WallpaperPlaylistV2::saveToDisk() const {
   if (!deps_.fileIO) return false;
-  return deps_.fileIO->safeWrite(deps_.orderFilePath, serializeOrderFile(buffer_, cursor_));
+  // Stream the write so peak heap is bounded — serializeOrderFile would
+  // concatenate header + buffer_ into a fresh std::string of full size,
+  // which doubles transient memory pressure right when reconcile already
+  // holds two buffer copies. safeWriteStreamed hands us a JsonSink-like
+  // byte sink wired straight to the .tmp file; no intermediate copy.
+  return deps_.fileIO->safeWriteStreamed(deps_.orderFilePath, [this](crosspoint::persist::JsonSink& sink) {
+    char header[32];
+    const int hn = std::snprintf(header, sizeof(header), "v1 cursor=%zu\n", cursor_);
+    if (hn <= 0) return false;
+    sink.write(reinterpret_cast<const uint8_t*>(header), static_cast<size_t>(hn));
+    if (!buffer_.empty()) {
+      sink.write(reinterpret_cast<const uint8_t*>(buffer_.data()), buffer_.size());
+    }
+    return true;
+  });
 }
 
 void WallpaperPlaylistV2::writeBuffer(const std::vector<std::string>& names, size_t cursor) {
@@ -297,7 +311,20 @@ void WallpaperPlaylistV2::reconcile() {
     reshuffle();
   } else {
     if (cursor_ > buffer_.size()) cursor_ = 0;
-    buffer_.insert(cursor_, insertion);
+    // Exact-size rebuild rather than buffer_.insert() — std::string::insert()
+    // doubles capacity which on a 14 KB buffer triggers a 28 KB single
+    // allocation, observed to fail on sleep-entry heap (largest free block
+    // for MALLOC_CAP_DEFAULT was smaller than the nominal "largest" value
+    // due to internal vs IRAM regioning). Allocating new = old + insertion
+    // exactly keeps the transient peak as two ~equal allocations rather
+    // than one doubled one — fragmentation-tolerant.
+    const size_t newSize = buffer_.size() + insertion.size();
+    std::string newBuffer;
+    newBuffer.reserve(newSize);
+    newBuffer.append(buffer_.data(), cursor_);
+    newBuffer.append(insertion);
+    newBuffer.append(buffer_.data() + cursor_, buffer_.size() - cursor_);
+    buffer_ = std::move(newBuffer);
     saveToDisk();
   }
 
