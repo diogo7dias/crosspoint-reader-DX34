@@ -370,8 +370,14 @@ static void wireWallpaperPlaylist() {
 
 static void trimSleepFolderIfDirty() {
 #if FEATURE_WALLPAPER_V2
-  auto& wpv2 = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
-  if (wpv2.dirty()) wpv2.reconcile();
+  // V2: do not run reconcile on home-route entry. listSleepBmpsWithMtime
+  // materializes vector<SleepBmpEntry> (each ~32 bytes — string + uint32_t)
+  // which at the 500-file cap can throw bad_alloc when the home heap budget
+  // is tight (~14 KB transient peak observed on first-boot of fresh V2 flash).
+  // V2's advance() lazy-builds the buffer on first sleep entry where the
+  // existing heap-budget gate (30 KB free required for rich sleep) protects
+  // against running on a pressured heap. dirty_ stays true until that point;
+  // new files added in this session will just be picked up on next sleep.
 #else
   auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
   if (wp.dirty()) wp.reconcile();
