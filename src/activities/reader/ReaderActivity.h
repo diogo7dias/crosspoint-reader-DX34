@@ -37,4 +37,15 @@ class ReaderActivity final : public ActivityWithSubactivity {
         onGoToLibrary(onGoToLibrary) {}
   void onEnter() override;
   bool isReaderActivity() const override { return true; }
+
+ protected:
+  // Override: when an inner reader subactivity (Epub/Xtc/Txt/Quotes) cannot
+  // bring itself up and is replaced by the OOM screen, the user dismissing
+  // that screen needs to land somewhere navigable. ReaderActivity has no
+  // chrome of its own, so dropping back to the library at the failing
+  // book's folder is the right escape hatch.
+  void onSubactivityEntryFailedFatally() override {
+    exitActivity();
+    goToLibrary(currentBookPath);
+  }
 };

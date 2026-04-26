@@ -106,6 +106,25 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
+  // PR #101: ReaderActivity::loadEpub now always skips CSS, so the heap is
+  // still fat when the base class's xTaskCreate runs. Pull the CSS index in
+  // here, after the 8 KB stack is acquired. For USER style mode the CSS
+  // rules aren't consulted, so we skip the work entirely. ensureCssCache
+  // failure is non-fatal — Section.cpp will fall back to layout without
+  // CSS rules and the user gets a stylistically degraded but readable page.
+  if (didEntryFail()) {
+    return;
+  }
+  if (SETTINGS.readerStyleMode != CrossPointSettings::READER_STYLE_USER) {
+    LOG_DBG("HEAP", "EPUB onEnter:before-css free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    if (!epub->ensureCssCache(nullptr)) {
+      LOG_ERR("EPUB", "Deferred CSS cache load failed — book renders without CSS");
+    }
+    LOG_DBG("HEAP", "EPUB onEnter:after-css free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  }
+
   // Full refresh on book enter. The v1.2.0 experiment downgraded this to
   // requestHalfRefresh() to shave ~1 s off open time, but hardware capture
   // 2026-04-24 caught the failure mode the original author warned about:
@@ -262,7 +281,16 @@ namespace {
 // mid-layout malloc failure cleanly, so a 20 KB floor optimizes for "try
 // and let the failure path catch it" over "block proactively".
 constexpr size_t kMinLargestBlockForLayout = 48 * 1024;
-constexpr size_t kMinLargestBlockHardFloor = 20 * 1024;
+// Hard floor for attempting a section *rebuild*. Below this, the parser
+// pipeline will reliably hit bad_alloc deep inside expat callbacks and
+// terminate(). Hardware testing on Wolfe (216-spine, dense prose) shows
+// rebuilds at largest=25588 still overflow on big sections; 28 KB is the
+// observed safe boundary where books known to fit (Lydia Davis 53 pages,
+// Shadow Slave 18 pages) all open and known-too-big books (Wolfe section
+// 26) get the recovery screen instead of a reset. Future work: streaming
+// section build that doesn't hold full per-page elements in heap during
+// parseAndBuildPages -- that fix lifts this floor back down.
+constexpr size_t kMinLargestBlockHardFloor = 28 * 1024;
 }  // namespace
 
 void EpubReaderActivity::releaseMaxResources() {
@@ -1797,6 +1825,19 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
                                                static_cast<int32_t>(pageCount)};
   progressSink_.write(pos);
   progress_.seed(pos);
+
+  // Cache the percent in RecentBooksStore so the home screen can render it
+  // without re-opening the EPUB. Computation mirrors getEpubPercent in
+  // util/BookProgress.cpp -- chapterProgress is currentPage / pageCount,
+  // then Epub::calculateProgress folds in spine sizes for the absolute
+  // percent. We already have epub + spine + page + count here, so this is
+  // ~free vs the cost of loading the EPUB at home entry.
+  if (epub && pageCount > 0) {
+    const int safePage = (currentPage < 0) ? 0 : (currentPage >= pageCount ? pageCount - 1 : currentPage);
+    const float chapterProgress = static_cast<float>(safePage) / static_cast<float>(pageCount);
+    const int percent = static_cast<int>(epub->calculateProgress(spineIndex, chapterProgress) * 100.0f + 0.5f);
+    RECENT_BOOKS.setPercent(epub->getPath(), percent);
+  }
 }
 void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
   if (!epub || !section || section->pageCount == 0) {
@@ -1807,6 +1848,16 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
                      static_cast<int32_t>(section->pageCount)},
                     now);
   progress_.flush(now, force);
+
+  // Keep the home-screen percent cache fresh. setPercent is a no-op when
+  // the value hasn't changed (no SD write), so this is cheap on every
+  // page turn and only persists when the percent actually advances.
+  const int safePage = (section->currentPage < 0)                     ? 0
+                       : (section->currentPage >= section->pageCount) ? section->pageCount - 1
+                                                                      : section->currentPage;
+  const float chapterProgress = static_cast<float>(safePage) / static_cast<float>(section->pageCount);
+  const int percent = static_cast<int>(epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f + 0.5f);
+  RECENT_BOOKS.setPercent(epub->getPath(), percent);
 }
 
 void EpubReaderActivity::addSessionPagesRead(const uint32_t amount) { APP_STATE.sessionPagesRead += amount; }

@@ -447,10 +447,9 @@ void CrossPointWebServer::handleI18nDict() const {
   const WebI18nBlob blob = getWebI18nBlob(lang);
   server->sendHeader("Content-Encoding", "gzip");
   server->sendHeader("Cache-Control", "no-cache");
-  server->send_P(200, "application/json",
-                 reinterpret_cast<const char*>(blob.data), blob.size);
-  LOG_DBG("WEB", "Served /api/i18n.json (lang=%u, %u B gz)",
-          static_cast<unsigned>(lang), static_cast<unsigned>(blob.size));
+  server->send_P(200, "application/json", reinterpret_cast<const char*>(blob.data), blob.size);
+  LOG_DBG("WEB", "Served /api/i18n.json (lang=%u, %u B gz)", static_cast<unsigned>(lang),
+          static_cast<unsigned>(blob.size));
 }
 
 void CrossPointWebServer::stop() {

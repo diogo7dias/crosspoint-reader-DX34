@@ -328,8 +328,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 self->currentPage.reset(new (std::nothrow) Page());
                 if (!self->currentPage) {
                   LOG_DIAG("EHP", "OOM new Page (image overflow) free=%u largest=%u min=%u",
-                           (unsigned)ESP.getFreeHeap(),
-                           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+                           (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
                            (unsigned)ESP.getMinFreeHeap());
                   self->parseFailed = true;
                   return;
@@ -338,10 +337,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
               } else if (!self->currentPage) {
                 self->currentPage.reset(new (std::nothrow) Page());
                 if (!self->currentPage) {
-                  LOG_DIAG("EHP", "OOM new Page (image initial) free=%u largest=%u min=%u",
-                           (unsigned)ESP.getFreeHeap(),
-                           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-                           (unsigned)ESP.getMinFreeHeap());
+                  LOG_DIAG("EHP", "OOM new Page (image initial) free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+                           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
                   self->parseFailed = true;
                   return;
                 }
@@ -356,8 +353,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
               // and bail.
               auto* rawImageBlock = new (std::nothrow) ImageBlock(cachedImagePath, displayWidth, displayHeight);
               if (!rawImageBlock) {
-                LOG_DIAG("EHP", "OOM new ImageBlock free=%u largest=%u",
-                         (unsigned)ESP.getFreeHeap(),
+                LOG_DIAG("EHP", "OOM new ImageBlock free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
                          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
                 self->parseFailed = true;
                 return;
@@ -366,8 +362,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
               int xPos = (self->viewportWidth - displayWidth) / 2;
               auto* rawPageImage = new (std::nothrow) PageImage(imageBlock, xPos, self->currentPageNextY);
               if (!rawPageImage) {
-                LOG_DIAG("EHP", "OOM new PageImage free=%u largest=%u",
-                         (unsigned)ESP.getFreeHeap(),
+                LOG_DIAG("EHP", "OOM new PageImage free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
                          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
                 self->parseFailed = true;
                 return;
@@ -1034,9 +1029,8 @@ void ChapterHtmlSlimParser::makePages() {
   if (!currentPage) {
     currentPage.reset(new (std::nothrow) Page());
     if (!currentPage) {
-      LOG_DIAG("EHP", "OOM new Page (makePages entry) free=%u largest=%u min=%u fontId=%d",
-               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-               (unsigned)ESP.getMinFreeHeap(), fontId);
+      LOG_DIAG("EHP", "OOM new Page (makePages entry) free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
       parseFailed = true;
       return;
     }
