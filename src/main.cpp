@@ -792,12 +792,18 @@ void setup() {
   if (goHome) {
     bootActivity->setProgress(60, "Refreshing sleep cache");
 #if FEATURE_WALLPAPER_V2
-    auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+    // V2: do NOT reconcile at boot. listSleepBmpsWithMtime materializes the
+    // full /sleep listing as a vector of SleepBmpEntry (~32 bytes each) — at
+    // 500 files this is a transient ~16 KB single allocation that boot-time
+    // heap fragmentation can fail (observed alloc-fail size=14336 on first
+    // V2 flash). Mark dirty only; advance() lazy-builds on first sleep entry,
+    // and trimSleepFolderIfDirty() runs on home navigation when heap is calmer.
+    crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
 #else
     auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
-#endif
     wp.markFolderDirty();
     wp.reconcile();
+#endif
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
