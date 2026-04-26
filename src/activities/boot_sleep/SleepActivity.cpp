@@ -241,10 +241,15 @@ size_t SleepActivity::cachedSleepFavoriteCount() {
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   (void)popupRenderer;  // No caller passes a non-null renderer today.
 #if FEATURE_WALLPAPER_V2
-  // V2 fuses trim into reconcile().
-  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
-  wp.markFolderDirty();
-  wp.reconcile();
+  // V2: only mark dirty. Calling reconcile() inline here (e.g. from
+  // MyLibraryActivity move-to-sleep) runs on the file-browser heap which is
+  // fragmented enough that the buffer_.insert() string growth (~28 KB
+  // observed allocation fail) throws bad_alloc → terminate. Reconcile fires
+  // safely on next sleep entry from advance(), under the rich-sleep heap-
+  // budget gate (30 KB free required). Net effect: file moved to /sleep is
+  // visible on the user's next sleep cycle, which is the natural moment
+  // they care about.
+  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
 #else
   crosspoint::sleep::WallpaperPlaylist::instance().trimToLimit();
 #endif
