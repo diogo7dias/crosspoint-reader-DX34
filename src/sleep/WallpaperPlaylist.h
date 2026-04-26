@@ -21,9 +21,12 @@ namespace sleep {
 class ISleepFs;
 
 // State size at which strategy switches. Hysteresis prevents flap near the cap.
-constexpr size_t kPlaylistMaxPersist = 500;
-constexpr size_t kSmallToLargeThreshold = 525;  // cross up
-constexpr size_t kLargeToSmallThreshold = 475;  // cross down
+// Must match CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST — the JSON serializer
+// skips writing the playlist when it exceeds that cap, so any in-RAM size above
+// it would not survive a deep-sleep boot and rotation would freeze on lex-min.
+constexpr size_t kPlaylistMaxPersist = 30;
+constexpr size_t kSmallToLargeThreshold = 35;  // cross up
+constexpr size_t kLargeToSmallThreshold = 25;  // cross down
 
 enum class StrategyKind : uint8_t { Small, Large };
 
