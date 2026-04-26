@@ -1852,9 +1852,9 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
   // Keep the home-screen percent cache fresh. setPercent is a no-op when
   // the value hasn't changed (no SD write), so this is cheap on every
   // page turn and only persists when the percent actually advances.
-  const int safePage = (section->currentPage < 0)                       ? 0
-                       : (section->currentPage >= section->pageCount)   ? section->pageCount - 1
-                                                                        : section->currentPage;
+  const int safePage = (section->currentPage < 0)                     ? 0
+                       : (section->currentPage >= section->pageCount) ? section->pageCount - 1
+                                                                      : section->currentPage;
   const float chapterProgress = static_cast<float>(safePage) / static_cast<float>(section->pageCount);
   const int percent = static_cast<int>(epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f + 0.5f);
   RECENT_BOOKS.setPercent(epub->getPath(), percent);

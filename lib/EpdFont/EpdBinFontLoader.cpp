@@ -110,12 +110,9 @@ namespace {
 // success.
 }  // namespace
 
-bool EpdBinFontLoader::openFromFile(const std::string& path) {
-  return openFromFileExternalBuf(path, nullptr, 0);
-}
+bool EpdBinFontLoader::openFromFile(const std::string& path) { return openFromFileExternalBuf(path, nullptr, 0); }
 
-bool EpdBinFontLoader::openFromFileExternalBuf(const std::string& path, uint8_t* externalBuf,
-                                               uint32_t externalBufCap) {
+bool EpdBinFontLoader::openFromFileExternalBuf(const std::string& path, uint8_t* externalBuf, uint32_t externalBufCap) {
   release();
 
   HalFile f;

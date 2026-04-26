@@ -11,9 +11,7 @@ namespace {
 // 8 KB render-task stack + ~4 KB margin for trampoline / FreeRTOS bookkeeping.
 constexpr size_t kRenderTaskMinLargestBlock = 12 * 1024;
 
-bool hasRoomForRenderTask() {
-  return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= kRenderTaskMinLargestBlock;
-}
+bool hasRoomForRenderTask() { return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= kRenderTaskMinLargestBlock; }
 }  // namespace
 
 void Activity::renderTaskTrampoline(void* param) {

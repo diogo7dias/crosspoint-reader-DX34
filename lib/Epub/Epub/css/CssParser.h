@@ -126,8 +126,8 @@ class CssParser {
   // record + one read of the style payload (same I/O as before, just no
   // in-RAM string copies). The on-disk cache format is unchanged.
   struct HashedOffset {
-    uint32_t hash;     // FNV-1a of normalized selector
-    uint32_t record;   // Byte offset of selectorLen field in the cache file
+    uint32_t hash;    // FNV-1a of normalized selector
+    uint32_t record;  // Byte offset of selectorLen field in the cache file
   };
   std::vector<HashedOffset> hashedIndex_;
 
