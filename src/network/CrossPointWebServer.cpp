@@ -293,15 +293,30 @@ void CrossPointWebServer::begin() {
   server->begin();
   LOG_DIAG("WEB", "[HEAP] s4_after_server_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
-  // Start WebSocket server for fast binary uploads
-  LOG_DBG("WEB", "Starting WebSocket server on port %d...", wsPort);
-  wsServer.reset(new WebSocketsServer(wsPort));
-  wsInstance = const_cast<CrossPointWebServer*>(this);
-  wsServer->begin();
-  wsServer->onEvent(wsEventCallback);
-  LOG_DIAG("WEB", "[HEAP] s5_after_wsServer_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+  // Start WebSocket server for fast binary uploads — STA only.
+  // In AP mode the heap pool can't sustain WS server (~1.8 KB resident +
+  // per-client buffers) plus parallel HTTP fetches from a phone loading
+  // asset-heavy pages like /fonts. AP clients fall back to HTTP POST upload
+  // (handleUploadPost), which is the same code path used before WS support.
+  if (!apMode) {
+    LOG_DBG("WEB", "Starting WebSocket server on port %d...", wsPort);
+    wsServer.reset(new WebSocketsServer(wsPort));
+    wsInstance = const_cast<CrossPointWebServer*>(this);
+    wsServer->begin();
+    wsServer->onEvent(wsEventCallback);
+  } else {
+    LOG_DBG("WEB", "Skipping WebSocket server (AP mode — HTTP POST fallback only)");
+  }
+  LOG_DIAG("WEB", "[HEAP] s5_after_wsServer_begin free=%u min=%u apMode=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+           apMode ? 1 : 0);
 
-  udpActive = udp.begin(LOCAL_UDP_PORT);
+  // UDP discovery beacon — STA only. In AP mode the device IS the gateway,
+  // so clients see it without broadcast discovery.
+  if (!apMode) {
+    udpActive = udp.begin(LOCAL_UDP_PORT);
+  } else {
+    udpActive = false;
+  }
   LOG_DIAG("WEB", "[HEAP] s6_after_udp_begin free=%u min=%u udpActive=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
            udpActive ? 1 : 0);
 
@@ -579,6 +594,37 @@ void CrossPointWebServer::handleClient() {
   if (millis() - lastDebugPrint > 10000) {
     LOG_DBG("WEB", "handleClient active, server running on port %d", port);
     lastDebugPrint = millis();
+  }
+
+  // Heap watchdog (B6): when free heap stays below the danger floor for >3 s,
+  // kill any in-flight WS download/upload to release their buffers and break
+  // the lwIP retransmit deadlock that otherwise pins ~8 KB of un-ACK'd pbufs
+  // until reboot. STA-side last-line defense; AP path already trimmed.
+  static unsigned long lowHeapSinceMs = 0;
+  static unsigned long lastHeapDiagMs = 0;
+  constexpr uint32_t kLowHeapDangerBytes = 8000;
+  constexpr uint32_t kLowHeapDurationMs = 3000;
+  const uint32_t freeNow = ESP.getFreeHeap();
+  const unsigned long nowMs = millis();
+  if (freeNow < kLowHeapDangerBytes) {
+    if (lowHeapSinceMs == 0) lowHeapSinceMs = nowMs;
+    if ((nowMs - lastHeapDiagMs) > 1000) {
+      LOG_DIAG("WEB", "[HEAP] low free=%u dur=%lu", freeNow, nowMs - lowHeapSinceMs);
+      lastHeapDiagMs = nowMs;
+    }
+    if ((nowMs - lowHeapSinceMs) > kLowHeapDurationMs) {
+      LOG_DIAG("WEB", "[HEAP] danger sustained free=%u — aborting in-flight WS", freeNow);
+      if (wsDownloadInProgress) {
+        if (wsServer) wsServer->disconnect(wsDownloadClientNum);
+        if (wsDownloadFile) wsDownloadFile.close();
+        wsDownloadInProgress = false;
+      }
+      if (g_wsUploadSession) g_wsUploadSession->abort("low_heap");
+      lowHeapSinceMs = nowMs;  // reset so we don't spam aborts every tick
+    }
+  } else if (lowHeapSinceMs != 0) {
+    LOG_DIAG("WEB", "[HEAP] recovered free=%u after %lu ms low", freeNow, nowMs - lowHeapSinceMs);
+    lowHeapSinceMs = 0;
   }
 
   server->handleClient();
