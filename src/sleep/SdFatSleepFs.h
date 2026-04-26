@@ -17,6 +17,7 @@ class SdFatSleepFs final : public ISleepFs {
 
   size_t countSleepBmps(size_t scanCap) override;
   std::vector<std::string> listSleepBmps(size_t maxEntries) override;
+  std::vector<SleepBmpEntry> listSleepBmpsWithMtime(size_t maxEntries) override;
   std::string nextSleepBmpAfter(const std::string& after) override;
   std::string nthSleepBmp(size_t n) override;
   NextBmpResult nextSleepBmpAfterWithCount(const std::string& after, size_t scanCap) override;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,13 @@ namespace sleep {
 struct NextBmpResult {
   std::string next;  // lex-smallest > after, or lex-min if wrap; empty on no files
   size_t count;      // total .bmp count, capped at scanCap
+};
+
+// Filename + last-modify time (FAT date/time packed). Used by V2 wallpaper
+// rotation for new-on-top insertion ordering and oldest-first trim selection.
+struct SleepBmpEntry {
+  std::string name;
+  uint32_t mtime;
 };
 
 struct ISleepFs {
@@ -54,6 +62,17 @@ struct ISleepFs {
     r.count = countSleepBmps(scanCap);
     r.next = nextSleepBmpAfter(after);
     return r;
+  }
+
+  // V2 rotation: collect up to maxEntries .bmp basenames + mtimes in directory
+  // iteration order. Default impl falls back to listSleepBmps + mtime=0 so
+  // existing fakes still link.
+  virtual std::vector<SleepBmpEntry> listSleepBmpsWithMtime(size_t maxEntries) {
+    std::vector<SleepBmpEntry> out;
+    auto names = listSleepBmps(maxEntries);
+    out.reserve(names.size());
+    for (auto& n : names) out.push_back({std::move(n), 0});
+    return out;
   }
 
   // Generic storage ops used during trim / rename bookkeeping.

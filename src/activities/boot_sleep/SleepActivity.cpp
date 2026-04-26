@@ -18,6 +18,9 @@
 #include "persist/BackupMirror.h"
 #include "persist/PersistManager.h"
 #include "sleep/WallpaperPlaylist.h"
+#if FEATURE_WALLPAPER_V2
+#include "sleep/WallpaperPlaylistV2.h"
+#endif
 #include "util/FavoriteBmp.h"
 #include "util/StringUtils.h"
 
@@ -166,7 +169,11 @@ void SleepActivity::renderCustomSleepScreen() const {
   std::string selectedImage;
   bool rendered = false;
   for (int attempt = 0; attempt < kMaxParseRetries && !rendered; ++attempt) {
+#if FEATURE_WALLPAPER_V2
+    selectedImage = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().advance();
+#else
     selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
+#endif
     if (selectedImage.empty()) break;
     const auto filename = "/sleep/" + selectedImage;
     FsFile file;
@@ -215,16 +222,32 @@ void SleepActivity::renderCustomSleepScreen() const {
 }
 
 bool SleepActivity::randomizeSleepImagePlaylist() {
+#if FEATURE_WALLPAPER_V2
+  return crosspoint::sleep::v2::WallpaperPlaylistV2::instance().reshuffle();
+#else
   return crosspoint::sleep::WallpaperPlaylist::instance().reshuffle();
+#endif
 }
 
 size_t SleepActivity::cachedSleepFavoriteCount() {
+#if FEATURE_WALLPAPER_V2
+  // PR2: V2 will track cached favorite count via its trim path.
+  return 0;
+#else
   return crosspoint::sleep::WallpaperPlaylist::instance().cachedFavoriteCount();
+#endif
 }
 
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   (void)popupRenderer;  // No caller passes a non-null renderer today.
+#if FEATURE_WALLPAPER_V2
+  // V2 fuses trim into reconcile().
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.markFolderDirty();
+  wp.reconcile();
+#else
   crosspoint::sleep::WallpaperPlaylist::instance().trimToLimit();
+#endif
 }
 
 void SleepActivity::renderDefaultSleepScreen() const {

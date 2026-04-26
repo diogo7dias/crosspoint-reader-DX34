@@ -60,6 +60,9 @@
 #include "persist/Trash.h"
 #include "sleep/SdFatSleepFs.h"
 #include "sleep/WallpaperPlaylist.h"
+#if FEATURE_WALLPAPER_V2
+#include "sleep/WallpaperPlaylistV2.h"
+#endif
 #include "util/ButtonNavigator.h"
 #include "util/FavoriteBmp.h"
 #include "util/TransitionFeedback.h"
@@ -336,11 +339,43 @@ static void wireWallpaperPlaylist() {
   };
   deps.onBeforeTrimMove = []() {};  // no popup in current call sites
   crosspoint::sleep::WallpaperPlaylist::instance().setDeps(deps);
+
+#if FEATURE_WALLPAPER_V2
+  // V2: parallel wiring for unified shuffled rotation. Same APP_STATE pointers
+  // (paused mode + lastShownSleepFilename are shared with V1 fallback). Buffer
+  // + cursor live in /.crosspoint/sleep_order.txt via a dedicated stateless
+  // SdFatFileIO instance.
+  static crosspoint::persist::SdFatFileIO s_v2FileIO;
+  crosspoint::sleep::v2::WallpaperPlaylistV2::Deps v2deps;
+  v2deps.fs = &s_sleepFs;
+  v2deps.fileIO = &s_v2FileIO;
+  v2deps.lastShownFilename = &APP_STATE.lastShownSleepFilename;
+  v2deps.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
+  v2deps.saveAppState = []() {
+    const bool ok = APP_STATE.saveToFile();
+    crosspoint::persist::PersistManager().flushAll();
+    return ok;
+  };
+  v2deps.randomFn = [](long mod) -> long { return ::random(mod); };
+  v2deps.isFavorite = [](const std::string& path) { return FavoriteBmp::isFavoritePath(path); };
+  v2deps.onPathRenamed = [](const std::string& from, const std::string& to) {
+    FavoriteBmp::replacePathReferences(from, to);
+  };
+  // PR2: wire to APP_STATE notification flags consumed by HomeActivity.
+  v2deps.onTrimMoved = [](uint16_t /*moved*/) {};
+  v2deps.onFavoritesCapBlocked = []() {};
+  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().setDeps(v2deps);
+#endif
 }
 
 static void trimSleepFolderIfDirty() {
+#if FEATURE_WALLPAPER_V2
+  auto& wpv2 = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  if (wpv2.dirty()) wpv2.reconcile();
+#else
   auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
   if (wp.dirty()) wp.reconcile();
+#endif
 }
 
 // Inline Reader activity construction. Used by both the V2 factory and the
@@ -366,7 +401,11 @@ void onGoToReader(const std::string& initialEpubPath) {
 
 static void openFileTransferInline() {
   TransitionFeedback::show(renderer, tr(STR_STARTING_SERVER));
+#if FEATURE_WALLPAPER_V2
+  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
+#else
   crosspoint::sleep::WallpaperPlaylist::instance().markFolderDirty();
+#endif
   exitActivity();
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
 }
@@ -752,7 +791,11 @@ void setup() {
   // Defer sleep cache trimming until home screen is actually needed.
   if (goHome) {
     bootActivity->setProgress(60, "Refreshing sleep cache");
+#if FEATURE_WALLPAPER_V2
+    auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+#else
     auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
+#endif
     wp.markFolderDirty();
     wp.reconcile();
   }

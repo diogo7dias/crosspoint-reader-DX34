@@ -86,6 +86,44 @@ std::vector<std::string> SdFatSleepFs::listSleepBmps(size_t maxEntries) {
   return out;
 }
 
+std::vector<SleepBmpEntry> SdFatSleepFs::listSleepBmpsWithMtime(size_t maxEntries) {
+  std::vector<SleepBmpEntry> out;
+  if (maxEntries == 0) return out;
+  auto dir = Storage.open(kSleepDir);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return out;
+  }
+  out.reserve(std::min<size_t>(maxEntries, 256));
+  size_t iter = 0;
+  char name[256];
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    if (!file.isDirectory()) {
+      file.getName(name, sizeof(name));
+      if (isBmpName(name)) {
+        // Pack FAT date+time into uint32 for stable ordering. FAT date/time is
+        // already monotonic (date in high bits, time in low) — relative order
+        // is what V2 needs, true epoch unnecessary.
+        uint16_t fdate = 0, ftime = 0;
+        file.getModifyDateTime(&fdate, &ftime);
+        const uint32_t mtime = (static_cast<uint32_t>(fdate) << 16) | ftime;
+        out.push_back({std::string(name), mtime});
+        if (out.size() >= maxEntries) {
+          file.close();
+          break;
+        }
+      }
+    }
+    file.close();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();
+    }
+  }
+  dir.close();
+  return out;
+}
+
 std::string SdFatSleepFs::nextSleepBmpAfter(const std::string& after) {
   auto dir = Storage.open(kSleepDir);
   if (!dir || !dir.isDirectory()) {
