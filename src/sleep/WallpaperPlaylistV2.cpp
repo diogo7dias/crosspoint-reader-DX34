@@ -213,82 +213,92 @@ uint16_t WallpaperPlaylistV2::trimToCap(std::vector<SleepBmpEntry>& entries, boo
   return moved;
 }
 
+bool WallpaperPlaylistV2::nameIsInBuffer(const std::string& name) const {
+  if (buffer_.empty() || name.empty()) return false;
+  // Match "name\n" at position 0, or "\nname\n" anywhere. \n separators bound
+  // the search so prefix-collisions are not misreported (e.g. "a.bmp" vs "ab.bmp").
+  const size_t nlen = name.size();
+  if (buffer_.size() > nlen && buffer_.compare(0, nlen, name) == 0 && buffer_[nlen] == '\n') return true;
+  // Search for "\nname\n" — caller-side concat into a temporary needle.
+  std::string needle;
+  needle.reserve(nlen + 2);
+  needle.push_back('\n');
+  needle.append(name);
+  needle.push_back('\n');
+  return buffer_.find(needle) != std::string::npos;
+}
+
 void WallpaperPlaylistV2::reconcile() {
   if (!deps_.fs) return;
   if (!ensureLoaded()) return;
   if (!dirty_) return;
 
-  auto entries = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap + 64);
-
-  bool favoritesCapBlocked = false;
-  const uint16_t moved = trimToCap(entries, favoritesCapBlocked);
-  if (moved > 0 && deps_.onTrimMoved) deps_.onTrimMoved(moved);
-  if (favoritesCapBlocked && deps_.onFavoritesCapBlocked) deps_.onFavoritesCapBlocked();
-
-  std::unordered_set<std::string> diskSet;
-  diskSet.reserve(entries.size() * 2);
-  for (const auto& e : entries) diskSet.insert(e.name);
-
-  auto current = bufferEntries();
-  std::unordered_set<std::string> bufferSet(current.begin(), current.end());
-
+  // Streaming walk: only retain NEW files (those not already in buffer_).
+  // Heap cost is proportional to the delta (typically 0-3 entries on a normal
+  // session), not the full /sleep listing. This is the critical fix for the
+  // bad_alloc that hit boot/home-route reconcile when /sleep had ~500 entries
+  // (fragmented heap could not fit the transient ~14 KB vector<SleepBmpEntry>).
   std::vector<SleepBmpEntry> newFiles;
-  for (const auto& e : entries) {
-    if (bufferSet.find(e.name) == bufferSet.end()) newFiles.push_back(e);
-  }
-  std::sort(newFiles.begin(), newFiles.end(),
-            [](const SleepBmpEntry& a, const SleepBmpEntry& b) { return a.mtime < b.mtime; });
+  newFiles.reserve(8);  // typical delta upper bound; grows if exceeded
+  size_t diskCount = 0;
+  size_t favCount = 0;
 
-  bool anyGone = false;
-  for (const auto& name : current) {
-    if (diskSet.find(name) == diskSet.end()) {
-      anyGone = true;
-      break;
+  deps_.fs->walkSleepBmps([&](const std::string& name, uint32_t mtime) {
+    ++diskCount;
+    if (deps_.isFavorite && deps_.isFavorite(makeSleepPath(name))) ++favCount;
+    if (!nameIsInBuffer(name)) newFiles.push_back({name, mtime});
+  });
+
+  // Trim path. Only enters here if /sleep is over the cap — gates the heavy
+  // full-listing materialization on a count-only streaming pass first.
+  bool capBlocked = false;
+  uint16_t moved = 0;
+  if (diskCount > kSleepFolderCap) {
+    std::vector<SleepBmpEntry> all = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap + 64);
+    moved = trimToCap(all, capBlocked);
+    if (capBlocked && deps_.onFavoritesCapBlocked) deps_.onFavoritesCapBlocked();
+    if (moved > 0 && deps_.onTrimMoved) deps_.onTrimMoved(moved);
+    // Re-derive newFiles after trim — some new arrivals may have been pushed
+    // to /sleep pause if the cap was favorites-saturated.
+    newFiles.clear();
+    for (auto& e : all) {
+      if (!nameIsInBuffer(e.name)) newFiles.push_back(std::move(e));
     }
   }
 
-  if (newFiles.empty() && !anyGone) {
+  if (newFiles.empty()) {
     dirty_ = false;
     return;
   }
 
-  const std::string cursorTarget = peekAtCursor();
+  // Sort new files by mtime ascending (oldest first) so multi-drop preserves
+  // upload order in the queue.
+  std::sort(newFiles.begin(), newFiles.end(),
+            [](const SleepBmpEntry& a, const SleepBmpEntry& b) { return a.mtime < b.mtime; });
 
-  std::vector<std::string> rebuilt;
-  rebuilt.reserve(current.size() + newFiles.size());
-
-  std::vector<std::string> preCursor;
-  std::vector<std::string> postCursor;
-  bool reachedCursor = false;
-  for (const auto& name : current) {
-    const bool isCursor = (!cursorTarget.empty() && name == cursorTarget);
-    if (isCursor) reachedCursor = true;
-    if (diskSet.find(name) == diskSet.end()) continue;
-    if (!reachedCursor)
-      preCursor.push_back(name);
-    else
-      postCursor.push_back(name);
+  // Splice insertion: build a single contiguous payload and inject at cursor_.
+  // buffer_.insert may reallocate (transient peak = old + insertion size), but
+  // that is one allocation, not 500. Cursor stays at byte position of first
+  // new file — next advance() returns it.
+  std::string insertion;
+  size_t insLen = 0;
+  for (const auto& nf : newFiles) insLen += nf.name.size() + 1;
+  insertion.reserve(insLen);
+  for (const auto& nf : newFiles) {
+    insertion.append(nf.name);
+    insertion.push_back('\n');
   }
 
-  for (auto& n : preCursor) rebuilt.push_back(std::move(n));
-  size_t newCursorByte = 0;
-  for (const auto& n : rebuilt) newCursorByte += n.size() + 1;
-  for (auto& nf : newFiles) rebuilt.push_back(nf.name);
-  for (auto& n : postCursor) rebuilt.push_back(std::move(n));
-
-  if (current.empty() || cursorTarget.empty()) {
-    std::vector<std::string> all;
-    all.reserve(rebuilt.size());
-    for (auto& n : rebuilt) all.push_back(std::move(n));
-    if (deps_.randomFn && all.size() > 1) {
-      for (size_t i = all.size() - 1; i > 0; --i) {
-        const auto j = static_cast<size_t>(deps_.randomFn(static_cast<long>(i + 1)));
-        std::swap(all[i], all[j]);
-      }
-    }
-    writeBuffer(all, 0);
+  // If buffer is empty (boot first reconcile, no prior shuffle), build a full
+  // shuffled lap from disk via reshuffle. Otherwise splice at cursor.
+  if (buffer_.empty()) {
+    // Defer to reshuffle which uses listSleepBmps (vector<string>, smaller and
+    // gated by the user's normal sleep heap budget).
+    reshuffle();
   } else {
-    writeBuffer(rebuilt, newCursorByte);
+    if (cursor_ > buffer_.size()) cursor_ = 0;
+    buffer_.insert(cursor_, insertion);
+    saveToDisk();
   }
 
   dirty_ = false;

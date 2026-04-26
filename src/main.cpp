@@ -370,14 +370,15 @@ static void wireWallpaperPlaylist() {
 
 static void trimSleepFolderIfDirty() {
 #if FEATURE_WALLPAPER_V2
-  // V2: do not run reconcile on home-route entry. listSleepBmpsWithMtime
-  // materializes vector<SleepBmpEntry> (each ~32 bytes — string + uint32_t)
-  // which at the 500-file cap can throw bad_alloc when the home heap budget
-  // is tight (~14 KB transient peak observed on first-boot of fresh V2 flash).
-  // V2's advance() lazy-builds the buffer on first sleep entry where the
-  // existing heap-budget gate (30 KB free required for rich sleep) protects
-  // against running on a pressured heap. dirty_ stays true until that point;
-  // new files added in this session will just be picked up on next sleep.
+  // V2 reconcile reads /.crosspoint/sleep_order.txt as one std::string —
+  // ~10 KB at typical /sleep sizes. On a fragmented boot/home-route heap
+  // that allocation can throw bad_alloc → terminate (no exceptions in this
+  // build). The rich-sleep heap-budget gate (30 KB free) protects the sleep
+  // entry path; reconcile from there is safe. Skip on home route so deep-
+  // sleep boot does not trip the bug.
+  // Trade-off: new files dropped via USB transfer become visible on the
+  // next sleep cycle, not the home screen immediately after disconnect —
+  // which matches the natural flow (drop wallpapers → put device down).
 #else
   auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
   if (wp.dirty()) wp.reconcile();
@@ -798,12 +799,10 @@ void setup() {
   if (goHome) {
     bootActivity->setProgress(60, "Refreshing sleep cache");
 #if FEATURE_WALLPAPER_V2
-    // V2: do NOT reconcile at boot. listSleepBmpsWithMtime materializes the
-    // full /sleep listing as a vector of SleepBmpEntry (~32 bytes each) — at
-    // 500 files this is a transient ~16 KB single allocation that boot-time
-    // heap fragmentation can fail (observed alloc-fail size=14336 on first
-    // V2 flash). Mark dirty only; advance() lazy-builds on first sleep entry,
-    // and trimSleepFolderIfDirty() runs on home navigation when heap is calmer.
+    // V2 boot reconcile: see trimSleepFolderIfDirty() comment. ensureLoaded
+    // would safeRead a multi-KB sleep_order.txt as a single std::string,
+    // which the boot heap cannot guarantee. Mark dirty only; first sleep
+    // entry consumes it under the rich-sleep heap-budget gate.
     crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
 #else
     auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();

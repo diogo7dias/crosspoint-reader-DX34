@@ -93,6 +93,11 @@ class WallpaperPlaylistV2 {
   void advanceCursor();
   uint16_t trimToCap(std::vector<SleepBmpEntry>& entries, bool& favoritesCapBlocked);
 
+  // Heap-cheap membership check via direct substring scan of buffer_. Avoids
+  // building the (~500-element) hash_set that materializing bufferEntries()
+  // would require. O(name + buffer_size) per query.
+  bool nameIsInBuffer(const std::string& name) const;
+
   Deps deps_;
   std::string buffer_;
   size_t cursor_ = 0;
