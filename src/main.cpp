@@ -28,6 +28,7 @@
 #include <esp_task_wdt.h>
 
 #include <cstring>
+#include <new>
 
 #include "Battery.h"
 #include "BleHidManager.h"
@@ -194,12 +195,44 @@ void exitActivity() {
   }
 }
 
+void onGoHome();  // fwd decl — defined later, needed by OOM fallback below
+
 void enterNewActivity(Activity* activity) {
   // Suppress stale button events from the previous activity so that
   // a press/release that closed the old screen doesn't leak into the new one.
   gpio.suppressUntilAllReleased();
   currentActivity = activity;
   currentActivity->onEnter();
+  if (!currentActivity->didEntryFail()) {
+    return;
+  }
+  // Activity could not bring itself up (semaphore alloc, low-largest-block,
+  // or xTaskCreate failure). Replace it with a graceful OOM screen instead
+  // of letting the user see a silent reboot.
+  LOG_ERR("MAIN", "Activity entry failed — swapping to OOM screen");
+  currentActivity->onExit();
+  delete currentActivity;
+  currentActivity = nullptr;
+
+  auto* oom = new (std::nothrow)
+      FullScreenMessageActivity(renderer, mappedInputManager, "Out of memory\nPress any key", EpdFontFamily::REGULAR);
+  if (oom) {
+    oom->setOnDismiss(onGoHome);
+    gpio.suppressUntilAllReleased();
+    currentActivity = oom;
+    currentActivity->onEnter();
+    if (!currentActivity->didEntryFail()) {
+      return;
+    }
+    // Even the OOM screen could not start — last-resort reboot.
+    LOG_ERR("MAIN", "OOM fallback screen also failed to enter — restarting");
+    currentActivity->onExit();
+    delete currentActivity;
+    currentActivity = nullptr;
+  } else {
+    LOG_ERR("MAIN", "OOM fallback allocation failed — restarting");
+  }
+  esp_restart();
 }
 
 bool persistAppState(const char* context) {

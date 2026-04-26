@@ -2,6 +2,10 @@
 
 #include <HalPowerManager.h>
 
+#include <new>
+
+#include "util/FullScreenMessageActivity.h"
+
 void ActivityWithSubactivity::renderTaskLoop() {
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -51,6 +55,36 @@ void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
   mappedInput.suppressUntilAllReleased();
   subActivity.reset(activity);
   subActivity->onEnter();
+  if (!subActivity->didEntryFail()) {
+    return;
+  }
+  // Subactivity could not bring itself up. Replace it inline with an OOM
+  // screen so the user sees a graceful message instead of a frozen parent
+  // (the parent's render task was just deleted above and won't be restored
+  // until the subactivity exits).
+  LOG_ERR("ACT", "Subactivity entry failed — swapping to OOM screen");
+  subActivity->onExit();
+  subActivity.reset();
+
+  auto* oom = new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, "Out of memory\nPress any key");
+  if (!oom) {
+    LOG_ERR("ACT", "OOM fallback alloc failed in subactivity path");
+    // exitActivity() restores the parent render task; without it the parent
+    // is wedged. Caller has no way to know — best we can do is let the parent
+    // recover its render task and stay on screen.
+    exitActivity();
+    return;
+  }
+  oom->setOnDismiss([this] { this->exitActivity(); });
+  mappedInput.suppressUntilAllReleased();
+  subActivity.reset(oom);
+  subActivity->onEnter();
+  if (subActivity->didEntryFail()) {
+    LOG_ERR("ACT", "OOM fallback subactivity also failed to enter");
+    subActivity->onExit();
+    subActivity.reset();
+    exitActivity();
+  }
 }
 
 void ActivityWithSubactivity::loop() {

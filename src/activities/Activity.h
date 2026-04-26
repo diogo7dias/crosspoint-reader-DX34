@@ -22,7 +22,6 @@
 
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
-#include "esp_system.h"  // esp_restart()
 
 class Activity {
  protected:
@@ -40,6 +39,12 @@ class Activity {
   // Signaled by render task after a frame finishes, used by requestUpdateAndWait().
   SemaphoreHandle_t renderDoneSemaphore = nullptr;
 
+  // Set true when ctor or onEnter() could not bring the activity up
+  // (semaphore alloc, pre-flight heap floor, or xTaskCreate failure).
+  // Callers in enterNewActivity() check didEntryFail() and route to a
+  // graceful OOM screen instead of crashing the device.
+  bool entryFailed = false;
+
  public:
   explicit Activity(std::string name, GfxRenderer& renderer, MappedInputManager& mappedInput)
       : name(std::move(name)),
@@ -47,23 +52,28 @@ class Activity {
         mappedInput(mappedInput),
         renderingMutex(xSemaphoreCreateMutex()),
         renderDoneSemaphore(xSemaphoreCreateBinary()) {
-    // Semaphore creation fails only on heap exhaustion. assert() compiles to
-    // nothing in release builds (NDEBUG), so use an explicit check + restart.
-    // The device is non-functional without these semaphores.
     if (!renderingMutex || !renderDoneSemaphore) {
-      LOG_ERR("ACT", "FATAL: semaphore alloc failed for '%s' — heap exhausted, restarting", name.c_str());
-      esp_restart();
+      LOG_ERR("ACT", "Semaphore alloc failed for '%s' — flagging entry failure", name.c_str());
+      entryFailed = true;
     }
   }
   virtual ~Activity() {
-    vSemaphoreDelete(renderingMutex);
-    renderingMutex = nullptr;
-    vSemaphoreDelete(renderDoneSemaphore);
-    renderDoneSemaphore = nullptr;
+    if (renderingMutex) {
+      vSemaphoreDelete(renderingMutex);
+      renderingMutex = nullptr;
+    }
+    if (renderDoneSemaphore) {
+      vSemaphoreDelete(renderDoneSemaphore);
+      renderDoneSemaphore = nullptr;
+    }
   };
   class RenderLock;
   virtual void onEnter();
   virtual void onExit();
+  // True iff the ctor or onEnter() could not bring the activity up.
+  // enterNewActivity() callers MUST check this and replace the failed
+  // activity with a graceful OOM screen instead of using it.
+  bool didEntryFail() const { return entryFailed; }
   virtual void loop() {}
 
   virtual void render(RenderLock&&) {}
