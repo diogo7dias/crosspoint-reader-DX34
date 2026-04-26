@@ -445,8 +445,11 @@
       </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <!-- opentype.js@1.3.4 and pako@2.1.0 are bundled in firmware (PROGMEM,
+         gzipped) so the page works in AP mode where the phone has no
+         internet. Update versions in src/network/html/js/ when bumping. -->
+    <script src="/js/opentype.min.js"></script>
+    <script src="/js/pako.min.js"></script>
     <script>
 // i18n bootstrap — fetches device-language dict, swaps [data-i18n] / [data-i18n-attr]
 // Exposes window.tr(KEY) for use in dynamic JS-emitted strings.

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <utility>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -34,6 +35,8 @@
 #include "html/HomePageHtml.generated.h"
 #include "html/brutalistCss.generated.h"
 #include "html/js/jszip_minJs.generated.h"
+#include "html/js/opentype_minJs.generated.h"
+#include "html/js/pako_minJs.generated.h"
 #include "network/ws/WsUploadSession.h"
 #include "util/StringUtils.h"
 
@@ -256,6 +259,11 @@ void CrossPointWebServer::begin() {
   // JSZip library for EPUB optimizer
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
 
+  // opentype.js + pako for the in-browser font baker on /fonts. Bundled in
+  // PROGMEM so the page works in AP mode where the phone has no internet.
+  server->on("/js/opentype.min.js", HTTP_GET, [this] { handleOpentypeJs(); });
+  server->on("/js/pako.min.js", HTTP_GET, [this] { handlePakoJs(); });
+
   server->on("/css/brutalist.css", HTTP_GET, [this] { handleBrutalistCss(); });
 
   // Web UI translation dict — picks language from SETTINGS.uiLanguage at request time.
@@ -430,6 +438,20 @@ void CrossPointWebServer::handleJszip() const {
   LOG_DBG("WEB", "Served jszip.min.js");
 }
 
+void CrossPointWebServer::handleOpentypeJs() const {
+  server->sendHeader("Content-Encoding", "gzip");
+  server->sendHeader("Cache-Control", "public, max-age=86400");
+  server->send_P(200, "application/javascript", opentype_minJs, opentype_minJsCompressedSize);
+  LOG_DBG("WEB", "Served opentype.min.js");
+}
+
+void CrossPointWebServer::handlePakoJs() const {
+  server->sendHeader("Content-Encoding", "gzip");
+  server->sendHeader("Cache-Control", "public, max-age=86400");
+  server->send_P(200, "application/javascript", pako_minJs, pako_minJsCompressedSize);
+  LOG_DBG("WEB", "Served pako.min.js");
+}
+
 void CrossPointWebServer::handleBrutalistCss() const {
   // Long cache lets pages share this asset across navigations without
   // re-fetching. Bumped by the build pipeline whenever the .generated.h
@@ -477,6 +499,17 @@ void CrossPointWebServer::stop() {
   // Stop WebSocket server
   if (wsServer) {
     LOG_DBG("WEB", "Stopping WebSocket server...");
+    // Disconnect each client explicitly so FIN frames go out before the
+    // listening socket is torn down. Without this, lwIP holds onto the
+    // per-client socket allocations until WiFi.mode(WIFI_OFF) yanks them,
+    // which fragments heap on repeated enter/exit cycles.
+    for (uint8_t i = 0; i < WEBSOCKETS_SERVER_CLIENT_MAX; ++i) {
+      wsServer->disconnect(i);
+    }
+    for (int k = 0; k < 3; ++k) {
+      wsServer->loop();
+      delay(5);
+    }
     wsServer->close();
     wsServer.reset();
     wsInstance = nullptr;
@@ -499,11 +532,31 @@ void CrossPointWebServer::stop() {
 
   server.reset();
   LOG_DBG("WEB", "Web server stopped and deleted");
-  LOG_DBG("WEB", "[MEM] Free heap after delete server: %d bytes", ESP.getFreeHeap());
 
-  // Note: Static upload variables (uploadFileName, uploadPath, uploadError) are declared
-  // later in the file and will be cleared when they go out of scope or on next upload
-  LOG_DBG("WEB", "[MEM] Free heap final: %d bytes", ESP.getFreeHeap());
+  // Reset every file-scope global. Without this, Arduino String backing
+  // buffers and stale primitive state survive across server lifecycles —
+  // the next begin() then sees less heap than the last.
+  if (wsUploadFile) wsUploadFile.close();
+  if (wsDownloadFile) wsDownloadFile.close();
+  wsUploadSize = 0;
+  wsUploadReceived = 0;
+  wsUploadLastProgressSent = 0;
+  wsUploadStartTime = 0;
+  wsUploadInProgress = false;
+  wsUploadClientNum = 255;
+  wsDownloadSize = 0;
+  wsDownloadSent = 0;
+  wsDownloadInProgress = false;
+  wsDownloadClientNum = 0;
+  wsLastCompleteSize = 0;
+  wsLastCompleteAt = 0;
+  // String::operator=("") would null the contents but keep the backing buffer.
+  // Swapping with a fresh empty String forces the old buffer's destructor.
+  { String tmp; std::swap(tmp, wsUploadFileName); }
+  { String tmp; std::swap(tmp, wsUploadPath); }
+  { String tmp; std::swap(tmp, wsLastCompleteName); }
+
+  LOG_DIAG("WEB", "[HEAP] stop() done free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }
 
 void CrossPointWebServer::handleClient() {
@@ -1496,6 +1549,10 @@ void CrossPointWebServer::handleFontsPage() const {
 void CrossPointWebServer::handleGetFonts() const {
   LOG_DIAG("WEB", "/api/fonts entry, free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   const auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
+  // Stream chunked instead of building one big buffer. Under heap pressure
+  // (AP mode + parallel asset fetches) a contiguous multi-KB allocation for
+  // the full body throws bad_alloc and crashes the firmware. Per-family
+  // serialization fits in a few hundred bytes and survives a fragmented heap.
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
   server->sendContent("[");

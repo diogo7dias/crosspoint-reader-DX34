@@ -120,6 +120,8 @@ class CrossPointWebServer {
   void handleMove() const;
   void handleDelete() const;
   void handleJszip() const;
+  void handleOpentypeJs() const;
+  void handlePakoJs() const;
   void handleBrutalistCss() const;
   void handleI18nDict() const;
   void abortWsUpload(const char* tag);
