@@ -773,6 +773,8 @@ void setup() {
   // default built-in family so the reader doesn't silently render empty
   // text. The header validation runs once at boot via the static
   // validateFile helper — no file is held open afterward.
+  LOG_DIAG("CFONT", "boot fallback check: ff=%u customFont='%s' cfsPt=%u", (unsigned)SETTINGS.fontFamily,
+           SETTINGS.customFontName.c_str(), (unsigned)SETTINGS.customFontSizePt);
   if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
     bool ok = false;
     const char* failReason = "missing";
@@ -805,6 +807,8 @@ void setup() {
       SETTINGS.saveToFile();
     }
   }
+  LOG_DIAG("CFONT", "boot fallback done: ff=%u customFont='%s' cfsPt=%u", (unsigned)SETTINGS.fontFamily,
+           SETTINGS.customFontName.c_str(), (unsigned)SETTINGS.customFontSizePt);
   launchBootDestination();
 
   // Ensure we're not still holding the power button before leaving setup
