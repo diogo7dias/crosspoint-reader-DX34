@@ -308,6 +308,13 @@ std::string WallpaperPlaylistV2::advance() {
   if (!deps_.fs) return {};
   if (!ensureLoaded()) return {};
 
+  // Reconcile new files / trim overflow on sleep entry. The rich-sleep heap-
+  // budget gate (30 KB free) in SleepActivity has already cleared by the time
+  // advance() runs, so the listing/diff allocation is safe here. This is the
+  // single trigger point for V2 reconcile in production — boot and home-route
+  // reconcile are intentionally suppressed (they hit boot heap fragmentation).
+  if (dirty_) reconcile();
+
   if (buffer_.empty()) {
     if (!reshuffle()) return {};
   }
