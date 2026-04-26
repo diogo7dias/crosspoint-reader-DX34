@@ -588,6 +588,51 @@ void setup() {
     LOG_ERR("MAIN", "Storage layout error: cannot access /.crosspoint");
   }
 
+  // One-shot boot cleanup of orphaned safeWriteFile temp files.
+  // Background: settings.json.tmp from an interrupted prior write occasionally
+  // ends up in a state where Storage.remove() returns false on every save, so
+  // safeWriteFile falls through to settings.json.tmp2 and logs an ERR each
+  // time. Try aggressive removal at boot when no save is in flight: remove,
+  // then truncate-via-openForWrite + close + remove, then last-resort rename
+  // to a junk path so a future boot can sweep it.
+  auto sweepOrphanTmp = [](const char* primaryPath) {
+    char tmpPath[128];
+    char tmp2Path[128];
+    snprintf(tmpPath, sizeof(tmpPath), "%s.tmp", primaryPath);
+    snprintf(tmp2Path, sizeof(tmp2Path), "%s.tmp2", primaryPath);
+    for (const char* p : {static_cast<const char*>(tmpPath), static_cast<const char*>(tmp2Path)}) {
+      if (!Storage.exists(p)) continue;
+      if (Storage.remove(p)) {
+        LOG_INF("MAIN", "Boot tmp sweep: removed orphan %s", p);
+        continue;
+      }
+      // Truncate-then-remove. Reopening for write zero-pads the entry; on SdFat
+      // this often unsticks a directory entry that plain remove() fails on.
+      FsFile f;
+      if (Storage.openFileForWrite("MAIN", p, f)) {
+        f.close();
+        if (Storage.remove(p)) {
+          LOG_INF("MAIN", "Boot tmp sweep: removed orphan %s after truncate", p);
+          continue;
+        }
+      }
+      // Last resort — rename to a junk path with a unique suffix so it stops
+      // being mistaken for a live tmp by safeWriteFile. Future boots can try
+      // again on the junk path.
+      char junkPath[160];
+      snprintf(junkPath, sizeof(junkPath), "%s.junk-%lu", p, (unsigned long)millis());
+      if (Storage.rename(p, junkPath)) {
+        LOG_INF("MAIN", "Boot tmp sweep: renamed stuck %s -> %s", p, junkPath);
+      } else {
+        LOG_ERR("MAIN", "Boot tmp sweep: %s remains stuck (remove + truncate + rename all failed)", p);
+      }
+    }
+  };
+  sweepOrphanTmp("/.crosspoint/settings.json");
+  sweepOrphanTmp("/.crosspoint/state.json");
+  sweepOrphanTmp("/.crosspoint/recent.json");
+  sweepOrphanTmp("/.crosspoint/themes.json");
+
   logHeapStage("after_sd");
   trash::pruneToCap();
   logHeapStage("after_trash_prune");
