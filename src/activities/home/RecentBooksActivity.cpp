@@ -60,8 +60,11 @@ void RecentBooksActivity::loadRecentBooks() {
     if (!Storage.exists(book.path.c_str())) {
       continue;
     }
-    const auto percent = BookProgress::getPercent(book.path);
-    if (!percent.has_value() || percent.value() <= 2) {
+    // Use cached percent (updated by the reader on book exit / progress
+    // save) so we don't open every recent EPUB just to render this list.
+    // Books we've never opened on this firmware show percent=-1 -> skip
+    // until the user opens them once and we cache the real value.
+    if (book.percent <= 2) {
       continue;
     }
 
@@ -72,7 +75,7 @@ void RecentBooksActivity::loadRecentBooks() {
     RecentBook decorated = book;
     const std::string initials = buildAuthorInitials(book.author);
     const std::string titleWithAuthor = initials.empty() ? book.title : (book.title + " by " + initials);
-    decorated.title = "[" + std::to_string(percent.value()) + "%]  " + titleWithAuthor;
+    decorated.title = "[" + std::to_string(book.percent) + "%]  " + titleWithAuthor;
     recentBooks.push_back(std::move(decorated));
   }
 }

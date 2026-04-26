@@ -123,8 +123,21 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
     eligibleCount++;
     RecentBook entry = book;
     if (isClassic) {
-      const auto percent = BookProgress::getPercent(book.path);
-      entry.title = "[" + (percent.has_value() ? std::to_string(percent.value()) : "0") + "%]  " + book.title;
+      // Use the cached percent from RecentBooksStore (updated by the
+      // reader on book exit / progress save). Avoids opening every recent
+      // EPUB at home entry, which previously cost a spine+TOC parse per
+      // book and fragmented the heap badly enough to block large books
+      // from opening at all.
+      //
+      // When percent < 0 the value has not been cached on this firmware
+      // yet (book hasn't been opened since the cache field was added).
+      // Show the title without a percent prefix rather than a misleading
+      // "0%". Reading actual position lives in progress.bin on SD; the
+      // first page-turn after opening will populate the cache and the
+      // prefix will appear thereafter.
+      if (book.percent >= 0) {
+        entry.title = "[" + std::to_string(book.percent) + "%]  " + book.title;
+      }
       // Classic mode should never attempt to load/render cover images.
       entry.coverBmpPath.clear();
     }

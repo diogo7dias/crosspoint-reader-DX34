@@ -66,13 +66,13 @@ class CssParser {
   /**
    * Check if any rules have been loaded (RAM map or disk-paged index)
    */
-  [[nodiscard]] bool empty() const { return rulesBySelector_.empty() && offsetsBySelector_.empty(); }
+  [[nodiscard]] bool empty() const { return rulesBySelector_.empty() && hashedIndex_.empty(); }
 
   /**
    * Get count of loaded rule sets
    */
   [[nodiscard]] size_t ruleCount() const {
-    return rulesBySelector_.empty() ? offsetsBySelector_.size() : rulesBySelector_.size();
+    return rulesBySelector_.empty() ? hashedIndex_.size() : rulesBySelector_.size();
   }
 
   /**
@@ -110,11 +110,26 @@ class CssParser {
   // loadFromCache. Not used during rendering.
   std::unordered_map<std::string, CssStyle> rulesBySelector_;
 
-  // Render-time disk-paged index: maps normalized selector -> file offset of
-  // its serialized CssStyle inside the CSS cache file. Populated by
-  // loadFromCache; styles are fetched on demand via readStyleAtOffset.
-  // Dramatically reduces RAM pressure on books with hundreds of CSS rules.
-  std::unordered_map<std::string, uint32_t> offsetsBySelector_;
+  // Render-time disk-paged index: a sorted vector of (selector hash, byte
+  // offset of selector record in the CSS cache file). Replaces the prior
+  // unordered_map<string, uint32_t> which cost ~70 bytes per entry (string
+  // copy + node + bucket). At 470 rules that map was ~33 KB persistent
+  // heap -- more than the largest contiguous free block on this device
+  // after custom-font activation fragments memory, blocking section
+  // rebuild for big books like Wolfe.
+  //
+  // New cost: 8 bytes per entry (~3.76 KB at 470 rules). Lookup is hash +
+  // binary-search on the sorted vector; on hash hit the original selector
+  // is read back from disk and strcmp'd to disambiguate collisions.
+  // Collisions are rare for short ASCII selectors so the typical lookup
+  // does one binary-search probe + one SD seek to read the verified
+  // record + one read of the style payload (same I/O as before, just no
+  // in-RAM string copies). The on-disk cache format is unchanged.
+  struct HashedOffset {
+    uint32_t hash;    // FNV-1a of normalized selector
+    uint32_t record;  // Byte offset of selectorLen field in the cache file
+  };
+  std::vector<HashedOffset> hashedIndex_;
 
   // Kept open for the life of loaded cache so resolveStyle can seek+read.
   // Closed by clear().
@@ -130,6 +145,11 @@ class CssParser {
 
   // Internal disk-paged helpers
   [[nodiscard]] bool readStyleAtOffset(uint32_t offset, CssStyle& out) const;
+  // Resolve a selector to the file offset of its style payload, or return
+  // false if no matching rule exists. Hashes the key, binary-searches
+  // hashedIndex_, and verifies any hits by re-reading the selector record
+  // off disk to handle hash collisions correctly.
+  [[nodiscard]] bool findStyleOffsetForSelector(const std::string& key, uint32_t& styleOffsetOut) const;
   [[nodiscard]] bool lruGet(const std::string& key, CssStyle& out) const;
   void lruPut(const std::string& key, const CssStyle& value) const;
 
