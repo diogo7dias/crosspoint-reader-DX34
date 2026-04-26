@@ -540,6 +540,17 @@ bool ensureCrosspointDataDir() {
   return true;
 }
 
+// Boot heap stage probe: dumps free/largest/free-blocks at named boot
+// checkpoints so we can see which stage strands the heap into small
+// fragments. PR #104 follow-up.
+static void logHeapStage(const char* label) {
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_8BIT);
+  LOG_DIAG("BOOT", "stage='%s' free=%u largest=%u free_blocks=%u alloc_blocks=%u total=%u", label,
+           (unsigned)info.total_free_bytes, (unsigned)info.largest_free_block, (unsigned)info.free_blocks,
+           (unsigned)info.allocated_blocks, (unsigned)(info.total_free_bytes + info.total_allocated_bytes));
+}
+
 void setup() {
   t1 = millis();
 
@@ -556,6 +567,7 @@ void setup() {
       delay(10);
     }
   }
+  logHeapStage("after_serial");
 
   // SD Card Initialization
   // We need 6 open files concurrently when parsing a new chapter
@@ -576,9 +588,12 @@ void setup() {
     LOG_ERR("MAIN", "Storage layout error: cannot access /.crosspoint");
   }
 
+  logHeapStage("after_sd");
   trash::pruneToCap();
+  logHeapStage("after_trash_prune");
 
   SETTINGS.loadFromFile();
+  logHeapStage("after_settings_load");
   I18N.setLanguage(static_cast<Language>(SETTINGS.uiLanguage));
   // Retry theme load up to 3 times — a transient SD read failure here would
   // leave the theme list empty, and any later save could overwrite the file.
@@ -589,7 +604,9 @@ void setup() {
     LOG_ERR("MAIN", "Theme load attempt %d failed, retrying...", attempt + 1);
     delay(50);
   }
+  logHeapStage("after_themes_load");
   KOREADER_STORE.loadFromFile();
+  logHeapStage("after_koreader_load");
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 
   // Lazy BLE init: only start stack if a device was previously paired
@@ -622,6 +639,7 @@ void setup() {
   LOG_DBG("MAIN", "Starting CrossPoint-Mod-DX34 version " CROSSPOINT_VERSION);
 
   setupDisplayAndFonts();
+  logHeapStage("after_display_fonts");
 
   exitActivity();
   auto* bootActivity = new BootActivity(renderer, mappedInputManager);
@@ -638,6 +656,7 @@ void setup() {
     }
   }
   APP_STATE.loadFromFile();
+  logHeapStage("after_app_state");
 
   // Wire crosspoint::sleep::WallpaperPlaylist deps now that APP_STATE is populated — all
   // subsequent sleep paths (trimSleepFolderIfDirty, SleepActivity) read through
@@ -649,6 +668,7 @@ void setup() {
   // Always load recents early — reader activities call addBook() which saves
   // to disk, so an unloaded list would overwrite the file with just one entry.
   RECENT_BOOKS.loadFromFile();
+  logHeapStage("after_recents");
 
   // Safety: skip straight to reader if Back held or crash-loop detected.
   const bool forcedHome =

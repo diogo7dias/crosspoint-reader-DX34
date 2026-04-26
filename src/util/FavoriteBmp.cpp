@@ -128,10 +128,10 @@ bool canPlacePathInSleep(const std::string& path) {
   if (!isBmpPathInternal(path) || !isFavoritePath(path) || isInSleepFolder(path)) {
     return true;
   }
-  return countProtectedSleepFavorites() < CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST;
+  return countProtectedSleepFavorites() < CrossPointState::SLEEP_FAVORITES_MAX;
 }
 
-bool isSleepFavoritesFull() { return countProtectedSleepFavorites() >= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST; }
+bool isSleepFavoritesFull() { return countProtectedSleepFavorites() >= CrossPointState::SLEEP_FAVORITES_MAX; }
 
 size_t countProtectedSleepFavorites() {
   size_t count = 0;
@@ -174,8 +174,8 @@ const char* limitReachedPopupMessage() {
   static char buf[48];
   static bool initialized = false;
   if (!initialized) {
-    snprintf(buf, sizeof(buf), "Sleep favorites full (%zu/%zu)", CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST,
-             CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST);
+    snprintf(buf, sizeof(buf), "Sleep favorites full (%zu/%zu)", CrossPointState::SLEEP_FAVORITES_MAX,
+             CrossPointState::SLEEP_FAVORITES_MAX);
     initialized = true;
   }
   return buf;
@@ -185,8 +185,8 @@ const char* limitReachedHomeMessage() {
   static char buf[48];
   static bool initialized = false;
   if (!initialized) {
-    snprintf(buf, sizeof(buf), "Sleep favorites full: %zu/%zu", CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST,
-             CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST);
+    snprintf(buf, sizeof(buf), "Sleep favorites full: %zu/%zu", CrossPointState::SLEEP_FAVORITES_MAX,
+             CrossPointState::SLEEP_FAVORITES_MAX);
     initialized = true;
   }
   return buf;
