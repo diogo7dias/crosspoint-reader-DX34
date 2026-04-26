@@ -255,20 +255,36 @@ static bool safeWriteFile(const char* path, const String& json) {
 
   // 1. Write to temp file.
   // Explicitly remove any stale .tmp from a previous interrupted write.
-  // If the entry is so corrupted it can't even be deleted, fall back to an
-  // alternate temp name so saves keep working.
+  // If the entry is so corrupted it can't even be deleted, try to clobber
+  // it with a fresh empty write first (which can re-link a broken FAT
+  // entry), then remove again. Only if that ALSO fails do we fall back
+  // to an alternate temp name — the fallback keeps saves working but
+  // leaves the broken entry on disk forever, which is what we want to
+  // avoid here.
   const char* activeTmp = tmpPath;
   char altTmpPath[128];
   if (Storage.exists(tmpPath)) {
-    if (!Storage.remove(tmpPath)) {
+    bool removed = Storage.remove(tmpPath);
+    if (!removed) {
+      // Second attempt: overwrite with an empty file, then remove. SdFat's
+      // remove() can fail when the dir entry is in an odd state from an
+      // interrupted write; a successful overwrite re-establishes a clean
+      // entry that the next remove() can act on.
+      if (Storage.writeFile(tmpPath, "") && Storage.remove(tmpPath)) {
+        LOG_INF("JSN", "safeWriteFile: recovered stuck stale tmp %s via overwrite-then-remove", tmpPath);
+        removed = true;
+      }
+    }
+    if (!removed) {
       LOG_ERR("JSN",
-              "safeWriteFile: stale tmp %s stuck (cannot remove); "
+              "safeWriteFile: stale tmp %s stuck (cannot remove even after overwrite); "
               "falling back to alternate tmp name",
               tmpPath);
       snprintf(altTmpPath, sizeof(altTmpPath), "%s.tmp2", path);
       activeTmp = altTmpPath;
     }
   }
+  LOG_DBG("JSN", "safeWriteFile: about to writeFile activeTmp='%s' (tmpPath='%s')", activeTmp, tmpPath);
   if (!Storage.writeFile(activeTmp, json)) {
     LOG_ERR("JSN", "safeWriteFile: failed to write tmp %s", activeTmp);
     return false;
@@ -304,6 +320,20 @@ static bool safeWriteFile(const char* path, const String& json) {
       }
     }
     return false;
+  }
+
+  // 5. If we used the .tmp2 fallback above, the original .tmp is still
+  //    on disk and will trip the same warning on every subsequent save.
+  //    Now that the directory has been touched by a successful rename,
+  //    SdFat may be able to drop the broken entry — try once more.
+  if (activeTmp != tmpPath && Storage.exists(tmpPath)) {
+    if (Storage.remove(tmpPath)) {
+      LOG_INF("JSN", "safeWriteFile: cleared stale tmp %s after successful fallback save", tmpPath);
+    } else if (Storage.writeFile(tmpPath, "") && Storage.remove(tmpPath)) {
+      LOG_INF("JSN", "safeWriteFile: cleared stale tmp %s via post-save overwrite-then-remove", tmpPath);
+    }
+    // If both passes still fail, we leave it. The .tmp2 fallback path
+    // continues to work; this is a best-effort cleanup, not load-bearing.
   }
 
   return true;
@@ -347,6 +377,9 @@ String JsonSettingsIO::safeReadFile(const char* path) {
 // ---- CrossPointSettings ----
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
+  LOG_DBG("JSN", "saveSettings: in-memory fontFamily=%u fontSize=%u customFontName='%s' lineSpacingPercent=%u",
+          (unsigned)s.fontFamily, (unsigned)s.fontSize, s.customFontName.c_str(), (unsigned)s.lineSpacingPercent);
+
   JsonDocument doc;
 
   doc["homeLayout"] = s.homeLayout;
