@@ -13,6 +13,13 @@ struct RecentBook {
   // affects the book it was toggled on.
   uint8_t boldSwap = 0;
 
+  // Cached reading progress (0-100, or -1 = unknown). Stored here so the
+  // home screen can render the per-book percent without opening the EPUB
+  // (which previously cost a spine+TOC parse per recent on every home
+  // entry, fragmenting the heap badly enough to block large books from
+  // opening). Updated on book exit / page turn from the reader.
+  int8_t percent = -1;
+
   bool operator==(const RecentBook& other) const { return path == other.path; }
 };
 
@@ -41,6 +48,10 @@ class RecentBooksStore {
 
   void updateBook(const std::string& path, const std::string& title, const std::string& author,
                   const std::string& coverBmpPath);
+  // Update only the cached reading percent for a book; no-op if the book is
+  // not registered. Used by the reader on exit / progress save so the home
+  // screen can show progress without re-opening every recent EPUB.
+  void setPercent(const std::string& path, int percent);
   void removeBook(const std::string& path);
 
   // Move a book file (and its QUOTES sidecar) to /recents/.

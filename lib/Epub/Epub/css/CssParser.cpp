@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstring>
 #include <string_view>
 
 namespace {
@@ -48,6 +49,20 @@ constexpr size_t MIN_FREE_HEAP_FOR_CSS = 48 * 1024;
 // Maximum length for a single selector string
 // Prevents parsing of extremely long or malformed selectors
 constexpr size_t MAX_SELECTOR_LENGTH = 256;
+
+// FNV-1a 32-bit hash. Cheap to compute, good enough distribution for the
+// short ASCII selectors EPUB stylesheets contain in practice. Used to
+// build the in-RAM CSS selector index without storing the strings
+// themselves (~30 KB savings on books with hundreds of rules).
+inline uint32_t fnv1aHash(const char* data, size_t len) {
+  uint32_t h = 2166136261u;
+  for (size_t i = 0; i < len; ++i) {
+    h ^= static_cast<uint8_t>(data[i]);
+    h *= 16777619u;
+  }
+  return h;
+}
+inline uint32_t fnv1aHash(const std::string& s) { return fnv1aHash(s.data(), s.size()); }
 
 // Check if character is CSS whitespace
 bool isCssWhitespace(const char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
@@ -563,7 +578,7 @@ CssStyle CssParser::resolveStyle(const std::string& tagName, const std::string& 
 
   // Helper: look up a selector and merge its style into `into`.
   // Transparently handles both RAM mode (rulesBySelector_ populated, e.g. during
-  // build before cache is written) and disk-paged mode (offsetsBySelector_
+  // build before cache is written) and disk-paged mode (hashedIndex_
   // populated, styles read from cache file on demand).
   const auto applySelectorInto = [this](const std::string& key, CssStyle& into) {
     if (!rulesBySelector_.empty()) {
@@ -578,12 +593,12 @@ CssStyle CssParser::resolveStyle(const std::string& tagName, const std::string& 
       into.applyOver(cached);
       return;
     }
-    const auto off = offsetsBySelector_.find(key);
-    if (off == offsetsBySelector_.end()) {
+    uint32_t styleOffset = 0;
+    if (!findStyleOffsetForSelector(key, styleOffset)) {
       return;
     }
     CssStyle fromDisk;
-    if (readStyleAtOffset(off->second, fromDisk)) {
+    if (readStyleAtOffset(styleOffset, fromDisk)) {
       lruPut(key, fromDisk);
       into.applyOver(fromDisk);
     }
@@ -770,6 +785,43 @@ bool CssParser::readStyleAtOffset(uint32_t offset, CssStyle& out) const {
   return true;
 }
 
+bool CssParser::findStyleOffsetForSelector(const std::string& key, uint32_t& styleOffsetOut) const {
+  if (!cacheFileOpen_ || hashedIndex_.empty()) {
+    return false;
+  }
+  const uint32_t needle = fnv1aHash(key);
+
+  // Binary-search to the first entry with this hash, then walk the (typically
+  // length-1) collision chain forward.
+  auto lo = std::lower_bound(hashedIndex_.begin(), hashedIndex_.end(), needle,
+                             [](const HashedOffset& e, uint32_t v) { return e.hash < v; });
+
+  for (auto it = lo; it != hashedIndex_.end() && it->hash == needle; ++it) {
+    cacheFile_.seek(it->record);
+    uint16_t selectorLen = 0;
+    if (cacheFile_.read(&selectorLen, sizeof(selectorLen)) != sizeof(selectorLen)) {
+      return false;
+    }
+    if (selectorLen != key.size() || selectorLen > MAX_SELECTOR_LENGTH) {
+      // Length differs -> can't be the same selector. Skip past this record
+      // and continue scanning the collision chain.
+      continue;
+    }
+    char buf[MAX_SELECTOR_LENGTH];
+    if (cacheFile_.read(buf, selectorLen) != selectorLen) {
+      return false;
+    }
+    if (std::memcmp(buf, key.data(), selectorLen) != 0) {
+      // Hash collision with a different selector. Continue to next entry.
+      continue;
+    }
+    // Verified match: style payload is right after the selector.
+    styleOffsetOut = it->record + sizeof(uint16_t) + selectorLen;
+    return true;
+  }
+  return false;
+}
+
 bool CssParser::lruGet(const std::string& key, CssStyle& out) const {
   for (auto it = lru_.begin(); it != lru_.end(); ++it) {
     if (it->first == key) {
@@ -806,7 +858,8 @@ void CssParser::lruPut(const std::string& key, const CssStyle& value) const {
 
 void CssParser::clear() {
   rulesBySelector_.clear();
-  offsetsBySelector_.clear();
+  hashedIndex_.clear();
+  hashedIndex_.shrink_to_fit();
   lru_.clear();
   if (cacheFileOpen_) {
     cacheFile_.close();
@@ -843,34 +896,50 @@ bool CssParser::loadFromCache() {
     return false;
   }
 
-  // Pre-size the hash map to avoid repeated rehashes; a few rehashes at 470+
-  // entries are enough to fragment the tight heap we're trying to conserve.
-  offsetsBySelector_.reserve(ruleCount);
+  // Reserve the index up-front. 8 bytes per entry; even at MAX_RULES the
+  // total is ~12 KB and a single contiguous allocation -- comfortably below
+  // any heap-floor that allows the section build to proceed at all.
+  hashedIndex_.reserve(ruleCount);
 
-  // Walk each rule, record selector→offset-of-style mapping, skip past the
-  // serialized style without deserializing it. Style bytes stay on SD and are
-  // read on demand in resolveStyle.
+  // Stack buffer for reading selector bytes during index build. We don't
+  // need to keep the selector strings around -- the original record stays
+  // on disk and can be re-read for collision verification at lookup time.
+  char selectorBuf[MAX_SELECTOR_LENGTH];
+
   for (uint16_t i = 0; i < ruleCount; ++i) {
+    const uint32_t recordOffset = static_cast<uint32_t>(cacheFile_.position());
+
     uint16_t selectorLen = 0;
     if (cacheFile_.read(&selectorLen, sizeof(selectorLen)) != sizeof(selectorLen)) {
       clear();
       return false;
     }
-
-    std::string selector;
-    selector.resize(selectorLen);
-    if (selectorLen > 0 && cacheFile_.read(&selector[0], selectorLen) != selectorLen) {
+    if (selectorLen > MAX_SELECTOR_LENGTH) {
+      // Cache file is corrupt or from an older format with no length cap.
+      // Bail rather than over-read into the next record.
+      LOG_DBG("CSS", "Selector length %u exceeds cap %u at rule %u", (unsigned)selectorLen,
+              (unsigned)MAX_SELECTOR_LENGTH, (unsigned)i);
+      clear();
+      return false;
+    }
+    if (selectorLen > 0 && cacheFile_.read(selectorBuf, selectorLen) != selectorLen) {
       clear();
       return false;
     }
 
-    const uint32_t styleOffset = static_cast<uint32_t>(cacheFile_.position());
-    // Skip style payload (fixed size in v4 format).
-    cacheFile_.seek(styleOffset + CSS_STYLE_SERIALIZED_SIZE);
+    const uint32_t hash = fnv1aHash(selectorBuf, selectorLen);
+    hashedIndex_.push_back({hash, recordOffset});
 
-    offsetsBySelector_.emplace(std::move(selector), styleOffset);
+    // Skip style payload (fixed size in v4 format).
+    cacheFile_.seek(static_cast<uint32_t>(cacheFile_.position()) + CSS_STYLE_SERIALIZED_SIZE);
   }
 
-  LOG_DBG("CSS", "Indexed %u rules from cache (disk-paged)", ruleCount);
+  // Sort by hash so lookup is a binary search. One-time O(N log N) cost on
+  // 470 entries is sub-millisecond.
+  std::sort(hashedIndex_.begin(), hashedIndex_.end(),
+            [](const HashedOffset& a, const HashedOffset& b) { return a.hash < b.hash; });
+
+  LOG_DBG("CSS", "Indexed %u rules from cache (hashed disk-paged, %u bytes)", ruleCount,
+          (unsigned)(hashedIndex_.size() * sizeof(HashedOffset)));
   return true;
 }

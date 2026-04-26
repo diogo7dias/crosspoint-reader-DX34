@@ -1,3 +1,7 @@
+#pragma once
+
+#include <esp_heap_caps.h>
+
 /**
  * @file SectionPageCache.h
  * @brief 3-page sliding window + pending-nav bundle for the reader.
@@ -17,7 +21,6 @@
  * Not wired into EpubReaderActivity in this stage. Stage 4 integrates
  * behind READER_V2 gate with V1 parallel.
  */
-#pragma once
 
 #include <array>
 #include <cstddef>
@@ -124,11 +127,24 @@ class SectionPageCache {
   // is invoked.
   //
   // If centerPage is out of bounds, cache is cleared.
+  //
+  // When the largest contiguous heap block is below kPrefetchHeapFloor at
+  // window-build time, the prev/next slots are skipped and only the
+  // current page is cached. This sacrifices fast page-turns on big books
+  // (each turn re-reads from the section cache file, ~200-500 ms) in
+  // exchange for ~6-10 KB of contiguous heap headroom -- enough to let
+  // the next section build run on heavy books like Wolfe that previously
+  // hit the layout pre-flight floor and could not open at all. When heap
+  // recovers (e.g. after a back-to-home cycle), the next refreshWindow
+  // call re-enables full prefetch automatically.
   void refreshWindow(int centerPage, PagePtr currentPage, int sectionPageCount, const PageLoader& loader) {
     if (centerPage < 0 || centerPage >= sectionPageCount) {
       clearEntries_();
       return;
     }
+
+    constexpr size_t kPrefetchHeapFloor = 30 * 1024;
+    const bool prefetchOk = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= kPrefetchHeapFloor;
 
     std::array<Entry, kWindow> next{};
     const int targets[kWindow] = {centerPage - 1, centerPage, centerPage + 1};
@@ -140,6 +156,10 @@ class SectionPageCache {
       PagePtr p;
       if (t == centerPage) {
         p = currentPage;
+      } else if (!prefetchOk) {
+        // Heap-pressured: leave the prev/next slot empty.  Subsequent
+        // page-turns will load on demand.
+        continue;
       } else {
         p = getRaw_(t);
         if (!p && loader) p = loader(t);

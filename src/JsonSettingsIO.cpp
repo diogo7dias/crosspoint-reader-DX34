@@ -864,6 +864,7 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
     obj["author"] = book.author;
     obj["coverBmpPath"] = book.coverBmpPath;
     obj["boldSwap"] = book.boldSwap;
+    obj["percent"] = book.percent;
   }
 
   String json;
@@ -890,6 +891,9 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     // Missing field (older recent.json) -> default OFF.
     book.boldSwap = (obj["boldSwap"] | (uint8_t)0) != 0 ? 1 : 0;
+    // Missing field (older recent.json) -> -1 = unknown; first read while
+    // book is open will populate it.
+    book.percent = static_cast<int8_t>(obj["percent"] | -1);
     store.recentBooks.push_back(book);
   }
 

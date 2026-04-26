@@ -127,6 +127,18 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
   }
 }
 
+void RecentBooksStore::setPercent(const std::string& path, int percent) {
+  const std::string normalizedKey = makeRecentPathKey(normalizeRecentPath(path));
+  auto it = std::find_if(recentBooks.begin(), recentBooks.end(),
+                         [&](const RecentBook& book) { return makeRecentPathKey(book.path) == normalizedKey; });
+  if (it == recentBooks.end()) return;
+  // Clamp to int8_t range; -1 means unknown, 0-100 are valid percents.
+  const int clamped = (percent < 0) ? -1 : (percent > 100 ? 100 : percent);
+  if (it->percent == clamped) return;  // No change, skip the disk write.
+  it->percent = static_cast<int8_t>(clamped);
+  saveToFile();
+}
+
 void RecentBooksStore::removeBook(const std::string& path) {
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);
