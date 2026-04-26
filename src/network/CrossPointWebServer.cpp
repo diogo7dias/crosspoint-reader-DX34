@@ -1549,16 +1549,20 @@ void CrossPointWebServer::handleFontsPage() const {
 void CrossPointWebServer::handleGetFonts() const {
   LOG_DIAG("WEB", "/api/fonts entry, free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   const auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
-  // Build the full document once and send with a known Content-Length. The
-  // previous chunked-encoding stream allocated a fresh JsonDocument and a
-  // std::string per family, fragmenting the heap under repeated mobile
-  // reloads. The payload here is a few hundred bytes per family at most.
-  JsonDocument doc;
-  JsonArray arr = doc.to<JsonArray>();
+  // Stream chunked instead of building one big buffer. Under heap pressure
+  // (AP mode + parallel asset fetches) a contiguous multi-KB allocation for
+  // the full body throws bad_alloc and crashes the firmware. Per-family
+  // serialization fits in a few hundred bytes and survives a fragmented heap.
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("[");
+  bool firstFamily = true;
   for (const auto& fam : mgr.families()) {
-    JsonObject f = arr.add<JsonObject>();
-    f["name"] = fam.name;
-    JsonArray sizes = f["sizes"].to<JsonArray>();
+    if (!firstFamily) server->sendContent(",");
+    firstFamily = false;
+    JsonDocument doc;
+    doc["name"] = fam.name;
+    JsonArray sizes = doc["sizes"].to<JsonArray>();
     for (const auto& sz : fam.sizes) {
       JsonObject o = sizes.add<JsonObject>();
       o["size"] = sz.sizePt;
@@ -1568,10 +1572,12 @@ void CrossPointWebServer::handleGetFonts() const {
       if (sz.hasItalic) variants.add("I");
       if (sz.hasBoldItalic) variants.add("Z");
     }
+    std::string out;
+    serializeJson(doc, out);
+    server->sendContent(out.c_str());
   }
-  String body;
-  serializeJson(doc, body);
-  server->send(200, "application/json", body);
+  server->sendContent("]");
+  server->sendContent("");  // flush
 }
 
 void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
