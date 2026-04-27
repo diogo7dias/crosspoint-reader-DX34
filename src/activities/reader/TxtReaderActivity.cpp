@@ -64,10 +64,15 @@ void TxtReaderActivity::onEnter() {
     return;
   }
 
-  // Full refresh on book enter — see EpubReaderActivity::onEnter for the
-  // regression the v1.2.0 half-refresh downgrade caused (ghost artifacts
-  // under the first page, especially post-font-switch).
-  renderer.requestFullRefresh();
+  // Refresh on book enter — see EpubReaderActivity::onEnter for full
+  // rationale. Full refresh only when path/layout/pixel-affecting settings
+  // changed since last enter; otherwise half refresh (same-book resume,
+  // return from subactivity without font change).
+  if (ReaderCommon::shouldFullRefreshOnEnter(txt->getPath())) {
+    renderer.requestFullRefresh();
+  } else {
+    renderer.requestHalfRefresh();
+  }
 
   // Configure screen orientation based on settings
   ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);

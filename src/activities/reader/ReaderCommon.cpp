@@ -8,6 +8,44 @@
 
 namespace ReaderCommon {
 
+namespace {
+struct LastEnterSig {
+  std::string bookPath;
+  uint8_t fontFamily = 0xFF;
+  uint8_t fontSize = 0xFF;
+  std::string customFontName;
+  uint8_t customFontSizePt = 0xFF;
+  uint8_t orientation = 0xFF;
+  uint8_t readerStyleMode = 0xFF;
+  uint8_t imageDither = 0xFF;
+  bool valid = false;
+};
+LastEnterSig g_lastEnter;
+}  // namespace
+
+bool shouldFullRefreshOnEnter(const std::string& bookPath) {
+  const auto& s = SETTINGS;
+  const bool needsFull = !g_lastEnter.valid || g_lastEnter.bookPath != bookPath ||
+                         g_lastEnter.fontFamily != s.fontFamily || g_lastEnter.fontSize != s.fontSize ||
+                         g_lastEnter.customFontName != s.customFontName ||
+                         g_lastEnter.customFontSizePt != s.customFontSizePt ||
+                         g_lastEnter.orientation != s.orientation ||
+                         g_lastEnter.readerStyleMode != s.readerStyleMode ||
+                         g_lastEnter.imageDither != s.imageDither;
+
+  g_lastEnter.bookPath = bookPath;
+  g_lastEnter.fontFamily = s.fontFamily;
+  g_lastEnter.fontSize = s.fontSize;
+  g_lastEnter.customFontName = s.customFontName;
+  g_lastEnter.customFontSizePt = s.customFontSizePt;
+  g_lastEnter.orientation = s.orientation;
+  g_lastEnter.readerStyleMode = s.readerStyleMode;
+  g_lastEnter.imageDither = s.imageDither;
+  g_lastEnter.valid = true;
+
+  return needsFull;
+}
+
 std::string formatPageCounterText(const uint8_t mode, const int currentPage, const int totalPages) {
   const int safeTotalPages = std::max(totalPages, 0);
   const int safeCurrentPage = std::max(currentPage, 0);
