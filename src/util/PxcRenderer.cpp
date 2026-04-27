@@ -1,7 +1,6 @@
 #include "PxcRenderer.h"
 
 #include <Epub/converters/DirectPixelWriter.h>
-#include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <esp_task_wdt.h>
@@ -9,11 +8,9 @@
 #include <cstdint>
 #include <cstdlib>
 
-#include "../CrossPointSettings.h"
-
 namespace PxcRenderer {
 
-bool renderPxc(GfxRenderer& renderer, const std::string& path) {
+bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::GrayscaleMode mode) {
   FsFile file;
   if (!Storage.openFileForRead("PXC", path, file)) {
     LOG_ERR("PXC", "Cannot open: %s", path.c_str());
@@ -43,9 +40,6 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path) {
     return false;
   }
 
-  const auto mode = SETTINGS.useFactoryLUT
-                        ? GfxRenderer::GrayscaleMode::FactoryQuality
-                        : GfxRenderer::GrayscaleMode::Differential;
   const int width = static_cast<int>(pxcWidth);
   const int height = static_cast<int>(pxcHeight);
   renderer.renderGrayscale(mode, [&]() {

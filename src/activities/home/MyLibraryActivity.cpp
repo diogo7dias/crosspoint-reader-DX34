@@ -1583,11 +1583,14 @@ void MyLibraryActivity::renderBmpImageView() {
 }
 
 void MyLibraryActivity::renderPxcImageView() {
-  // Post-load render (returning from menu, popup toggle, etc.): draw
-  // buttons and refresh fast. Image was already streamed once, so skip the
-  // slow HALF_REFRESH + full PXC decode pipeline.
+  // Post-load render (returning from menu, popup toggle, etc.): redraw
+  // hints + popup against the saved BW base. The grayscale image is
+  // already on the panel from the initial render and will be left alone
+  // because FAST_REFRESH only drives pixels that differ from the BW
+  // base just stored on first entry.
   if (imageViewFullyLoaded) {
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
+    renderer.clearScreen();
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     if (messagePopupOpen) {
       GUI.drawPopup(renderer, messagePopupText.c_str());
@@ -1597,21 +1600,11 @@ void MyLibraryActivity::renderPxcImageView() {
     return;
   }
 
+  // Initial PXC viewer load. Mirrors EpubReaderActivity's image-page
+  // pattern: lay down a BW base (white + button hints), HALF_REFRESH it,
+  // then layer the PXC image as a Differential grayscale overlay so the
+  // button hints survive underneath.
   renderer.clearScreen();
-
-  if (!PxcRenderer::renderPxc(renderer, selectedFilePath)) {
-    renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_INVALID_BMP));
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-    displayFrame();
-    imageViewFullyLoaded = true;
-    return;
-  }
-
-  // HALF_REFRESH required to overlay BW button hints cleanly on top of the
-  // grayscale image just pushed by renderGrayscale. FAST_REFRESH inverts
-  // the panel because the BW buffer state diverges from the grayscale
-  // composite the panel currently shows.
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (messagePopupOpen) {
@@ -1619,6 +1612,25 @@ void MyLibraryActivity::renderPxcImageView() {
   }
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   nextRefreshMode = HalDisplay::FAST_REFRESH;
+
+  if (!renderer.storeBwBuffer()) {
+    LOG_ERR("LIB", "PXC viewer: storeBwBuffer failed; skipping grayscale overlay");
+    imageViewFullyLoaded = true;
+    return;
+  }
+
+  if (!PxcRenderer::renderPxc(renderer, selectedFilePath, GfxRenderer::GrayscaleMode::Differential)) {
+    renderer.restoreBwBuffer();
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_INVALID_BMP));
+    const auto errLabels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    GUI.drawButtonHints(renderer, errLabels.btn1, errLabels.btn2, errLabels.btn3, errLabels.btn4);
+    displayFrame();
+    imageViewFullyLoaded = true;
+    return;
+  }
+
+  renderer.restoreBwBuffer();
   imageViewFullyLoaded = true;
 }
 
