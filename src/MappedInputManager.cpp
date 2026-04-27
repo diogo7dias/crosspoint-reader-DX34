@@ -63,17 +63,11 @@ bool MappedInputManager::mapButton(const Button button, bool (HalGPIO::*fn)(uint
   return false;
 }
 
-bool MappedInputManager::wasPressed(const Button button) const {
-  return mapButton(button, &HalGPIO::wasPressed);
-}
+bool MappedInputManager::wasPressed(const Button button) const { return mapButton(button, &HalGPIO::wasPressed); }
 
-bool MappedInputManager::wasReleased(const Button button) const {
-  return mapButton(button, &HalGPIO::wasReleased);
-}
+bool MappedInputManager::wasReleased(const Button button) const { return mapButton(button, &HalGPIO::wasReleased); }
 
-bool MappedInputManager::isPressed(const Button button) const {
-  return mapButton(button, &HalGPIO::isPressed);
-}
+bool MappedInputManager::isPressed(const Button button) const { return mapButton(button, &HalGPIO::isPressed); }
 
 bool MappedInputManager::wasAnyPressed() const { return gpio.wasAnyPressed(); }
 

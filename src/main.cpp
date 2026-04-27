@@ -11,10 +11,10 @@
  * onGoHome(), onGoToReader(), etc. which swap the global currentActivity.
  */
 #include <Arduino.h>
+#include <BitmapHelpers.h>
 #include <Epub.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
-#include <BitmapHelpers.h>
 #include <GfxRenderer.h>
 #include <HalDisplay.h>
 #include <HalGPIO.h>

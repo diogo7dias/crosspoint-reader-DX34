@@ -43,21 +43,19 @@ void filterEpubCachePxc(std::vector<std::string>& files) {
     }
   }
 
-  files.erase(
-      std::remove_if(files.begin(), files.end(),
-                     [&](const std::string& name) {
-                       if (name.empty() || name.back() == '/') return false;
-                       if (lowerExt(name, 4) != ".pxc") return false;
-                       const std::string lower = toLower(name);
-                       // Drop any *_q.pxc.
-                       if (lower.size() >= 6 &&
-                           lower.compare(lower.size() - 6, 6, "_q.pxc") == 0) {
-                         return true;
-                       }
-                       // Drop *.pxc whose stem has a source-format sibling.
-                       return sourceStems.count(toLower(stemOf(name))) > 0;
-                     }),
-      files.end());
+  files.erase(std::remove_if(files.begin(), files.end(),
+                             [&](const std::string& name) {
+                               if (name.empty() || name.back() == '/') return false;
+                               if (lowerExt(name, 4) != ".pxc") return false;
+                               const std::string lower = toLower(name);
+                               // Drop any *_q.pxc.
+                               if (lower.size() >= 6 && lower.compare(lower.size() - 6, 6, "_q.pxc") == 0) {
+                                 return true;
+                               }
+                               // Drop *.pxc whose stem has a source-format sibling.
+                               return sourceStems.count(toLower(stemOf(name))) > 0;
+                             }),
+              files.end());
 }
 
 }  // namespace LibraryListingFilter

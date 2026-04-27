@@ -25,13 +25,11 @@ LastEnterSig g_lastEnter;
 
 bool shouldFullRefreshOnEnter(const std::string& bookPath) {
   const auto& s = SETTINGS;
-  const bool needsFull = !g_lastEnter.valid || g_lastEnter.bookPath != bookPath ||
-                         g_lastEnter.fontFamily != s.fontFamily || g_lastEnter.fontSize != s.fontSize ||
-                         g_lastEnter.customFontName != s.customFontName ||
-                         g_lastEnter.customFontSizePt != s.customFontSizePt ||
-                         g_lastEnter.orientation != s.orientation ||
-                         g_lastEnter.readerStyleMode != s.readerStyleMode ||
-                         g_lastEnter.imageDither != s.imageDither;
+  const bool needsFull =
+      !g_lastEnter.valid || g_lastEnter.bookPath != bookPath || g_lastEnter.fontFamily != s.fontFamily ||
+      g_lastEnter.fontSize != s.fontSize || g_lastEnter.customFontName != s.customFontName ||
+      g_lastEnter.customFontSizePt != s.customFontSizePt || g_lastEnter.orientation != s.orientation ||
+      g_lastEnter.readerStyleMode != s.readerStyleMode || g_lastEnter.imageDither != s.imageDither;
 
   g_lastEnter.bookPath = bookPath;
   g_lastEnter.fontFamily = s.fontFamily;

@@ -15,15 +15,8 @@ namespace {
 
 std::vector<std::string> sampleListing() {
   return {
-      "wallpaper1.pxc",
-      "wallpaper1.bmp",
-      "lonely.pxc",
-      "image1.jpg",
-      "image1.pxc",
-      "anything_q.pxc",
-      "book.epub",
-      "notes.txt",
-      "subdir/",
+      "wallpaper1.pxc", "wallpaper1.bmp", "lonely.pxc", "image1.jpg", "image1.pxc",
+      "anything_q.pxc", "book.epub",      "notes.txt",  "subdir/",
   };
 }
 
@@ -31,8 +24,7 @@ void test_filter_drops_q_pxc() {
   std::vector<std::string> files = sampleListing();
   LibraryListingFilter::filterEpubCachePxc(files);
   for (const auto& name : files) {
-    TEST_ASSERT_FALSE_MESSAGE(name.size() >= 6 && name.compare(name.size() - 6, 6, "_q.pxc") == 0,
-                              name.c_str());
+    TEST_ASSERT_FALSE_MESSAGE(name.size() >= 6 && name.compare(name.size() - 6, 6, "_q.pxc") == 0, name.c_str());
   }
 }
 

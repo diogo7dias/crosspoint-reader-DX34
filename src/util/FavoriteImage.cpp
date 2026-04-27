@@ -12,9 +12,7 @@
 namespace FavoriteImage {
 namespace {
 
-bool isImagePath(const std::string& path) {
-  return FavoriteImage::isImageExtension(path);
-}
+bool isImagePath(const std::string& path) { return FavoriteImage::isImageExtension(path); }
 
 bool startsWith(const std::string& value, const char* prefix) { return value.rfind(prefix, 0) == 0; }
 
@@ -132,8 +130,7 @@ size_t countProtectedSleepFavorites() {
 
     file.getName(name, sizeof(name));
     std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' && isImagePath(filename) &&
-        isFavoritePath("/sleep/" + filename)) {
+    if (!filename.empty() && filename[0] != '.' && isImagePath(filename) && isFavoritePath("/sleep/" + filename)) {
       ++count;
     }
     file.close();

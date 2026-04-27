@@ -45,8 +45,7 @@ class HalDisplay {
   void copyGrayscaleMsbBuffers(const uint8_t* msbBuffer);
   void cleanupGrayscaleBuffers(const uint8_t* bwBuffer);
 
-  void displayGrayBuffer(bool turnOffScreen = false, const uint8_t* lut = nullptr,
-                         bool factoryMode = false);
+  void displayGrayBuffer(bool turnOffScreen = false, const uint8_t* lut = nullptr, bool factoryMode = false);
 
  private:
   EInkDisplay einkDisplay;
