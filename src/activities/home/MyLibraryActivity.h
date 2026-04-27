@@ -121,6 +121,8 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   void loopBrowse();
   void displayFrame();
   void renderImageView();
+  void renderBmpImageView();
+  void renderPxcImageView();
   void renderFileActions();
   void renderFileMoveBrowser();
   size_t findEntry(const std::string& name) const;

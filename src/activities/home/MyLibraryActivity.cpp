@@ -30,6 +30,7 @@
 #include "persist/Trash.h"
 #include "util/BookProgress.h"
 #include "util/FavoriteImage.h"
+#include "util/PxcRenderer.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
@@ -1435,14 +1436,14 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   // Help text
   const auto selectedRawIndex = rawFileIndexForListIndex(selectorIndex);
   const bool hasSelectedFile = selectedRawIndex.has_value() && isManagedFile(files[*selectedRawIndex]);
-  const bool hasSelectedBmp = selectedRawIndex.has_value() && isImageFile(files[*selectedRawIndex]);
+  const bool hasSelectedImage = selectedRawIndex.has_value() && isImageFile(files[*selectedRawIndex]);
   const char* confirmLabel = tr(STR_OPEN);
   if (isSearchActionRow(selectorIndex)) {
     confirmLabel = tr(STR_SEARCH_BUTTON);
   } else if (isClearSearchRow(selectorIndex)) {
     confirmLabel = tr(STR_CLEAR_BUTTON);
   } else if (hasSelectedFile) {
-    confirmLabel = hasSelectedBmp ? tr(STR_VIEW_HOLD) : tr(STR_OPEN_HOLD);
+    confirmLabel = hasSelectedImage ? tr(STR_VIEW_HOLD) : tr(STR_OPEN_HOLD);
   }
   const char* backLabel = basepath == "/" ? tr(STR_HOME) : tr(STR_BACK_HOLD);
   const auto labels = mappedInput.mapLabels(backLabel, confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
@@ -1456,6 +1457,14 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
 }
 
 void MyLibraryActivity::renderImageView() {
+  if (isPxcFile(selectedFilePath)) {
+    renderPxcImageView();
+    return;
+  }
+  renderBmpImageView();
+}
+
+void MyLibraryActivity::renderBmpImageView() {
   renderer.clearScreen();
 
   FsFile file;
@@ -1556,6 +1565,28 @@ void MyLibraryActivity::renderImageView() {
   // fast post-load path above.
   imageViewFullyLoaded = true;
   requestUpdate();
+}
+
+void MyLibraryActivity::renderPxcImageView() {
+  renderer.clearScreen();
+
+  if (!PxcRenderer::renderPxc(renderer, selectedFilePath)) {
+    renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_INVALID_BMP));
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    displayFrame();
+    imageViewFullyLoaded = true;
+    return;
+  }
+
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (messagePopupOpen) {
+    GUI.drawPopup(renderer, messagePopupText.c_str());
+  }
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  nextRefreshMode = HalDisplay::FAST_REFRESH;
+  imageViewFullyLoaded = true;
 }
 
 void MyLibraryActivity::renderFileActions() {
