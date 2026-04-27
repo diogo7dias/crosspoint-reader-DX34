@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 
 #include "CrossPointSettings.h"
@@ -25,6 +26,7 @@
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
 #include "fonts/CustomBinFontManager.h"
+#include "../activities/home/LibraryListingFilter.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
@@ -771,10 +773,12 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
         info.size = 0;
         info.isEpub = false;
         info.isBmp = false;
+        info.isPxc = false;
       } else {
         info.size = file.size();
         info.isEpub = hasExtCI(name, nameLen, ".epub", 5);
         info.isBmp = hasExtCI(name, nameLen, ".bmp", 4);
+        info.isPxc = hasExtCI(name, nameLen, ".pxc", 4);
       }
 
       callback(info);
@@ -800,6 +804,10 @@ bool CrossPointWebServer::isBmpFile(const String& filename) const {
   return hasExtCI(filename.c_str(), filename.length(), ".bmp", 4);
 }
 
+bool CrossPointWebServer::isPxcFile(const String& filename) const {
+  return hasExtCI(filename.c_str(), filename.length(), ".pxc", 4);
+}
+
 void CrossPointWebServer::handleFileList() const {
   sendHtmlContent(server.get(), FilesPageHtml, sizeof(FilesPageHtml));
 }
@@ -820,6 +828,35 @@ void CrossPointWebServer::handleFileListData() const {
     }
   }
 
+  // Collect all entries first so we can apply the EPUB-cache PXC filter
+  // before serialization. The filter removes *_q.pxc cache files and
+  // <base>.pxc when a source image sibling (.jpg/.png/etc.) is present.
+  std::vector<FileInfo> entries;
+  scanFiles(currentPath.c_str(), [&entries](const FileInfo& info) {
+    entries.push_back(info);
+  });
+
+  // Build flat name list (file entries only), run filter, then rebuild a
+  // fast-lookup set of surviving names (Option A from task spec).
+  {
+    std::vector<std::string> names;
+    names.reserve(entries.size());
+    for (const auto& e : entries) {
+      if (!e.isDirectory) names.push_back(e.name.c_str());
+    }
+    LibraryListingFilter::filterEpubCachePxc(names);
+    // Reconstruct as unordered_set for O(1) lookup during serialization.
+    std::unordered_set<std::string> surviving(names.begin(), names.end());
+    // Erase file entries that didn't survive the filter; keep directories.
+    entries.erase(
+        std::remove_if(entries.begin(), entries.end(),
+                       [&surviving](const FileInfo& e) {
+                         return !e.isDirectory &&
+                                surviving.find(e.name.c_str()) == surviving.end();
+                       }),
+        entries.end());
+  }
+
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
   server->sendContent("[");
@@ -833,19 +870,20 @@ void CrossPointWebServer::handleFileListData() const {
   batch.reserve(3072);
   constexpr size_t kFlushAt = 2048;
 
-  scanFiles(currentPath.c_str(), [this, &output, &doc, &seenFirst, &batch](const FileInfo& info) {
+  for (const auto& info : entries) {
     doc.clear();
     doc["name"] = info.name;
     doc["size"] = info.size;
     doc["isDirectory"] = info.isDirectory;
     doc["isEpub"] = info.isEpub;
     doc["isBmp"] = info.isBmp;
+    doc["isPxc"] = info.isPxc;
 
     const size_t written = serializeJson(doc, output, outputSize);
     if (written >= outputSize) {
       // JSON output truncated; skip this entry to avoid sending malformed JSON
       LOG_DBG("WEB", "Skipping file entry with oversized JSON for name: %s", info.name.c_str());
-      return;
+      continue;
     }
 
     if (seenFirst) {
@@ -860,7 +898,7 @@ void CrossPointWebServer::handleFileListData() const {
       batch = "";
       batch.reserve(3072);
     }
-  });
+  }
 
   if (batch.length()) server->sendContent(batch);
   server->sendContent("]");
