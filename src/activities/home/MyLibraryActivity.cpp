@@ -1609,12 +1609,16 @@ void MyLibraryActivity::renderPxcImageView() {
     return;
   }
 
+  // PXC is pre-dithered: renderGrayscale() inside PxcRenderer::renderPxc
+  // already pushed the image to the panel via displayGrayBuffer. Here we
+  // only overlay button hints / popup, so FAST_REFRESH (~300 ms) is
+  // sufficient — no need for the legacy BMP HALF_REFRESH (~1.7 s).
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (messagePopupOpen) {
     GUI.drawPopup(renderer, messagePopupText.c_str());
   }
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   nextRefreshMode = HalDisplay::FAST_REFRESH;
   imageViewFullyLoaded = true;
 }
