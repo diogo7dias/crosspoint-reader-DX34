@@ -65,7 +65,7 @@
 #include "sleep/WallpaperPlaylistV2.h"
 #endif
 #include "util/ButtonNavigator.h"
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
 #include "util/TransitionFeedback.h"
 
 HalDisplay display;
@@ -334,9 +334,9 @@ static void wireWallpaperPlaylist() {
     return ok;
   };
   deps.randomFn = [](long mod) -> long { return ::random(mod); };
-  deps.isFavorite = [](const std::string& path) { return FavoriteBmp::isFavoritePath(path); };
+  deps.isFavorite = [](const std::string& path) { return FavoriteImage::isFavoritePath(path); };
   deps.onPathRenamed = [](const std::string& from, const std::string& to) {
-    FavoriteBmp::replacePathReferences(from, to);
+    FavoriteImage::replacePathReferences(from, to);
   };
   deps.onBeforeTrimMove = []() {};  // no popup in current call sites
   crosspoint::sleep::WallpaperPlaylist::instance().setDeps(deps);
@@ -358,9 +358,9 @@ static void wireWallpaperPlaylist() {
     return ok;
   };
   v2deps.randomFn = [](long mod) -> long { return ::random(mod); };
-  v2deps.isFavorite = [](const std::string& path) { return FavoriteBmp::isFavoritePath(path); };
+  v2deps.isFavorite = [](const std::string& path) { return FavoriteImage::isFavoritePath(path); };
   v2deps.onPathRenamed = [](const std::string& from, const std::string& to) {
-    FavoriteBmp::replacePathReferences(from, to);
+    FavoriteImage::replacePathReferences(from, to);
   };
   // PR2: wire to APP_STATE notification flags consumed by HomeActivity.
   v2deps.onTrimMoved = [](uint16_t /*moved*/) {};

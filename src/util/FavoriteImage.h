@@ -3,11 +3,11 @@
 #include <cstddef>
 #include <string>
 
-namespace FavoriteBmp {
+namespace FavoriteImage {
 
 enum class SetFavoriteResult {
   Success,
-  NotBmp,
+  NotImage,
   Missing,
   LimitReached,
   RenameConflict,
@@ -28,4 +28,4 @@ SetFavoriteResult setFavorite(const std::string& path, bool favorite, std::strin
 void replacePathReferences(const std::string& oldPath, const std::string& newPath);
 void removePathReferences(const std::string& path);
 
-}  // namespace FavoriteBmp
+}  // namespace FavoriteImage

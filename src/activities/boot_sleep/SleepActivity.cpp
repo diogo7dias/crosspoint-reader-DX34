@@ -23,7 +23,7 @@
 #if FEATURE_WALLPAPER_V2
 #include "sleep/WallpaperPlaylistV2.h"
 #endif
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
 #include "util/PxcRenderer.h"
 #include "util/StringUtils.h"
 
@@ -150,7 +150,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (StringUtils::checkFileExtension(APP_STATE.lastSleepWallpaperPath, ".pxc")) {
       LOG_DBG("SLP", "Paused, re-showing PXC: %s", APP_STATE.lastSleepWallpaperPath.c_str());
       delay(100);
-      const std::string displayName = FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
+      const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
       if (renderPxcSleepScreen(APP_STATE.lastSleepWallpaperPath, displayName.c_str())) {
         return;
       }
@@ -163,7 +163,7 @@ void SleepActivity::renderCustomSleepScreen() const {
         Bitmap bitmap(file, true);
         const auto parseErr = bitmap.parseHeaders();
         if (parseErr == BmpReaderError::Ok) {
-          const std::string displayName = FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
+          const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
           renderBitmapSleepScreen(bitmap, displayName.c_str());
           file.close();
           return;
@@ -192,7 +192,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (StringUtils::checkFileExtension(selectedImage, ".pxc")) {
       LOG_DBG("SLP", "Loading PXC: %s", filename.c_str());
       delay(100);
-      const std::string displayName = FavoriteBmp::displayNameForPath(filename);
+      const std::string displayName = FavoriteImage::displayNameForPath(filename);
       if (renderPxcSleepScreen(filename, displayName.c_str())) {
         rememberLastRenderedSleepBitmap(filename, selectedImage);
         rendered = true;
@@ -208,7 +208,7 @@ void SleepActivity::renderCustomSleepScreen() const {
       Bitmap bitmap(file, true);
       const auto parseErr = bitmap.parseHeaders();
       if (parseErr == BmpReaderError::Ok) {
-        const std::string displayName = FavoriteBmp::displayNameForPath(filename);
+        const std::string displayName = FavoriteImage::displayNameForPath(filename);
         rememberLastRenderedSleepBitmap(filename, selectedImage);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
         file.close();
@@ -239,7 +239,7 @@ void SleepActivity::renderCustomSleepScreen() const {
       Bitmap bitmap(file, true);
       const auto parseErr = bitmap.parseHeaders();
       if (parseErr == BmpReaderError::Ok) {
-        const std::string displayName = FavoriteBmp::displayNameForPath(fallbackPath);
+        const std::string displayName = FavoriteImage::displayNameForPath(fallbackPath);
         LOG_DBG("SLP", "Loading: %s", fallbackPath);
         rememberLastRenderedSleepBitmap(fallbackPath);
         renderBitmapSleepScreen(bitmap, displayName.c_str());

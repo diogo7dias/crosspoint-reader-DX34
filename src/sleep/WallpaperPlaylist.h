@@ -54,11 +54,11 @@ class WallpaperPlaylist {
     // RNG. Defaults to Arduino random() in production. Tests inject seeded fn.
     std::function<long(long)> randomFn;
 
-    // Favorite predicate (delegates to FavoriteBmp in production).
+    // Favorite predicate (delegates to FavoriteImage in production).
     // Argument is a full /sleep/<filename> path.
     std::function<bool(const std::string&)> isFavorite;
 
-    // Called after a file is renamed during trim (for FavoriteBmp path updates).
+    // Called after a file is renamed during trim (for FavoriteImage path updates).
     std::function<void(const std::string& /*from*/, const std::string& /*to*/)> onPathRenamed;
 
     // Called by trimToLimit before moving overflow files (activity shows popup).

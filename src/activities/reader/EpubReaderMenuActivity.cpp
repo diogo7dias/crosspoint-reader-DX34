@@ -12,7 +12,7 @@
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
 
 EpubReaderMenuActivity::EpubReaderMenuActivity(
     GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title, const std::string& bookPath,
@@ -62,7 +62,7 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   const std::string& wallpaperPath = APP_STATE.lastSleepWallpaperPath;
   if (!wallpaperPath.empty() && Storage.exists(wallpaperPath.c_str())) {
     items.push_back({MenuAction::NONE, StrId::STR_WALLPAPER_TRIAGE, nullptr, true});
-    const bool isFav = FavoriteBmp::isFavoritePath(wallpaperPath);
+    const bool isFav = FavoriteImage::isFavoritePath(wallpaperPath);
     items.push_back({MenuAction::TRIAGE_FAVORITE, isFav ? StrId::STR_UNFAVORITE : StrId::STR_FAVORITE});
     items.push_back({MenuAction::TRIAGE_PAUSE_ROTATION,
                      APP_STATE.wallpaperRotationPaused ? StrId::STR_TRIAGE_UNPAUSE : StrId::STR_TRIAGE_PAUSE});

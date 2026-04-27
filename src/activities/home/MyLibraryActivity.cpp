@@ -29,7 +29,7 @@
 #include "fontIds.h"
 #include "persist/Trash.h"
 #include "util/BookProgress.h"
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
@@ -438,7 +438,7 @@ std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {
   }
 
   if (isBmpFile(name)) {
-    return FavoriteBmp::displayNameForPath(makeAbsolutePath(name));
+    return FavoriteImage::displayNameForPath(makeAbsolutePath(name));
   }
 
   if (!isBookFile(name)) {
@@ -557,7 +557,7 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
     }
   }
 
-  const bool wasFav = FavoriteBmp::isFavoritePath(selectedFilePath);
+  const bool wasFav = FavoriteImage::isFavoritePath(selectedFilePath);
   const std::string parent = basepath.empty() ? "/" : basepath;
   const std::string parentSlash = (parent.back() == '/') ? parent : parent + "/";
   const std::string suffix = std::string(wasFav ? "_F" : "") + ".bmp";
@@ -594,7 +594,7 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
     return;
   }
 
-  FavoriteBmp::replacePathReferences(selectedFilePath, targetPath);
+  FavoriteImage::replacePathReferences(selectedFilePath, targetPath);
   APP_STATE.saveToFile();
 
   const std::string newName = getBasename(targetPath);
@@ -630,7 +630,7 @@ std::string MyLibraryActivity::getFileActionLabel(const int index) const {
       case 0:
         return tr(STR_MOVE_TO_SLEEP_ACTION);
       case 1:
-        return FavoriteBmp::isFavoritePath(selectedFilePath) ? tr(STR_UNFAVORITE) : tr(STR_FAVORITE);
+        return FavoriteImage::isFavoritePath(selectedFilePath) ? tr(STR_UNFAVORITE) : tr(STR_FAVORITE);
       case 2:
         return tr(STR_RENAME_ACTION);
       case 3:
@@ -716,7 +716,7 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
   std::string normalizedTarget = targetDir;
   if (normalizedTarget.empty()) normalizedTarget = "/";
   if (normalizedTarget.back() != '/') normalizedTarget += "/";
-  if (normalizedTarget == "/sleep/" && !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
+  if (normalizedTarget == "/sleep/" && !FavoriteImage::canPlacePathInSleep(selectedFilePath)) {
     return false;
   }
 
@@ -763,7 +763,7 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
     }
     RECENT_BOOKS.removeBook(selectedFilePath);
   } else if (isBmpFile(selectedFilePath)) {
-    FavoriteBmp::replacePathReferences(selectedFilePath, destination);
+    FavoriteImage::replacePathReferences(selectedFilePath, destination);
     APP_STATE.saveToFile();
   }
   if (destinationPath != nullptr) {
@@ -791,7 +791,7 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
   }
 
   if (isBmpFile(path)) {
-    FavoriteBmp::removePathReferences(path);
+    FavoriteImage::removePathReferences(path);
     APP_STATE.saveToFile();
   }
   if (selectedFilePath == path) selectedFilePath.clear();
@@ -951,8 +951,8 @@ void MyLibraryActivity::loopFileActions() {
       const int actionIndex = fileActionIndex - (actionsOpenedFromViewer ? 0 : 1);
       switch (actionIndex) {
         case 0: {
-          if (!FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
-            showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
+          if (!FavoriteImage::canPlacePathInSleep(selectedFilePath)) {
+            showMessagePopup(FavoriteImage::limitReachedPopupMessage());
             return;
           }
           StatusPopup::showBlocking(renderer, tr(STR_MOVING_TO_SLEEP));
@@ -972,11 +972,11 @@ void MyLibraryActivity::loopFileActions() {
           break;
         }
         case 1: {
-          const bool makeFavorite = !FavoriteBmp::isFavoritePath(selectedFilePath);
+          const bool makeFavorite = !FavoriteImage::isFavoritePath(selectedFilePath);
           StatusPopup::showBlocking(renderer, makeFavorite ? tr(STR_FAVORITING) : tr(STR_UNFAVORITING));
           std::string updatedPath;
-          const auto result = FavoriteBmp::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
-          if (result == FavoriteBmp::SetFavoriteResult::Success) {
+          const auto result = FavoriteImage::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
+          if (result == FavoriteImage::SetFavoriteResult::Success) {
             const std::string newName = getBasename(updatedPath);
             if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
               files[*rawIndex] = newName;
@@ -986,13 +986,13 @@ void MyLibraryActivity::loopFileActions() {
             }
             selectedFilePath = updatedPath;
             StatusPopup::showConfirmation(renderer, makeFavorite ? tr(STR_FAVORITED) : tr(STR_UNFAVORITED));
-          } else if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
-            showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
+          } else if (result == FavoriteImage::SetFavoriteResult::LimitReached) {
+            showMessagePopup(FavoriteImage::limitReachedPopupMessage());
             return;
-          } else if (result == FavoriteBmp::SetFavoriteResult::RenameConflict) {
+          } else if (result == FavoriteImage::SetFavoriteResult::RenameConflict) {
             showMessagePopup(tr(STR_FAVORITE_NAME_EXISTS));
             return;
-          } else if (result == FavoriteBmp::SetFavoriteResult::RenameFailed) {
+          } else if (result == FavoriteImage::SetFavoriteResult::RenameFailed) {
             showMessagePopup(tr(STR_FAILED_RENAME_IMAGE));
             return;
           } else {
@@ -1179,8 +1179,8 @@ void MyLibraryActivity::loopFileMoveBrowser() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& entry = moveBrowseEntries[fileMoveIndex];
-    if (entry.path == "/sleep" && !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
-      showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
+    if (entry.path == "/sleep" && !FavoriteImage::canPlacePathInSleep(selectedFilePath)) {
+      showMessagePopup(FavoriteImage::limitReachedPopupMessage());
       return;
     }
     StatusPopup::showBlocking(renderer, tr(STR_MOVING_FILE));

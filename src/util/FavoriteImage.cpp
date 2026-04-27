@@ -1,4 +1,4 @@
-#include "FavoriteBmp.h"
+#include "FavoriteImage.h"
 
 #include <HalStorage.h>
 
@@ -9,7 +9,7 @@
 #include "CrossPointState.h"
 #include "util/StringUtils.h"
 
-namespace FavoriteBmp {
+namespace FavoriteImage {
 namespace {
 
 constexpr const char* kFavoriteSuffix = "_F";
@@ -194,7 +194,7 @@ const char* limitReachedHomeMessage() {
 
 SetFavoriteResult setFavorite(const std::string& path, const bool favorite, std::string* updatedPath) {
   if (!isBmpPathInternal(path)) {
-    return SetFavoriteResult::NotBmp;
+    return SetFavoriteResult::NotImage;
   }
   if (!Storage.exists(path.c_str())) {
     return SetFavoriteResult::Missing;
@@ -255,4 +255,4 @@ void removePathReferences(const std::string& path) {
   removeSleepReferencesForPath(path);
 }
 
-}  // namespace FavoriteBmp
+}  // namespace FavoriteImage
