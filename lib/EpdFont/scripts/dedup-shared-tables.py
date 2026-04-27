@@ -28,13 +28,13 @@ FONTS_DIR = SCRIPT_DIR.parent / "builtinFonts"
 SHARED_DIR = FONTS_DIR / "shared"
 
 FAMILIES = [
-    ("bookerly", ["regular", "bold", "italic"], [12, 13, 14, 15, 16, 17]),
-    ("chareink", ["regular", "bold", "italic"], [12, 13, 14, 15, 16, 17]),
-    ("vollkorn", ["regular", "bold", "italic"], [12, 13, 14, 15, 16, 17]),
-    ("bitter", ["regular", "bold", "italic"], [12, 14, 16]),
+    ("bookerly", ["regular", "bold", "italic"], [10, 12, 13, 14, 15, 16, 17]),
+    ("chareink", ["regular", "bold", "italic"], [10, 12, 13, 14, 15, 16, 17]),
+    ("vollkorn", ["regular", "bold", "italic"], [10, 12, 13, 14, 15, 16, 17]),
+    ("bitter", ["regular", "bold", "italic"], [10, 12, 14, 16]),
     # Galmuri is Regular-only (italic/bold synthesized at draw time) and
     # covers the small pixel-font sizes.
-    ("galmuri", ["regular"], [11, 12, 14]),
+    ("galmuri", ["regular"], [10, 11, 12, 14]),
 ]
 
 # Array-name suffix -> (C type, shared symbol suffix).  The first entry of each

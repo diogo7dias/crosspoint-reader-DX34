@@ -16,6 +16,7 @@ reader_shared() {
   echo "./shared/${family}_regular_tables.h ./shared/${family}_bold_tables.h ./shared/${family}_italic_tables.h"
 }
 
+echo "#define CHAREINK_10_FONT_ID ($(font_id ./chareink_10_regular.h ./chareink_10_bold.h ./chareink_10_italic.h))"
 echo "#define CHAREINK_12_FONT_ID ($(font_id ./chareink_12_regular.h ./chareink_12_bold.h ./chareink_12_italic.h $(reader_shared chareink)))"
 echo "#define CHAREINK_13_FONT_ID ($(font_id ./chareink_13_regular.h ./chareink_13_bold.h ./chareink_13_italic.h $(reader_shared chareink)))"
 echo "#define CHAREINK_14_FONT_ID ($(font_id ./chareink_14_regular.h ./chareink_14_bold.h ./chareink_14_italic.h $(reader_shared chareink)))"
@@ -23,6 +24,7 @@ echo "#define CHAREINK_15_FONT_ID ($(font_id ./chareink_15_regular.h ./chareink_
 echo "#define CHAREINK_16_FONT_ID ($(font_id ./chareink_16_regular.h ./chareink_16_bold.h ./chareink_16_italic.h $(reader_shared chareink)))"
 echo "#define CHAREINK_17_FONT_ID ($(font_id ./chareink_17_regular.h ./chareink_17_bold.h ./chareink_17_italic.h $(reader_shared chareink)))"
 echo ""
+echo "#define BOOKERLY_10_FONT_ID ($(font_id ./bookerly_10_regular.h ./bookerly_10_bold.h ./bookerly_10_italic.h))"
 echo "#define BOOKERLY_12_FONT_ID ($(font_id ./bookerly_12_regular.h ./bookerly_12_bold.h ./bookerly_12_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_13_FONT_ID ($(font_id ./bookerly_13_regular.h ./bookerly_13_bold.h ./bookerly_13_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_14_FONT_ID ($(font_id ./bookerly_14_regular.h ./bookerly_14_bold.h ./bookerly_14_italic.h $(reader_shared bookerly)))"
@@ -30,6 +32,7 @@ echo "#define BOOKERLY_15_FONT_ID ($(font_id ./bookerly_15_regular.h ./bookerly_
 echo "#define BOOKERLY_16_FONT_ID ($(font_id ./bookerly_16_regular.h ./bookerly_16_bold.h ./bookerly_16_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_17_FONT_ID ($(font_id ./bookerly_17_regular.h ./bookerly_17_bold.h ./bookerly_17_italic.h $(reader_shared bookerly)))"
 echo ""
+echo "#define VOLLKORN_10_FONT_ID ($(font_id ./vollkorn_10_regular.h ./vollkorn_10_bold.h ./vollkorn_10_italic.h))"
 echo "#define VOLLKORN_12_FONT_ID ($(font_id ./vollkorn_12_regular.h ./vollkorn_12_bold.h ./vollkorn_12_italic.h $(reader_shared vollkorn)))"
 echo "#define VOLLKORN_13_FONT_ID ($(font_id ./vollkorn_13_regular.h ./vollkorn_13_bold.h ./vollkorn_13_italic.h $(reader_shared vollkorn)))"
 echo "#define VOLLKORN_14_FONT_ID ($(font_id ./vollkorn_14_regular.h ./vollkorn_14_bold.h ./vollkorn_14_italic.h $(reader_shared vollkorn)))"
@@ -39,9 +42,13 @@ echo "#define VOLLKORN_17_FONT_ID ($(font_id ./vollkorn_17_regular.h ./vollkorn_
 echo ""
 # Bitter: experimental slab-serif reader font (debug env only). Three
 # weight-specific shared-tables headers like the other reader families.
-for size in 12 13 14 15 16 17; do
+for size in 10 12 13 14 15 16 17; do
   if [[ -f "./bitter_${size}_regular.h" ]]; then
-    echo "#define BITTER_${size}_FONT_ID ($(font_id ./bitter_${size}_regular.h ./bitter_${size}_bold.h ./bitter_${size}_italic.h $(reader_shared bitter)))"
+    if [[ "$size" == "10" ]]; then
+      echo "#define BITTER_${size}_FONT_ID ($(font_id ./bitter_${size}_regular.h ./bitter_${size}_bold.h ./bitter_${size}_italic.h))"
+    else
+      echo "#define BITTER_${size}_FONT_ID ($(font_id ./bitter_${size}_regular.h ./bitter_${size}_bold.h ./bitter_${size}_italic.h $(reader_shared bitter)))"
+    fi
   fi
 done
 echo ""
@@ -57,7 +64,11 @@ galmuri_shared() {
 }
 for size in 10 11 12 13 14 15 16 17; do
   if [[ -f "./galmuri_${size}_regular.h" ]]; then
-    echo "#define GALMURI_${size}_FONT_ID ($(font_id ./galmuri_${size}_regular.h $(galmuri_shared)))"
+    if [[ "$size" == "10" ]]; then
+      echo "#define GALMURI_${size}_FONT_ID ($(font_id ./galmuri_${size}_regular.h))"
+    else
+      echo "#define GALMURI_${size}_FONT_ID ($(font_id ./galmuri_${size}_regular.h $(galmuri_shared)))"
+    fi
   fi
 done
 echo ""

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <builtinFonts/chareink_10_regular.h>
+#include <builtinFonts/chareink_10_bold.h>
+#include <builtinFonts/chareink_10_italic.h>
 #include <builtinFonts/chareink_12_regular.h>
 #include <builtinFonts/chareink_12_bold.h>
 #include <builtinFonts/chareink_12_italic.h>
@@ -19,6 +22,9 @@
 #include <builtinFonts/chareink_17_bold.h>
 #include <builtinFonts/chareink_17_italic.h>
 
+#include <builtinFonts/bookerly_10_regular.h>
+#include <builtinFonts/bookerly_10_bold.h>
+#include <builtinFonts/bookerly_10_italic.h>
 #include <builtinFonts/bookerly_12_regular.h>
 #include <builtinFonts/bookerly_12_bold.h>
 #include <builtinFonts/bookerly_12_italic.h>
@@ -38,6 +44,9 @@
 #include <builtinFonts/bookerly_17_bold.h>
 #include <builtinFonts/bookerly_17_italic.h>
 
+#include <builtinFonts/vollkorn_10_regular.h>
+#include <builtinFonts/vollkorn_10_bold.h>
+#include <builtinFonts/vollkorn_10_italic.h>
 #include <builtinFonts/vollkorn_12_regular.h>
 #include <builtinFonts/vollkorn_12_bold.h>
 #include <builtinFonts/vollkorn_12_italic.h>
@@ -60,6 +69,9 @@
 #include <builtinFonts/unifont_14_regular.h>
 #include <builtinFonts/unifont_18_regular.h>
 
+#include <builtinFonts/bitter_10_regular.h>
+#include <builtinFonts/bitter_10_bold.h>
+#include <builtinFonts/bitter_10_italic.h>
 #include <builtinFonts/bitter_12_regular.h>
 #include <builtinFonts/bitter_12_bold.h>
 #include <builtinFonts/bitter_12_italic.h>
@@ -70,6 +82,7 @@
 #include <builtinFonts/bitter_16_bold.h>
 #include <builtinFonts/bitter_16_italic.h>
 
+#include <builtinFonts/galmuri_10_regular.h>
 #include <builtinFonts/galmuri_11_regular.h>
 #include <builtinFonts/galmuri_12_regular.h>
 #include <builtinFonts/galmuri_14_regular.h>

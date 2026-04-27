@@ -544,12 +544,11 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
     (void)fontSize;
     return SIZE_16;
   }
-  // Galmuri is a pixel font exposed at sizes 11, 12, 14. Size 10 was
-  // dropped as too small; any SIZE_10 still stored in a user's
-  // settings.json falls back to SIZE_11.
+  // Galmuri is a pixel font exposed at sizes 10, 11, 12, 14.
   if (family == GALMURI) {
     switch (fontSize) {
       case SIZE_10:
+        return SIZE_10;
       case SIZE_11:
         return SIZE_11;
       case SIZE_14:
@@ -559,10 +558,12 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
         return SIZE_12;
     }
   }
-  // Bitter ships sizes 12, 14, 16 only. Nearest-fallback mapping: 13->14,
+  // Bitter ships sizes 10, 12, 14, 16. Nearest-fallback mapping: 13->14,
   // 15->14, 17->16.
   if (family == BITTER) {
     switch (fontSize) {
+      case SIZE_10:
+        return SIZE_10;
       case SIZE_12:
         return SIZE_12;
       case SIZE_13:
@@ -575,8 +576,10 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
         return SIZE_16;
     }
   }
-  // Non-Galmuri families: shared active set 12, 13, 14, 15, 16, 17 (LARGE).
+  // Non-Galmuri families: shared active set 10, 12, 13, 14, 15, 16, 17 (LARGE).
   switch (fontSize) {
+    case SIZE_10:
+      return SIZE_10;
     case SIZE_12:
       return SIZE_12;
     case SIZE_13:
@@ -589,9 +592,8 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
       return SIZE_16;
     case LARGE:
       return LARGE;  // 17pt
-    case SIZE_10:
     case SIZE_11:
-      return SIZE_12;  // legacy / Galmuri-only -> 12 for other families
+      return SIZE_12;  // Galmuri-only -> 12 for other families
     case MEDIUM:
       return SIZE_14;  // legacy 15pt MEDIUM -> 14 (preserve existing user size)
     case SIZE_18:
@@ -634,12 +636,12 @@ uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
     return 1;  // native size of the installed BDF
   }
   if (family == GALMURI) {
-    return 3;  // 11, 12, 14
+    return 4;  // 10, 11, 12, 14
   }
   if (family == BITTER) {
-    return 3;  // 12, 14, 16
+    return 4;  // 10, 12, 14, 16
   }
-  return 6;  // 12, 13, 14, 15, 16, 17
+  return 7;  // 10, 12, 13, 14, 15, 16, 17
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
@@ -649,40 +651,46 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
   }
   if (family == GALMURI) {
     switch (normalizeFontSizeForFamily(family, fontSize)) {
-      case SIZE_11:
+      case SIZE_10:
         return 0;
-      case SIZE_12:
+      case SIZE_11:
         return 1;
+      case SIZE_12:
+        return 2;
       case SIZE_14:
       default:
-        return 2;
+        return 3;
     }
   }
   if (family == BITTER) {
     switch (normalizeFontSizeForFamily(family, fontSize)) {
-      case SIZE_12:
+      case SIZE_10:
         return 0;
-      case SIZE_14:
+      case SIZE_12:
         return 1;
+      case SIZE_14:
+        return 2;
       case SIZE_16:
       default:
-        return 2;
+        return 3;
     }
   }
   switch (normalizeFontSizeForFamily(family, fontSize)) {
-    case SIZE_12:
+    case SIZE_10:
       return 0;
-    case SIZE_13:
+    case SIZE_12:
       return 1;
-    case SIZE_14:
+    case SIZE_13:
       return 2;
-    case SIZE_15:
+    case SIZE_14:
       return 3;
-    case SIZE_16:
+    case SIZE_15:
       return 4;
+    case SIZE_16:
+      return 5;
     case LARGE:
     default:
-      return 5;
+      return 6;
   }
 }
 
@@ -694,10 +702,12 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
   if (family == GALMURI) {
     switch (displayIndex) {
       case 0:
-        return SIZE_11;
+        return SIZE_10;
       case 1:
-        return SIZE_12;
+        return SIZE_11;
       case 2:
+        return SIZE_12;
+      case 3:
       default:
         return SIZE_14;
     }
@@ -705,26 +715,30 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
   if (family == BITTER) {
     switch (displayIndex) {
       case 0:
-        return SIZE_12;
+        return SIZE_10;
       case 1:
-        return SIZE_14;
+        return SIZE_12;
       case 2:
+        return SIZE_14;
+      case 3:
       default:
         return SIZE_16;
     }
   }
   switch (displayIndex) {
     case 0:
-      return SIZE_12;
+      return SIZE_10;
     case 1:
-      return SIZE_13;
+      return SIZE_12;
     case 2:
-      return SIZE_14;
+      return SIZE_13;
     case 3:
-      return SIZE_15;
+      return SIZE_14;
     case 4:
-      return SIZE_16;
+      return SIZE_15;
     case 5:
+      return SIZE_16;
+    case 6:
     default:
       return LARGE;  // 17pt
   }
@@ -772,6 +786,8 @@ int CrossPointSettings::getReaderFontId() const {
   }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {
+      case SIZE_10:
+        return BOOKERLY_10_FONT_ID;
       case SIZE_12:
         return BOOKERLY_12_FONT_ID;
       case SIZE_13:
@@ -789,6 +805,8 @@ int CrossPointSettings::getReaderFontId() const {
   }
   if (normalizedFamily == VOLLKORN) {
     switch (normalizedFontSize) {
+      case SIZE_10:
+        return VOLLKORN_10_FONT_ID;
       case SIZE_12:
         return VOLLKORN_12_FONT_ID;
       case SIZE_13:
@@ -806,6 +824,8 @@ int CrossPointSettings::getReaderFontId() const {
   }
   if (normalizedFamily == GALMURI) {
     switch (normalizedFontSize) {
+      case SIZE_10:
+        return GALMURI_10_FONT_ID;
       case SIZE_11:
         return GALMURI_11_FONT_ID;
       case SIZE_14:
@@ -817,6 +837,8 @@ int CrossPointSettings::getReaderFontId() const {
   }
   if (normalizedFamily == BITTER) {
     switch (normalizedFontSize) {
+      case SIZE_10:
+        return BITTER_10_FONT_ID;
       case SIZE_12:
         return BITTER_12_FONT_ID;
       case SIZE_14:
@@ -827,6 +849,8 @@ int CrossPointSettings::getReaderFontId() const {
     }
   }
   switch (normalizedFontSize) {
+    case SIZE_10:
+      return CHAREINK_10_FONT_ID;
     case SIZE_12:
       return CHAREINK_12_FONT_ID;
     case SIZE_13:

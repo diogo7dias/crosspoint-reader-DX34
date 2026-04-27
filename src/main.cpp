@@ -76,6 +76,10 @@ FontDecompressor fontDecompressor;
 Activity* currentActivity = nullptr;
 
 // Fonts
+EpdFont chareink10RegularFont(&chareink_10_regular);
+EpdFont chareink10BoldFont(&chareink_10_bold);
+EpdFont chareink10ItalicFont(&chareink_10_italic);
+EpdFontFamily chareink10FontFamily(&chareink10RegularFont, &chareink10BoldFont, &chareink10ItalicFont, nullptr);
 EpdFont chareink12RegularFont(&chareink_12_regular);
 EpdFont chareink12BoldFont(&chareink_12_bold);
 EpdFont chareink12ItalicFont(&chareink_12_italic);
@@ -100,6 +104,10 @@ EpdFont chareink17RegularFont(&chareink_17_regular);
 EpdFont chareink17BoldFont(&chareink_17_bold);
 EpdFont chareink17ItalicFont(&chareink_17_italic);
 EpdFontFamily chareink17FontFamily(&chareink17RegularFont, &chareink17BoldFont, &chareink17ItalicFont, nullptr);
+EpdFont bookerly10RegularFont(&bookerly_10_regular);
+EpdFont bookerly10BoldFont(&bookerly_10_bold);
+EpdFont bookerly10ItalicFont(&bookerly_10_italic);
+EpdFontFamily bookerly10FontFamily(&bookerly10RegularFont, &bookerly10BoldFont, &bookerly10ItalicFont, nullptr);
 EpdFont bookerly12RegularFont(&bookerly_12_regular);
 EpdFont bookerly12BoldFont(&bookerly_12_bold);
 EpdFont bookerly12ItalicFont(&bookerly_12_italic);
@@ -124,6 +132,10 @@ EpdFont bookerly17RegularFont(&bookerly_17_regular);
 EpdFont bookerly17BoldFont(&bookerly_17_bold);
 EpdFont bookerly17ItalicFont(&bookerly_17_italic);
 EpdFontFamily bookerly17FontFamily(&bookerly17RegularFont, &bookerly17BoldFont, &bookerly17ItalicFont, nullptr);
+EpdFont vollkorn10RegularFont(&vollkorn_10_regular);
+EpdFont vollkorn10BoldFont(&vollkorn_10_bold);
+EpdFont vollkorn10ItalicFont(&vollkorn_10_italic);
+EpdFontFamily vollkorn10FontFamily(&vollkorn10RegularFont, &vollkorn10BoldFont, &vollkorn10ItalicFont, nullptr);
 EpdFont vollkorn12RegularFont(&vollkorn_12_regular);
 EpdFont vollkorn12BoldFont(&vollkorn_12_bold);
 EpdFont vollkorn12ItalicFont(&vollkorn_12_italic);
@@ -157,6 +169,10 @@ EpdFontFamily unifont18FontFamily(&unifont18RegularFont, nullptr, nullptr, nullp
 // Bitter: slab-serif reader font. Regular, Bold, Italic (no BoldItalic
 // source TTF -- slot nullptr, Vollkorn pattern). Exposed at sizes 12, 14,
 // 16 only (odd sizes and 17 dropped to save flash).
+EpdFont bitter10RegularFont(&bitter_10_regular);
+EpdFont bitter10BoldFont(&bitter_10_bold);
+EpdFont bitter10ItalicFont(&bitter_10_italic);
+EpdFontFamily bitter10FontFamily(&bitter10RegularFont, &bitter10BoldFont, &bitter10ItalicFont, nullptr);
 EpdFont bitter12RegularFont(&bitter_12_regular);
 EpdFont bitter12BoldFont(&bitter_12_bold);
 EpdFont bitter12ItalicFont(&bitter_12_italic);
@@ -173,6 +189,8 @@ EpdFontFamily bitter16FontFamily(&bitter16RegularFont, &bitter16BoldFont, &bitte
 // Galmuri: Korean pixel font. Regular-only headers -- italic synthesized
 // via slant, bold via multi-pass redraw (1 base + 2 extra for visible
 // weight). Sizes 11, 12, 14. Size 10 dropped (too small on screen).
+EpdFont galmuri10RegularFont(&galmuri_10_regular);
+EpdFontFamily galmuri10FontFamily(&galmuri10RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
 EpdFont galmuri11RegularFont(&galmuri_11_regular);
 EpdFontFamily galmuri11FontFamily(&galmuri11RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
 EpdFont galmuri12RegularFont(&galmuri_12_regular);
@@ -498,18 +516,21 @@ void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
   LOG_DBG("MAIN", "Display initialized");
+  renderer.insertFont(CHAREINK_10_FONT_ID, chareink10FontFamily);
   renderer.insertFont(CHAREINK_12_FONT_ID, chareink12FontFamily);
   renderer.insertFont(CHAREINK_13_FONT_ID, chareink13FontFamily);
   renderer.insertFont(CHAREINK_14_FONT_ID, chareink14FontFamily);
   renderer.insertFont(CHAREINK_15_FONT_ID, chareink15FontFamily);
   renderer.insertFont(CHAREINK_16_FONT_ID, chareink16FontFamily);
   renderer.insertFont(CHAREINK_17_FONT_ID, chareink17FontFamily);
+  renderer.insertFont(BOOKERLY_10_FONT_ID, bookerly10FontFamily);
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
   renderer.insertFont(BOOKERLY_13_FONT_ID, bookerly13FontFamily);
   renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
   renderer.insertFont(BOOKERLY_15_FONT_ID, bookerly15FontFamily);
   renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
   renderer.insertFont(BOOKERLY_17_FONT_ID, bookerly17FontFamily);
+  renderer.insertFont(VOLLKORN_10_FONT_ID, vollkorn10FontFamily);
   renderer.insertFont(VOLLKORN_12_FONT_ID, vollkorn12FontFamily);
   renderer.insertFont(VOLLKORN_13_FONT_ID, vollkorn13FontFamily);
   renderer.insertFont(VOLLKORN_14_FONT_ID, vollkorn14FontFamily);
@@ -518,9 +539,11 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn17FontFamily);
   renderer.insertFont(UNIFONT_14_FONT_ID, unifont14FontFamily);
   renderer.insertFont(UNIFONT_18_FONT_ID, unifont18FontFamily);
+  renderer.insertFont(BITTER_10_FONT_ID, bitter10FontFamily);
   renderer.insertFont(BITTER_12_FONT_ID, bitter12FontFamily);
   renderer.insertFont(BITTER_14_FONT_ID, bitter14FontFamily);
   renderer.insertFont(BITTER_16_FONT_ID, bitter16FontFamily);
+  renderer.insertFont(GALMURI_10_FONT_ID, galmuri10FontFamily);
   renderer.insertFont(GALMURI_11_FONT_ID, galmuri11FontFamily);
   renderer.insertFont(GALMURI_12_FONT_ID, galmuri12FontFamily);
   renderer.insertFont(GALMURI_14_FONT_ID, galmuri14FontFamily);
