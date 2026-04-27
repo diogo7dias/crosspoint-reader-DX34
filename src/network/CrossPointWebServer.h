@@ -55,10 +55,11 @@ class CrossPointWebServer {
     // 4KB is a good balance: large enough to reduce syscall overhead, small enough
     // to keep individual write times short and avoid watchdog issues
     static constexpr size_t UPLOAD_BUFFER_SIZE = 4096;  // 4KB buffer
+    // Lazily allocated on UPLOAD_FILE_START, freed on END/ABORTED. Keeping it
+    // resident across the entire web-server lifetime cost ~4 KB of always-on
+    // heap on a 123 KB chip; we only need it during an active POST.
     std::vector<uint8_t> buffer;
     size_t bufferPos = 0;
-
-    UploadState() { buffer.resize(UPLOAD_BUFFER_SIZE); }
   } upload;
 
   CrossPointWebServer();
@@ -144,9 +145,10 @@ class CrossPointWebServer {
     bool success = false;
     String error;
     static constexpr size_t UPLOAD_BUFFER_SIZE = 4096;
+    // Lazily allocated on UPLOAD_FILE_START, freed on END/ABORTED — same
+    // rationale as UploadState::buffer above.
     std::vector<uint8_t> buffer;
     size_t bufferPos = 0;
-    FontUploadState() { buffer.resize(UPLOAD_BUFFER_SIZE); }
   } fontUpload;
 
   void handleFontsPage() const;

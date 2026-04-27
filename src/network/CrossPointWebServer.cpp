@@ -205,15 +205,17 @@ void CrossPointWebServer::begin() {
   // Store AP mode flag for later use (e.g., in handleStatus)
   apMode = isInApMode;
 
-  LOG_DBG("WEB", "[MEM] Free heap before begin: %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEB", "[HEAP] s0_begin_entry free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
   LOG_DBG("WEB", "Network mode: %s", apMode ? "AP" : "STA");
 
   LOG_DBG("WEB", "Creating web server on port %d...", port);
   server.reset(new WebServer(port));
+  LOG_DIAG("WEB", "[HEAP] s1_after_new_WebServer free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Disable WiFi sleep to improve responsiveness and prevent 'unreachable' errors.
   // This is critical for reliable web server operation on ESP32.
   WiFi.setSleep(false);
+  LOG_DIAG("WEB", "[HEAP] s2_after_setSleep_false free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Ensure the SDK reconnects the STA link if the router flickers or
   // the client device briefly drops. Keeps the web session alive
@@ -223,8 +225,6 @@ void CrossPointWebServer::begin() {
 
   // Note: WebServer class doesn't have setNoDelay() in the standard ESP32 library.
   // We rely on disabling WiFi sleep for responsiveness.
-
-  LOG_DBG("WEB", "[MEM] Free heap after WebServer allocation: %d bytes", ESP.getFreeHeap());
 
   if (!server) {
     LOG_ERR("WEB", "Failed to create WebServer!");
@@ -281,7 +281,7 @@ void CrossPointWebServer::begin() {
   server->on("/api/fonts/delete", HTTP_POST, [this] { handleDeleteFont(); });
 
   server->onNotFound([this] { handleNotFound(); });
-  LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEB", "[HEAP] s3_after_route_setup free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
 #if defined(CROSSPOINT_HAS_WEBDAV)
   // Collect WebDAV headers and register handler
@@ -291,6 +291,7 @@ void CrossPointWebServer::begin() {
   LOG_DBG("WEB", "WebDAV handler initialized");
 #endif
   server->begin();
+  LOG_DIAG("WEB", "[HEAP] s4_after_server_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start WebSocket server for fast binary uploads
   LOG_DBG("WEB", "Starting WebSocket server on port %d...", wsPort);
@@ -298,10 +299,11 @@ void CrossPointWebServer::begin() {
   wsInstance = const_cast<CrossPointWebServer*>(this);
   wsServer->begin();
   wsServer->onEvent(wsEventCallback);
-  LOG_DBG("WEB", "WebSocket server started");
+  LOG_DIAG("WEB", "[HEAP] s5_after_wsServer_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   udpActive = udp.begin(LOCAL_UDP_PORT);
-  LOG_DBG("WEB", "Discovery UDP %s on port %d", udpActive ? "enabled" : "failed", LOCAL_UDP_PORT);
+  LOG_DIAG("WEB", "[HEAP] s6_after_udp_begin free=%u min=%u udpActive=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+           udpActive ? 1 : 0);
 
   // WsUploadSession deps bind the file-scope upload state (wsUploadFile,
   // wsUploadFileName, wsUploadPath, wsUploadSize, wsLastCompleteName/Size/At)
@@ -369,7 +371,7 @@ void CrossPointWebServer::begin() {
   const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
   LOG_DBG("WEB", "Access at http://%s/", ipAddr.c_str());
   LOG_DBG("WEB", "WebSocket at ws://%s:%d/", ipAddr.c_str(), wsPort);
-  LOG_DBG("WEB", "[MEM] Free heap after server.begin(): %d bytes", ESP.getFreeHeap());
+  LOG_DIAG("WEB", "[HEAP] s7_begin_done free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }
 
 void CrossPointWebServer::abortWsUpload(const char* tag) {
@@ -1043,6 +1045,9 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     state.bufferPos = 0;
     totalWriteTime = 0;
     writeCount = 0;
+    if (state.buffer.size() != UploadState::UPLOAD_BUFFER_SIZE) {
+      state.buffer.resize(UploadState::UPLOAD_BUFFER_SIZE);
+    }
 
     // Get upload path from query parameter (defaults to root if not specified)
     // Note: We use query parameter instead of form data because multipart form
@@ -1146,6 +1151,8 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         clearBookCacheIfNeeded(filePath);
       }
     }
+    std::vector<uint8_t>().swap(state.buffer);
+    state.bufferPos = 0;
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     state.bufferPos = 0;  // Discard buffered data
     if (state.file) {
@@ -1157,6 +1164,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
       Storage.remove(filePath.c_str());
     }
     state.error = "Upload aborted";
+    std::vector<uint8_t>().swap(state.buffer);
     LOG_DBG("WEB", "Upload aborted");
   }
 }
@@ -1595,6 +1603,9 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     state.family = "";
     state.tmpPath = "";
     state.finalPath = "";
+    if (state.buffer.size() != FontUploadState::UPLOAD_BUFFER_SIZE) {
+      state.buffer.resize(FontUploadState::UPLOAD_BUFFER_SIZE);
+    }
 
     // Extract (family, variant, size) from the query string — multipart
     // form fields aren't parsed until after the upload callback runs.
@@ -1675,6 +1686,7 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
       }
       state.file.close();
     }
+    std::vector<uint8_t>().swap(state.buffer);
     if (!state.error.isEmpty()) return;
 
     // Validate the CPBN header before committing with the rename.
@@ -1699,6 +1711,7 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     if (state.file) state.file.close();
     if (!state.tmpPath.isEmpty()) Storage.remove(state.tmpPath.c_str());
     state.error = "upload aborted";
+    std::vector<uint8_t>().swap(state.buffer);
     LOG_DBG("FONTUP", "aborted");
   }
 }
