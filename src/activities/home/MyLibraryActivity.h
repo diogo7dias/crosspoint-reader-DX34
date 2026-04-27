@@ -96,6 +96,8 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   static std::string getBasename(const std::string& path);
   static bool isBookFile(const std::string& filename);
   static bool isBmpFile(const std::string& filename);
+  static bool isPxcFile(const std::string& filename);
+  static bool isImageFile(const std::string& filename);
   static bool isManagedFile(const std::string& filename);
   void enterBmpView(const std::string& bmpPath);
   void enterFileActions(const std::string& filePath);

@@ -415,6 +415,14 @@ bool MyLibraryActivity::isBmpFile(const std::string& filename) {
   return StringUtils::checkFileExtension(filename, ".bmp");
 }
 
+bool MyLibraryActivity::isPxcFile(const std::string& filename) {
+  return StringUtils::checkFileExtension(filename, ".pxc");
+}
+
+bool MyLibraryActivity::isImageFile(const std::string& filename) {
+  return isBmpFile(filename) || isPxcFile(filename);
+}
+
 bool MyLibraryActivity::isManagedFile(const std::string& filename) {
   return isBookFile(filename) || isBmpFile(filename);
 }
