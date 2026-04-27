@@ -149,13 +149,11 @@ void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) 
     exitActivity();
 
     LOG_DIAG("WEBACT", "[HEAP] sta0_after_wifi_connect free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
-    // Start mDNS for hostname resolution
-    if (MDNS.begin(AP_HOSTNAME)) {
-      MDNS.addService("http", "tcp", 80);
-      MDNS.addService("ws", "tcp", 81);
-      LOG_DBG("WEBACT", "mDNS started: http://%s.local/", AP_HOSTNAME);
-    }
-    LOG_DIAG("WEBACT", "[HEAP] sta1_after_mdns_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+    // mDNS responder skipped for v2.0.0 — its ~6.5 KB resident commit was
+    // pushing the STA-mode heap pool below the fragmentation floor needed
+    // for parallel asset fetches on phone browsers. Users open the device
+    // by typed IP; the IP is shown on screen after pairing.
+    LOG_DIAG("WEBACT", "[HEAP] sta1_skipped_mdns free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
     // Start the web server
     startWebServer();
