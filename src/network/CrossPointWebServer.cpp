@@ -11,6 +11,7 @@
 #include <Txt.h>
 #include <WiFi.h>
 #include <Xtc.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -293,30 +294,20 @@ void CrossPointWebServer::begin() {
   server->begin();
   LOG_DIAG("WEB", "[HEAP] s4_after_server_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
-  // Start WebSocket server for fast binary uploads — STA only.
-  // In AP mode the heap pool can't sustain WS server (~1.8 KB resident +
-  // per-client buffers) plus parallel HTTP fetches from a phone loading
-  // asset-heavy pages like /fonts. AP clients fall back to HTTP POST upload
-  // (handleUploadPost), which is the same code path used before WS support.
-  if (!apMode) {
-    LOG_DBG("WEB", "Starting WebSocket server on port %d...", wsPort);
-    wsServer.reset(new WebSocketsServer(wsPort));
-    wsInstance = const_cast<CrossPointWebServer*>(this);
-    wsServer->begin();
-    wsServer->onEvent(wsEventCallback);
-  } else {
-    LOG_DBG("WEB", "Skipping WebSocket server (AP mode — HTTP POST fallback only)");
-  }
+  // WebSocket server, UDP discovery, and mDNS responder are all skipped
+  // unconditionally for v2.0.0. The combined ~10 KB resident commit was
+  // pushing the heap pool below the fragmentation floor needed for parallel
+  // HTTP asset fetches on phone browsers in STA mode (free=24 KB baseline
+  // collapses to <4 KB largest-block after fetching opentype.js + pako.js).
+  // HTTP POST upload covers the WS fast-binary use case; UDP discovery is
+  // unused by any current client; mDNS is replaced by typed IP entry.
+  // Document in release notes; revisit when async esp_http_server lands in
+  // a later release.
+  LOG_DBG("WEB", "Skipping WebSocket server (heap budget — HTTP POST only)");
   LOG_DIAG("WEB", "[HEAP] s5_after_wsServer_begin free=%u min=%u apMode=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
            apMode ? 1 : 0);
 
-  // UDP discovery beacon — STA only. In AP mode the device IS the gateway,
-  // so clients see it without broadcast discovery.
-  if (!apMode) {
-    udpActive = udp.begin(LOCAL_UDP_PORT);
-  } else {
-    udpActive = false;
-  }
+  udpActive = false;
   LOG_DIAG("WEB", "[HEAP] s6_after_udp_begin free=%u min=%u udpActive=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
            udpActive ? 1 : 0);
 
@@ -448,7 +439,15 @@ void CrossPointWebServer::pumpWsDownload() {
   }
 }
 
+// The three large JS bundles are pinned to STA mode. In AP mode their parallel
+// fetch wedges the heap (see comment on kFontsPageApStub above). Returning
+// 503 immediately frees the socket without committing tx buffers to the gzip
+// payload, so a stale browser cache cannot resurrect the wedge.
 void CrossPointWebServer::handleJszip() const {
+  if (apMode) {
+    server->send(503, "text/plain", "Asset disabled in hotspot mode");
+    return;
+  }
   server->sendHeader("Content-Encoding", "gzip");
   server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "application/javascript", jszip_minJs, jszip_minJsCompressedSize);
@@ -456,6 +455,10 @@ void CrossPointWebServer::handleJszip() const {
 }
 
 void CrossPointWebServer::handleOpentypeJs() const {
+  if (apMode) {
+    server->send(503, "text/plain", "Asset disabled in hotspot mode");
+    return;
+  }
   server->sendHeader("Content-Encoding", "gzip");
   server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "application/javascript", opentype_minJs, opentype_minJsCompressedSize);
@@ -463,6 +466,10 @@ void CrossPointWebServer::handleOpentypeJs() const {
 }
 
 void CrossPointWebServer::handlePakoJs() const {
+  if (apMode) {
+    server->send(503, "text/plain", "Asset disabled in hotspot mode");
+    return;
+  }
   server->sendHeader("Content-Encoding", "gzip");
   server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "application/javascript", pako_minJs, pako_minJsCompressedSize);
@@ -1091,7 +1098,18 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     state.bufferPos = 0;
     totalWriteTime = 0;
     writeCount = 0;
+    // Pre-flight heap check before vector::resize. Exceptions are disabled
+    // (-fno-exceptions), so a bad_alloc inside resize would call terminate()
+    // and abort the firmware. Phone-on-STA after fetching the 64 KB JS bundle
+    // hits this path: heap can fragment below the buffer size mid-upload.
     if (state.buffer.size() != UploadState::UPLOAD_BUFFER_SIZE) {
+      const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+      if (largest < UploadState::UPLOAD_BUFFER_SIZE + 1024) {
+        state.error = "out of memory (try again from desktop browser)";
+        LOG_ERR("WEB", "[UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
+                static_cast<unsigned>(largest), ESP.getFreeHeap(), ESP.getMinFreeHeap());
+        return;
+      }
       state.buffer.resize(UploadState::UPLOAD_BUFFER_SIZE);
     }
 
@@ -1595,7 +1613,37 @@ const char* variantTagFor(uint8_t v) {
 
 }  // namespace
 
+// Self-contained no-asset stub for /fonts in AP mode. The full font
+// management UI pulls opentype.min.js (~49 KB gzip) + pako.min.js (~15 KB
+// gzip) + brutalist.css in parallel; that quadruples concurrent TCP sockets
+// against a precompiled lwIP whose per-socket tx buffer commit (5744 B)
+// collapses the heap pool to <3 KB and triggers a pbuf alloc-fail storm
+// inside server->handleClient(). The stub fits in one TCP segment and has
+// zero external references, so the phone makes exactly one request.
+static constexpr char kFontsPageApStub[] =
+    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+    "<title>CrossPoint - Fonts</title>"
+    "<style>body{font-family:system-ui,sans-serif;max-width:38em;margin:2em auto;"
+    "padding:0 1em;line-height:1.5;color:#111;background:#fafafa}"
+    "h1{margin-top:0}code{background:#eee;padding:0 .3em;border-radius:3px}"
+    "a{color:#06c}</style></head><body>"
+    "<h1>Font management unavailable in hotspot mode</h1>"
+    "<p>The font upload page bundles ~70&nbsp;KB of JavaScript that the device "
+    "cannot serve over its own access point without exhausting RAM.</p>"
+    "<p><strong>To manage fonts:</strong> exit this screen, choose "
+    "<em>Join Network</em>, connect to your home Wi-Fi, then re-open the web "
+    "server and visit <code>/fonts</code> from a desktop browser.</p>"
+    "<p><a href=\"/\">&larr; Back to home</a> &nbsp;&middot;&nbsp; "
+    "<a href=\"/files\">Open file browser</a></p>"
+    "</body></html>";
+
 void CrossPointWebServer::handleFontsPage() const {
+  if (apMode) {
+    server->send(200, "text/html", kFontsPageApStub);
+    LOG_DBG("WEB", "Served fonts page (AP stub)");
+    return;
+  }
   sendHtmlContent(server.get(), FontsPageHtml, sizeof(FontsPageHtml));
   LOG_DBG("WEB", "Served fonts page");
 }
@@ -1649,7 +1697,18 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     state.family = "";
     state.tmpPath = "";
     state.finalPath = "";
+    // Pre-flight heap check (exceptions disabled — bad_alloc would abort).
+    // Phone-on-STA after fetching the 64 KB JS bundle hits this path; heap
+    // can fragment below the 4 KB buffer size. Bail gracefully so
+    // handleUploadFontPost returns a 400 JSON error instead of crashing.
     if (state.buffer.size() != FontUploadState::UPLOAD_BUFFER_SIZE) {
+      const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+      if (largest < FontUploadState::UPLOAD_BUFFER_SIZE + 1024) {
+        state.error = "out of memory (try again from desktop browser)";
+        LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
+                static_cast<unsigned>(largest), ESP.getFreeHeap(), ESP.getMinFreeHeap());
+        return;
+      }
       state.buffer.resize(FontUploadState::UPLOAD_BUFFER_SIZE);
     }
 
