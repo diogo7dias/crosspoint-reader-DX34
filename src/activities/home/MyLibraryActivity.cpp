@@ -536,11 +536,19 @@ void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
   while (!base.empty() && (base.front() == ' ' || base.front() == '\t')) base.erase(base.begin());
   while (!base.empty() && (base.back() == ' ' || base.back() == '\t')) base.pop_back();
 
-  // Strip user-typed trailing .bmp (any case) and _F — we control both.
+  // Capture the original extension up-front so the rebuilt path keeps it.
+  std::string originalExt = ".bmp";
+  if (selectedFilePath.size() >= 4) {
+    std::string tail = selectedFilePath.substr(selectedFilePath.size() - 4);
+    std::transform(tail.begin(), tail.end(), tail.begin(), ::tolower);
+    if (tail == ".pxc") originalExt = ".pxc";
+  }
+
+  // Strip a user-typed trailing .bmp/.pxc (any case) and _F — we control both.
   if (base.size() >= 4) {
     std::string tail = base.substr(base.size() - 4);
     std::transform(tail.begin(), tail.end(), tail.begin(), ::tolower);
-    if (tail == ".bmp") base = base.substr(0, base.size() - 4);
+    if (tail == ".bmp" || tail == ".pxc") base = base.substr(0, base.size() - 4);
   }
   if (base.size() >= 2 && base.substr(base.size() - 2) == "_F") {
     base = base.substr(0, base.size() - 2);
@@ -561,7 +569,7 @@ void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
   const bool wasFav = FavoriteImage::isFavoritePath(selectedFilePath);
   const std::string parent = basepath.empty() ? "/" : basepath;
   const std::string parentSlash = (parent.back() == '/') ? parent : parent + "/";
-  const std::string suffix = std::string(wasFav ? "_F" : "") + ".bmp";
+  const std::string suffix = std::string(wasFav ? "_F" : "") + originalExt;
 
   auto buildPath = [&](const std::string& b) { return parentSlash + b + suffix; };
 
