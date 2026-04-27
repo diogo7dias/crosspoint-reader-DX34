@@ -62,6 +62,14 @@ void ActivityRouter::enterDeepSleep(bool fromReader) {
     }
   }
 
+  // Second flush: captures dirty state written during onExit() before the CPU
+  // halts. Without this, flushSoon() calls in onExit() (e.g. resetting
+  // readerActivityLoadCount to 0) are never drained — the debounce window
+  // never expires once deep sleep starts, so the stale value survives to the
+  // next boot and triggers the crash-loop guard, sending the user to home
+  // instead of resuming the book they were reading.
+  if (deps_.persistAppState) deps_.persistAppState("after activity exit");
+
   if (deps_.enterSleepActivity) deps_.enterSleepActivity();
 
   // Does not return in production (startDeepSleep halts the CPU).

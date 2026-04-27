@@ -239,12 +239,13 @@ void test_enter_deep_sleep_sequence_from_reader() {
   ActivityRouter::instance().enterDeepSleep(true);
 
   TEST_ASSERT_NULL(slot);
-  TEST_ASSERT_EQUAL_size_t(5, g_sleepOrder.size());
+  TEST_ASSERT_EQUAL_size_t(6, g_sleepOrder.size());
   TEST_ASSERT_EQUAL_STRING("before:true", g_sleepOrder[0].c_str());
   TEST_ASSERT_EQUAL_STRING("persist:enter deep sleep", g_sleepOrder[1].c_str());
   TEST_ASSERT_EQUAL_STRING("exit", g_sleepOrder[2].c_str());
-  TEST_ASSERT_EQUAL_STRING("sleepActivity", g_sleepOrder[3].c_str());
-  TEST_ASSERT_EQUAL_STRING("after", g_sleepOrder[4].c_str());
+  TEST_ASSERT_EQUAL_STRING("persist:after activity exit", g_sleepOrder[3].c_str());
+  TEST_ASSERT_EQUAL_STRING("sleepActivity", g_sleepOrder[4].c_str());
+  TEST_ASSERT_EQUAL_STRING("after", g_sleepOrder[5].c_str());
 }
 
 void test_enter_deep_sleep_sequence_not_from_reader() {
@@ -261,12 +262,13 @@ void test_enter_deep_sleep_sequence_not_from_reader() {
 
   ActivityRouter::instance().enterDeepSleep(false);
 
-  // Exit tag absent because slot was null.
-  TEST_ASSERT_EQUAL_size_t(4, g_sleepOrder.size());
+  // Exit tag absent because slot was null; second persist still runs.
+  TEST_ASSERT_EQUAL_size_t(5, g_sleepOrder.size());
   TEST_ASSERT_EQUAL_STRING("before:false", g_sleepOrder[0].c_str());
   TEST_ASSERT_EQUAL_STRING("persist:enter deep sleep", g_sleepOrder[1].c_str());
-  TEST_ASSERT_EQUAL_STRING("sleepActivity", g_sleepOrder[2].c_str());
-  TEST_ASSERT_EQUAL_STRING("after", g_sleepOrder[3].c_str());
+  TEST_ASSERT_EQUAL_STRING("persist:after activity exit", g_sleepOrder[2].c_str());
+  TEST_ASSERT_EQUAL_STRING("sleepActivity", g_sleepOrder[3].c_str());
+  TEST_ASSERT_EQUAL_STRING("after", g_sleepOrder[4].c_str());
 }
 
 // ---- Make* synthesizer tests ----
