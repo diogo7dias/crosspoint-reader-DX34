@@ -436,23 +436,8 @@ void XtcReaderActivity::renderPage() {
       return (bit1 << 1) | bit2;
     };
 
-    // Apply contrast boost: remap grayscale values
-    // Normal: 0=W, 1=DkGray, 2=LtGray, 3=Black (unchanged)
-    // High:   0=W, 1=Black,  2=DkGray, 3=Black (boost one step)
-    // Max:    0=W, 1=Black,  2=Black,  3=Black (all non-white → black)
-    const uint8_t contrast = SETTINGS.xtcContrast;
-    auto getPixelValue = [&](uint16_t x, uint16_t y) -> uint8_t {
-      const uint8_t raw = getRawPixelValue(x, y);
-      if (contrast == CrossPointSettings::XTC_CONTRAST_MAX) {
-        return raw >= 1 ? 3 : 0;  // all non-white → black
-      }
-      if (contrast == CrossPointSettings::XTC_CONTRAST_HIGH) {
-        // Boost one level: 1→3(black), 2→1(dark gray)
-        static constexpr uint8_t highMap[4] = {0, 3, 1, 3};
-        return highMap[raw];
-      }
-      return raw;
-    };
+    // XTH pixel values: 0=White, 1=DarkGray, 2=LightGray, 3=Black
+    auto getPixelValue = [&](uint16_t x, uint16_t y) -> uint8_t { return getRawPixelValue(x, y); };
 
     // Pass 1: BW buffer - draw all non-white pixels as black
     for (uint16_t y = 0; y < pageHeight; y++) {
@@ -472,14 +457,6 @@ void XtcReaderActivity::renderPage() {
       renderer.displayBuffer();
       pagesUntilFullRefresh--;
     }
-
-    // Max contrast: all non-white already mapped to black, skip grayscale passes
-    if (contrast == CrossPointSettings::XTC_CONTRAST_MAX) {
-      LOG_DBG("XTR", "Rendered page %lu/%lu (max contrast, 1-bit)", currentPage + 1, xtc->getPageCount());
-      return;
-    }
-
-    // Grayscale passes (Normal & High contrast modes)
 
     // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
     renderer.clearScreen(0x00);
@@ -523,7 +500,7 @@ void XtcReaderActivity::renderPage() {
     // Cleanup grayscale buffers with current frame buffer
     renderer.cleanupGrayscaleWithFrameBuffer();
 
-    LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit, contrast=%u)", currentPage + 1, xtc->getPageCount(), contrast);
+    LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit)", currentPage + 1, xtc->getPageCount());
     return;
   } else {
     // 1-bit mode: 8 pixels per byte, MSB first
