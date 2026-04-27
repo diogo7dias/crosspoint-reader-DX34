@@ -206,15 +206,11 @@ void CrossPointWebServerActivity::startAccessPoint() {
   LOG_DBG("WEBACT", "IP: %s", connectedIP.c_str());
   LOG_DIAG("WEBACT", "[HEAP] a0_after_softAP free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
-  // Start mDNS for hostname resolution
-  if (MDNS.begin(AP_HOSTNAME)) {
-    MDNS.addService("http", "tcp", 80);
-    MDNS.addService("ws", "tcp", 81);
-    LOG_DBG("WEBACT", "mDNS started: http://%s.local/", AP_HOSTNAME);
-  } else {
-    LOG_DBG("WEBACT", "WARNING: mDNS failed to start");
-  }
-  LOG_DIAG("WEBACT", "[HEAP] a1_after_mdns_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+  // Skip mDNS in AP mode: the DNS captive portal below already redirects every
+  // hostname to apIP, so the MDNS responder is dead weight (~6.5 KB heap) on a
+  // chip whose AP-mode baseline is already tight. Phones type the IP or land
+  // via captive-portal probe regardless.
+  LOG_DIAG("WEBACT", "[HEAP] a1_skipped_mdns_ap free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start DNS server for captive portal behavior
   // This redirects all DNS queries to our IP, making any domain typed resolve to us
