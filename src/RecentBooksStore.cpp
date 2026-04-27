@@ -139,6 +139,16 @@ void RecentBooksStore::setPercent(const std::string& path, int percent) {
   saveToFile();
 }
 
+int RecentBooksStore::getCachedPercent(const std::string& path) const {
+  const std::string normalizedKey = makeRecentPathKey(normalizeRecentPath(path));
+  for (const auto& book : recentBooks) {
+    if (makeRecentPathKey(book.path) == normalizedKey) {
+      return book.percent;
+    }
+  }
+  return -1;
+}
+
 void RecentBooksStore::removeBook(const std::string& path) {
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);

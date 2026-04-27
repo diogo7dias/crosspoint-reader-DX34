@@ -481,8 +481,20 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
     const std::string fullPath = makeAbsolutePath(name);
     auto cached = progressPrefixCache.find(fullPath);
     if (cached == progressPrefixCache.end()) {
-      cached =
-          progressPrefixCache.emplace(fullPath, formatLibraryProgressPrefix(BookProgress::getPercent(fullPath))).first;
+      // Most library entries are also in RECENT_BOOKS (any book ever opened
+      // is tracked), and the reader keeps that percent fresh on exit and
+      // page turn. Hitting it first avoids the per-row EPUB spine+TOC parse
+      // + progress.bin read that BookProgress::getPercent does, which was
+      // the dominant cost on library scroll.
+      const int recentPercent = RECENT_BOOKS.getCachedPercent(fullPath);
+      std::optional<int> percent;
+      if (recentPercent >= 0) {
+        percent = recentPercent;
+      } else {
+        // Untracked book (never opened): fall back to disk parse.
+        percent = BookProgress::getPercent(fullPath);
+      }
+      cached = progressPrefixCache.emplace(fullPath, formatLibraryProgressPrefix(percent)).first;
     }
     rowText = cached->second + "  " + rowText;
   }

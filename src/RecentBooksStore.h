@@ -52,6 +52,11 @@ class RecentBooksStore {
   // not registered. Used by the reader on exit / progress save so the home
   // screen can show progress without re-opening every recent EPUB.
   void setPercent(const std::string& path, int percent);
+
+  // Lookup cached reading percent. Returns 0-100 if known and the book is
+  // tracked in recents, or -1 otherwise. Library list rendering uses this
+  // to avoid re-opening every visible EPUB on every scroll tick.
+  int getCachedPercent(const std::string& path) const;
   void removeBook(const std::string& path);
 
   // Move a book file (and its QUOTES sidecar) to /recents/.
