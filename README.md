@@ -59,7 +59,7 @@ See [docs/development.md](./docs/development.md) for build, flash, serial monito
 
 - **[EPUB reader](./docs/reader.md)** — in-book menu, Reading Themes (16 per book), highlights and quotes, bookmarks (20 per book), footnote navigation, live text settings, configurable status bar
 - **[Fonts](./docs/fonts.md)** — three reader families (ChareInk, Bookerly, Vollkorn) at six sizes (12–17 pt) with regular/bold/italic styles; Unifont fallback
-- **[Sleep wallpapers](./docs/wallpapers.md)** — nine sleep modes, managed `/sleep` folder, favorites with auto-trim protection, in-book triage actions
+- **[Sleep wallpapers](./docs/wallpapers.md)** — nine sleep modes, managed `/sleep` folder, favorites with auto-trim protection, in-book triage actions, native `.pxc` pre-dithered wallpapers (convert at <https://crosspoint-pxc-converter.pages.dev/> for sharper, faster, smaller wallpapers than `.bmp`)
 - **[Device controls](./docs/controls.md)** — side and front button remapping, power button action, auto-sleep, refresh frequency, custom boot image, orientation
 - **[Wi-Fi features](./docs/webserver.md)** — web file transfer with resume, OPDS browser, Calibre wireless, KOReader progress sync, OTA updates from GitHub
 - **[Home screen and library](#home-screen-and-library)** — recents (up to 100), file browser with search, QR file sharing
