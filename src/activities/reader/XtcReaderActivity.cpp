@@ -218,7 +218,7 @@ void XtcReaderActivity::loop() {
     }
     progressDirty = true;
     lastProgressChangeMs = millis();
-    flushProgressIfNeeded(true);
+    flushProgressIfNeeded(false);
     requestUpdate();
   } else if (nextTriggered) {
     const uint32_t previousPage = currentPage;
@@ -231,7 +231,7 @@ void XtcReaderActivity::loop() {
     }
     progressDirty = true;
     lastProgressChangeMs = millis();
-    flushProgressIfNeeded(true);
+    flushProgressIfNeeded(false);
     requestUpdate();
   }
 }
@@ -240,6 +240,7 @@ void XtcReaderActivity::openChapterMenu() {
   if (!xtc || !xtc->hasChapters() || xtc->getChapters().empty()) {
     return;
   }
+  flushProgressIfNeeded(true);
   exitActivity();
   enterNewActivity(new XtcReaderChapterSelectionActivity(
       this->renderer, this->mappedInput, xtc, currentPage,

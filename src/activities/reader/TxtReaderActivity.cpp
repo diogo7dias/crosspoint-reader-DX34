@@ -285,6 +285,7 @@ void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x, const in
 }
 
 void TxtReaderActivity::openReadingThemes() {
+  flushProgressIfNeeded(true);
   exitActivity();
   enterNewActivity(new ReadingThemesActivity(renderer, mappedInput, txt ? txt->getCachePath() : std::string(),
                                              [this](const bool changed) {
@@ -434,7 +435,7 @@ void TxtReaderActivity::loop() {
     currentPage--;
     progressDirty = true;
     lastProgressChangeMs = millis();
-    flushProgressIfNeeded(true);
+    flushProgressIfNeeded(false);
     requestUpdate();
   } else if (nextTriggered) {
     if (currentPage < totalPages - 1) {
@@ -442,7 +443,7 @@ void TxtReaderActivity::loop() {
       APP_STATE.sessionPagesRead++;
       progressDirty = true;
       lastProgressChangeMs = millis();
-      flushProgressIfNeeded(true);
+      flushProgressIfNeeded(false);
       requestUpdate();
     } else {
       onGoHome();

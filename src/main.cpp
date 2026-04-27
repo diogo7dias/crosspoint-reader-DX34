@@ -55,6 +55,7 @@
 #include "fonts/CustomBinFontManager.h"
 #include "lifecycle/ActivityRouter.h"
 #include "persist/AppStateStore.h"
+#include "persist/AsyncWriter.h"
 #include "persist/PersistManager.h"
 #include "persist/SdFatFileIO.h"
 #include "persist/Trash.h"
@@ -243,6 +244,10 @@ bool persistAppState(const char* context) {
   // crash-safety boundary — debounce only coalesces within an activity,
   // never across one.
   (void)context;
+  // Drain any background SD writes (reader progress) first so the store
+  // mutex isn't contended by a half-finished async write when we go to
+  // commit app state.
+  crosspoint::persist::AsyncWriter::instance().drainBlocking();
   const size_t flushed = crosspoint::persist::PersistManager().flushAll();
   (void)flushed;
   return true;
@@ -625,6 +630,11 @@ void setup() {
         new FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", EpdFontFamily::REGULAR));
     return;
   }
+
+  // Background SD-write task. Must come up after Storage.begin() so submitted
+  // jobs can use HalStorage; lifecycle drains in persistAppState() and force-
+  // flush callers ensure no in-flight write outlives a deep sleep.
+  crosspoint::persist::AsyncWriter::instance().start();
 
   // Dump crash report to SD card if we rebooted from a panic
   HalSystem::checkPanic();
