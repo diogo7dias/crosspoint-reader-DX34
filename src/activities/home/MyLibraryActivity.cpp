@@ -483,16 +483,16 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
   return rowText;
 }
 
-void MyLibraryActivity::enterBmpView(const std::string& bmpPath) {
+void MyLibraryActivity::enterImageView(const std::string& imagePath) {
   // Stacking toasts for image-open stages. Natural FAST_REFRESH pacing
   // (~400 ms each) keeps each toast visible briefly; no artificial stall.
   // Full refresh on enter scrubs the list ghost.
   if (!TransitionFeedback::isActive()) {
     TransitionFeedback::show(renderer, tr(STR_OPENING_IMAGE));
   }
-  selectedFilePath = bmpPath;
-  mode = Mode::BMP_VIEW;
-  bmpViewFullyLoaded = false;
+  selectedFilePath = imagePath;
+  mode = Mode::IMAGE_VIEW;
+  imageViewFullyLoaded = false;
   TransitionFeedback::show(renderer, tr(STR_LOADING_BITMAP));
   renderer.requestFullRefresh();
   requestCleanRefresh();
@@ -514,7 +514,7 @@ void MyLibraryActivity::enterFileMoveBrowser() {
   mode = Mode::FILE_MOVE_BROWSER;
 }
 
-void MyLibraryActivity::openKeyboardForRenameBmp() {
+void MyLibraryActivity::openKeyboardForRenameImage() {
   if (!isBmpFile(selectedFilePath)) return;
 
   pendingRenameBase.clear();
@@ -529,7 +529,7 @@ void MyLibraryActivity::openKeyboardForRenameBmp() {
       [this]() { pendingRenameCancel = true; }));
 }
 
-void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
+void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
   std::string base = newBase;
   // Trim whitespace.
   while (!base.empty() && (base.front() == ' ' || base.front() == '\t')) base.erase(base.begin());
@@ -566,7 +566,7 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
 
   std::string targetPath = buildPath(base);
   if (targetPath == selectedFilePath) {
-    mode = actionsOpenedFromViewer ? Mode::BMP_VIEW : Mode::FILE_ACTIONS;
+    mode = actionsOpenedFromViewer ? Mode::IMAGE_VIEW : Mode::FILE_ACTIONS;
     requestUpdate();
     return;
   }
@@ -839,8 +839,8 @@ void MyLibraryActivity::loop() {
     loopMessagePopup();
     return;
   }
-  if (mode == Mode::BMP_VIEW) {
-    loopBmpView();
+  if (mode == Mode::IMAGE_VIEW) {
+    loopImageView();
     return;
   }
   if (mode == Mode::FILE_ACTIONS) {
@@ -876,7 +876,7 @@ void MyLibraryActivity::loopSubActivity() {
     pendingRenameBase.clear();
     exitActivity();
     if (shouldApplyRename) {
-      renameSelectedBmp(typed);
+      renameSelectedImage(typed);
     } else {
       requestUpdate();
     }
@@ -898,7 +898,7 @@ void MyLibraryActivity::loopMessagePopup() {
   }
 }
 
-void MyLibraryActivity::loopBmpView() {
+void MyLibraryActivity::loopImageView() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     mode = Mode::BROWSE;
     requestCleanRefresh();
@@ -919,7 +919,7 @@ void MyLibraryActivity::loopFileActions() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     if (actionsOpenedFromViewer) {
       actionsOpenedFromViewer = false;
-      mode = Mode::BMP_VIEW;
+      mode = Mode::IMAGE_VIEW;
     } else {
       mode = Mode::BROWSE;
     }
@@ -944,7 +944,7 @@ void MyLibraryActivity::loopFileActions() {
       // "Open Image" is hidden and actions start at 0. Shift to a unified
       // action index so the switch below stays simple.
       if (!actionsOpenedFromViewer && fileActionIndex == 0) {
-        mode = Mode::BMP_VIEW;
+        mode = Mode::IMAGE_VIEW;
         requestUpdateAndWait();
         return;
       }
@@ -1003,7 +1003,7 @@ void MyLibraryActivity::loopFileActions() {
           break;
         }
         case 2:
-          openKeyboardForRenameBmp();
+          openKeyboardForRenameImage();
           return;
         case 3:
           actionsOpenedFromViewer = false;
@@ -1075,7 +1075,7 @@ void MyLibraryActivity::loopFileActions() {
           // where the menu came from, otherwise to the file list.
           if (actionsOpenedFromViewer) {
             actionsOpenedFromViewer = false;
-            mode = Mode::BMP_VIEW;
+            mode = Mode::IMAGE_VIEW;
           } else {
             mode = Mode::BROWSE;
           }
@@ -1271,7 +1271,7 @@ void MyLibraryActivity::loopBrowse() {
       requestUpdate();
     } else if (isManagedFile(selectedEntry)) {
       if (isBmpFile(selectedEntry)) {
-        enterBmpView(selectedPath);
+        enterImageView(selectedPath);
       } else {
         onSelectBook(selectedPath);
         return;
@@ -1331,8 +1331,8 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   // Reset stacking so render-loop popups start at the top.
   TransitionFeedback::resetStacking();
 
-  if (mode == Mode::BMP_VIEW) {
-    renderBmpView();
+  if (mode == Mode::IMAGE_VIEW) {
+    renderImageView();
     return;
   }
 
@@ -1455,7 +1455,7 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   displayFrame();
 }
 
-void MyLibraryActivity::renderBmpView() {
+void MyLibraryActivity::renderImageView() {
   renderer.clearScreen();
 
   FsFile file;
@@ -1501,7 +1501,7 @@ void MyLibraryActivity::renderBmpView() {
   // Post-load render (returning from menu, popup toggle, etc.): draw
   // buttons and refresh fast. Image was already loaded once, so skip the
   // slow HALF_REFRESH + grayscale pipeline.
-  if (bmpViewFullyLoaded) {
+  if (imageViewFullyLoaded) {
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     if (messagePopupOpen) {
@@ -1531,7 +1531,7 @@ void MyLibraryActivity::renderBmpView() {
     // the button hints via the fast post-load path.
     gpio.update();
     if (gpio.wasAnyPressed()) {
-      bmpViewFullyLoaded = true;
+      imageViewFullyLoaded = true;
       requestUpdate();
       return;
     }
@@ -1554,7 +1554,7 @@ void MyLibraryActivity::renderBmpView() {
 
   // Image fully loaded — mark so next frame renders button hints via the
   // fast post-load path above.
-  bmpViewFullyLoaded = true;
+  imageViewFullyLoaded = true;
   requestUpdate();
 }
 
