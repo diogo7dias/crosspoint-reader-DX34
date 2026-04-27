@@ -14,11 +14,16 @@ namespace {
 constexpr const char* kSleepDir = "/sleep";
 constexpr size_t kWdtResetInterval = 50;
 
+// Sleep wallpapers can be .bmp (legacy) or .pxc (pre-dithered 2bpp, faster
+// wake + better quality, requires factory LUT to render). Public API still
+// uses "Bmp" names for back-compat; the file-type check is the single point
+// where we accept both.
 bool isBmpName(const char* name) {
   if (!name || name[0] == '\0' || name[0] == '.') return false;
   const size_t len = std::strlen(name);
   if (len < 4) return false;
-  return strcasecmp(name + len - 4, ".bmp") == 0;
+  const char* ext = name + len - 4;
+  return strcasecmp(ext, ".bmp") == 0 || strcasecmp(ext, ".pxc") == 0;
 }
 
 }  // namespace
