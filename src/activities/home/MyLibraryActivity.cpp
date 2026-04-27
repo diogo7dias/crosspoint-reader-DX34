@@ -1,4 +1,5 @@
 #include "MyLibraryActivity.h"
+#include "LibraryListingFilter.h"
 
 #include <Bitmap.h>
 #include <Epub.h>
@@ -258,6 +259,9 @@ void MyLibraryActivity::loadFilesWithLimit() {
 
   sortFileList(files);
 
+  // Remove EPUB-render cache files before any ordering/capping logic.
+  filterEpubCachePxc(files);
+
   // Randomize display order for media-browsing folders
   bool shouldShuffle = (basepath == "/sleep pause" || basepath == "/sleep library");
   if (basepath == "/books" && SETTINGS.booksFolderOrder == 1) shouldShuffle = true;
@@ -426,6 +430,10 @@ bool MyLibraryActivity::isImageFile(const std::string& filename) {
 
 bool MyLibraryActivity::isManagedFile(const std::string& filename) {
   return isBookFile(filename) || isImageFile(filename);
+}
+
+void MyLibraryActivity::filterEpubCachePxc(std::vector<std::string>& files) {
+  LibraryListingFilter::filterEpubCachePxc(files);
 }
 
 std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {

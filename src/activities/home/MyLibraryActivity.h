@@ -99,6 +99,7 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   static bool isPxcFile(const std::string& filename);
   static bool isImageFile(const std::string& filename);
   static bool isManagedFile(const std::string& filename);
+  static void filterEpubCachePxc(std::vector<std::string>& files);
   void enterImageView(const std::string& imagePath);
   void enterFileActions(const std::string& filePath);
   void enterFileMoveBrowser();
