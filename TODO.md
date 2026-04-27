@@ -38,10 +38,6 @@ Items already merged to `main` that should be called out in the release notes fo
 
 - [ ] **Merge `feat/factory-lut` → `main` on `diogo7dias/community-sdk`.** Today the firmware submodule pins commit `9e21cfe` on the `feat/factory-lut` branch; SDK fork's `main` is still at `c0a79fe` (pre-cherry-pick). Build works either way (submodules pin to a SHA, not a branch), but having SDK main canonical with what we depend on is cleaner.
 
-## Carryover from earlier sessions
+## Not pursuing
 
-- [ ] **Issue #44 — Gamebrick BLE Plan B.** Surgical Gamebrick decoder port from [thedrunkpenguin/crosspoint-reader-ble](https://github.com/thedrunkpenguin/crosspoint-reader-ble) (`crosspoint-ble-1.2` branch). Their `BluetoothHIDManager.cpp` has the V2 reverse-engineering (MAC prefix `60:4d:ec`, 5-byte report, counter-freeze at `0x07D0`, `byte[4]=0x07/0x09` D-pad, `byte[3]=0x98±` joystick). Port just the decoder into [src/BleHidManager.cpp](src/BleHidManager.cpp) `onHidReport` behind a name-prefix detect (`"IINE"`). Keep NimBLE 1.4.3 (do NOT upgrade to 2.x — drunkpenguin uses the 2.3.6 API). Do NOT port: their full client lifecycle, DeviceProfiles table, button-injector architecture. No hardware available locally — compile-check + ship to a volunteer tester (NOT @ytsejam1138, last attempt bricked their device).
-
-## Not pursuing (hardware-blocked)
-
-- Nintendo Switch Joy-Con / PS DualSense / default-mode 8BitDo / older Xbox Wireless BLE support — all use Bluetooth Classic (BR/EDR), which the ESP32-C3 radio does not have. Only the original ESP32 supports Classic BT; S3/C3/C6/H2 don't. Not fixable without new hardware. Known-working BLE HID inputs: Free2-M, Kobo remote, MINI_KEYBOARD, Gamebrick (pending Plan B), newer Xbox Wireless BLE firmware, 8BitDo `X+Start` BLE-keyboard mode.
+- Bluetooth / BLE HID input support. The NimBLE stack, `BleHidManager`, and pairing UI were removed entirely from this fork because the feature was non-functional (BLE button edges were never polled during reader operation) and held ~50–100 KB of RAM the GPIO-only input path doesn't need. Reintroducing it would need a rewrite of the per-tick polling contract.

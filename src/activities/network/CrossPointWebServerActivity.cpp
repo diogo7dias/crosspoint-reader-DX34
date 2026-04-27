@@ -316,8 +316,8 @@ void CrossPointWebServerActivity::loop() {
       for (int i = 0; i < MAX_ITERATIONS && webServer->isRunning(); i++) {
         // Check Back button before the first handleClient() and every 32 iters
         // after. Prior cadence (every 64) made Exit unresponsive; every 16
-        // quintupled BLE HID polling inside mappedInput.update() and measurably
-        // slowed concurrent WebSocket uploads. 32 is the middle ground.
+        // measurably slowed concurrent WebSocket uploads. 32 is the middle
+        // ground.
         if (i == 0 || (i & 0x1F) == 0x1F) {
           yield();
           mappedInput.update();

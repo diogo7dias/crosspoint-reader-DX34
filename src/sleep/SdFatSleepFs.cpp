@@ -51,7 +51,7 @@ size_t SdFatSleepFs::countSleepBmps(size_t scanCap) {
     file.close();
     if (++iter % kWdtResetInterval == 0) {
       esp_task_wdt_reset();
-      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+      yield();  // Let WiFi/render tasks run during long SD scans.
     }
   }
   dir.close();
@@ -83,7 +83,7 @@ std::vector<std::string> SdFatSleepFs::listSleepBmps(size_t maxEntries) {
     file.close();
     if (++iter % kWdtResetInterval == 0) {
       esp_task_wdt_reset();
-      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+      yield();  // Let WiFi/render tasks run during long SD scans.
     }
   }
   dir.close();
@@ -183,7 +183,7 @@ std::string SdFatSleepFs::nextSleepBmpAfter(const std::string& after) {
     file.close();
     if (++iter % kWdtResetInterval == 0) {
       esp_task_wdt_reset();
-      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+      yield();  // Let WiFi/render tasks run during long SD scans.
     }
   }
   dir.close();
@@ -227,7 +227,7 @@ NextBmpResult SdFatSleepFs::nextSleepBmpAfterWithCount(const std::string& after,
     file.close();
     if (++iter % kWdtResetInterval == 0) {
       esp_task_wdt_reset();
-      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+      yield();  // Let WiFi/render tasks run during long SD scans.
     }
   }
   dir.close();
@@ -264,7 +264,7 @@ std::string SdFatSleepFs::nthSleepBmp(size_t n) {
     file.close();
     if (++iter % kWdtResetInterval == 0) {
       esp_task_wdt_reset();
-      yield();  // Let WiFi/BLE/render tasks run during long SD scans.
+      yield();  // Let WiFi/render tasks run during long SD scans.
     }
   }
   dir.close();
