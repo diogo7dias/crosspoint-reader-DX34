@@ -125,17 +125,26 @@ void EpubReaderActivity::onEnter() {
             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
   }
 
-  // Full refresh on book enter. The v1.2.0 experiment downgraded this to
-  // requestHalfRefresh() to shave ~1 s off open time, but hardware capture
-  // 2026-04-24 caught the failure mode the original author warned about:
-  // the first page on open, and the first page after a mid-book font switch,
-  // both showed ghost pixels of the previous screen overlaid on the new
-  // render. Half refresh doesn't fully invert the segment drivers, so
-  // incompletely-reset pixels bleed through the first buffer write. Pay the
-  // extra second at enter-time to get a clean first page — especially
-  // important after a font switch, where old-font glyph positions would
-  // otherwise double-expose under the new layout.
-  renderer.requestFullRefresh();
+  // Refresh on book enter. The v1.2.0 experiment unconditionally downgraded
+  // this to requestHalfRefresh() to shave ~1 s off open time, but hardware
+  // capture 2026-04-24 caught the failure mode the original author warned
+  // about: the first page on open, and the first page after a mid-book font
+  // switch, both showed ghost pixels of the previous screen overlaid on the
+  // new render. Half refresh doesn't fully invert the segment drivers, so
+  // incompletely-reset pixels bleed through the first buffer write.
+  //
+  // Compromise: full refresh only when the book path or a layout-/pixel-
+  // affecting setting (font family/size, custom font name+pt, orientation,
+  // reader style mode, image dither) has changed since the previous enter.
+  // Same-book / same-settings re-entry (resume at boot, return from a
+  // subactivity that didn't touch fonts) takes the half-refresh fast path,
+  // since the previous frame already laid down the same glyph positions
+  // and there's nothing to ghost.
+  if (ReaderCommon::shouldFullRefreshOnEnter(epub->getPath())) {
+    renderer.requestFullRefresh();
+  } else {
+    renderer.requestHalfRefresh();
+  }
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.

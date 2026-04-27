@@ -20,6 +20,17 @@ void applyReaderOrientation(GfxRenderer& renderer, uint8_t orientation);
 // Txt passes its total page count.
 std::string formatPageCounterText(uint8_t mode, int currentPage, int totalPages);
 
+// Decide whether the renderer needs a full refresh on reader onEnter, or a
+// half refresh suffices. Returns true when the book path or any layout-/
+// pixel-affecting setting has changed since the previous reader entry —
+// the cases that produced ghost artifacts when v1.2.0 unconditionally
+// downgraded to half refresh. Returns false on same-book / same-settings
+// re-entry (e.g. resuming the last-opened book at boot, or returning from
+// a subactivity that didn't touch fonts), letting the caller skip the
+// ~1 s full refresh penalty. Updates internal state — call exactly once
+// per onEnter.
+bool shouldFullRefreshOnEnter(const std::string& bookPath);
+
 // Persist the currently opened book as the last-opened entry and add it to
 // the recent books list. Shared by all three reader activities (Epub, Txt,
 // Xtc). Callers remain responsible for any subsequent moveBookToRecents()
