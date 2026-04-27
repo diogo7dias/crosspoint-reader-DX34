@@ -14,6 +14,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 - **Sleep wallpapers and library images now support `.pxc` (pre-dithered, faster sleep entry).** `.pxc` files appear in the file browser alongside `.bmp`, can be moved to `/sleep`, favorited (`_F.pxc`), renamed, deleted, and viewed full-screen. The home-screen SD card stats popup counts `.pxc` wallpapers and favorites correctly. Sleep entry using a `.pxc` file is noticeably faster than the equivalent `.bmp` because no dithering is done at wake time.
 
+- **Bluetooth / BLE HID input stack removed entirely** ([#120](https://github.com/diogo7dias/crosspoint-reader-DX34/pull/120)). `BleHidManager`, the pairing / remap Settings screens, the NimBLE library dependency, and the four `bleEnabled` / `bleDeviceAddr` / `bleDeviceName` / `bleKeyMap` settings keys are gone. The feature was non-functional in this fork (BLE button edges were never polled during reader operation) and was holding ~50–100 KB of RAM the GPIO-only input path doesn't need. Old `settings.json` files keep the four BLE keys as orphans; ArduinoJson silently ignores them, no migration required. Net diff −1881 LOC.
+
 ## Active
 
 - [ ] **Flip `useFactoryLUT` default to ON.** Today the toggle ships off in [src/CrossPointSettings.h](src/CrossPointSettings.h). Default-on means new users get the sharper sleep-cover rendering immediately. Existing on-SD cover BMPs were generated with the prior dither + double-bright, so they'll render slightly darker until the user runs Library Refresh — call that out in the release notes for the version that flips it.
