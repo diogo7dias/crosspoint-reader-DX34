@@ -9,9 +9,10 @@
 #include <string>
 
 namespace FavoriteImage {
-namespace {
 
+namespace {
 constexpr const char* kFavoriteSuffix = "_F";
+}  // namespace
 
 bool isImageExtension(const std::string& filename) {
   if (filename.size() < 4) return false;
@@ -25,8 +26,6 @@ bool isImageExtension(const std::string& filename) {
   const std::string extLc = lc(ext);
   return extLc == ".bmp" || extLc == ".pxc";
 }
-
-}  // namespace
 
 bool hasFavoriteSuffix(const std::string& filename) {
   if (!isImageExtension(filename) || filename.size() <= 6) {

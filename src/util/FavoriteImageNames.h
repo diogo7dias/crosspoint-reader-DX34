@@ -8,6 +8,12 @@
 
 namespace FavoriteImage {
 
+// Returns true if `filename` has a recognized favorite-eligible image
+// extension (.bmp or .pxc, case-insensitive). Single source of truth for
+// the supported-extension list; FavoriteImage.cpp::isImagePath delegates
+// here.
+bool isImageExtension(const std::string& filename);
+
 bool hasFavoriteSuffix(const std::string& filename);
 std::string stripFavoriteSuffix(const std::string& filename);
 std::string addFavoriteSuffix(const std::string& filename);

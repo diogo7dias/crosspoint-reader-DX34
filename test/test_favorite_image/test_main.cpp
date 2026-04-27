@@ -16,12 +16,14 @@ void test_has_favorite_suffix_bmp() {
   TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("foo_F.bmp"));
   TEST_ASSERT_FALSE(FavoriteImage::hasFavoriteSuffix("foo.bmp"));
   TEST_ASSERT_FALSE(FavoriteImage::hasFavoriteSuffix("F.bmp"));
+  TEST_ASSERT_FALSE(FavoriteImage::hasFavoriteSuffix("_F.bmp"));  // no stem, reject
 }
 
 void test_has_favorite_suffix_pxc() {
   TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("foo_F.pxc"));
   TEST_ASSERT_FALSE(FavoriteImage::hasFavoriteSuffix("foo.pxc"));
   TEST_ASSERT_FALSE(FavoriteImage::hasFavoriteSuffix("F.pxc"));
+  TEST_ASSERT_FALSE(FavoriteImage::hasFavoriteSuffix("_F.pxc"));  // no stem, reject
 }
 
 void test_has_favorite_suffix_rejects_non_image() {
@@ -53,6 +55,21 @@ void test_strip_favorite_suffix_pxc() {
   TEST_ASSERT_EQUAL_STRING("foo.pxc", FavoriteImage::stripFavoriteSuffix("foo.pxc").c_str());
 }
 
+void test_extensions_case_insensitive() {
+  TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("foo_F.BMP"));
+  TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("foo_F.Pxc"));
+  TEST_ASSERT_EQUAL_STRING("foo_F.BMP", FavoriteImage::addFavoriteSuffix("foo.BMP").c_str());
+}
+
+void test_helpers_handle_paths_with_directories() {
+  TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("/sleep/foo_F.bmp"));
+  TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("/sleep/foo_F.pxc"));
+  TEST_ASSERT_EQUAL_STRING("/sleep/foo.bmp",
+                           FavoriteImage::stripFavoriteSuffix("/sleep/foo_F.bmp").c_str());
+  TEST_ASSERT_EQUAL_STRING("/sleep/foo_F.pxc",
+                           FavoriteImage::addFavoriteSuffix("/sleep/foo.pxc").c_str());
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -65,5 +82,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_add_favorite_suffix_passthrough_for_non_image);
   RUN_TEST(test_strip_favorite_suffix_bmp);
   RUN_TEST(test_strip_favorite_suffix_pxc);
+  RUN_TEST(test_extensions_case_insensitive);
+  RUN_TEST(test_helpers_handle_paths_with_directories);
   return UNITY_END();
 }

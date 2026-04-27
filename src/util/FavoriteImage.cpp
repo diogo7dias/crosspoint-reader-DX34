@@ -7,14 +7,13 @@
 #include <string>
 
 #include "CrossPointState.h"
-#include "util/StringUtils.h"
+#include "util/FavoriteImageNames.h"
 
 namespace FavoriteImage {
 namespace {
 
 bool isImagePath(const std::string& path) {
-  return StringUtils::checkFileExtension(path, ".bmp") ||
-         StringUtils::checkFileExtension(path, ".pxc");
+  return FavoriteImage::isImageExtension(path);
 }
 
 bool startsWith(const std::string& value, const char* prefix) { return value.rfind(prefix, 0) == 0; }
