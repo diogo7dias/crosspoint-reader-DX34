@@ -37,6 +37,11 @@ bool sameThemeName(const std::string& left, const std::string& right) {
 std::string bookReaderSettingsPath(const std::string& cachePath) { return cachePath + BOOK_READER_SETTINGS_FILE_JSON; }
 
 bool persistAppliedSettings(const std::string& cachePath) {
+  return ReadingThemeStore::persistContextual(cachePath);
+}
+}  // namespace
+
+bool ReadingThemeStore::persistContextual(const std::string& cachePath) {
   if (cachePath.empty()) {
     // No book context — save to global settings only
     return SETTINGS.saveToFile();
@@ -45,7 +50,6 @@ bool persistAppliedSettings(const std::string& cachePath) {
   // In-book context — save per-book only, keep global as new-book defaults
   return ReadingThemeStore::saveCurrentBookSettings(cachePath);
 }
-}  // namespace
 
 ReadingThemeStore ReadingThemeStore::instance;
 

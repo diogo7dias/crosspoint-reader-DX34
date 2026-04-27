@@ -167,7 +167,10 @@ void EpubReaderActivity::onEnter() {
       SETTINGS.fontSize = CrossPointSettings::SIZE_12;
       SETTINGS.customFontName.clear();
       SETTINGS.customFontSizePt = 0;
-      SETTINGS.saveToFile();
+      // Persist into the active context: per-book file when this revert
+      // happens inside an open book, never the global file (otherwise the
+      // per-book theme already applied to SETTINGS would leak into globals).
+      ReadingThemeStore::persistContextual(epub ? epub->getCachePath() : std::string());
     }
   }
 
@@ -862,7 +865,7 @@ void EpubReaderActivity::toggleTextRenderMode() {
   TransitionFeedback::show(renderer, tr(STR_LOADING));
   flushProgressIfNeeded(true);
   SETTINGS.textRenderMode = (SETTINGS.textRenderMode + 1) % CrossPointSettings::TEXT_RENDER_MODE_COUNT;
-  if (!SETTINGS.saveToFile()) {
+  if (!ReadingThemeStore::persistContextual(epub ? epub->getCachePath() : std::string())) {
     LOG_ERR("ERS", "Failed to save settings after text render mode toggle");
   }
 
@@ -1380,7 +1383,7 @@ void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
     // Persist the selection so the reader keeps the new orientation on next
     // launch.
     SETTINGS.orientation = orientation;
-    SETTINGS.saveToFile();
+    ReadingThemeStore::persistContextual(epub ? epub->getCachePath() : std::string());
 
     // Update renderer orientation to match the new logical coordinate system.
     ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
@@ -1549,7 +1552,7 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
         SETTINGS.fontSize = CrossPointSettings::SIZE_12;
         SETTINGS.customFontName.clear();
         SETTINGS.customFontSizePt = 0;
-        SETTINGS.saveToFile();
+        ReadingThemeStore::persistContextual(epub ? epub->getCachePath() : std::string());
       }
       clearPageCache();
       section.reset();

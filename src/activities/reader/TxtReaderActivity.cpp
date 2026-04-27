@@ -19,6 +19,7 @@
 #include "MappedInputManager.h"
 #include "ReaderCommon.h"
 #include "ReaderLayoutSafety.h"
+#include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
@@ -393,7 +394,7 @@ void TxtReaderActivity::loop() {
     SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
                                ? CrossPointSettings::ORIENTATION::PORTRAIT
                                : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
-    if (!SETTINGS.saveToFile()) {
+    if (!ReadingThemeStore::persistContextual(txt ? txt->getCachePath() : std::string())) {
       LOG_ERR("TRS", "Failed to save settings after orientation change");
     }
     renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
@@ -452,7 +453,7 @@ void TxtReaderActivity::loop() {
 void TxtReaderActivity::toggleTextRenderMode() {
   flushProgressIfNeeded(true);
   SETTINGS.textRenderMode = (SETTINGS.textRenderMode + 1) % CrossPointSettings::TEXT_RENDER_MODE_COUNT;
-  if (!SETTINGS.saveToFile()) {
+  if (!ReadingThemeStore::persistContextual(txt ? txt->getCachePath() : std::string())) {
     LOG_ERR("TRS", "Failed to save settings after text render mode toggle");
   }
 

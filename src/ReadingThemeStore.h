@@ -109,6 +109,15 @@ class ReadingThemeStore {
   static bool loadBookSettingsIntoCurrent(const std::string& cachePath);
   static bool resetBookSettingsToGlobal(const std::string& cachePath);
 
+  // Persist current SETTINGS into the right destination for the active context:
+  // - empty cachePath  -> global /.crosspoint/settings.json
+  // - non-empty path   -> per-book reader_settings.json under that cache dir
+  // Use this from any reader-side code path that mutates a theme-managed field
+  // (font, fontSize, orientation, textRenderMode, ...). Calling
+  // SETTINGS.saveToFile() directly from inside an open book corrupts the
+  // global file, because SETTINGS has been overwritten with the per-book theme.
+  static bool persistContextual(const std::string& cachePath);
+
   static ReadingTheme fromSettings(const std::string& name, const CrossPointSettings& settings);
   static ReadingTheme normalizeTheme(const ReadingTheme& theme);
   static void applyThemeToSettings(const ReadingTheme& theme, CrossPointSettings& settings);

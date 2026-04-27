@@ -21,6 +21,7 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "ReaderCommon.h"
+#include "ReadingThemeStore.h"
 #include "RecentBooksStore.h"
 #include "XtcReaderChapterSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -160,7 +161,7 @@ void XtcReaderActivity::loop() {
     SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
                                ? CrossPointSettings::ORIENTATION::PORTRAIT
                                : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
-    if (!SETTINGS.saveToFile()) {
+    if (!ReadingThemeStore::persistContextual(xtc ? xtc->getCachePath() : std::string())) {
       LOG_ERR("XRS", "Failed to save settings after orientation change");
     }
     renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
@@ -259,7 +260,7 @@ void XtcReaderActivity::openChapterMenu() {
 void XtcReaderActivity::toggleTextRenderMode() {
   flushProgressIfNeeded(true);
   SETTINGS.textRenderMode = (SETTINGS.textRenderMode + 1) % CrossPointSettings::TEXT_RENDER_MODE_COUNT;
-  if (!SETTINGS.saveToFile()) {
+  if (!ReadingThemeStore::persistContextual(xtc ? xtc->getCachePath() : std::string())) {
     LOG_ERR("XRS", "Failed to save settings after text render mode toggle");
   }
   requestUpdate();

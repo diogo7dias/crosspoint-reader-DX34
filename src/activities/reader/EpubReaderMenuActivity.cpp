@@ -8,6 +8,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
+#include "ReadingThemeStore.h"
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -117,8 +118,25 @@ void EpubReaderMenuActivity::loop() {
       return;
     }
     if (selectedAction == MenuAction::TOGGLE_RANDOM_BOOK_ON_BOOT) {
-      SETTINGS.randomBookOnBoot = !SETTINGS.randomBookOnBoot;
-      SETTINGS.saveToFile();
+      // randomBookOnBoot is a true global (boot behavior), not a per-book
+      // theme field, so it must persist to /.crosspoint/settings.json. But
+      // the in-memory SETTINGS currently holds the per-book theme overlay
+      // (applied at book open by ReadingThemeStore::loadBookSettingsIntoCurrent).
+      // A naive SETTINGS.saveToFile() here would write that overlay to globals
+      // and corrupt the user's defaults. Snapshot the per-book theme, reload
+      // the on-disk globals, flip the flag, save, then re-apply the per-book
+      // theme so the in-memory rendering state is preserved.
+      const bool newValue = !SETTINGS.randomBookOnBoot;
+      const ReadingTheme bookTheme = ReadingThemeStore::fromSettings("", SETTINGS);
+      // Only persist if we successfully reloaded the on-disk globals — a
+      // failed load would leave SETTINGS in a partially-initialised state and
+      // saveToFile would then write that garbage back as the new global.
+      if (SETTINGS.loadFromFile()) {
+        SETTINGS.randomBookOnBoot = newValue;
+        SETTINGS.saveToFile();
+      }
+      ReadingThemeStore::applyThemeToSettings(bookTheme, SETTINGS);
+      SETTINGS.randomBookOnBoot = newValue;  // keep in-memory flag consistent for this session
       requestUpdate();
       return;
     }

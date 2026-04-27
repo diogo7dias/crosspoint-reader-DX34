@@ -129,6 +129,7 @@ void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
 
 void ReaderActivity::onGoToXtcReader(std::unique_ptr<Xtc> xtc) {
   const auto xtcPath = xtc->getPath();
+  ReadingThemeStore::loadBookSettingsIntoCurrent(xtc->getCachePath());
   currentBookPath = xtcPath;
   exitActivity();
   enterNewActivity(new XtcReaderActivity(
