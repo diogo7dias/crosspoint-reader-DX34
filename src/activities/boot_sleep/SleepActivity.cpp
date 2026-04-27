@@ -149,7 +149,6 @@ void SleepActivity::renderCustomSleepScreen() const {
       Storage.exists(APP_STATE.lastSleepWallpaperPath.c_str())) {
     if (StringUtils::checkFileExtension(APP_STATE.lastSleepWallpaperPath, ".pxc")) {
       LOG_DBG("SLP", "Paused, re-showing PXC: %s", APP_STATE.lastSleepWallpaperPath.c_str());
-      delay(100);
       const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
       if (renderPxcSleepScreen(APP_STATE.lastSleepWallpaperPath, displayName.c_str())) {
         return;
@@ -159,7 +158,6 @@ void SleepActivity::renderCustomSleepScreen() const {
       FsFile file;
       if (Storage.openFileForRead("SLP", APP_STATE.lastSleepWallpaperPath, file)) {
         LOG_DBG("SLP", "Paused, re-showing: %s", APP_STATE.lastSleepWallpaperPath.c_str());
-        delay(100);
         Bitmap bitmap(file, true);
         const auto parseErr = bitmap.parseHeaders();
         if (parseErr == BmpReaderError::Ok) {
@@ -191,7 +189,6 @@ void SleepActivity::renderCustomSleepScreen() const {
     const auto filename = "/sleep/" + selectedImage;
     if (StringUtils::checkFileExtension(selectedImage, ".pxc")) {
       LOG_DBG("SLP", "Loading PXC: %s", filename.c_str());
-      delay(100);
       const std::string displayName = FavoriteImage::displayNameForPath(filename);
       if (renderPxcSleepScreen(filename, displayName.c_str())) {
         rememberLastRenderedSleepBitmap(filename, selectedImage);
@@ -204,7 +201,6 @@ void SleepActivity::renderCustomSleepScreen() const {
     FsFile file;
     if (Storage.openFileForRead("SLP", filename, file)) {
       LOG_DBG("SLP", "Loading: %s", filename.c_str());
-      delay(100);
       Bitmap bitmap(file, true);
       const auto parseErr = bitmap.parseHeaders();
       if (parseErr == BmpReaderError::Ok) {
@@ -374,10 +370,10 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
     drawSleepFilenameLabel(renderer, sourceFilename);
   }
 
-  // Use FULL_REFRESH for the best contrast and cleanest initial state before
-  // the grayscale overlay. The extra refresh time is negligible since the
-  // device is going to sleep immediately after.
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  // FAST_REFRESH for snappier sleep entry. Grayscale path below handles its
+  // own pre-flash (HALF for factory mode) so contrast on the final frame is
+  // not compromised when greyscale overlay runs.
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
 
   if (hasGreyscale) {
     const auto mode =
