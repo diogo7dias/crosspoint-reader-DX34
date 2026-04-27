@@ -35,7 +35,8 @@ inline std::vector<SettingInfo> getSettingsList() {
                                 StrId::STR_CAT_DISPLAY));
   s.push_back(SettingInfo::Enum(
       StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
-      {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30},
+      {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30,
+       StrId::STR_NEVER},
       "refreshFrequency", StrId::STR_CAT_DISPLAY));
   s.push_back(SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                                   StrId::STR_CAT_DISPLAY));
