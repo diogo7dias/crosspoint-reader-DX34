@@ -373,7 +373,9 @@ void GfxRenderer::drawArc(const int maxRadius, const int cx, const int cy, const
       }
       const int px = cx + xDir * dx;
       const int py = cy + yDir * dy;
-      drawPixel(px, py, state);
+      // GRAY2 modes: framebuffer convention is inverted; flip BW-convention state.
+      const bool s = (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB) ? !state : state;
+      drawPixel(px, py, s);
     }
   }
 };
@@ -452,22 +454,28 @@ void GfxRenderer::drawPixelDither<Color::Clear>(const int x, const int y) const 
 
 template <>
 void GfxRenderer::drawPixelDither<Color::Black>(const int x, const int y) const {
-  drawPixel(x, y, true);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, !gray2);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::White>(const int x, const int y) const {
-  drawPixel(x, y, false);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::LightGray>(const int x, const int y) const {
-  drawPixel(x, y, x % 2 == 0 && y % 2 == 0);
+  const bool pix = x % 2 == 0 && y % 2 == 0;
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::DarkGray>(const int x, const int y) const {
-  drawPixel(x, y, (x + y) % 2 == 0);  // TODO: maybe find a better pattern?
+  const bool pix = (x + y) % 2 == 0;  // TODO: maybe find a better pattern?
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {
@@ -1045,7 +1053,7 @@ void GfxRenderer::displayGrayBuffer(const uint8_t* lut, bool factoryMode) const 
   display.displayGrayBuffer(fadingFix, lut, factoryMode);
 }
 
-void GfxRenderer::renderGrayscale(GrayscaleMode mode, void (*drawFn)(GfxRenderer&, const void*), const void* ctx) {
+void GfxRenderer::renderGrayscale(GrayscaleMode mode, const std::function<void()>& drawFn) {
   const bool factory = (mode != GrayscaleMode::Differential);
   const uint8_t* lut = nullptr;
   RenderMode lsbMode = GRAYSCALE_LSB;
@@ -1070,13 +1078,13 @@ void GfxRenderer::renderGrayscale(GrayscaleMode mode, void (*drawFn)(GfxRenderer
   // LSB plane (BW RAM)
   setRenderMode(lsbMode);
   display.clearScreen(0x00);
-  drawFn(*this, ctx);
+  drawFn();
   copyGrayscaleLsbBuffers();
 
   // MSB plane (RED RAM)
   setRenderMode(msbMode);
   display.clearScreen(0x00);
-  drawFn(*this, ctx);
+  drawFn();
   copyGrayscaleMsbBuffers();
 
   displayGrayBuffer(lut, factory);

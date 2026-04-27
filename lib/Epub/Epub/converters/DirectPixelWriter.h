@@ -90,7 +90,8 @@ struct DirectPixelWriter {
   // Must be called after beginRow() for the current row.
   // No bounds checking — caller guarantees coordinates are valid.
   inline void writePixel(int logicalX, uint8_t pixelValue) const {
-    // Determine whether to draw based on render mode
+    // Determine whether to draw based on render mode.
+    // pixelValue convention: 0=Black, 1=DarkGrey, 2=LightGrey, 3=White.
     bool draw;
     bool state;
     switch (mode) {
@@ -104,6 +105,16 @@ struct DirectPixelWriter {
         break;
       case GfxRenderer::GRAYSCALE_LSB:
         draw = (pixelValue == 1);
+        state = false;
+        break;
+      case GfxRenderer::GRAY2_LSB:
+        // Factory absolute LSB (BW RAM): set BW=1 for Black(0) and LightGrey(2).
+        draw = !(pixelValue & 1);
+        state = false;
+        break;
+      case GfxRenderer::GRAY2_MSB:
+        // Factory absolute MSB (RED RAM): set RED=1 for Black(0) and DarkGrey(1).
+        draw = (pixelValue < 2);
         state = false;
         break;
       default:

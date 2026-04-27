@@ -5,6 +5,7 @@
 
 class FontCacheManager;
 
+#include <functional>
 #include <map>
 #include <memory>
 
@@ -187,7 +188,7 @@ class GfxRenderer {
   // handles pre-flash (factory modes only), clearScreen, setRenderMode, buffer copies,
   // displayGrayBuffer, and resets renderMode to BW on completion. storeBwBuffer /
   // restoreBwBuffer remain the caller's responsibility.
-  void renderGrayscale(GrayscaleMode mode, void (*drawFn)(GfxRenderer&, const void*), const void* ctx);
+  void renderGrayscale(GrayscaleMode mode, const std::function<void()>& drawFn);
   bool storeBwBuffer();    // Returns true if buffer was stored successfully
   void restoreBwBuffer();  // Restore and free the stored buffer
   void cleanupGrayscaleWithFrameBuffer() const;

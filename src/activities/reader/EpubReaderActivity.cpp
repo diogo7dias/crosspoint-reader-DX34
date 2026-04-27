@@ -2314,25 +2314,20 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     pagesUntilFullRefresh--;
   }
 
-  // Apply hardware grayscale overlay for pages with images.
-  // Default path uses the differential LSB/MSB overlay on top of the BW base.
-  // When SETTINGS.useFactoryLUT is enabled, switch to the factory absolute
-  // waveform (FactoryFast) for sharper grayscale at the cost of a black flash.
+  // Differential grayscale overlay for image pages. Text + status bar stay on
+  // the BW base above; only the image area gets the 2-bit overlay so other
+  // text-only pages still look "normal" via the standard BW differential path.
   if (pageHasImages && renderer.storeBwBuffer()) {
-    struct ImgCtx {
-      const Page* page;
-      int marginLeft;
-      int contentY;
-    };
-    ImgCtx imgCtx{&page, orientedMarginLeft, contentY};
-    auto drawImages = [](GfxRenderer& r, const void* ctx) {
-      const auto* c = static_cast<const ImgCtx*>(ctx);
-      c->page->renderImages(r, c->marginLeft, c->contentY);
-    };
-    const auto mode =
-        SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryFast : GfxRenderer::GrayscaleMode::Differential;
-    renderer.renderGrayscale(mode, drawImages, &imgCtx);
+    const Page* pagePtr = &page;
+    const int ml = orientedMarginLeft;
+    const int cy = contentY;
+    auto drawImages = [&, pagePtr, ml, cy]() { pagePtr->renderImages(renderer, ml, cy); };
+    renderer.renderGrayscale(GfxRenderer::GrayscaleMode::Differential, drawImages);
     renderer.restoreBwBuffer();
+    // Force the next page after an image page to take the HALF_REFRESH branch
+    // above, fully clearing any residual grayscale state so text doesn't ghost
+    // through. Cheaper than a FULL_REFRESH and visually identical.
+    pagesUntilFullRefresh = 1;
   }
 
   renderer.setTextRenderStyle(0);

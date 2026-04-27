@@ -347,20 +347,12 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
   renderer.displayBuffer(HalDisplay::FULL_REFRESH);
 
   if (hasGreyscale) {
-    struct BmpCtx {
-      const Bitmap* bitmap;
-      int x, y, drawWidth, drawHeight;
-      float cropX, cropY;
-    };
-    BmpCtx bmpCtx{&bitmap, x, y, drawWidth, drawHeight, cropX, cropY};
-    auto drawBmp = [](GfxRenderer& r, const void* ctx) {
-      const auto* c = static_cast<const BmpCtx*>(ctx);
-      c->bitmap->rewindToData();
-      r.drawBitmap(*c->bitmap, c->x, c->y, c->drawWidth, c->drawHeight, c->cropX, c->cropY);
-    };
     const auto mode =
         SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
-    renderer.renderGrayscale(mode, drawBmp, &bmpCtx);
+    renderer.renderGrayscale(mode, [&]() {
+      bitmap.rewindToData();
+      renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
+    });
   }
 
   renderer.setDarkMode(wasDarkMode);
