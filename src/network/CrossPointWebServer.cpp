@@ -36,6 +36,7 @@
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
+#include "html/SleepConverterPageHtml.generated.h"
 #include "html/brutalistCss.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "html/js/opentype_minJs.generated.h"
@@ -277,6 +278,7 @@ void CrossPointWebServer::begin() {
   // size tuple rides in query params because form fields aren't
   // parsed until after the upload callback finishes.
   server->on("/fonts", HTTP_GET, [this] { handleFontsPage(); });
+  server->on("/sleep-converter", HTTP_GET, [this] { handleSleepConverterPage(); });
   server->on("/api/fonts", HTTP_GET, [this] { handleGetFonts(); });
   server->on(
       "/api/fonts/upload", HTTP_POST, [this] { handleUploadFontPost(fontUpload); },
@@ -700,6 +702,11 @@ static void sendHtmlContent(WebServer* server, const char* data, size_t len) {
 void CrossPointWebServer::handleRoot() const {
   sendHtmlContent(server.get(), HomePageHtml, sizeof(HomePageHtml));
   LOG_DBG("WEB", "Served root page");
+}
+
+void CrossPointWebServer::handleSleepConverterPage() const {
+  sendHtmlContent(server.get(), SleepConverterPageHtml, sizeof(SleepConverterPageHtml));
+  LOG_DBG("WEB", "Served sleep converter page");
 }
 
 void CrossPointWebServer::handleNotFound() const {

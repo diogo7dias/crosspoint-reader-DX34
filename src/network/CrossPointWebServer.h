@@ -158,4 +158,6 @@ class CrossPointWebServer {
   void handleUploadFont(FontUploadState& state);
   void handleUploadFontPost(FontUploadState& state);
   void handleDeleteFont();
+
+  void handleSleepConverterPage() const;
 };

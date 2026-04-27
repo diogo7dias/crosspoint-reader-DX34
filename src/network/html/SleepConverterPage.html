@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0d10" />
+    <title>CrossPoint Sleep Converter</title>
+    <link rel="stylesheet" href="/css/brutalist.css" />
+    <style>
+      :root {
+        --pad: 16px;
+        --gap: 12px;
+      }
+      h1 {
+        font-size: clamp(28px, 6vw, 44px);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        margin: 0 0 8px 0;
+      }
+      h1 em { font-style: normal; color: var(--red); }
+      .lead {
+        font-size: 11px;
+        letter-spacing: 0.26em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: var(--pad);
+      }
+      section.panel {
+        border: 1px dashed var(--dash);
+        padding: var(--pad);
+        margin-top: var(--gap);
+      }
+      section.panel h2 {
+        margin: 0 0 10px 0;
+        font-size: 11px;
+        letter-spacing: 0.28em;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+      .drop {
+        padding: 32px var(--pad);
+        text-align: center;
+        cursor: pointer;
+        transition: background 80ms;
+        display: block;
+      }
+      .drop.over { background: rgba(255,255,255,0.04); }
+      .drop input { display: none; }
+      .drop b { color: var(--yellow); }
+
+      .queue {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .queue .qi {
+        flex: 0 0 auto;
+        width: 56px;
+        height: 88px;
+        border: 1px dashed var(--dash);
+        position: relative;
+        background: #111;
+        overflow: hidden;
+      }
+      .queue .qi img { width: 100%; height: 100%; object-fit: cover; opacity: 0.45; }
+      .queue .qi.cur { border-color: var(--yellow); border-style: solid; }
+      .queue .qi.cur img { opacity: 1; }
+      .queue .qi.done img { opacity: 0.65; filter: grayscale(1); }
+      .queue .qi .badge {
+        position: absolute; bottom: 2px; right: 2px;
+        font-size: 9px; line-height: 1;
+        padding: 2px 4px;
+        background: #000;
+        color: var(--green);
+        letter-spacing: 0.1em;
+      }
+      .queue .qi.skipped .badge { color: var(--muted); }
+      .queue .qi.failed .badge { color: var(--red); }
+
+      .editor {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--pad);
+      }
+      @media (min-width: 800px) {
+        .editor { grid-template-columns: 1fr 1.2fr; }
+      }
+
+      .preview-wrap {
+        background: #000;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+      }
+      .preview-wrap canvas {
+        max-width: 100%;
+        height: auto;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        cursor: grab;
+        touch-action: none;
+      }
+      .preview-wrap canvas.panning { cursor: grabbing; }
+
+      .controls { display: grid; gap: var(--gap); align-content: start; }
+      .row { display: grid; grid-template-columns: 1fr; gap: 8px; }
+      .row label {
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .row .vals {
+        display: flex; justify-content: space-between;
+        font-size: 11px; color: var(--fg);
+        font-variant-numeric: tabular-nums;
+      }
+      input[type="range"] { width: 100%; accent-color: var(--yellow); }
+      select, button {
+        background: #000;
+        color: var(--fg);
+        border: 1px solid var(--dash);
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); }
+      button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.primary { border-color: var(--green); color: var(--green); }
+      button.primary:hover:not(:disabled) { background: var(--green); color: #000; }
+      button.danger { border-color: var(--red); color: var(--red); }
+      button.danger:hover:not(:disabled) { background: var(--red); color: #000; }
+
+      .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+      .btn-group button { flex: 1 1 auto; }
+
+      .align-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        max-width: 120px;
+      }
+      .align-grid button {
+        aspect-ratio: 1;
+        padding: 0;
+        font-size: 14px;
+      }
+      .align-grid button.on { background: var(--yellow); color: #000; }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: var(--gap);
+      }
+      .actions button { flex: 1 1 200px; padding: 14px; }
+
+      .status {
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-top: 8px;
+      }
+      .status.err { color: var(--red); }
+      .status.ok { color: var(--green); }
+
+      .topbar {
+        display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+        font-size: 11px; letter-spacing: 0.16em; color: var(--muted);
+      }
+      .topbar select { padding: 4px 8px; font-size: 11px; }
+
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header style="margin-bottom: var(--pad);">
+        <h1>SLEEP <em>CONVERTER</em></h1>
+        <div class="lead">PXC encoder · 4-level dither · sleep wallpaper upload</div>
+      </header>
+
+      <nav class="nav" aria-label="Primary">
+        <a href="/"><span class="k">[1]</span><span>HOME</span></a>
+        <a href="/files"><span class="k">[2]</span><span>FILES</span></a>
+        <a href="/fonts"><span class="k">[3]</span><span>FONTS</span></a>
+        <a href="/sleep-converter" class="on"><span class="k">[4]</span><span>SLEEP</span></a>
+      </nav>
+
+      <section class="panel">
+        <h2>Device</h2>
+        <div class="topbar">
+          <label for="device-size">Resolution</label>
+          <select id="device-size">
+            <option value="480x800" selected>X4 · 480 × 800</option>
+            <option value="528x792">X3 · 528 × 792</option>
+          </select>
+          <span id="queue-count">0 queued · 0 done</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Add images</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/bmp" multiple />
+          <div><b>DROP</b> images here · or click to browse</div>
+          <div class="lead" style="margin: 8px 0 0 0;">PNG · JPG · WEBP · BMP</div>
+        </label>
+      </section>
+
+      <section class="panel" id="queue-panel">
+        <h2>Queue</h2>
+        <div class="queue" id="queue"></div>
+      </section>
+
+      <section class="panel hidden" id="editor-panel">
+        <h2>Edit · <span id="editor-name">—</span></h2>
+        <div class="editor">
+          <div class="preview-wrap">
+            <canvas id="preview-canvas" title="Drag to pan when zoomed"></canvas>
+          </div>
+          <div class="controls">
+            <div class="row">
+              <label>Mode</label>
+              <div class="btn-group">
+                <button id="mode-fill" class="primary">Fill (zoom + pan)</button>
+                <button id="mode-fit">Fit (letterbox)</button>
+              </div>
+            </div>
+            <div class="row" id="row-zoom">
+              <label>Zoom (crop)</label>
+              <div class="vals"><span id="zoom-val">1.00×</span><span>1× — 4×</span></div>
+              <input type="range" id="zoom" min="1" max="4" step="0.05" value="1" />
+            </div>
+            <div class="row hidden" id="row-align">
+              <label>Align (fit)</label>
+              <div class="align-grid" id="align-grid">
+                <button data-a="tl">↖</button>
+                <button data-a="tc">↑</button>
+                <button data-a="tr">↗</button>
+                <button data-a="ml">←</button>
+                <button data-a="mc" class="on">·</button>
+                <button data-a="mr">→</button>
+                <button data-a="bl">↙</button>
+                <button data-a="bc">↓</button>
+                <button data-a="br">↘</button>
+              </div>
+            </div>
+            <div class="row hidden" id="row-bg">
+              <label>Background (fit)</label>
+              <div class="btn-group">
+                <button id="bg-black" class="primary">Black</button>
+                <button id="bg-white">White</button>
+              </div>
+            </div>
+            <div class="row">
+              <label>Rotate</label>
+              <div class="btn-group">
+                <button id="rot-ccw">↺ 90° CCW</button>
+                <button id="rot-cw">↻ 90° CW</button>
+              </div>
+            </div>
+            <div class="row">
+              <label>Black point</label>
+              <div class="vals"><span id="black-val">0</span><span>0 — 254</span></div>
+              <input type="range" id="black" min="0" max="254" step="1" value="0" />
+            </div>
+            <div class="row">
+              <label>White point</label>
+              <div class="vals"><span id="white-val">255</span><span>1 — 255</span></div>
+              <input type="range" id="white" min="1" max="255" step="1" value="255" />
+            </div>
+            <div class="row">
+              <label>Gamma</label>
+              <div class="vals"><span id="gamma-val">1.00</span><span>0.30 — 3.00</span></div>
+              <input type="range" id="gamma" min="0.3" max="3" step="0.01" value="1" />
+            </div>
+            <div class="row">
+              <div class="btn-group">
+                <button id="auto-levels">Auto levels</button>
+                <button id="reset-tone">Reset tone</button>
+              </div>
+            </div>
+            <div class="row">
+              <label>Dither</label>
+              <select id="dither">
+                <option value="zhou-fang" selected>Zhou-Fang (serpentine JJN)</option>
+                <option value="floyd-steinberg">Floyd-Steinberg</option>
+                <option value="atkinson">Atkinson</option>
+                <option value="off">Off (no dither, hard quantise)</option>
+              </select>
+            </div>
+            <div class="actions">
+              <button id="btn-upload" class="primary">Convert &amp; upload (Next)</button>
+              <button id="btn-skip">Skip image</button>
+              <button id="btn-cancel" class="danger">Cancel batch</button>
+            </div>
+            <div class="status" id="status">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Output</h2>
+        <div class="topbar">
+          <span><b style="color: var(--fg);">/sleep/&lt;name&gt;.pxc</b></span>
+          <span>Format · 2 bpp · 4 grey levels</span>
+        </div>
+      </section>
+
+      <footer class="foot" style="margin-top: var(--pad);">
+        <span class="heart">&bull; Open-source &middot; MIT</span>
+      </footer>
+    </div>
+
+    <script type="module">
+      // ─────────────────────────────────────────────────────────
+      // pxc-encode: pack 2bpp MSB-first, prepend [w u16 LE][h u16 LE].
+      // Input is luma already quantised to {0, 85, 170, 255}.
+      // ─────────────────────────────────────────────────────────
+      function encodePxc(luma, w, h) {
+        const stride = (w + 3) >> 2;
+        const out = new Uint8Array(4 + stride * h);
+        out[0] = w & 0xff;
+        out[1] = (w >> 8) & 0xff;
+        out[2] = h & 0xff;
+        out[3] = (h >> 8) & 0xff;
+        for (let y = 0; y < h; y++) {
+          const rowIn = y * w;
+          const rowOut = 4 + y * stride;
+          for (let x = 0; x < w; x++) {
+            const v = luma[rowIn + x];
+            const q = v >= 212 ? 3 : v >= 127 ? 2 : v >= 42 ? 1 : 0;
+            const bx = x >> 2;
+            const shift = 6 - ((x & 3) << 1);
+            out[rowOut + bx] |= q << shift;
+          }
+        }
+        return out;
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // dither: 4 modes (3 algorithms + off). Output luma in {0,85,170,255}.
+      // ─────────────────────────────────────────────────────────
+      const PALETTE = [0, 85, 170, 255];
+      function quantPalette(v) {
+        if (v < 0) v = 0; else if (v > 255) v = 255;
+        return v >= 212 ? 255 : v >= 127 ? 170 : v >= 42 ? 85 : 0;
+      }
+
+      function ditherOff(luma, w, h) {
+        const out = new Uint8ClampedArray(w * h);
+        for (let i = 0; i < luma.length; i++) out[i] = quantPalette(luma[i]);
+        return out;
+      }
+
+      function ditherFloyd(luma, w, h) {
+        const buf = Float32Array.from(luma);
+        const out = new Uint8ClampedArray(w * h);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            const old = buf[i];
+            const q = quantPalette(old);
+            out[i] = q;
+            const err = old - q;
+            if (x + 1 < w)             buf[i + 1]     += err * 7 / 16;
+            if (y + 1 < h && x > 0)    buf[i + w - 1] += err * 3 / 16;
+            if (y + 1 < h)             buf[i + w]     += err * 5 / 16;
+            if (y + 1 < h && x + 1 < w)buf[i + w + 1] += err * 1 / 16;
+          }
+        }
+        return out;
+      }
+
+      function ditherAtkinson(luma, w, h) {
+        const buf = Float32Array.from(luma);
+        const out = new Uint8ClampedArray(w * h);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            const old = buf[i];
+            const q = quantPalette(old);
+            out[i] = q;
+            const e = (old - q) / 8;
+            if (x + 1 < w) buf[i + 1] += e;
+            if (x + 2 < w) buf[i + 2] += e;
+            if (y + 1 < h) {
+              if (x > 0)     buf[i + w - 1] += e;
+              buf[i + w]     += e;
+              if (x + 1 < w) buf[i + w + 1] += e;
+            }
+            if (y + 2 < h)   buf[i + 2 * w] += e;
+          }
+        }
+        return out;
+      }
+
+      function ditherZhouFang(luma, w, h) {
+        const buf = Float32Array.from(luma);
+        const out = new Uint8ClampedArray(w * h);
+        const KERNEL = [
+          [0, 1, 7], [0, 2, 5],
+          [1, -2, 3], [1, -1, 5], [1, 0, 7], [1, 1, 5], [1, 2, 3],
+          [2, -2, 1], [2, -1, 3], [2, 0, 5], [2, 1, 3], [2, 2, 1],
+        ];
+        for (let y = 0; y < h; y++) {
+          const reverse = (y & 1) === 1;
+          if (!reverse) {
+            for (let x = 0; x < w; x++) {
+              const i = y * w + x;
+              const old = buf[i];
+              const q = quantPalette(old);
+              out[i] = q;
+              const err = (old - q) / 48;
+              for (const [dy, dx, wt] of KERNEL) {
+                const yy = y + dy, xx = x + dx;
+                if (yy < h && xx >= 0 && xx < w) buf[yy * w + xx] += err * wt;
+              }
+            }
+          } else {
+            for (let x = w - 1; x >= 0; x--) {
+              const i = y * w + x;
+              const old = buf[i];
+              const q = quantPalette(old);
+              out[i] = q;
+              const err = (old - q) / 48;
+              for (const [dy, dx, wt] of KERNEL) {
+                const yy = y + dy, xx = x - dx;
+                if (yy < h && xx >= 0 && xx < w) buf[yy * w + xx] += err * wt;
+              }
+            }
+          }
+        }
+        return out;
+      }
+
+      const DITHER = {
+        'off':             ditherOff,
+        'floyd-steinberg': ditherFloyd,
+        'atkinson':        ditherAtkinson,
+        'zhou-fang':       ditherZhouFang,
+      };
+
+      function buildToneLut(black, white, gamma) {
+        if (white <= black) white = black + 1;
+        const span = white - black;
+        const inv = 1 / gamma;
+        const lut = new Uint8ClampedArray(256);
+        for (let i = 0; i < 256; i++) {
+          let v = (i - black) / span;
+          if (v < 0) v = 0; else if (v > 1) v = 1;
+          v = Math.pow(v, inv);
+          lut[i] = Math.round(v * 255);
+        }
+        return lut;
+      }
+      function applyTone(luma, lut) {
+        const out = new Uint8ClampedArray(luma.length);
+        for (let i = 0; i < luma.length; i++) out[i] = lut[luma[i]];
+        return out;
+      }
+
+      function rgbaToLuma(rgba, n) {
+        const out = new Uint8ClampedArray(n);
+        for (let i = 0, j = 0; i < n; i++, j += 4) {
+          out[i] = (0.299 * rgba[j] + 0.587 * rgba[j + 1] + 0.114 * rgba[j + 2]) | 0;
+        }
+        return out;
+      }
+
+      function autoLevels(luma) {
+        const hist = new Uint32Array(256);
+        for (let i = 0; i < luma.length; i++) hist[luma[i]]++;
+        const total = luma.length;
+        const lowCut = total * 0.005, highCut = total * 0.005;
+        let acc = 0, black = 0, white = 255;
+        for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= lowCut) { black = i; break; } }
+        acc = 0;
+        for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= highCut) { white = i; break; } }
+        if (white <= black) { black = 0; white = 255; }
+        return { black, white };
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // State.
+      // ─────────────────────────────────────────────────────────
+      const state = {
+        queue: [],
+        idx: -1,
+        device: { w: 480, h: 800 },
+        // per-image
+        rotation: 0,
+        mode: 'fill',          // 'fill' (cover + zoom + pan) | 'fit' (letterbox)
+        align: 'mc',
+        bg: 'black',
+        zoom: 1,               // fill mode only; multiplies the cover scale
+        pan: { x: 0.5, y: 0.5 },// fill mode focal point in source coords (0..1)
+        // batch defaults
+        tone: { black: 0, white: 255, gamma: 1 },
+        dither: 'zhou-fang',
+        bitmap: null,
+        previewLuma: null,
+      };
+
+      // ─────────────────────────────────────────────────────────
+      // Bake target-resolution RGBA from current bitmap + transforms.
+      // ─────────────────────────────────────────────────────────
+      function bakeOutput() {
+        if (!state.bitmap) return null;
+        const tw = state.device.w, th = state.device.h;
+        const c = document.createElement('canvas');
+        c.width = tw; c.height = th;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = state.bg === 'white' ? '#fff' : '#000';
+        ctx.fillRect(0, 0, tw, th);
+
+        let src = state.bitmap;
+        let sw = src.width, sh = src.height;
+        if (state.rotation !== 0) {
+          const tc = document.createElement('canvas');
+          const r = state.rotation;
+          if (r === 90 || r === 270) { tc.width = sh; tc.height = sw; }
+          else { tc.width = sw; tc.height = sh; }
+          const tctx = tc.getContext('2d');
+          tctx.translate(tc.width / 2, tc.height / 2);
+          tctx.rotate(r * Math.PI / 180);
+          tctx.drawImage(src, -sw / 2, -sh / 2);
+          src = tc; sw = tc.width; sh = tc.height;
+        }
+
+        if (state.mode === 'fit') {
+          const sa = sw / sh, ta = tw / th;
+          let dw, dh;
+          if (sa > ta) { dw = tw; dh = Math.round(tw / sa); }
+          else { dh = th; dw = Math.round(th * sa); }
+          const a = state.align;
+          let dx, dy;
+          if (a[0] === 't') dy = 0;
+          else if (a[0] === 'b') dy = th - dh;
+          else dy = ((th - dh) >> 1);
+          if (a[1] === 'l') dx = 0;
+          else if (a[1] === 'r') dx = tw - dw;
+          else dx = ((tw - dw) >> 1);
+          ctx.drawImage(src, dx, dy, dw, dh);
+        } else {
+          // Fill: cover-scale * zoom, then pan.
+          const sa = sw / sh, ta = tw / th;
+          let coverW, coverH;
+          if (sa > ta) { coverH = th; coverW = Math.round(th * sa); }
+          else { coverW = tw; coverH = Math.round(tw / sa); }
+          const dw = Math.round(coverW * state.zoom);
+          const dh = Math.round(coverH * state.zoom);
+          // Pan: focal (px, py) in source coords (0..1) maps to centre of target.
+          // Equivalent: shift dx so source point (px*dw) lands at tw/2.
+          let dx = Math.round(tw / 2 - state.pan.x * dw);
+          let dy = Math.round(th / 2 - state.pan.y * dh);
+          // Clamp pan so we never reveal background gaps.
+          if (dx > 0) dx = 0;
+          if (dy > 0) dy = 0;
+          if (dx + dw < tw) dx = tw - dw;
+          if (dy + dh < th) dy = th - dh;
+          ctx.drawImage(src, dx, dy, dw, dh);
+        }
+        return ctx.getImageData(0, 0, tw, th).data;
+      }
+
+      function runPipeline() {
+        const rgba = bakeOutput();
+        if (!rgba) return;
+        const tw = state.device.w, th = state.device.h;
+        const luma = rgbaToLuma(rgba, tw * th);
+        const lut = buildToneLut(state.tone.black, state.tone.white, state.tone.gamma);
+        const toned = applyTone(luma, lut);
+        const fn = DITHER[state.dither] || ditherZhouFang;
+        state.previewLuma = fn(toned, tw, th);
+        renderPreview();
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // Preview render.
+      // ─────────────────────────────────────────────────────────
+      const $ = (id) => document.getElementById(id);
+      const previewCanvas = $('preview-canvas');
+      const previewCtx = previewCanvas.getContext('2d');
+
+      function renderPreview() {
+        if (!state.previewLuma) return;
+        const tw = state.device.w, th = state.device.h;
+        previewCanvas.width = tw;
+        previewCanvas.height = th;
+        const img = previewCtx.createImageData(tw, th);
+        for (let i = 0, j = 0; i < tw * th; i++, j += 4) {
+          const v = state.previewLuma[i];
+          img.data[j] = v;
+          img.data[j + 1] = v;
+          img.data[j + 2] = v;
+          img.data[j + 3] = 255;
+        }
+        previewCtx.putImageData(img, 0, 0);
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // Drag-to-pan on preview (fill mode only).
+      // ─────────────────────────────────────────────────────────
+      let dragStart = null;
+      previewCanvas.addEventListener('pointerdown', (e) => {
+        if (state.mode !== 'fill' || !state.bitmap) return;
+        previewCanvas.setPointerCapture(e.pointerId);
+        previewCanvas.classList.add('panning');
+        dragStart = { x: e.clientX, y: e.clientY, px: state.pan.x, py: state.pan.y };
+      });
+      previewCanvas.addEventListener('pointermove', (e) => {
+        if (!dragStart) return;
+        // Translate screen-px movement to pan delta.
+        const rect = previewCanvas.getBoundingClientRect();
+        // displayed scale: target pixels per screen pixel
+        const screenPerTargetX = rect.width  / state.device.w;
+        const screenPerTargetY = rect.height / state.device.h;
+        // moving one screen px shifts focal by dx_target/dw fraction of source.
+        // Approximate: large enough zoom = fine pan.
+        const dxTarget = (e.clientX - dragStart.x) / screenPerTargetX;
+        const dyTarget = (e.clientY - dragStart.y) / screenPerTargetY;
+        // Convert to pan-fraction by dividing by displayed source extent.
+        let bw = state.bitmap.width, bh = state.bitmap.height;
+        if (state.rotation === 90 || state.rotation === 270) { [bw, bh] = [bh, bw]; }
+        const sa = bw / bh, ta = state.device.w / state.device.h;
+        let coverW, coverH;
+        if (sa > ta) { coverH = state.device.h; coverW = state.device.h * sa; }
+        else { coverW = state.device.w; coverH = state.device.w / sa; }
+        const dw = coverW * state.zoom, dh = coverH * state.zoom;
+        let nx = dragStart.px - dxTarget / dw;
+        let ny = dragStart.py - dyTarget / dh;
+        // Clamp so cover stays filled.
+        const minX = state.device.w / (2 * dw);
+        const maxX = 1 - minX;
+        const minY = state.device.h / (2 * dh);
+        const maxY = 1 - minY;
+        if (minX <= maxX) nx = Math.max(minX, Math.min(maxX, nx)); else nx = 0.5;
+        if (minY <= maxY) ny = Math.max(minY, Math.min(maxY, ny)); else ny = 0.5;
+        state.pan.x = nx; state.pan.y = ny;
+        scheduleRun();
+      });
+      function endDrag() {
+        dragStart = null;
+        previewCanvas.classList.remove('panning');
+      }
+      previewCanvas.addEventListener('pointerup', endDrag);
+      previewCanvas.addEventListener('pointercancel', endDrag);
+
+      let runTimer = null;
+      function scheduleRun() {
+        if (runTimer) cancelAnimationFrame(runTimer);
+        runTimer = requestAnimationFrame(() => { runTimer = null; runPipeline(); });
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // Queue.
+      // ─────────────────────────────────────────────────────────
+      function renderQueue() {
+        const el = $('queue');
+        el.innerHTML = '';
+        state.queue.forEach((q, i) => {
+          const div = document.createElement('div');
+          div.className = 'qi';
+          if (i === state.idx) div.classList.add('cur');
+          if (q.status === 'done') div.classList.add('done');
+          if (q.status === 'skipped') div.classList.add('skipped');
+          if (q.status === 'failed') div.classList.add('failed');
+          if (q.thumbUrl) {
+            const img = document.createElement('img');
+            img.src = q.thumbUrl;
+            div.appendChild(img);
+          }
+          if (q.status === 'done')    { const b = document.createElement('div'); b.className = 'badge'; b.textContent = 'OK';   div.appendChild(b); }
+          if (q.status === 'skipped') { const b = document.createElement('div'); b.className = 'badge'; b.textContent = 'SKIP'; div.appendChild(b); }
+          if (q.status === 'failed')  { const b = document.createElement('div'); b.className = 'badge'; b.textContent = 'ERR';  div.appendChild(b); }
+          el.appendChild(div);
+        });
+        const total = state.queue.length;
+        const done = state.queue.filter(q => q.status === 'done').length;
+        $('queue-count').textContent = total + ' queued · ' + done + ' done';
+      }
+
+      function addFiles(fileList) {
+        for (const f of fileList) {
+          if (!f.type.startsWith('image/')) continue;
+          state.queue.push({ file: f, status: 'pending', thumbUrl: URL.createObjectURL(f) });
+        }
+        renderQueue();
+        if (state.idx === -1) advance();
+      }
+
+      async function advance() {
+        for (let i = state.idx + 1; i < state.queue.length; i++) {
+          if (state.queue[i].status === 'pending') {
+            state.idx = i;
+            await loadCurrent();
+            return;
+          }
+        }
+        state.idx = -1;
+        showEditor(false);
+        setStatus('Batch finished.', 'ok');
+        renderQueue();
+      }
+
+      async function loadCurrent() {
+        const q = state.queue[state.idx];
+        if (!q) return;
+        showEditor(true);
+        setStatus('Decoding ' + q.file.name + '…');
+        try {
+          state.bitmap = await createImageBitmap(q.file);
+          state.rotation = 0;
+          state.zoom = 1;
+          state.pan = { x: 0.5, y: 0.5 };
+          $('zoom').value = '1';
+          $('zoom-val').textContent = '1.00×';
+          $('editor-name').textContent = q.file.name;
+          renderQueue();
+          runPipeline();
+          setStatus('Ready · ' + q.file.name);
+        } catch (e) {
+          setStatus('Decode failed: ' + e.message, 'err');
+          q.status = 'failed';
+          renderQueue();
+          advance();
+        }
+      }
+
+      function showEditor(on) {
+        $('editor-panel').classList.toggle('hidden', !on);
+      }
+
+      function setStatus(text, cls) {
+        const el = $('status');
+        el.textContent = text;
+        el.className = 'status' + (cls ? ' ' + cls : '');
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // Upload.
+      // ─────────────────────────────────────────────────────────
+      function pxcFilename(srcName) {
+        const dot = srcName.lastIndexOf('.');
+        const stem = dot > 0 ? srcName.slice(0, dot) : srcName;
+        return stem + '.pxc';
+      }
+      async function uploadPxc(name, bytes) {
+        const fd = new FormData();
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        fd.append('file', blob, name);
+        const res = await fetch('/upload?path=' + encodeURIComponent('/sleep'), {
+          method: 'POST', body: fd,
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error('HTTP ' + res.status + (text ? ' · ' + text : ''));
+        }
+      }
+
+      async function convertAndUpload() {
+        const q = state.queue[state.idx];
+        if (!q) return;
+        const tw = state.device.w, th = state.device.h;
+        if (!state.previewLuma || state.previewLuma.length !== tw * th) runPipeline();
+        if (!state.previewLuma) { setStatus('Pipeline not ready.', 'err'); return; }
+        const bytes = encodePxc(state.previewLuma, tw, th);
+        const name = pxcFilename(q.file.name);
+        $('btn-upload').disabled = true;
+        $('btn-skip').disabled = true;
+        setStatus('Uploading ' + name + ' (' + bytes.length + ' B)…');
+        try {
+          await uploadPxc(name, bytes);
+          q.status = 'done';
+          setStatus('Uploaded ' + name, 'ok');
+          renderQueue();
+          await advance();
+        } catch (e) {
+          q.status = 'failed';
+          setStatus('Upload failed: ' + e.message, 'err');
+          renderQueue();
+        } finally {
+          $('btn-upload').disabled = false;
+          $('btn-skip').disabled = false;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────
+      // UI wiring.
+      // ─────────────────────────────────────────────────────────
+      $('device-size').addEventListener('change', (e) => {
+        const [w, h] = e.target.value.split('x').map(Number);
+        state.device.w = w; state.device.h = h;
+        runPipeline();
+      });
+
+      const drop = $('drop');
+      const fileInput = $('file-input');
+      drop.addEventListener('click', (e) => {
+        // Don't double-trigger when the click bubbles from the hidden <input>.
+        if (e.target === fileInput) return;
+        e.preventDefault();
+        fileInput.click();
+      });
+      fileInput.addEventListener('change', (e) => { if (e.target.files) addFiles(e.target.files); fileInput.value = ''; });
+      ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+      ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+      drop.addEventListener('drop', (e) => { if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+
+      function updateModeButtons() {
+        const fill = state.mode === 'fill';
+        $('mode-fill').classList.toggle('primary', fill);
+        $('mode-fit').classList.toggle('primary', !fill);
+        $('row-zoom').classList.toggle('hidden', !fill);
+        $('row-align').classList.toggle('hidden', fill);
+        $('row-bg').classList.toggle('hidden', fill);
+      }
+      $('mode-fill').addEventListener('click', () => { state.mode = 'fill'; state.pan = { x: 0.5, y: 0.5 }; updateModeButtons(); runPipeline(); });
+      $('mode-fit').addEventListener('click',  () => { state.mode = 'fit';  updateModeButtons(); runPipeline(); });
+
+      document.querySelectorAll('#align-grid button').forEach(b => {
+        b.addEventListener('click', () => {
+          state.align = b.dataset.a;
+          document.querySelectorAll('#align-grid button').forEach(x => x.classList.toggle('on', x === b));
+          runPipeline();
+        });
+      });
+
+      $('bg-black').addEventListener('click', () => { state.bg = 'black'; $('bg-black').classList.add('primary'); $('bg-white').classList.remove('primary'); runPipeline(); });
+      $('bg-white').addEventListener('click', () => { state.bg = 'white'; $('bg-white').classList.add('primary'); $('bg-black').classList.remove('primary'); runPipeline(); });
+
+      $('rot-cw').addEventListener('click',  () => { state.rotation = (state.rotation + 90) % 360;  runPipeline(); });
+      $('rot-ccw').addEventListener('click', () => { state.rotation = (state.rotation + 270) % 360; runPipeline(); });
+
+      $('zoom').addEventListener('input', (e) => {
+        state.zoom = parseFloat(e.target.value);
+        $('zoom-val').textContent = state.zoom.toFixed(2) + '×';
+        scheduleRun();
+      });
+
+      function bindToneSlider(id, valEl, key, fmt) {
+        const el = $(id);
+        el.addEventListener('input', (e) => {
+          state.tone[key] = parseFloat(e.target.value);
+          $(valEl).textContent = fmt(state.tone[key]);
+          scheduleRun();
+        });
+      }
+      bindToneSlider('black', 'black-val', 'black', (v) => v.toFixed(0));
+      bindToneSlider('white', 'white-val', 'white', (v) => v.toFixed(0));
+      bindToneSlider('gamma', 'gamma-val', 'gamma', (v) => v.toFixed(2));
+
+      $('auto-levels').addEventListener('click', () => {
+        if (!state.bitmap) return;
+        const prev = state.tone;
+        state.tone = { black: 0, white: 255, gamma: 1 };
+        const rgba = bakeOutput();
+        if (!rgba) { state.tone = prev; return; }
+        const luma = rgbaToLuma(rgba, state.device.w * state.device.h);
+        const { black, white } = autoLevels(luma);
+        state.tone = { black, white, gamma: 1 };
+        $('black').value = black; $('black-val').textContent = String(black);
+        $('white').value = white; $('white-val').textContent = String(white);
+        $('gamma').value = '1';   $('gamma-val').textContent = '1.00';
+        runPipeline();
+      });
+
+      $('reset-tone').addEventListener('click', () => {
+        state.tone = { black: 0, white: 255, gamma: 1 };
+        $('black').value = 0; $('black-val').textContent = '0';
+        $('white').value = 255; $('white-val').textContent = '255';
+        $('gamma').value = '1'; $('gamma-val').textContent = '1.00';
+        runPipeline();
+      });
+
+      $('dither').addEventListener('change', (e) => { state.dither = e.target.value; runPipeline(); });
+
+      $('btn-upload').addEventListener('click', convertAndUpload);
+      $('btn-skip').addEventListener('click', () => {
+        const q = state.queue[state.idx];
+        if (q) { q.status = 'skipped'; renderQueue(); advance(); }
+      });
+      $('btn-cancel').addEventListener('click', () => {
+        for (let i = state.idx; i < state.queue.length; i++) {
+          if (state.queue[i].status === 'pending') state.queue[i].status = 'skipped';
+        }
+        state.idx = -1;
+        showEditor(false);
+        setStatus('Batch cancelled.');
+        renderQueue();
+      });
+
+      updateModeButtons();
+      renderQueue();
+    </script>
+  </body>
+</html>
