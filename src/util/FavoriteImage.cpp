@@ -12,8 +12,6 @@
 namespace FavoriteImage {
 namespace {
 
-constexpr const char* kFavoriteSuffix = "_F";
-
 bool isImagePath(const std::string& path) {
   return StringUtils::checkFileExtension(path, ".bmp") ||
          StringUtils::checkFileExtension(path, ".pxc");
@@ -100,28 +98,8 @@ void removeSleepReferencesForPath(const std::string& path) {
 
 }  // namespace
 
-bool hasFavoriteSuffix(const std::string& filename) {
-  if (!isImagePath(filename) || filename.size() <= 6) {
-    return false;
-  }
-  const size_t extPos = filename.size() - 4;
-  return filename.substr(extPos - 2, 2) == "_F";
-}
-
-std::string addFavoriteSuffix(const std::string& filename) {
-  if (!isImagePath(filename) || hasFavoriteSuffix(filename)) {
-    return filename;
-  }
-  return filename.substr(0, filename.size() - 4) + kFavoriteSuffix + filename.substr(filename.size() - 4);
-}
-
-std::string stripFavoriteSuffix(const std::string& filename) {
-  if (!hasFavoriteSuffix(filename)) {
-    return filename;
-  }
-  const size_t extPos = filename.size() - 4;
-  return filename.substr(0, extPos - 2) + filename.substr(extPos);
-}
+// hasFavoriteSuffix, addFavoriteSuffix, stripFavoriteSuffix are defined in
+// FavoriteImageNames.cpp (pure helpers, no Arduino/APP_STATE deps).
 
 bool isFavoritePath(const std::string& path) {
   return vectorContains(APP_STATE.favoriteBmpPaths, path) || hasFavoriteSuffix(getBasename(path));
