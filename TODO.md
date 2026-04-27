@@ -34,10 +34,6 @@ Items already merged to `main` that should be called out in the release notes fo
 
 - [ ] **XTC factory LUT.** Upstream rewrites `lib/Xtc/Xtc.cpp` and adds an `XtcParser`. Big diff. Wait for clearer user demand or a reason to do the parser rewrite for other purposes.
 
-## SDK fork hygiene
-
-- [ ] **Merge `feat/factory-lut` → `main` on `diogo7dias/community-sdk`.** Today the firmware submodule pins commit `9e21cfe` on the `feat/factory-lut` branch; SDK fork's `main` is still at `c0a79fe` (pre-cherry-pick). Build works either way (submodules pin to a SHA, not a branch), but having SDK main canonical with what we depend on is cleaner.
-
 ## Not pursuing
 
 - Bluetooth / BLE HID input support. The NimBLE stack, `BleHidManager`, and pairing UI were removed entirely from this fork because the feature was non-functional (BLE button edges were never polled during reader operation) and held ~50–100 KB of RAM the GPIO-only input path doesn't need. Reintroducing it would need a rewrite of the per-tick polling contract.
