@@ -1584,6 +1584,20 @@ void MyLibraryActivity::renderBmpImageView() {
 }
 
 void MyLibraryActivity::renderPxcImageView() {
+  // Post-load render (returning from menu, popup toggle, etc.): draw
+  // buttons and refresh fast. Image was already streamed once, so skip the
+  // slow HALF_REFRESH + full PXC decode pipeline.
+  if (imageViewFullyLoaded) {
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    if (messagePopupOpen) {
+      GUI.drawPopup(renderer, messagePopupText.c_str());
+    }
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    nextRefreshMode = HalDisplay::FAST_REFRESH;
+    return;
+  }
+
   renderer.clearScreen();
 
   if (!PxcRenderer::renderPxc(renderer, selectedFilePath)) {
