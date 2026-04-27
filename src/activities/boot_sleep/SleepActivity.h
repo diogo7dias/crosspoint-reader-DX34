@@ -30,6 +30,10 @@ class SleepActivity final : public Activity {
   void renderCustomSleepScreen() const;
   void renderCoverSleepScreen() const;
   void renderBitmapSleepScreen(const Bitmap& bitmap, const char* sourceFilename = nullptr) const;
+  // Renders a .pxc (pre-dithered 2bpp) wallpaper via the factory grayscale
+  // path. Returns true on success; false if the file can't be opened, the
+  // header is unreadable, or the dimensions don't match the screen.
+  bool renderPxcSleepScreen(const std::string& path, const char* sourceFilename = nullptr) const;
   void renderBlankSleepScreen() const;
   void renderQuotesSleepScreen() const;
   void renderFreezeSleepScreen() const;
