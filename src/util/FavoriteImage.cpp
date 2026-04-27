@@ -1,4 +1,4 @@
-#include "FavoriteBmp.h"
+#include "FavoriteImage.h"
 
 #include <HalStorage.h>
 
@@ -7,14 +7,14 @@
 #include <string>
 
 #include "CrossPointState.h"
-#include "util/StringUtils.h"
+#include "util/FavoriteImageNames.h"
 
-namespace FavoriteBmp {
+namespace FavoriteImage {
 namespace {
 
-constexpr const char* kFavoriteSuffix = "_F";
-
-bool isBmpPathInternal(const std::string& path) { return StringUtils::checkFileExtension(path, ".bmp"); }
+bool isImagePath(const std::string& path) {
+  return FavoriteImage::isImageExtension(path);
+}
 
 bool startsWith(const std::string& value, const char* prefix) { return value.rfind(prefix, 0) == 0; }
 
@@ -97,35 +97,15 @@ void removeSleepReferencesForPath(const std::string& path) {
 
 }  // namespace
 
-bool hasFavoriteSuffix(const std::string& filename) {
-  if (!isBmpPathInternal(filename) || filename.size() <= 6) {
-    return false;
-  }
-  const size_t extPos = filename.size() - 4;
-  return filename.substr(extPos - 2, 2) == "_F";
-}
-
-std::string addFavoriteSuffix(const std::string& filename) {
-  if (!isBmpPathInternal(filename) || hasFavoriteSuffix(filename)) {
-    return filename;
-  }
-  return filename.substr(0, filename.size() - 4) + kFavoriteSuffix + filename.substr(filename.size() - 4);
-}
-
-std::string stripFavoriteSuffix(const std::string& filename) {
-  if (!hasFavoriteSuffix(filename)) {
-    return filename;
-  }
-  const size_t extPos = filename.size() - 4;
-  return filename.substr(0, extPos - 2) + filename.substr(extPos);
-}
+// hasFavoriteSuffix, addFavoriteSuffix, stripFavoriteSuffix are defined in
+// FavoriteImageNames.cpp (pure helpers, no Arduino/APP_STATE deps).
 
 bool isFavoritePath(const std::string& path) {
   return vectorContains(APP_STATE.favoriteBmpPaths, path) || hasFavoriteSuffix(getBasename(path));
 }
 
 bool canPlacePathInSleep(const std::string& path) {
-  if (!isBmpPathInternal(path) || !isFavoritePath(path) || isInSleepFolder(path)) {
+  if (!isImagePath(path) || !isFavoritePath(path) || isInSleepFolder(path)) {
     return true;
   }
   return countProtectedSleepFavorites() < CrossPointState::SLEEP_FAVORITES_MAX;
@@ -152,7 +132,7 @@ size_t countProtectedSleepFavorites() {
 
     file.getName(name, sizeof(name));
     std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' && isBmpPathInternal(filename) &&
+    if (!filename.empty() && filename[0] != '.' && isImagePath(filename) &&
         isFavoritePath("/sleep/" + filename)) {
       ++count;
     }
@@ -193,8 +173,8 @@ const char* limitReachedHomeMessage() {
 }
 
 SetFavoriteResult setFavorite(const std::string& path, const bool favorite, std::string* updatedPath) {
-  if (!isBmpPathInternal(path)) {
-    return SetFavoriteResult::NotBmp;
+  if (!isImagePath(path)) {
+    return SetFavoriteResult::NotImage;
   }
   if (!Storage.exists(path.c_str())) {
     return SetFavoriteResult::Missing;
@@ -255,4 +235,4 @@ void removePathReferences(const std::string& path) {
   removeSleepReferencesForPath(path);
 }
 
-}  // namespace FavoriteBmp
+}  // namespace FavoriteImage

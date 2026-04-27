@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <unordered_set>
 #include <utility>
 
 #include "CrossPointSettings.h"
@@ -25,6 +26,7 @@
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
 #include "fonts/CustomBinFontManager.h"
+#include "../activities/home/LibraryListingFilter.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
@@ -771,10 +773,12 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
         info.size = 0;
         info.isEpub = false;
         info.isBmp = false;
+        info.isPxc = false;
       } else {
         info.size = file.size();
         info.isEpub = hasExtCI(name, nameLen, ".epub", 5);
         info.isBmp = hasExtCI(name, nameLen, ".bmp", 4);
+        info.isPxc = hasExtCI(name, nameLen, ".pxc", 4);
       }
 
       callback(info);
@@ -800,6 +804,10 @@ bool CrossPointWebServer::isBmpFile(const String& filename) const {
   return hasExtCI(filename.c_str(), filename.length(), ".bmp", 4);
 }
 
+bool CrossPointWebServer::isPxcFile(const String& filename) const {
+  return hasExtCI(filename.c_str(), filename.length(), ".pxc", 4);
+}
+
 void CrossPointWebServer::handleFileList() const {
   sendHtmlContent(server.get(), FilesPageHtml, sizeof(FilesPageHtml));
 }
@@ -820,6 +828,25 @@ void CrossPointWebServer::handleFileListData() const {
     }
   }
 
+  // Pass 1: collect file basenames only (no full FileInfo heap cost) so we can
+  // run the EPUB-cache PXC filter. For a 1000-file /sleep folder this is ~32 KB
+  // of small strings — well within budget. The full vector<FileInfo> approach
+  // of commit 50f2b01 peaked ~150 KB transient, exceeding the ~54 KB free heap.
+  std::vector<std::string> names;
+  scanFiles(currentPath.c_str(), [&names](const FileInfo& info) {
+    if (!info.isDirectory) names.push_back(info.name.c_str());
+  });
+
+  LibraryListingFilter::filterEpubCachePxc(names);
+
+  // Move survivors into a hash set for O(1) lookup; release the names vector
+  // before pass 2 so only the set is live during JSON streaming.
+  std::unordered_set<std::string> surviving(names.begin(), names.end());
+  std::vector<std::string>().swap(names);
+
+  // Pass 2: stream JSON directly from a second scanFiles pass — one FileInfo
+  // on the stack at a time. Directories always pass through (they are not
+  // subject to the EPUB-cache filter).
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
   server->sendContent("[");
@@ -833,13 +860,19 @@ void CrossPointWebServer::handleFileListData() const {
   batch.reserve(3072);
   constexpr size_t kFlushAt = 2048;
 
-  scanFiles(currentPath.c_str(), [this, &output, &doc, &seenFirst, &batch](const FileInfo& info) {
+  scanFiles(currentPath.c_str(), [this, &output, &doc, &seenFirst, &batch, &surviving](const FileInfo& info) {
+    // Skip file entries that didn't survive the filter; always emit directories.
+    if (!info.isDirectory && surviving.find(info.name.c_str()) == surviving.end()) {
+      return;
+    }
+
     doc.clear();
     doc["name"] = info.name;
     doc["size"] = info.size;
     doc["isDirectory"] = info.isDirectory;
     doc["isEpub"] = info.isEpub;
     doc["isBmp"] = info.isBmp;
+    doc["isPxc"] = info.isPxc;
 
     const size_t written = serializeJson(doc, output, outputSize);
     if (written >= outputSize) {

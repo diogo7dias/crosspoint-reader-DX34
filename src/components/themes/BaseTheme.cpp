@@ -95,7 +95,13 @@ bool isBookFile(const char* name) {
          endsWithIgnoreCase(name, ".txt") || endsWithIgnoreCase(name, ".md");
 }
 
-bool isBmpFile(const char* name) { return endsWithIgnoreCase(name, ".bmp"); }
+bool isImageFile(const char* name) {
+  return endsWithIgnoreCase(name, ".bmp") || endsWithIgnoreCase(name, ".pxc");
+}
+
+bool isFavoriteImageFile(const char* name) {
+  return endsWithIgnoreCase(name, "_F.bmp") || endsWithIgnoreCase(name, "_F.pxc");
+}
 
 // Iterative directory scan — avoids deep recursion on ESP32 stack.
 // Feeds watchdog every 32 entries to prevent WDT reset on large SD cards.
@@ -128,7 +134,7 @@ void countFilesIterative(FsFile& root, uint32_t& bookCount, uint32_t& bmpCount, 
     if (countBooks && isBookFile(name)) {
       ++bookCount;
     }
-    if (countBmps && isBmpFile(name)) {
+    if (countBmps && isImageFile(name)) {
       ++bmpCount;
     }
     entry.close();
@@ -139,8 +145,8 @@ void countFilesIterative(FsFile& root, uint32_t& bookCount, uint32_t& bmpCount, 
   }
 }
 
-// Flat scan of a single directory (no recursion). Counts BMP files only.
-uint32_t countBmpsInDir(const char* path) {
+// Flat scan of a single directory (no recursion). Counts BMP and PXC files.
+uint32_t countImagesInDir(const char* path) {
   auto dir = Storage.open(path);
   if (!dir || !dir.isDirectory()) return 0;
 
@@ -149,7 +155,7 @@ uint32_t countBmpsInDir(const char* path) {
   char name[256];
   for (auto entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
     entry.getName(name, sizeof(name));
-    if (!entry.isDirectory() && isBmpFile(name)) {
+    if (!entry.isDirectory() && isImageFile(name)) {
       ++count;
     }
     entry.close();
@@ -282,7 +288,7 @@ void drawMoreIndicator(const GfxRenderer& renderer, int count, StrId formatKey, 
 
 struct HomeInfoStats {
   uint32_t bookCount = 0;
-  uint32_t sleepBmpCount = 0;
+  uint32_t sleepImageCount = 0;
   uint32_t sleepFavoriteCount = 0;
   uint32_t sleepPauseCount = 0;
   uint64_t freeBytes = 0;
@@ -294,7 +300,7 @@ HomeInfoStats gHomeInfoStats;
 
 void scanHomeInfoStats(HomeInfoStats& stats) {
   stats.bookCount = 0;
-  stats.sleepBmpCount = 0;
+  stats.sleepImageCount = 0;
   stats.sleepFavoriteCount = 0;
   stats.sleepPauseCount = 0;
   stats.freeBytes = Storage.freeBytes();
@@ -303,12 +309,12 @@ void scanHomeInfoStats(HomeInfoStats& stats) {
   // Count books recursively from root (skip hidden dirs)
   auto root = Storage.open("/");
   if (root && root.isDirectory()) {
-    countFilesIterative(root, stats.bookCount, stats.sleepBmpCount, true, false);
+    countFilesIterative(root, stats.bookCount, stats.sleepImageCount, true, false);
     // root closed by countFilesIterative
   }
 
-  // Count sleep BMPs + favorites in /sleep (flat scan).
-  // Favorite detection uses suffix-only check ("_F.bmp") — zero heap allocations.
+  // Count sleep images (BMP + PXC) + favorites in /sleep (flat scan).
+  // Favorite detection uses suffix-only check ("_F.bmp" / "_F.pxc") — zero heap allocations.
   {
     auto dir = Storage.open("/sleep");
     if (dir && dir.isDirectory()) {
@@ -316,9 +322,9 @@ void scanHomeInfoStats(HomeInfoStats& stats) {
       char name[256];
       for (auto entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
         entry.getName(name, sizeof(name));
-        if (!entry.isDirectory() && isBmpFile(name)) {
-          ++stats.sleepBmpCount;
-          if (endsWithIgnoreCase(name, "_F.bmp")) {
+        if (!entry.isDirectory() && isImageFile(name)) {
+          ++stats.sleepImageCount;
+          if (isFavoriteImageFile(name)) {
             ++stats.sleepFavoriteCount;
           }
         }
@@ -331,8 +337,8 @@ void scanHomeInfoStats(HomeInfoStats& stats) {
     }
   }
 
-  // Count BMPs in /sleep pause
-  stats.sleepPauseCount = countBmpsInDir("/sleep pause");
+  // Count images in /sleep pause (BMP + PXC)
+  stats.sleepPauseCount = countImagesInDir("/sleep pause");
 
   stats.valid = true;
 }
@@ -446,7 +452,7 @@ void BaseTheme::refreshHomeInfoStats() {
 uint64_t BaseTheme::homeInfoStatsSignature() {
   const auto& stats = getHomeInfoStats();
   // Compact signature from the three displayed values.
-  return (static_cast<uint64_t>(stats.bookCount) << 40) ^ (static_cast<uint64_t>(stats.sleepBmpCount) << 24) ^
+  return (static_cast<uint64_t>(stats.bookCount) << 40) ^ (static_cast<uint64_t>(stats.sleepImageCount) << 24) ^
          stats.freeBytes;
 }
 
@@ -1134,7 +1140,7 @@ void BaseTheme::drawHomeInfoStatsPopup(const GfxRenderer& renderer) const {
   // Content block.
   drawRow(y, "Books", std::to_string(stats.bookCount));
   y += lineStep;
-  drawRow(y, "Sleep images", std::to_string(stats.sleepBmpCount));
+  drawRow(y, "Sleep images", std::to_string(stats.sleepImageCount));
   y += lineStep;
   drawRow(y, "Sleep favorites", std::to_string(stats.sleepFavoriteCount));
   y += lineStep;

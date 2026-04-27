@@ -1,4 +1,5 @@
 #include "MyLibraryActivity.h"
+#include "LibraryListingFilter.h"
 
 #include <Bitmap.h>
 #include <Epub.h>
@@ -29,7 +30,8 @@
 #include "fontIds.h"
 #include "persist/Trash.h"
 #include "util/BookProgress.h"
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
+#include "util/PxcRenderer.h"
 #include "util/StatusPopup.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
@@ -257,6 +259,9 @@ void MyLibraryActivity::loadFilesWithLimit() {
 
   sortFileList(files);
 
+  // Remove EPUB-render cache files before any ordering/capping logic.
+  filterEpubCachePxc(files);
+
   // Randomize display order for media-browsing folders
   bool shouldShuffle = (basepath == "/sleep pause" || basepath == "/sleep library");
   if (basepath == "/books" && SETTINGS.booksFolderOrder == 1) shouldShuffle = true;
@@ -415,8 +420,20 @@ bool MyLibraryActivity::isBmpFile(const std::string& filename) {
   return StringUtils::checkFileExtension(filename, ".bmp");
 }
 
+bool MyLibraryActivity::isPxcFile(const std::string& filename) {
+  return StringUtils::checkFileExtension(filename, ".pxc");
+}
+
+bool MyLibraryActivity::isImageFile(const std::string& filename) {
+  return isBmpFile(filename) || isPxcFile(filename);
+}
+
 bool MyLibraryActivity::isManagedFile(const std::string& filename) {
-  return isBookFile(filename) || isBmpFile(filename);
+  return isBookFile(filename) || isImageFile(filename);
+}
+
+void MyLibraryActivity::filterEpubCachePxc(std::vector<std::string>& files) {
+  LibraryListingFilter::filterEpubCachePxc(files);
 }
 
 std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {
@@ -429,8 +446,8 @@ std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {
     return "[" + name.substr(0, name.size() - 1) + "]";
   }
 
-  if (isBmpFile(name)) {
-    return FavoriteBmp::displayNameForPath(makeAbsolutePath(name));
+  if (isImageFile(name)) {
+    return FavoriteImage::displayNameForPath(makeAbsolutePath(name));
   }
 
   if (!isBookFile(name)) {
@@ -475,17 +492,16 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
   return rowText;
 }
 
-void MyLibraryActivity::enterBmpView(const std::string& bmpPath) {
-  // Stacking toasts for image-open stages. Natural FAST_REFRESH pacing
-  // (~400 ms each) keeps each toast visible briefly; no artificial stall.
-  // Full refresh on enter scrubs the list ghost.
+void MyLibraryActivity::enterImageView(const std::string& imagePath) {
+  // Single "Opening image" toast — PXC renders fast enough that a stacked
+  // load toast would just race the image onto the screen. Full refresh on
+  // enter scrubs the list ghost.
   if (!TransitionFeedback::isActive()) {
     TransitionFeedback::show(renderer, tr(STR_OPENING_IMAGE));
   }
-  selectedFilePath = bmpPath;
-  mode = Mode::BMP_VIEW;
-  bmpViewFullyLoaded = false;
-  TransitionFeedback::show(renderer, tr(STR_LOADING_BITMAP));
+  selectedFilePath = imagePath;
+  mode = Mode::IMAGE_VIEW;
+  imageViewFullyLoaded = false;
   renderer.requestFullRefresh();
   requestCleanRefresh();
   requestUpdate();
@@ -506,8 +522,8 @@ void MyLibraryActivity::enterFileMoveBrowser() {
   mode = Mode::FILE_MOVE_BROWSER;
 }
 
-void MyLibraryActivity::openKeyboardForRenameBmp() {
-  if (!isBmpFile(selectedFilePath)) return;
+void MyLibraryActivity::openKeyboardForRenameImage() {
+  if (!isImageFile(selectedFilePath)) return;
 
   pendingRenameBase.clear();
   pendingRenameSubmit = false;
@@ -521,17 +537,25 @@ void MyLibraryActivity::openKeyboardForRenameBmp() {
       [this]() { pendingRenameCancel = true; }));
 }
 
-void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
+void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
   std::string base = newBase;
   // Trim whitespace.
   while (!base.empty() && (base.front() == ' ' || base.front() == '\t')) base.erase(base.begin());
   while (!base.empty() && (base.back() == ' ' || base.back() == '\t')) base.pop_back();
 
-  // Strip user-typed trailing .bmp (any case) and _F — we control both.
+  // Capture the original extension up-front so the rebuilt path keeps it.
+  std::string originalExt = ".bmp";
+  if (selectedFilePath.size() >= 4) {
+    std::string tail = selectedFilePath.substr(selectedFilePath.size() - 4);
+    std::transform(tail.begin(), tail.end(), tail.begin(), ::tolower);
+    if (tail == ".pxc") originalExt = ".pxc";
+  }
+
+  // Strip a user-typed trailing .bmp/.pxc (any case) and _F — we control both.
   if (base.size() >= 4) {
     std::string tail = base.substr(base.size() - 4);
     std::transform(tail.begin(), tail.end(), tail.begin(), ::tolower);
-    if (tail == ".bmp") base = base.substr(0, base.size() - 4);
+    if (tail == ".bmp" || tail == ".pxc") base = base.substr(0, base.size() - 4);
   }
   if (base.size() >= 2 && base.substr(base.size() - 2) == "_F") {
     base = base.substr(0, base.size() - 2);
@@ -549,16 +573,16 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
     }
   }
 
-  const bool wasFav = FavoriteBmp::isFavoritePath(selectedFilePath);
+  const bool wasFav = FavoriteImage::isFavoritePath(selectedFilePath);
   const std::string parent = basepath.empty() ? "/" : basepath;
   const std::string parentSlash = (parent.back() == '/') ? parent : parent + "/";
-  const std::string suffix = std::string(wasFav ? "_F" : "") + ".bmp";
+  const std::string suffix = std::string(wasFav ? "_F" : "") + originalExt;
 
   auto buildPath = [&](const std::string& b) { return parentSlash + b + suffix; };
 
   std::string targetPath = buildPath(base);
   if (targetPath == selectedFilePath) {
-    mode = actionsOpenedFromViewer ? Mode::BMP_VIEW : Mode::FILE_ACTIONS;
+    mode = actionsOpenedFromViewer ? Mode::IMAGE_VIEW : Mode::FILE_ACTIONS;
     requestUpdate();
     return;
   }
@@ -586,7 +610,7 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
     return;
   }
 
-  FavoriteBmp::replacePathReferences(selectedFilePath, targetPath);
+  FavoriteImage::replacePathReferences(selectedFilePath, targetPath);
   APP_STATE.saveToFile();
 
   const std::string newName = getBasename(targetPath);
@@ -607,12 +631,12 @@ void MyLibraryActivity::renameSelectedBmp(const std::string& newBase) {
 }
 
 int MyLibraryActivity::getFileActionCount() const {
-  if (!isBmpFile(selectedFilePath)) return 5;
+  if (!isImageFile(selectedFilePath)) return 5;
   return actionsOpenedFromViewer ? 7 : 8;
 }
 
 std::string MyLibraryActivity::getFileActionLabel(const int index) const {
-  if (isBmpFile(selectedFilePath)) {
+  if (isImageFile(selectedFilePath)) {
     int i = index;
     if (!actionsOpenedFromViewer) {
       if (i == 0) return tr(STR_OPEN_IMAGE);
@@ -622,7 +646,7 @@ std::string MyLibraryActivity::getFileActionLabel(const int index) const {
       case 0:
         return tr(STR_MOVE_TO_SLEEP_ACTION);
       case 1:
-        return FavoriteBmp::isFavoritePath(selectedFilePath) ? tr(STR_UNFAVORITE) : tr(STR_FAVORITE);
+        return FavoriteImage::isFavoritePath(selectedFilePath) ? tr(STR_UNFAVORITE) : tr(STR_FAVORITE);
       case 2:
         return tr(STR_RENAME_ACTION);
       case 3:
@@ -708,7 +732,7 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
   std::string normalizedTarget = targetDir;
   if (normalizedTarget.empty()) normalizedTarget = "/";
   if (normalizedTarget.back() != '/') normalizedTarget += "/";
-  if (normalizedTarget == "/sleep/" && !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
+  if (normalizedTarget == "/sleep/" && !FavoriteImage::canPlacePathInSleep(selectedFilePath)) {
     return false;
   }
 
@@ -754,8 +778,8 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
       }
     }
     RECENT_BOOKS.removeBook(selectedFilePath);
-  } else if (isBmpFile(selectedFilePath)) {
-    FavoriteBmp::replacePathReferences(selectedFilePath, destination);
+  } else if (isImageFile(selectedFilePath)) {
+    FavoriteImage::replacePathReferences(selectedFilePath, destination);
     APP_STATE.saveToFile();
   }
   if (destinationPath != nullptr) {
@@ -782,8 +806,8 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
     return false;
   }
 
-  if (isBmpFile(path)) {
-    FavoriteBmp::removePathReferences(path);
+  if (isImageFile(path)) {
+    FavoriteImage::removePathReferences(path);
     APP_STATE.saveToFile();
   }
   if (selectedFilePath == path) selectedFilePath.clear();
@@ -831,8 +855,8 @@ void MyLibraryActivity::loop() {
     loopMessagePopup();
     return;
   }
-  if (mode == Mode::BMP_VIEW) {
-    loopBmpView();
+  if (mode == Mode::IMAGE_VIEW) {
+    loopImageView();
     return;
   }
   if (mode == Mode::FILE_ACTIONS) {
@@ -868,7 +892,7 @@ void MyLibraryActivity::loopSubActivity() {
     pendingRenameBase.clear();
     exitActivity();
     if (shouldApplyRename) {
-      renameSelectedBmp(typed);
+      renameSelectedImage(typed);
     } else {
       requestUpdate();
     }
@@ -890,7 +914,7 @@ void MyLibraryActivity::loopMessagePopup() {
   }
 }
 
-void MyLibraryActivity::loopBmpView() {
+void MyLibraryActivity::loopImageView() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     mode = Mode::BROWSE;
     requestCleanRefresh();
@@ -911,7 +935,7 @@ void MyLibraryActivity::loopFileActions() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     if (actionsOpenedFromViewer) {
       actionsOpenedFromViewer = false;
-      mode = Mode::BMP_VIEW;
+      mode = Mode::IMAGE_VIEW;
     } else {
       mode = Mode::BROWSE;
     }
@@ -930,21 +954,21 @@ void MyLibraryActivity::loopFileActions() {
   });
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (isBmpFile(selectedFilePath)) {
+    if (isImageFile(selectedFilePath)) {
       // When menu opened from library browser, index 0 is "Open Image" and
       // the remaining actions start at 1. When opened from the viewer,
       // "Open Image" is hidden and actions start at 0. Shift to a unified
       // action index so the switch below stays simple.
       if (!actionsOpenedFromViewer && fileActionIndex == 0) {
-        mode = Mode::BMP_VIEW;
+        mode = Mode::IMAGE_VIEW;
         requestUpdateAndWait();
         return;
       }
       const int actionIndex = fileActionIndex - (actionsOpenedFromViewer ? 0 : 1);
       switch (actionIndex) {
         case 0: {
-          if (!FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
-            showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
+          if (!FavoriteImage::canPlacePathInSleep(selectedFilePath)) {
+            showMessagePopup(FavoriteImage::limitReachedPopupMessage());
             return;
           }
           StatusPopup::showBlocking(renderer, tr(STR_MOVING_TO_SLEEP));
@@ -964,11 +988,11 @@ void MyLibraryActivity::loopFileActions() {
           break;
         }
         case 1: {
-          const bool makeFavorite = !FavoriteBmp::isFavoritePath(selectedFilePath);
+          const bool makeFavorite = !FavoriteImage::isFavoritePath(selectedFilePath);
           StatusPopup::showBlocking(renderer, makeFavorite ? tr(STR_FAVORITING) : tr(STR_UNFAVORITING));
           std::string updatedPath;
-          const auto result = FavoriteBmp::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
-          if (result == FavoriteBmp::SetFavoriteResult::Success) {
+          const auto result = FavoriteImage::setFavorite(selectedFilePath, makeFavorite, &updatedPath);
+          if (result == FavoriteImage::SetFavoriteResult::Success) {
             const std::string newName = getBasename(updatedPath);
             if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
               files[*rawIndex] = newName;
@@ -978,13 +1002,13 @@ void MyLibraryActivity::loopFileActions() {
             }
             selectedFilePath = updatedPath;
             StatusPopup::showConfirmation(renderer, makeFavorite ? tr(STR_FAVORITED) : tr(STR_UNFAVORITED));
-          } else if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
-            showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
+          } else if (result == FavoriteImage::SetFavoriteResult::LimitReached) {
+            showMessagePopup(FavoriteImage::limitReachedPopupMessage());
             return;
-          } else if (result == FavoriteBmp::SetFavoriteResult::RenameConflict) {
+          } else if (result == FavoriteImage::SetFavoriteResult::RenameConflict) {
             showMessagePopup(tr(STR_FAVORITE_NAME_EXISTS));
             return;
-          } else if (result == FavoriteBmp::SetFavoriteResult::RenameFailed) {
+          } else if (result == FavoriteImage::SetFavoriteResult::RenameFailed) {
             showMessagePopup(tr(STR_FAILED_RENAME_IMAGE));
             return;
           } else {
@@ -995,7 +1019,7 @@ void MyLibraryActivity::loopFileActions() {
           break;
         }
         case 2:
-          openKeyboardForRenameBmp();
+          openKeyboardForRenameImage();
           return;
         case 3:
           actionsOpenedFromViewer = false;
@@ -1067,7 +1091,7 @@ void MyLibraryActivity::loopFileActions() {
           // where the menu came from, otherwise to the file list.
           if (actionsOpenedFromViewer) {
             actionsOpenedFromViewer = false;
-            mode = Mode::BMP_VIEW;
+            mode = Mode::IMAGE_VIEW;
           } else {
             mode = Mode::BROWSE;
           }
@@ -1171,8 +1195,8 @@ void MyLibraryActivity::loopFileMoveBrowser() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& entry = moveBrowseEntries[fileMoveIndex];
-    if (entry.path == "/sleep" && !FavoriteBmp::canPlacePathInSleep(selectedFilePath)) {
-      showMessagePopup(FavoriteBmp::limitReachedPopupMessage());
+    if (entry.path == "/sleep" && !FavoriteImage::canPlacePathInSleep(selectedFilePath)) {
+      showMessagePopup(FavoriteImage::limitReachedPopupMessage());
       return;
     }
     StatusPopup::showBlocking(renderer, tr(STR_MOVING_FILE));
@@ -1262,8 +1286,8 @@ void MyLibraryActivity::loopBrowse() {
       requestCleanRefresh();
       requestUpdate();
     } else if (isManagedFile(selectedEntry)) {
-      if (isBmpFile(selectedEntry)) {
-        enterBmpView(selectedPath);
+      if (isImageFile(selectedEntry)) {
+        enterImageView(selectedPath);
       } else {
         onSelectBook(selectedPath);
         return;
@@ -1323,8 +1347,8 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   // Reset stacking so render-loop popups start at the top.
   TransitionFeedback::resetStacking();
 
-  if (mode == Mode::BMP_VIEW) {
-    renderBmpView();
+  if (mode == Mode::IMAGE_VIEW) {
+    renderImageView();
     return;
   }
 
@@ -1427,14 +1451,14 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   // Help text
   const auto selectedRawIndex = rawFileIndexForListIndex(selectorIndex);
   const bool hasSelectedFile = selectedRawIndex.has_value() && isManagedFile(files[*selectedRawIndex]);
-  const bool hasSelectedBmp = selectedRawIndex.has_value() && isBmpFile(files[*selectedRawIndex]);
+  const bool hasSelectedImage = selectedRawIndex.has_value() && isImageFile(files[*selectedRawIndex]);
   const char* confirmLabel = tr(STR_OPEN);
   if (isSearchActionRow(selectorIndex)) {
     confirmLabel = tr(STR_SEARCH_BUTTON);
   } else if (isClearSearchRow(selectorIndex)) {
     confirmLabel = tr(STR_CLEAR_BUTTON);
   } else if (hasSelectedFile) {
-    confirmLabel = hasSelectedBmp ? tr(STR_VIEW_HOLD) : tr(STR_OPEN_HOLD);
+    confirmLabel = hasSelectedImage ? tr(STR_VIEW_HOLD) : tr(STR_OPEN_HOLD);
   }
   const char* backLabel = basepath == "/" ? tr(STR_HOME) : tr(STR_BACK_HOLD);
   const auto labels = mappedInput.mapLabels(backLabel, confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
@@ -1447,7 +1471,15 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   displayFrame();
 }
 
-void MyLibraryActivity::renderBmpView() {
+void MyLibraryActivity::renderImageView() {
+  if (isPxcFile(selectedFilePath)) {
+    renderPxcImageView();
+    return;
+  }
+  renderBmpImageView();
+}
+
+void MyLibraryActivity::renderBmpImageView() {
   renderer.clearScreen();
 
   FsFile file;
@@ -1493,7 +1525,7 @@ void MyLibraryActivity::renderBmpView() {
   // Post-load render (returning from menu, popup toggle, etc.): draw
   // buttons and refresh fast. Image was already loaded once, so skip the
   // slow HALF_REFRESH + grayscale pipeline.
-  if (bmpViewFullyLoaded) {
+  if (imageViewFullyLoaded) {
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     if (messagePopupOpen) {
@@ -1523,7 +1555,7 @@ void MyLibraryActivity::renderBmpView() {
     // the button hints via the fast post-load path.
     gpio.update();
     if (gpio.wasAnyPressed()) {
-      bmpViewFullyLoaded = true;
+      imageViewFullyLoaded = true;
       requestUpdate();
       return;
     }
@@ -1546,8 +1578,65 @@ void MyLibraryActivity::renderBmpView() {
 
   // Image fully loaded — mark so next frame renders button hints via the
   // fast post-load path above.
-  bmpViewFullyLoaded = true;
+  imageViewFullyLoaded = true;
   requestUpdate();
+}
+
+void MyLibraryActivity::renderPxcImageView() {
+  // Post-load render (returning from menu, popup toggle, etc.): redraw
+  // hints + popup with FAST_REFRESH. The grayscale image was already
+  // composited by the differential pass below; FAST refresh only drives
+  // pixels that differ from the BW base captured during initial load.
+  if (imageViewFullyLoaded) {
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    if (messagePopupOpen) {
+      GUI.drawPopup(renderer, messagePopupText.c_str());
+    }
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    nextRefreshMode = HalDisplay::FAST_REFRESH;
+    return;
+  }
+
+  // Initial PXC viewer load — same strategy as the BMP viewer:
+  //   1. BW pass: stream PXC as 1-bit (pv < 3 → black, pv == 3 → white) into
+  //      the BW frameBuffer; overlay button hints; HALF_REFRESH. Panel now
+  //      shows a stark BW silhouette of the image plus the hints.
+  //   2. storeBwBuffer to preserve the BW base.
+  //   3. Differential grayscale overlay: re-streams the PXC twice (LSB plane
+  //      + MSB plane) and pushes the composite. Differential's encoding
+  //      identifies pure-black and pure-white as (0,0) and lets the prior
+  //      panel state — set by step 1 — disambiguate them, so stark images
+  //      come out correctly without Factory mode's pre-flash wiping the
+  //      button hints.
+  //   4. restoreBwBuffer (also calls cleanupGrayscaleBuffers, syncing RED
+  //      RAM back to the BW base for future FAST_REFRESH transitions).
+  renderer.clearScreen();
+
+  if (!PxcRenderer::streamPxcAsBw(renderer, selectedFilePath)) {
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_INVALID_BMP));
+    const auto errLabels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    GUI.drawButtonHints(renderer, errLabels.btn1, errLabels.btn2, errLabels.btn3, errLabels.btn4);
+    displayFrame();
+    imageViewFullyLoaded = true;
+    return;
+  }
+
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (messagePopupOpen) {
+    GUI.drawPopup(renderer, messagePopupText.c_str());
+  }
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  nextRefreshMode = HalDisplay::FAST_REFRESH;
+
+  if (renderer.storeBwBuffer()) {
+    PxcRenderer::renderPxc(renderer, selectedFilePath, GfxRenderer::GrayscaleMode::Differential);
+    renderer.restoreBwBuffer();
+  }
+
+  imageViewFullyLoaded = true;
 }
 
 void MyLibraryActivity::renderFileActions() {

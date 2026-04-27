@@ -25,7 +25,7 @@
 #include "fontIds.h"
 #include "util/BookProgress.h"
 #include "util/DrawUtils.h"
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
 #include "util/StringUtils.h"
 
 namespace {
@@ -328,7 +328,7 @@ void HomeActivity::render(Activity::RenderLock&&) {
     const int warningY = warningBottomY;
     const int warningWidth = pageWidth - metrics.contentSidePadding * 2;
     const std::string warningText =
-        renderer.truncatedText(SMALL_FONT_ID, FavoriteBmp::limitReachedHomeMessage(), warningWidth);
+        renderer.truncatedText(SMALL_FONT_ID, FavoriteImage::limitReachedHomeMessage(), warningWidth);
     renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, warningY, warningText.c_str());
     warningBottomY = warningY + renderer.getLineHeight(SMALL_FONT_ID) + 8;
   }

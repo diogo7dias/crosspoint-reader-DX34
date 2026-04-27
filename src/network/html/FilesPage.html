@@ -257,6 +257,21 @@
       font-size: 0.75em;
       margin-left: 8px;
     }
+    .pxc-file {
+      background-color: #f5f0e8 !important;
+    }
+    .pxc-file:hover {
+      background-color: #ede3d0 !important;
+    }
+    .pxc-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background-color: #d97706;
+      color: white;
+      border-radius: 10px;
+      font-size: 0.75em;
+      margin-left: 8px;
+    }
     .folder-badge {
       display: inline-block;
       padding: 2px 8px;
@@ -1203,6 +1218,7 @@
       }
       .epub-badge,
       .bmp-badge,
+      .pxc-badge,
       .folder-badge,
       .quotes-badge {
         padding: 2px 5px;
@@ -1568,7 +1584,8 @@
        !important, which read as a giant white block on the dark page. */
     #folderContentsCard .folder-row,
     #folderContentsCard .epub-file,
-    #folderContentsCard .bmp-file {
+    #folderContentsCard .bmp-file,
+    #folderContentsCard .pxc-file {
       background: transparent !important;
     }
     #folderContentsCard .folder-row:hover {
@@ -1579,6 +1596,9 @@
     }
     #folderContentsCard .bmp-file:hover {
       background: rgba(77, 192, 255, 0.06) !important;
+    }
+    #folderContentsCard .pxc-file:hover {
+      background: rgba(217, 119, 6, 0.06) !important;
     }
     #folderContentsCard .folder-link,
     #folderContentsCard .file-link {
@@ -2597,7 +2617,9 @@
           filePath += file.name;
 
           // Checkbox cell + file row
-          const rowClass = file.isEpub ? 'epub-file' : (file.isBmp ? 'bmp-file' : '');
+          const rowClass = file.isEpub
+              ? 'epub-file'
+              : (file.isBmp ? 'bmp-file' : (file.isPxc ? 'pxc-file' : ''));
           fileTableContent += `<tr class="${rowClass}">`;
           fileTableContent += `<td><input type="checkbox" class="select-item" data-path="${encodeURIComponent(filePath)}" data-name="${escapeHtml(file.name)}" data-type="file"></td>`;
           if (file.isBmp) {
@@ -2605,9 +2627,10 @@
             fileTableContent += `<a href="#" onclick="openImagePreview('${filePath.replaceAll("'", "\\'")}', '${file.name.replaceAll("'", "\\'")}', ${file.size});return false;" class="file-link">${escapeHtml(file.name)}</a>`;
             fileTableContent += '<span class="bmp-badge">BMP</span>';
           } else {
-            fileTableContent += `<td><span class="file-icon">${file.isEpub ? '📗' : '📄'}</span>`;
+            fileTableContent += `<td><span class="file-icon">${file.isEpub ? '📗' : (file.isPxc ? '🖼️' : '📄')}</span>`;
             fileTableContent += `<a href="#" onclick="downloadFile('${filePath.replaceAll("'", "\\'")}', '${file.name.replaceAll("'", "\\'")}');return false;" class="file-link">${escapeHtml(file.name)}</a>`;
             if (file.isEpub) fileTableContent += '<span class="epub-badge">EPUB</span>';
+            if (file.isPxc) fileTableContent += '<span class="pxc-badge">PXC</span>';
             if (file.name.includes('QUOTES')) fileTableContent += '<span class="quotes-badge">QUOTES</span>';
           }
           fileTableContent += '</td>';

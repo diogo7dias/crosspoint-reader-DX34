@@ -29,7 +29,7 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
     bool isMoveHere = false;
   };
 
-  enum class Mode { BROWSE, BMP_VIEW, FILE_ACTIONS, FILE_MOVE_BROWSER };
+  enum class Mode { BROWSE, IMAGE_VIEW, FILE_ACTIONS, FILE_MOVE_BROWSER };
 
   ButtonNavigator buttonNavigator;
 
@@ -43,13 +43,13 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   std::string messagePopupText;
   std::vector<MoveBrowseEntry> moveBrowseEntries;
   HalDisplay::RefreshMode nextRefreshMode = HalDisplay::FAST_REFRESH;
-  // True when FILE_ACTIONS was entered from BMP_VIEW (tap Actions in viewer).
+  // True when FILE_ACTIONS was entered from IMAGE_VIEW (tap Actions in viewer).
   // Controls menu layout (no "Open Image") and back-destination (returns to viewer).
   bool actionsOpenedFromViewer = false;
   // False until the initial BW + grayscale render of the current image has
-  // completed. While false, renderBmpView hides the bottom button hints so
+  // completed. While false, renderImageView hides the bottom button hints so
   // the user doesn't try to press buttons that aren't yet responsive.
-  bool bmpViewFullyLoaded = false;
+  bool imageViewFullyLoaded = false;
 
   // Files state
   std::string basepath = "/";
@@ -96,12 +96,15 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   static std::string getBasename(const std::string& path);
   static bool isBookFile(const std::string& filename);
   static bool isBmpFile(const std::string& filename);
+  static bool isPxcFile(const std::string& filename);
+  static bool isImageFile(const std::string& filename);
   static bool isManagedFile(const std::string& filename);
-  void enterBmpView(const std::string& bmpPath);
+  static void filterEpubCachePxc(std::vector<std::string>& files);
+  void enterImageView(const std::string& imagePath);
   void enterFileActions(const std::string& filePath);
   void enterFileMoveBrowser();
-  void openKeyboardForRenameBmp();
-  void renameSelectedBmp(const std::string& newBase);
+  void openKeyboardForRenameImage();
+  void renameSelectedImage(const std::string& newBase);
   void loadMoveBrowseEntries();
   int getFileActionCount() const;
   std::string getFileActionLabel(int index) const;
@@ -113,12 +116,14 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   void requestCleanRefresh();
   void loopSubActivity();
   void loopMessagePopup();
-  void loopBmpView();
+  void loopImageView();
   void loopFileActions();
   void loopFileMoveBrowser();
   void loopBrowse();
   void displayFrame();
-  void renderBmpView();
+  void renderImageView();
+  void renderBmpImageView();
+  void renderPxcImageView();
   void renderFileActions();
   void renderFileMoveBrowser();
   size_t findEntry(const std::string& name) const;

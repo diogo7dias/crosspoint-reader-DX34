@@ -27,6 +27,7 @@ struct FileInfo {
   size_t size;
   bool isEpub;
   bool isBmp;
+  bool isPxc;
   bool isDirectory;
 };
 
@@ -105,6 +106,7 @@ class CrossPointWebServer {
   String formatFileSize(size_t bytes) const;
   bool isEpubFile(const String& filename) const;
   bool isBmpFile(const String& filename) const;
+  bool isPxcFile(const String& filename) const;
 
   // Request handlers
   void handleRoot() const;

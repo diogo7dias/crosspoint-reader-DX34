@@ -1,7 +1,6 @@
 #include "SleepActivity.h"
 
 #include <Epub.h>
-#include <Epub/converters/DirectPixelWriter.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -24,7 +23,8 @@
 #if FEATURE_WALLPAPER_V2
 #include "sleep/WallpaperPlaylistV2.h"
 #endif
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
+#include "util/PxcRenderer.h"
 #include "util/StringUtils.h"
 
 namespace {
@@ -150,7 +150,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (StringUtils::checkFileExtension(APP_STATE.lastSleepWallpaperPath, ".pxc")) {
       LOG_DBG("SLP", "Paused, re-showing PXC: %s", APP_STATE.lastSleepWallpaperPath.c_str());
       delay(100);
-      const std::string displayName = FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
+      const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
       if (renderPxcSleepScreen(APP_STATE.lastSleepWallpaperPath, displayName.c_str())) {
         return;
       }
@@ -163,7 +163,7 @@ void SleepActivity::renderCustomSleepScreen() const {
         Bitmap bitmap(file, true);
         const auto parseErr = bitmap.parseHeaders();
         if (parseErr == BmpReaderError::Ok) {
-          const std::string displayName = FavoriteBmp::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
+          const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
           renderBitmapSleepScreen(bitmap, displayName.c_str());
           file.close();
           return;
@@ -192,7 +192,7 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (StringUtils::checkFileExtension(selectedImage, ".pxc")) {
       LOG_DBG("SLP", "Loading PXC: %s", filename.c_str());
       delay(100);
-      const std::string displayName = FavoriteBmp::displayNameForPath(filename);
+      const std::string displayName = FavoriteImage::displayNameForPath(filename);
       if (renderPxcSleepScreen(filename, displayName.c_str())) {
         rememberLastRenderedSleepBitmap(filename, selectedImage);
         rendered = true;
@@ -208,7 +208,7 @@ void SleepActivity::renderCustomSleepScreen() const {
       Bitmap bitmap(file, true);
       const auto parseErr = bitmap.parseHeaders();
       if (parseErr == BmpReaderError::Ok) {
-        const std::string displayName = FavoriteBmp::displayNameForPath(filename);
+        const std::string displayName = FavoriteImage::displayNameForPath(filename);
         rememberLastRenderedSleepBitmap(filename, selectedImage);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
         file.close();
@@ -239,7 +239,7 @@ void SleepActivity::renderCustomSleepScreen() const {
       Bitmap bitmap(file, true);
       const auto parseErr = bitmap.parseHeaders();
       if (parseErr == BmpReaderError::Ok) {
-        const std::string displayName = FavoriteBmp::displayNameForPath(fallbackPath);
+        const std::string displayName = FavoriteImage::displayNameForPath(fallbackPath);
         LOG_DBG("SLP", "Loading: %s", fallbackPath);
         rememberLastRenderedSleepBitmap(fallbackPath);
         renderBitmapSleepScreen(bitmap, displayName.c_str());
@@ -475,56 +475,14 @@ void SleepActivity::renderCoverSleepScreen() const {
 }
 
 bool SleepActivity::renderPxcSleepScreen(const std::string& path, const char* sourceFilename) const {
-  // PXC layout: uint16 width, uint16 height, then packed 2bpp payload (4 px/byte, MSB first).
-  // Pixel convention: 0=Black, 1=DarkGray, 2=LightGray, 3=White — same as Bitmap::readNextRow.
-  FsFile file;
-  if (!Storage.openFileForRead("SLP", path, file)) {
-    LOG_ERR("SLP", "Cannot open PXC: %s", path.c_str());
+  // Sleep wallpapers cover the full screen with no overlay underneath, so
+  // Factory mode (with its pre-flash) gives the best image quality.
+  // Differential is the fallback when the user has the factory LUT off.
+  const auto mode = SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality
+                                           : GfxRenderer::GrayscaleMode::Differential;
+  if (!PxcRenderer::renderPxc(renderer, path, mode)) {
     return false;
   }
-  uint16_t pxcWidth = 0, pxcHeight = 0;
-  if (file.read(&pxcWidth, 2) != 2 || file.read(&pxcHeight, 2) != 2) {
-    LOG_ERR("SLP", "PXC header read failed: %s", path.c_str());
-    file.close();
-    return false;
-  }
-  const int sw = renderer.getScreenWidth();
-  const int sh = renderer.getScreenHeight();
-  if (std::abs(static_cast<int>(pxcWidth) - sw) > 1 || std::abs(static_cast<int>(pxcHeight) - sh) > 1) {
-    LOG_ERR("SLP", "PXC size mismatch %dx%d (screen %dx%d): %s", pxcWidth, pxcHeight, sw, sh, path.c_str());
-    file.close();
-    return false;
-  }
-  const uint32_t dataOffset = file.position();
-  const int bytesPerRow = (pxcWidth + 3) / 4;
-  uint8_t* rowBuf = static_cast<uint8_t*>(malloc(bytesPerRow));
-  if (!rowBuf) {
-    LOG_ERR("SLP", "PXC row alloc failed (%d bytes)", bytesPerRow);
-    file.close();
-    return false;
-  }
-
-  const auto mode =
-      SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
-  const int width = static_cast<int>(pxcWidth);
-  const int height = static_cast<int>(pxcHeight);
-  renderer.renderGrayscale(mode, [&]() {
-    file.seek(dataOffset);
-    DirectPixelWriter pw;
-    pw.init(renderer);
-    for (int row = 0; row < height; row++) {
-      if (file.read(rowBuf, bytesPerRow) != bytesPerRow) break;
-      pw.beginRow(row);
-      for (int col = 0; col < width; col++) {
-        const uint8_t pv = (rowBuf[col >> 2] >> (6 - (col & 3) * 2)) & 0x03;
-        pw.writePixel(col, pv);
-      }
-      if ((row & 31) == 0) esp_task_wdt_reset();
-    }
-  });
-
-  free(rowBuf);
-  file.close();
 
   if (sourceFilename != nullptr && SETTINGS.showSleepImageFilename) {
     drawSleepFilenameLabel(renderer, sourceFilename);

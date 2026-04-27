@@ -38,7 +38,7 @@
 #include "fonts/CustomBinFontManager.h"
 #include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
-#include "util/FavoriteBmp.h"
+#include "util/FavoriteImage.h"
 #include "util/StatusPopup.h"
 #include "util/TransitionFeedback.h"
 
@@ -1134,13 +1134,13 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const std::string lastPath = APP_STATE.lastSleepWallpaperPath;
       if (lastPath.empty()) break;
       std::string updatedPath;
-      const bool makeFavorite = !FavoriteBmp::isFavoritePath(lastPath);
-      const auto result = FavoriteBmp::setFavorite(lastPath, makeFavorite, &updatedPath);
-      if (result == FavoriteBmp::SetFavoriteResult::LimitReached) {
-        StatusPopup::showConfirmation(renderer, FavoriteBmp::limitReachedPopupMessage());
-      } else if (result == FavoriteBmp::SetFavoriteResult::RenameConflict) {
+      const bool makeFavorite = !FavoriteImage::isFavoritePath(lastPath);
+      const auto result = FavoriteImage::setFavorite(lastPath, makeFavorite, &updatedPath);
+      if (result == FavoriteImage::SetFavoriteResult::LimitReached) {
+        StatusPopup::showConfirmation(renderer, FavoriteImage::limitReachedPopupMessage());
+      } else if (result == FavoriteImage::SetFavoriteResult::RenameConflict) {
         StatusPopup::showConfirmation(renderer, tr(STR_FAVORITE_NAME_EXISTS));
-      } else if (result != FavoriteBmp::SetFavoriteResult::Success) {
+      } else if (result != FavoriteImage::SetFavoriteResult::Success) {
         StatusPopup::showConfirmation(renderer, tr(STR_FAVORITE_FAILED));
       } else {
         StatusPopup::showConfirmation(renderer, makeFavorite ? tr(STR_FAVORITED) : tr(STR_UNFAVORITED));
@@ -1194,7 +1194,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         dst.close();
         if (ok) {
           Storage.remove(lastPath.c_str());
-          FavoriteBmp::replacePathReferences(lastPath, dstPath);
+          FavoriteImage::replacePathReferences(lastPath, dstPath);
           APP_STATE.wallpaperRotationPaused = false;
           APP_STATE.saveToFile();
         } else {
@@ -1216,7 +1216,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       if (lastPath.empty()) break;
       const bool removed = Storage.remove(lastPath.c_str());
       if (removed) {
-        FavoriteBmp::removePathReferences(lastPath);
+        FavoriteImage::removePathReferences(lastPath);
         APP_STATE.wallpaperRotationPaused = false;
         APP_STATE.saveToFile();
       }
