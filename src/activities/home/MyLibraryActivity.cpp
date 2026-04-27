@@ -1583,14 +1583,12 @@ void MyLibraryActivity::renderBmpImageView() {
 }
 
 void MyLibraryActivity::renderPxcImageView() {
-  // Post-load render (returning from menu, popup toggle, etc.): rewrite
-  // BW frameBuffer to (white + button hints) and FAST_REFRESH. RED RAM
-  // already holds white from the initial-load cleanup below, so this
-  // FAST pass only drives the hint-region pixels — the grayscale image
-  // is left untouched.
+  // Post-load render (returning from menu, popup toggle, etc.): redraw
+  // hints + popup with FAST_REFRESH. The grayscale image was already
+  // composited by the differential pass below; FAST refresh only drives
+  // pixels that differ from the BW base captured during initial load.
   if (imageViewFullyLoaded) {
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
-    renderer.clearScreen();
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     if (messagePopupOpen) {
       GUI.drawPopup(renderer, messagePopupText.c_str());
@@ -1600,22 +1598,22 @@ void MyLibraryActivity::renderPxcImageView() {
     return;
   }
 
-  // Initial PXC viewer load.
-  //
-  // Render strategy:
-  //   1. Factory grayscale push of the PXC. Pre-flashes white and absolutely
-  //      drives a clean 4-level image. Differential mode can't render pure
-  //      black (Black and White both encode as LSB=0,MSB=0 and rely on the
-  //      panel's prior state), so PXC viewer needs Factory.
-  //   2. Reset BW frameBuffer to white and copy that into RED RAM via
-  //      cleanupGrayscaleWithFrameBuffer. After this: BW RAM = factory LSB,
-  //      RED RAM = white, panel = grayscale image.
-  //   3. Draw button hints (and any popup) into BW frameBuffer, FAST_REFRESH.
-  //      Standard fast waveform compares BW (=white+hints) to RED (=white)
-  //      and only drives the hint-region pixels — image area stays as-is.
+  // Initial PXC viewer load — same strategy as the BMP viewer:
+  //   1. BW pass: stream PXC as 1-bit (pv < 3 → black, pv == 3 → white) into
+  //      the BW frameBuffer; overlay button hints; HALF_REFRESH. Panel now
+  //      shows a stark BW silhouette of the image plus the hints.
+  //   2. storeBwBuffer to preserve the BW base.
+  //   3. Differential grayscale overlay: re-streams the PXC twice (LSB plane
+  //      + MSB plane) and pushes the composite. Differential's encoding
+  //      identifies pure-black and pure-white as (0,0) and lets the prior
+  //      panel state — set by step 1 — disambiguate them, so stark images
+  //      come out correctly without Factory mode's pre-flash wiping the
+  //      button hints.
+  //   4. restoreBwBuffer (also calls cleanupGrayscaleBuffers, syncing RED
+  //      RAM back to the BW base for future FAST_REFRESH transitions).
   renderer.clearScreen();
 
-  if (!PxcRenderer::renderPxc(renderer, selectedFilePath, GfxRenderer::GrayscaleMode::FactoryQuality)) {
+  if (!PxcRenderer::streamPxcAsBw(renderer, selectedFilePath)) {
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 80, tr(STR_INVALID_BMP));
     const auto errLabels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
@@ -1625,19 +1623,19 @@ void MyLibraryActivity::renderPxcImageView() {
     return;
   }
 
-  // Sync BW frameBuffer + RED RAM to white so the upcoming FAST_REFRESH
-  // computes hint-region transitions against a clean baseline and treats
-  // the grayscale image area as "no change".
-  renderer.clearScreen();
-  renderer.cleanupGrayscaleWithFrameBuffer();
-
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (messagePopupOpen) {
     GUI.drawPopup(renderer, messagePopupText.c_str());
   }
-  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   nextRefreshMode = HalDisplay::FAST_REFRESH;
+
+  if (renderer.storeBwBuffer()) {
+    PxcRenderer::renderPxc(renderer, selectedFilePath, GfxRenderer::GrayscaleMode::Differential);
+    renderer.restoreBwBuffer();
+  }
+
   imageViewFullyLoaded = true;
 }
 

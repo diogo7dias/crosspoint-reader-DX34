@@ -27,4 +27,14 @@ namespace PxcRenderer {
 // 2=LightGray, 3=White (matches Bitmap::readNextRow).
 bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::GrayscaleMode mode);
 
+// Streams the PXC and writes a 1-bit BW representation into the renderer's
+// current frameBuffer. Pixels with pv < 3 (Black/DarkGray/LightGray) are
+// drawn black; pv == 3 (White) is left as background. Caller is responsible
+// for clearScreen() before and displayBuffer() after — this just populates
+// the frameBuffer. Used to prime the panel before a Differential grayscale
+// overlay so stark Black pixels transition cleanly (Differential mode
+// encodes Black and White identically as LSB=0,MSB=0, so it relies on the
+// pre-existing panel state to disambiguate them).
+bool streamPxcAsBw(GfxRenderer& renderer, const std::string& path);
+
 }  // namespace PxcRenderer
