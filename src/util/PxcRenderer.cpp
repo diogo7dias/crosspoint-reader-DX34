@@ -24,10 +24,8 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::Gray
   }
   const int sw = renderer.getScreenWidth();
   const int sh = renderer.getScreenHeight();
-  if (std::abs(static_cast<int>(pxcWidth) - sw) > 1 ||
-      std::abs(static_cast<int>(pxcHeight) - sh) > 1) {
-    LOG_ERR("PXC", "Size mismatch %dx%d (screen %dx%d): %s",
-            pxcWidth, pxcHeight, sw, sh, path.c_str());
+  if (std::abs(static_cast<int>(pxcWidth) - sw) > 1 || std::abs(static_cast<int>(pxcHeight) - sh) > 1) {
+    LOG_ERR("PXC", "Size mismatch %dx%d (screen %dx%d): %s", pxcWidth, pxcHeight, sw, sh, path.c_str());
     file.close();
     return false;
   }
@@ -76,10 +74,8 @@ bool streamPxcAsBw(GfxRenderer& renderer, const std::string& path) {
   }
   const int sw = renderer.getScreenWidth();
   const int sh = renderer.getScreenHeight();
-  if (std::abs(static_cast<int>(pxcWidth) - sw) > 1 ||
-      std::abs(static_cast<int>(pxcHeight) - sh) > 1) {
-    LOG_ERR("PXC", "Size mismatch (BW pass) %dx%d (screen %dx%d): %s",
-            pxcWidth, pxcHeight, sw, sh, path.c_str());
+  if (std::abs(static_cast<int>(pxcWidth) - sw) > 1 || std::abs(static_cast<int>(pxcHeight) - sh) > 1) {
+    LOG_ERR("PXC", "Size mismatch (BW pass) %dx%d (screen %dx%d): %s", pxcWidth, pxcHeight, sw, sh, path.c_str());
     file.close();
     return false;
   }

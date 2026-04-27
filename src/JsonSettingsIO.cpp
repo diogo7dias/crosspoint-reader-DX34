@@ -442,17 +442,6 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["booksFolderOrder"] = s.booksFolderOrder;
   doc["imageDither"] = s.imageDither;
 
-  // BLE HID controller
-  doc["bleEnabled"] = s.bleEnabled;
-  doc["bleDeviceAddr"] = s.bleDeviceAddr;
-  doc["bleDeviceName"] = s.bleDeviceName;
-  {
-    JsonArray bleKeys = doc["bleKeyMap"].to<JsonArray>();
-    for (int i = 0; i < CrossPointSettings::BLE_KEY_MAP_SIZE; i++) {
-      bleKeys.add(s.bleKeyMap[i]);
-    }
-  }
-
   String json;
   serializeJson(doc, json);
   const bool ok = safeWriteFile(path, json);
@@ -747,29 +736,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.booksFolderOrder = doc["booksFolderOrder"] | (uint8_t)0;
   if (s.booksFolderOrder > 1) s.booksFolderOrder = 0;
   s.imageDither = clampEnum(doc["imageDither"] | (uint8_t)0, S::IMAGE_DITHER_COUNT, 0);
-
-  // BLE HID controller
-  s.bleEnabled = doc["bleEnabled"] | (uint8_t)0;
-  if (s.bleEnabled > 1) s.bleEnabled = 0;
-  {
-    const char* addr = doc["bleDeviceAddr"] | "";
-    StringUtils::safeStrncpy(s.bleDeviceAddr, addr);
-  }
-  {
-    const char* name = doc["bleDeviceName"] | "";
-    StringUtils::safeStrncpy(s.bleDeviceName, name);
-  }
-  {
-    JsonArray bleKeys = doc["bleKeyMap"];
-    for (int i = 0; i < CrossPointSettings::BLE_KEY_MAP_SIZE; i++) {
-      s.bleKeyMap[i] = 0;
-    }
-    if (!bleKeys.isNull()) {
-      for (int i = 0; i < CrossPointSettings::BLE_KEY_MAP_SIZE && i < (int)bleKeys.size(); i++) {
-        s.bleKeyMap[i] = bleKeys[i] | (uint16_t)0;
-      }
-    }
-  }
 
   const char* url = doc["opdsServerUrl"] | "";
   StringUtils::safeStrncpy(s.opdsServerUrl, url);

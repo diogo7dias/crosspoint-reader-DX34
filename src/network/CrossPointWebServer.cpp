@@ -20,13 +20,13 @@
 #include <unordered_set>
 #include <utility>
 
+#include "../activities/home/LibraryListingFilter.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
 #include "fonts/CustomBinFontManager.h"
-#include "../activities/home/LibraryListingFilter.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
@@ -578,9 +578,18 @@ void CrossPointWebServer::stop() {
   wsLastCompleteAt = 0;
   // String::operator=("") would null the contents but keep the backing buffer.
   // Swapping with a fresh empty String forces the old buffer's destructor.
-  { String tmp; std::swap(tmp, wsUploadFileName); }
-  { String tmp; std::swap(tmp, wsUploadPath); }
-  { String tmp; std::swap(tmp, wsLastCompleteName); }
+  {
+    String tmp;
+    std::swap(tmp, wsUploadFileName);
+  }
+  {
+    String tmp;
+    std::swap(tmp, wsUploadPath);
+  }
+  {
+    String tmp;
+    std::swap(tmp, wsLastCompleteName);
+  }
 
   LOG_DIAG("WEB", "[HEAP] stop() done free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }
@@ -1139,8 +1148,8 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
       const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
       if (largest < UploadState::UPLOAD_BUFFER_SIZE + 1024) {
         state.error = "out of memory (try again from desktop browser)";
-        LOG_ERR("WEB", "[UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
-                static_cast<unsigned>(largest), ESP.getFreeHeap(), ESP.getMinFreeHeap());
+        LOG_ERR("WEB", "[UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u", static_cast<unsigned>(largest),
+                ESP.getFreeHeap(), ESP.getMinFreeHeap());
         return;
       }
       state.buffer.resize(UploadState::UPLOAD_BUFFER_SIZE);
@@ -1738,8 +1747,8 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
       const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
       if (largest < FontUploadState::UPLOAD_BUFFER_SIZE + 1024) {
         state.error = "out of memory (try again from desktop browser)";
-        LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
-                static_cast<unsigned>(largest), ESP.getFreeHeap(), ESP.getMinFreeHeap());
+        LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u", static_cast<unsigned>(largest),
+                ESP.getFreeHeap(), ESP.getMinFreeHeap());
         return;
       }
       state.buffer.resize(FontUploadState::UPLOAD_BUFFER_SIZE);

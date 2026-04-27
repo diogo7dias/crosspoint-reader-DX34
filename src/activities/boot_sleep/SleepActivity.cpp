@@ -478,8 +478,8 @@ bool SleepActivity::renderPxcSleepScreen(const std::string& path, const char* so
   // Sleep wallpapers cover the full screen with no overlay underneath, so
   // Factory mode (with its pre-flash) gives the best image quality.
   // Differential is the fallback when the user has the factory LUT off.
-  const auto mode = SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality
-                                           : GfxRenderer::GrayscaleMode::Differential;
+  const auto mode =
+      SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
   if (!PxcRenderer::renderPxc(renderer, path, mode)) {
     return false;
   }

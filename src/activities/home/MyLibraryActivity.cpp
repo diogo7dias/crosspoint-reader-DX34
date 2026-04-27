@@ -1,5 +1,4 @@
 #include "MyLibraryActivity.h"
-#include "LibraryListingFilter.h"
 
 #include <Bitmap.h>
 #include <Epub.h>
@@ -17,6 +16,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "LibraryListingFilter.h"
 #include "LibrarySearchActivity.h"
 #include "LibrarySearchSupport.h"
 #include "MappedInputManager.h"
@@ -424,9 +424,7 @@ bool MyLibraryActivity::isPxcFile(const std::string& filename) {
   return StringUtils::checkFileExtension(filename, ".pxc");
 }
 
-bool MyLibraryActivity::isImageFile(const std::string& filename) {
-  return isBmpFile(filename) || isPxcFile(filename);
-}
+bool MyLibraryActivity::isImageFile(const std::string& filename) { return isBmpFile(filename) || isPxcFile(filename); }
 
 bool MyLibraryActivity::isManagedFile(const std::string& filename) {
   return isBookFile(filename) || isImageFile(filename);

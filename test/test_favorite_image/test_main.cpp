@@ -64,10 +64,8 @@ void test_extensions_case_insensitive() {
 void test_helpers_handle_paths_with_directories() {
   TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("/sleep/foo_F.bmp"));
   TEST_ASSERT_TRUE(FavoriteImage::hasFavoriteSuffix("/sleep/foo_F.pxc"));
-  TEST_ASSERT_EQUAL_STRING("/sleep/foo.bmp",
-                           FavoriteImage::stripFavoriteSuffix("/sleep/foo_F.bmp").c_str());
-  TEST_ASSERT_EQUAL_STRING("/sleep/foo_F.pxc",
-                           FavoriteImage::addFavoriteSuffix("/sleep/foo.pxc").c_str());
+  TEST_ASSERT_EQUAL_STRING("/sleep/foo.bmp", FavoriteImage::stripFavoriteSuffix("/sleep/foo_F.bmp").c_str());
+  TEST_ASSERT_EQUAL_STRING("/sleep/foo_F.pxc", FavoriteImage::addFavoriteSuffix("/sleep/foo.pxc").c_str());
 }
 
 }  // namespace

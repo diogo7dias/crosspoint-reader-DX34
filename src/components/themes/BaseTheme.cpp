@@ -95,9 +95,7 @@ bool isBookFile(const char* name) {
          endsWithIgnoreCase(name, ".txt") || endsWithIgnoreCase(name, ".md");
 }
 
-bool isImageFile(const char* name) {
-  return endsWithIgnoreCase(name, ".bmp") || endsWithIgnoreCase(name, ".pxc");
-}
+bool isImageFile(const char* name) { return endsWithIgnoreCase(name, ".bmp") || endsWithIgnoreCase(name, ".pxc"); }
 
 bool isFavoriteImageFile(const char* name) {
   return endsWithIgnoreCase(name, "_F.bmp") || endsWithIgnoreCase(name, "_F.pxc");

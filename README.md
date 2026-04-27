@@ -101,7 +101,7 @@ Runtime state and caches live under `/.crosspoint/` on the SD card (`settings.js
 - **EPUB is the primary target** for advanced DX34 features. TXT and XTC are supported but do not share the full in-book workflow.
 - Current releases are intentionally **English-first**.
 - The ESP32-C3 has limited RAM, which constrains features like sleep playlist size and the number of files browsable at once.
-- **Bluetooth input: work in progress, not available in current release.**
+- **Bluetooth input is not supported.** This firmware is GPIO-only; the BLE HID stack and pairing UI were removed to keep the click path responsive.
 
 ---
 

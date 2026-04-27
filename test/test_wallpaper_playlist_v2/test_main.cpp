@@ -65,9 +65,9 @@ class FakeSleepFs : public crosspoint::sleep::ISleepFs {
     renames.push_back({from, to});
     if (from.compare(0, 7, "/sleep/") == 0) {
       const std::string name = from.substr(7);
-      sleepFiles.erase(std::remove_if(sleepFiles.begin(), sleepFiles.end(),
-                                      [&name](const Entry& e) { return e.name == name; }),
-                       sleepFiles.end());
+      sleepFiles.erase(
+          std::remove_if(sleepFiles.begin(), sleepFiles.end(), [&name](const Entry& e) { return e.name == name; }),
+          sleepFiles.end());
     }
     return true;
   }
@@ -207,9 +207,7 @@ void test_favorites_full_blocks_new_uploads() {
   Fixture fx;
   for (int i = 0; i < 500; ++i) fx.fs.seed(std::string("fav_") + std::to_string(i) + ".bmp", 100);
   fx.fs.seed("new_drop.bmp", 999);
-  fx.isFavoriteFn = [](const std::string& path) {
-    return path.find("fav_") != std::string::npos;
-  };
+  fx.isFavoriteFn = [](const std::string& path) { return path.find("fav_") != std::string::npos; };
 
   auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
   wp.resetForTest();
@@ -243,11 +241,10 @@ void test_advance_skips_files_deleted_since_reconcile() {
   wp.markFolderDirty();
   wp.reconcile();
 
-  fx.fs.sleepFiles.erase(std::remove_if(fx.fs.sleepFiles.begin(), fx.fs.sleepFiles.end(),
-                                        [](const FakeSleepFs::Entry& e) {
-                                          return e.name == "f1.bmp" || e.name == "f2.bmp";
-                                        }),
-                         fx.fs.sleepFiles.end());
+  fx.fs.sleepFiles.erase(
+      std::remove_if(fx.fs.sleepFiles.begin(), fx.fs.sleepFiles.end(),
+                     [](const FakeSleepFs::Entry& e) { return e.name == "f1.bmp" || e.name == "f2.bmp"; }),
+      fx.fs.sleepFiles.end());
 
   for (int i = 0; i < 6; ++i) {
     const auto n = wp.advance();

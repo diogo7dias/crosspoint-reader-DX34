@@ -36,9 +36,7 @@ bool sameThemeName(const std::string& left, const std::string& right) {
 
 std::string bookReaderSettingsPath(const std::string& cachePath) { return cachePath + BOOK_READER_SETTINGS_FILE_JSON; }
 
-bool persistAppliedSettings(const std::string& cachePath) {
-  return ReadingThemeStore::persistContextual(cachePath);
-}
+bool persistAppliedSettings(const std::string& cachePath) { return ReadingThemeStore::persistContextual(cachePath); }
 }  // namespace
 
 bool ReadingThemeStore::persistContextual(const std::string& cachePath) {

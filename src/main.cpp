@@ -11,10 +11,10 @@
  * onGoHome(), onGoToReader(), etc. which swap the global currentActivity.
  */
 #include <Arduino.h>
+#include <BitmapHelpers.h>
 #include <Epub.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
-#include <BitmapHelpers.h>
 #include <GfxRenderer.h>
 #include <HalDisplay.h>
 #include <HalGPIO.h>
@@ -32,7 +32,6 @@
 #include <new>
 
 #include "Battery.h"
-#include "BleHidManager.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
@@ -702,14 +701,6 @@ void setup() {
   logHeapStage("after_koreader_load");
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 
-  // Lazy BLE init: only start stack if a device was previously paired
-  if (SETTINGS.bleEnabled && SETTINGS.bleDeviceAddr[0] != '\0') {
-    LOG_INF("BLE", "Saved BLE device found, initializing for auto-reconnect");
-    if (BLE_HID.init()) {
-      BLE_HID.tryAutoReconnect();
-    }
-  }
-
   switch (gpio.getWakeupReason()) {
     case HalGPIO::WakeupReason::PowerButton:
       // For normal wakeups, verify power button press duration
@@ -825,13 +816,7 @@ void setup() {
     deps.currentActivitySlot = &currentActivity;
     deps.persistAppState = &::persistAppState;
     deps.trimSleepFolderIfDirty = &::trimSleepFolderIfDirty;
-    deps.onBeforeDeepSleep = [](bool fromReader) {
-      if (BLE_HID.isInitialized()) {
-        BLE_HID.disconnect();
-        BLE_HID.deinit();
-      }
-      APP_STATE.lastSleepFromReader = fromReader;
-    };
+    deps.onBeforeDeepSleep = [](bool fromReader) { APP_STATE.lastSleepFromReader = fromReader; };
     deps.onAfterDeepSleep = []() {
       display.deepSleep();
       LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);

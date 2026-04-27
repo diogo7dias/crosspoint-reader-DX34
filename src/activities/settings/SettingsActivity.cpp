@@ -6,8 +6,6 @@
 
 #include <algorithm>
 
-#include "BleConnectActivity.h"
-#include "BleRemapActivity.h"
 #include "ButtonRemapActivity.h"
 #include "CalibreSettingsActivity.h"
 #include "ClearCacheActivity.h"
@@ -309,7 +307,6 @@ void SettingsActivity::buildSettingsList() {
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
-  controlsSettings.push_back(SettingInfo::Action(StrId::STR_BLUETOOTH_HID, SettingAction::BluetoothHID));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
@@ -674,14 +671,6 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::RemapFrontButtons:
         enterSubActivity(new ButtonRemapActivity(renderer, mappedInput, onComplete));
         break;
-      case SettingAction::BluetoothHID: {
-        // Temporarily disabled: BLE HID path is mid-rework for issue #44 and
-        // must not be entered from the UI until the Gamebrick decoder lands
-        // and a volunteer has verified pairing on real hardware. The row is
-        // still visible with a strikethrough so users see the feature is
-        // upcoming; confirm presses are ignored here.
-        break;
-      }
       case SettingAction::KOReaderSync:
         enterSubActivity(new KOReaderSettingsActivity(renderer, mappedInput, onComplete));
         break;
@@ -987,9 +976,6 @@ void SettingsActivity::render(Activity::RenderLock&&) {
     const int labelL2ChipY = labelL2Y + (rowHeight - chipH) / 2;
     const int valueChipY = valueY + (rowHeight - chipH) / 2;
 
-    const bool isDisabledAction =
-        (setting.type == SettingType::ACTION && setting.action == SettingAction::BluetoothHID);
-
     const int labelL1W = renderer.getTextWidth(rowFont, labelL1.c_str());
     if (isSelected) {
       renderer.fillRect(metrics.contentSidePadding - kChipPad, labelL1ChipY, labelL1W + kChipPad * 2, chipH, true);
@@ -1002,19 +988,6 @@ void SettingsActivity::render(Activity::RenderLock&&) {
         renderer.fillRect(metrics.contentSidePadding - kChipPad, labelL2ChipY, labelL2W + kChipPad * 2, chipH, true);
       }
       renderer.drawText(rowFont, metrics.contentSidePadding, labelL2Y, labelL2.c_str(), !isSelected);
-    }
-
-    if (isDisabledAction) {
-      // Strike-through indicates "upcoming but disabled for now". Inverted
-      // foreground color when the row is selected (highlight draws the
-      // background black, so the line must be drawn white to remain visible).
-      // 2px thickness — two stacked 1px lines — so the mark reads clearly
-      // against the row font at a glance.
-      const int strikeY = labelL1Y + textH / 2;
-      renderer.drawLine(metrics.contentSidePadding, strikeY, metrics.contentSidePadding + labelL1W, strikeY,
-                        !isSelected);
-      renderer.drawLine(metrics.contentSidePadding, strikeY + 1, metrics.contentSidePadding + labelL1W, strikeY + 1,
-                        !isSelected);
     }
 
     const std::string& valueText = valueTexts[i];
