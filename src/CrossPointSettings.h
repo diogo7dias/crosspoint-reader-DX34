@@ -290,7 +290,7 @@ class CrossPointSettings {
   // waveform — sharper grayscale at the cost of a black flash before each refresh. When 0:
   // current differential grayscale path. Also gates the dither/brightness retune in
   // BitmapHelpers tuned for the factory LUT's response curve.
-  uint8_t useFactoryLUT = 0;
+  uint8_t useFactoryLUT = 1;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
   // EPUB reading orientation settings
