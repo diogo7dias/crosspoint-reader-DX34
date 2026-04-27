@@ -424,7 +424,7 @@ bool MyLibraryActivity::isImageFile(const std::string& filename) {
 }
 
 bool MyLibraryActivity::isManagedFile(const std::string& filename) {
-  return isBookFile(filename) || isBmpFile(filename);
+  return isBookFile(filename) || isImageFile(filename);
 }
 
 std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {
@@ -437,7 +437,7 @@ std::string MyLibraryActivity::getDisplayNameForRawFile(const size_t rawIndex) {
     return "[" + name.substr(0, name.size() - 1) + "]";
   }
 
-  if (isBmpFile(name)) {
+  if (isImageFile(name)) {
     return FavoriteImage::displayNameForPath(makeAbsolutePath(name));
   }
 
@@ -515,7 +515,7 @@ void MyLibraryActivity::enterFileMoveBrowser() {
 }
 
 void MyLibraryActivity::openKeyboardForRenameImage() {
-  if (!isBmpFile(selectedFilePath)) return;
+  if (!isImageFile(selectedFilePath)) return;
 
   pendingRenameBase.clear();
   pendingRenameSubmit = false;
@@ -615,12 +615,12 @@ void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
 }
 
 int MyLibraryActivity::getFileActionCount() const {
-  if (!isBmpFile(selectedFilePath)) return 5;
+  if (!isImageFile(selectedFilePath)) return 5;
   return actionsOpenedFromViewer ? 7 : 8;
 }
 
 std::string MyLibraryActivity::getFileActionLabel(const int index) const {
-  if (isBmpFile(selectedFilePath)) {
+  if (isImageFile(selectedFilePath)) {
     int i = index;
     if (!actionsOpenedFromViewer) {
       if (i == 0) return tr(STR_OPEN_IMAGE);
@@ -762,7 +762,7 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
       }
     }
     RECENT_BOOKS.removeBook(selectedFilePath);
-  } else if (isBmpFile(selectedFilePath)) {
+  } else if (isImageFile(selectedFilePath)) {
     FavoriteImage::replacePathReferences(selectedFilePath, destination);
     APP_STATE.saveToFile();
   }
@@ -790,7 +790,7 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
     return false;
   }
 
-  if (isBmpFile(path)) {
+  if (isImageFile(path)) {
     FavoriteImage::removePathReferences(path);
     APP_STATE.saveToFile();
   }
@@ -938,7 +938,7 @@ void MyLibraryActivity::loopFileActions() {
   });
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (isBmpFile(selectedFilePath)) {
+    if (isImageFile(selectedFilePath)) {
       // When menu opened from library browser, index 0 is "Open Image" and
       // the remaining actions start at 1. When opened from the viewer,
       // "Open Image" is hidden and actions start at 0. Shift to a unified
@@ -1270,7 +1270,7 @@ void MyLibraryActivity::loopBrowse() {
       requestCleanRefresh();
       requestUpdate();
     } else if (isManagedFile(selectedEntry)) {
-      if (isBmpFile(selectedEntry)) {
+      if (isImageFile(selectedEntry)) {
         enterImageView(selectedPath);
       } else {
         onSelectBook(selectedPath);
@@ -1435,7 +1435,7 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   // Help text
   const auto selectedRawIndex = rawFileIndexForListIndex(selectorIndex);
   const bool hasSelectedFile = selectedRawIndex.has_value() && isManagedFile(files[*selectedRawIndex]);
-  const bool hasSelectedBmp = selectedRawIndex.has_value() && isBmpFile(files[*selectedRawIndex]);
+  const bool hasSelectedBmp = selectedRawIndex.has_value() && isImageFile(files[*selectedRawIndex]);
   const char* confirmLabel = tr(STR_OPEN);
   if (isSearchActionRow(selectorIndex)) {
     confirmLabel = tr(STR_SEARCH_BUTTON);
