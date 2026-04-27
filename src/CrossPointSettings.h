@@ -293,6 +293,12 @@ class CrossPointSettings {
   uint8_t textRenderMode = TEXT_RENDER_CRISP;
   // Legacy binary-compat field; always 0. Do not remove (breaks serialization).
   uint8_t textAntiAliasing = 0;
+  // Factory LUT grayscale (off-by-default; ships behind a settings toggle for first release).
+  // When 1: image-bearing pages, BMP viewer, and sleep covers render via the panel's factory
+  // waveform — sharper grayscale at the cost of a black flash before each refresh. When 0:
+  // current differential grayscale path. Also gates the dither/brightness retune in
+  // BitmapHelpers tuned for the factory LUT's response curve.
+  uint8_t useFactoryLUT = 0;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
   // EPUB reading orientation settings

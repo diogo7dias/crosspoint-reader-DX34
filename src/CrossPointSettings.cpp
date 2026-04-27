@@ -1,5 +1,6 @@
 #include "CrossPointSettings.h"
 
+#include <BitmapHelpers.h>
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
 #include <Logging.h>
@@ -194,6 +195,9 @@ void CrossPointSettings::validateFrontButtonMapping(CrossPointSettings& settings
 
 bool CrossPointSettings::saveToFile() const {
   Storage.mkdir(Paths::kDataDir);
+  // Mirror the toggle into BitmapHelpers so an in-UI flip takes effect on the
+  // very next render; loadFromFile syncs the same global on cold start.
+  setBitmapHelpersUseFactoryLUT(useFactoryLUT != 0);
   return JsonSettingsIO::saveSettings(*this, SETTINGS_FILE_JSON);
 }
 

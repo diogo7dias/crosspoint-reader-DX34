@@ -2315,22 +2315,24 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   }
 
   // Apply hardware grayscale overlay for pages with images.
-  // This uses the same LSB/MSB technique as sleep wallpapers to render
-  // true 4-level grayscale, making photographs much more visible on e-ink.
+  // Default path uses the differential LSB/MSB overlay on top of the BW base.
+  // When SETTINGS.useFactoryLUT is enabled, switch to the factory absolute
+  // waveform (FactoryFast) for sharper grayscale at the cost of a black flash.
   if (pageHasImages && renderer.storeBwBuffer()) {
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
-    page.renderImages(renderer, orientedMarginLeft, contentY);
-    renderer.copyGrayscaleLsbBuffers();
-
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
-    page.renderImages(renderer, orientedMarginLeft, contentY);
-    renderer.copyGrayscaleMsbBuffers();
-
-    renderer.displayGrayBuffer();
+    struct ImgCtx {
+      const Page* page;
+      int marginLeft;
+      int contentY;
+    };
+    ImgCtx imgCtx{&page, orientedMarginLeft, contentY};
+    auto drawImages = [](GfxRenderer& r, const void* ctx) {
+      const auto* c = static_cast<const ImgCtx*>(ctx);
+      c->page->renderImages(r, c->marginLeft, c->contentY);
+    };
+    const auto mode =
+        SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryFast : GfxRenderer::GrayscaleMode::Differential;
+    renderer.renderGrayscale(mode, drawImages, &imgCtx);
     renderer.restoreBwBuffer();
-    renderer.setRenderMode(GfxRenderer::BW);
   }
 
   renderer.setTextRenderStyle(0);

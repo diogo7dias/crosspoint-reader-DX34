@@ -347,20 +347,20 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
   renderer.displayBuffer(HalDisplay::FULL_REFRESH);
 
   if (hasGreyscale) {
-    bitmap.rewindToData();
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
-    renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
-    renderer.copyGrayscaleLsbBuffers();
-
-    bitmap.rewindToData();
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
-    renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
-    renderer.copyGrayscaleMsbBuffers();
-
-    renderer.displayGrayBuffer();
-    renderer.setRenderMode(GfxRenderer::BW);
+    struct BmpCtx {
+      const Bitmap* bitmap;
+      int x, y, drawWidth, drawHeight;
+      float cropX, cropY;
+    };
+    BmpCtx bmpCtx{&bitmap, x, y, drawWidth, drawHeight, cropX, cropY};
+    auto drawBmp = [](GfxRenderer& r, const void* ctx) {
+      const auto* c = static_cast<const BmpCtx*>(ctx);
+      c->bitmap->rewindToData();
+      r.drawBitmap(*c->bitmap, c->x, c->y, c->drawWidth, c->drawHeight, c->cropX, c->cropY);
+    };
+    const auto mode =
+        SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
+    renderer.renderGrayscale(mode, drawBmp, &bmpCtx);
   }
 
   renderer.setDarkMode(wasDarkMode);

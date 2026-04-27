@@ -8,6 +8,18 @@ uint8_t quantizeSimple(int gray);
 uint8_t quantize1bit(int gray, int x, int y);
 int adjustPixel(int gray);
 
+// True when SETTINGS.useFactoryLUT is enabled. When true:
+// - adjustPixel() returns input unchanged (no double-brightening; factory LUT
+//   bakes brightness into its waveform).
+// - Atkinson/Floyd-Steinberg/quantizeSimple thresholds shift to evenly-spaced
+//   midpoints (43/128/213) tuned for the factory LUT response curve.
+// Off path is byte-for-byte identical to current differential rendering.
+//
+// Mirror set from src/ at boot + on settings save (BitmapHelpers is a leaf
+// module that cannot include CrossPointSettings.h directly).
+bool bitmapHelpersUseFactoryLUT();
+void setBitmapHelpersUseFactoryLUT(bool enabled);
+
 // 1-bit Atkinson dithering - better quality than noise dithering for thumbnails
 // Error distribution pattern (same as 2-bit but quantizes to 2 levels):
 //     X  1/8 1/8
@@ -122,22 +134,37 @@ class AtkinsonDitherer {
     // Quantize to 4 levels
     uint8_t quantized;
     int quantizedValue;
-    // Quantize to 4 levels, tuned for X4 e-ink display.
-    // Thresholds are set at midpoints between the display's actual gray levels.
-    // quantizedValues approximate each level's perceived luminance for accurate
-    // error diffusion.
-    if (adjusted < 40) {
-      quantized = 0;
-      quantizedValue = 0;
-    } else if (adjusted < 105) {
-      quantized = 1;
-      quantizedValue = 75;
-    } else if (adjusted < 180) {
-      quantized = 2;
-      quantizedValue = 150;
+    // Thresholds tuned per panel response curve. Differential mode uses
+    // perceptually-spaced midpoints (40/105/180); factory LUT mode uses
+    // evenly-spaced midpoints (43/128/213) tuned for its broader tonal range.
+    if (bitmapHelpersUseFactoryLUT()) {
+      if (adjusted < 43) {
+        quantized = 0;
+        quantizedValue = 0;
+      } else if (adjusted < 128) {
+        quantized = 1;
+        quantizedValue = 85;
+      } else if (adjusted < 213) {
+        quantized = 2;
+        quantizedValue = 170;
+      } else {
+        quantized = 3;
+        quantizedValue = 255;
+      }
     } else {
-      quantized = 3;
-      quantizedValue = 235;
+      if (adjusted < 40) {
+        quantized = 0;
+        quantizedValue = 0;
+      } else if (adjusted < 105) {
+        quantized = 1;
+        quantizedValue = 75;
+      } else if (adjusted < 180) {
+        quantized = 2;
+        quantizedValue = 150;
+      } else {
+        quantized = 3;
+        quantizedValue = 235;
+      }
     }
 
     // Calculate error (only distribute 6/8 = 75%)
@@ -208,21 +235,37 @@ class FloydSteinbergDitherer {
     if (adjusted < 0) adjusted = 0;
     if (adjusted > 255) adjusted = 255;
 
-    // Quantize to 4 levels, tuned for X4 e-ink display
+    // Quantize to 4 levels — see AtkinsonDitherer for threshold rationale.
     uint8_t quantized;
     int quantizedValue;
-    if (adjusted < 40) {
-      quantized = 0;
-      quantizedValue = 0;
-    } else if (adjusted < 105) {
-      quantized = 1;
-      quantizedValue = 75;
-    } else if (adjusted < 180) {
-      quantized = 2;
-      quantizedValue = 150;
+    if (bitmapHelpersUseFactoryLUT()) {
+      if (adjusted < 43) {
+        quantized = 0;
+        quantizedValue = 0;
+      } else if (adjusted < 128) {
+        quantized = 1;
+        quantizedValue = 85;
+      } else if (adjusted < 213) {
+        quantized = 2;
+        quantizedValue = 170;
+      } else {
+        quantized = 3;
+        quantizedValue = 255;
+      }
     } else {
-      quantized = 3;
-      quantizedValue = 235;
+      if (adjusted < 40) {
+        quantized = 0;
+        quantizedValue = 0;
+      } else if (adjusted < 105) {
+        quantized = 1;
+        quantizedValue = 75;
+      } else if (adjusted < 180) {
+        quantized = 2;
+        quantizedValue = 150;
+      } else {
+        quantized = 3;
+        quantizedValue = 235;
+      }
     }
 
     // Calculate error
