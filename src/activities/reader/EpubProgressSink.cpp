@@ -5,11 +5,18 @@
 
 #include <cstdint>
 
+#include "../../persist/AsyncWriter.h"
+
 namespace crosspoint {
 namespace reader {
 
-bool EpubProgressSink::write(const ReaderPosition& pos) {
-  if (spineCount_ <= 0) {
+namespace {
+
+// The actual blocking SD work. Runs on either the AsyncWriter task (typical)
+// or the caller (boot fallback before AsyncWriter::start()). Storage.* is
+// mutex-serialized internally so concurrent main-thread access is safe.
+bool writeProgressSync(const std::string& cachePath, int spineCount, ReaderPosition pos) {
+  if (spineCount <= 0) {
     return false;
   }
 
@@ -18,17 +25,17 @@ bool EpubProgressSink::write(const ReaderPosition& pos) {
   int32_t pageCount = pos.pageCount;
   if (spineIndex < 0) {
     spineIndex = 0;
-  } else if (spineIndex >= spineCount_) {
-    spineIndex = spineCount_ - 1;
+  } else if (spineIndex >= spineCount) {
+    spineIndex = spineCount - 1;
     page = UINT16_MAX;  // legacy past-end sentinel preserved for byte-compat
   }
   if (pageCount <= 0) {
     pageCount = 1;
   }
 
-  const std::string progPath = cachePath_ + "/progress.bin";
-  const std::string tmpPath = cachePath_ + "/progress_tmp.bin";
-  const std::string bakPath = cachePath_ + "/progress.bin.bak";
+  const std::string progPath = cachePath + "/progress.bin";
+  const std::string tmpPath = cachePath + "/progress_tmp.bin";
+  const std::string bakPath = cachePath + "/progress.bin.bak";
 
   if (Storage.exists(tmpPath.c_str())) {
     Storage.remove(tmpPath.c_str());
@@ -50,9 +57,6 @@ bool EpubProgressSink::write(const ReaderPosition& pos) {
   f.write(data, 6);
   f.close();
 
-  // Rotate current progress.bin to progress.bin.bak before replacing.
-  // Defence-in-depth: survives an interrupted write, and survives an accidental
-  // removal of progress.bin as long as the .bak is still on disk.
   if (Storage.exists(progPath.c_str())) {
     if (Storage.exists(bakPath.c_str())) {
       Storage.remove(bakPath.c_str());
@@ -62,6 +66,26 @@ bool EpubProgressSink::write(const ReaderPosition& pos) {
   Storage.rename(tmpPath.c_str(), progPath.c_str());
 
   LOG_DBG("ERS", "Progress saved: Chapter %d, Page %d", static_cast<int>(spineIndex), static_cast<int>(page));
+  return true;
+}
+
+}  // namespace
+
+bool EpubProgressSink::write(const ReaderPosition& pos) {
+  // Capture by value so the lambda is self-contained on the AsyncWriter task.
+  // EpubProgressSink instances may be destroyed while a write is in flight
+  // (e.g. user closes book mid-debounce); copying state avoids dangling refs.
+  // Lifecycle drain (AsyncWriter::drainBlocking) at onExit / enterDeepSleep
+  // guarantees no in-flight write outlives the device powering down.
+  const std::string cachePath = cachePath_;
+  const int spineCount = spineCount_;
+  ReaderPosition snap = pos;
+  ::crosspoint::persist::AsyncWriter::instance().submit(
+      [cachePath, spineCount, snap]() { writeProgressSync(cachePath, spineCount, snap); });
+  // Optimistic success: tracker advances lastSaved immediately. If the async
+  // write later fails, the next observe() with the same position will not
+  // re-dirty the tracker — same risk window as previous synchronous
+  // best-effort behaviour (we never retried failed writes either).
   return true;
 }
 

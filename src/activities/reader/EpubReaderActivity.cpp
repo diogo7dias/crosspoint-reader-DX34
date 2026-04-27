@@ -17,6 +17,7 @@
 #include <new>
 #include <vector>
 
+#include "../../persist/AsyncWriter.h"
 #include "BookmarkListActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -801,7 +802,7 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
   if (prevTriggered) {
     if (section->currentPage > 0) {
       section->currentPage--;
-      flushProgressIfNeeded(true);
+      flushProgressIfNeeded(false);
     } else if (currentSpineIndex > 0) {
       TransitionFeedback::show(renderer, tr(STR_LOADING));
       {
@@ -818,7 +819,7 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
     if (section->currentPage < section->pageCount - 1) {
       section->currentPage++;
       addSessionPagesRead();
-      flushProgressIfNeeded(true);
+      flushProgressIfNeeded(false);
     } else {
       TransitionFeedback::show(renderer, tr(STR_LOADING));
       {
@@ -853,6 +854,7 @@ void EpubReaderActivity::openReaderMenu() {
   const std::string quotesPath = getQuotesFilePath();
   const bool hasQuotes = !quotesPath.empty() && Storage.exists(quotesPath.c_str());
   boldSwapAtMenuOpen = RECENT_BOOKS.getBoldSwap(epub->getPath());
+  flushProgressIfNeeded(true);
   exitActivity();
   enterNewActivity(new EpubReaderMenuActivity(
       this->renderer, this->mappedInput, epub->getTitle(), epub->getPath(), currentPage, totalPages,
@@ -1864,6 +1866,12 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
                      static_cast<int32_t>(section->pageCount)},
                     now);
   progress_.flush(now, force);
+  if (force) {
+    // Force-flush callers (onExit, theme/font change, openReaderMenu, deep
+    // sleep) need persistence guarantee, not just enqueue. Drain the async
+    // task before returning.
+    ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
+  }
 
   // Keep the home-screen percent cache fresh. setPercent is a no-op when
   // the value hasn't changed (no SD write), so this is cheap on every
