@@ -493,16 +493,15 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
 }
 
 void MyLibraryActivity::enterImageView(const std::string& imagePath) {
-  // Stacking toasts for image-open stages. Natural FAST_REFRESH pacing
-  // (~400 ms each) keeps each toast visible briefly; no artificial stall.
-  // Full refresh on enter scrubs the list ghost.
+  // Single "Opening image" toast — PXC renders fast enough that a stacked
+  // load toast would just race the image onto the screen. Full refresh on
+  // enter scrubs the list ghost.
   if (!TransitionFeedback::isActive()) {
     TransitionFeedback::show(renderer, tr(STR_OPENING_IMAGE));
   }
   selectedFilePath = imagePath;
   mode = Mode::IMAGE_VIEW;
   imageViewFullyLoaded = false;
-  TransitionFeedback::show(renderer, tr(STR_LOADING_BITMAP));
   renderer.requestFullRefresh();
   requestCleanRefresh();
   requestUpdate();
@@ -1609,16 +1608,16 @@ void MyLibraryActivity::renderPxcImageView() {
     return;
   }
 
-  // PXC is pre-dithered: renderGrayscale() inside PxcRenderer::renderPxc
-  // already pushed the image to the panel via displayGrayBuffer. Here we
-  // only overlay button hints / popup, so FAST_REFRESH (~300 ms) is
-  // sufficient — no need for the legacy BMP HALF_REFRESH (~1.7 s).
+  // HALF_REFRESH required to overlay BW button hints cleanly on top of the
+  // grayscale image just pushed by renderGrayscale. FAST_REFRESH inverts
+  // the panel because the BW buffer state diverges from the grayscale
+  // composite the panel currently shows.
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_ACTIONS_BUTTON), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (messagePopupOpen) {
     GUI.drawPopup(renderer, messagePopupText.c_str());
   }
-  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   nextRefreshMode = HalDisplay::FAST_REFRESH;
   imageViewFullyLoaded = true;
 }
