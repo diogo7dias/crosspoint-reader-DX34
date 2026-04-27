@@ -149,6 +149,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
           } else if (renderMode == GfxRenderer::GRAYSCALE_LSB && bmpVal == 1) {
             // Dark gray
             renderer.drawPixel(screenX, screenY, false);
+          } else if (renderMode == GfxRenderer::GRAY2_LSB && !(bmpVal & 1)) {
+            // Factory absolute LSB (BW RAM): set BW=1 for Black(0) and LightGrey(2)
+            renderer.drawPixel(screenX, screenY, false);
+          } else if (renderMode == GfxRenderer::GRAY2_MSB && bmpVal < 2) {
+            // Factory absolute MSB (RED RAM): set RED=1 for Black(0) and DarkGrey(1)
+            renderer.drawPixel(screenX, screenY, false);
           }
         }
       }
@@ -171,13 +177,18 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
           const uint8_t bit_index = 7 - (pixelPosition & 7);
 
           if ((byte >> bit_index) & 1) {
-            renderer.drawPixel(screenX, screenY, pixelState);
+            // GRAY2 modes: framebuffer convention is inverted vs BW (clearScreen(0x00) base,
+            // drawPixel(false) marks active). 1-bit callers pass pixelState=true for "black";
+            // invert here so glyph pixels stay visible during a factory grayscale pass.
+            const bool gray2 = renderMode == GfxRenderer::GRAY2_LSB || renderMode == GfxRenderer::GRAY2_MSB;
+            const bool s = gray2 ? !pixelState : pixelState;
+            renderer.drawPixel(screenX, screenY, s);
             for (uint8_t pass = 1; pass <= extraBoldPasses; ++pass) {
-              renderer.drawPixel(screenX + pass, screenY, pixelState);
+              renderer.drawPixel(screenX + pass, screenY, s);
             }
             if (textStyle == 1) {  // Dark: +1 right, +1 down
-              renderer.drawPixel(screenX + 1, screenY, pixelState);
-              renderer.drawPixel(screenX, screenY + 1, pixelState);
+              renderer.drawPixel(screenX + 1, screenY, s);
+              renderer.drawPixel(screenX, screenY + 1, s);
             }
           }
         }
@@ -301,19 +312,22 @@ void GfxRenderer::drawTextSpaced(const int fontId, const int x, const int y, con
 }
 
 void GfxRenderer::drawLine(int x1, int y1, int x2, int y2, const bool state) const {
+  // GRAY2 modes: framebuffer convention is inverted vs BW. BW-convention callers pass
+  // state=true for "black" — flip so 1-bit lines stay visible during a factory grayscale pass.
+  const bool s = (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB) ? !state : state;
   if (x1 == x2) {
     if (y2 < y1) {
       std::swap(y1, y2);
     }
     for (int y = y1; y <= y2; y++) {
-      drawPixel(x1, y, state);
+      drawPixel(x1, y, s);
     }
   } else if (y1 == y2) {
     if (x2 < x1) {
       std::swap(x1, x2);
     }
     for (int x = x1; x <= x2; x++) {
-      drawPixel(x, y1, state);
+      drawPixel(x, y1, s);
     }
   } else {
     // TODO: Implement
@@ -359,7 +373,9 @@ void GfxRenderer::drawArc(const int maxRadius, const int cx, const int cy, const
       }
       const int px = cx + xDir * dx;
       const int py = cy + yDir * dy;
-      drawPixel(px, py, state);
+      // GRAY2 modes: framebuffer convention is inverted; flip BW-convention state.
+      const bool s = (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB) ? !state : state;
+      drawPixel(px, py, s);
     }
   }
 };
@@ -438,22 +454,28 @@ void GfxRenderer::drawPixelDither<Color::Clear>(const int x, const int y) const 
 
 template <>
 void GfxRenderer::drawPixelDither<Color::Black>(const int x, const int y) const {
-  drawPixel(x, y, true);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, !gray2);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::White>(const int x, const int y) const {
-  drawPixel(x, y, false);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::LightGray>(const int x, const int y) const {
-  drawPixel(x, y, x % 2 == 0 && y % 2 == 0);
+  const bool pix = x % 2 == 0 && y % 2 == 0;
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::DarkGray>(const int x, const int y) const {
-  drawPixel(x, y, (x + y) % 2 == 0);  // TODO: maybe find a better pattern?
+  const bool pix = (x + y) % 2 == 0;  // TODO: maybe find a better pattern?
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {
@@ -681,6 +703,12 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
       } else if (renderMode == GRAYSCALE_MSB && (val == 1 || val == 2)) {
         drawPixel(screenX, screenY, false);
       } else if (renderMode == GRAYSCALE_LSB && val == 1) {
+        drawPixel(screenX, screenY, false);
+      } else if (renderMode == GRAY2_LSB && !(val & 1)) {
+        // Factory absolute LSB (BW RAM): set BW=1 for Black(0) and LightGrey(2)
+        drawPixel(screenX, screenY, false);
+      } else if (renderMode == GRAY2_MSB && val < 2) {
+        // Factory absolute MSB (RED RAM): set RED=1 for Black(0) and DarkGrey(1)
         drawPixel(screenX, screenY, false);
       }
     }
@@ -1021,7 +1049,47 @@ void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuff
 
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
-void GfxRenderer::displayGrayBuffer() const { display.displayGrayBuffer(fadingFix); }
+void GfxRenderer::displayGrayBuffer(const uint8_t* lut, bool factoryMode) const {
+  display.displayGrayBuffer(fadingFix, lut, factoryMode);
+}
+
+void GfxRenderer::renderGrayscale(GrayscaleMode mode, const std::function<void()>& drawFn) {
+  const bool factory = (mode != GrayscaleMode::Differential);
+  const uint8_t* lut = nullptr;
+  RenderMode lsbMode = GRAYSCALE_LSB;
+  RenderMode msbMode = GRAYSCALE_MSB;
+  if (mode == GrayscaleMode::FactoryFast) {
+    lut = lut_factory_fast;
+    lsbMode = GRAY2_LSB;
+    msbMode = GRAY2_MSB;
+  } else if (mode == GrayscaleMode::FactoryQuality) {
+    lut = lut_factory_quality;
+    lsbMode = GRAY2_LSB;
+    msbMode = GRAY2_MSB;
+  }
+
+  // Factory absolute drive: pre-flash to white via HALF_REFRESH so the panel starts
+  // from a known state. Differential mode skips this — caller must own prior BW state.
+  if (factory) {
+    display.clearScreen(0xFF);
+    display.displayBuffer(HalDisplay::HALF_REFRESH);
+  }
+
+  // LSB plane (BW RAM)
+  setRenderMode(lsbMode);
+  display.clearScreen(0x00);
+  drawFn();
+  copyGrayscaleLsbBuffers();
+
+  // MSB plane (RED RAM)
+  setRenderMode(msbMode);
+  display.clearScreen(0x00);
+  drawFn();
+  copyGrayscaleMsbBuffers();
+
+  displayGrayBuffer(lut, factory);
+  setRenderMode(BW);
+}
 
 void GfxRenderer::freeBwBufferChunks() {
   for (auto& bwBufferChunk : bwBufferChunks) {

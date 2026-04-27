@@ -5,6 +5,7 @@
 
 class FontCacheManager;
 
+#include <functional>
 #include <map>
 #include <memory>
 
@@ -16,7 +17,20 @@ enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 
 
 class GfxRenderer {
  public:
-  enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
+  enum RenderMode {
+    BW,             // 1-bit: clearScreen(0xFF) base; drawPixel(true) clears bit (black on white)
+    GRAYSCALE_LSB,  // Differential gray LSB plane: clearScreen(0x00) base; drawPixel(false) sets bit
+    GRAYSCALE_MSB,  // Differential gray MSB plane: clearScreen(0x00) base; drawPixel(false) sets bit
+    GRAY2_LSB,      // Factory absolute gray BW RAM: clearScreen(0x00) base; drawPixel(false) sets bit
+    GRAY2_MSB,      // Factory absolute gray RED RAM: clearScreen(0x00) base; drawPixel(false) sets bit
+  };
+
+  // Selects LUT and behavior for renderGrayscale().
+  enum class GrayscaleMode {
+    FactoryFast,     // Factory absolute 2-bit (lut_factory_fast); HALF_REFRESH pre-flash
+    FactoryQuality,  // Factory absolute 2-bit (lut_factory_quality); HALF_REFRESH pre-flash
+    Differential,    // Differential 2-bit overlay (lut_grayscale); no pre-flash, requires prior BW state
+  };
 
   // Logical screen orientation from the perspective of callers
   enum Orientation {
@@ -167,7 +181,14 @@ class GfxRenderer {
   uint8_t getTextRenderStyle() const { return textRenderStyle; }
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
-  void displayGrayBuffer() const;
+  void displayGrayBuffer(const uint8_t* lut = nullptr, bool factoryMode = false) const;
+
+  // Two-pass grayscale render. drawFn is called twice: once with the LSB render mode set
+  // (writes BW RAM plane), then with the MSB mode set (writes RED RAM plane). The method
+  // handles pre-flash (factory modes only), clearScreen, setRenderMode, buffer copies,
+  // displayGrayBuffer, and resets renderMode to BW on completion. storeBwBuffer /
+  // restoreBwBuffer remain the caller's responsibility.
+  void renderGrayscale(GrayscaleMode mode, const std::function<void()>& drawFn);
   bool storeBwBuffer();    // Returns true if buffer was stored successfully
   void restoreBwBuffer();  // Restore and free the stored buffer
   void cleanupGrayscaleWithFrameBuffer() const;

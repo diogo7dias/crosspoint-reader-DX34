@@ -1,6 +1,7 @@
 #include "JsonSettingsIO.h"
 
 #include <ArduinoJson.h>
+#include <BitmapHelpers.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
@@ -399,6 +400,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["readerStyleMode"] = s.readerStyleMode;
   doc["textRenderMode"] = s.textRenderMode;
   doc["textRenderModeV2"] = true;
+  doc["useFactoryLUT"] = s.useFactoryLUT;
   doc["shortPwrBtn"] = s.shortPwrBtn;
   doc["orientation"] = s.orientation;
   doc["sideButtonLayout"] = s.sideButtonLayout;
@@ -438,7 +440,6 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["highlightMode"] = s.highlightMode;
   doc["darkMode"] = s.darkMode;
   doc["booksFolderOrder"] = s.booksFolderOrder;
-  doc["xtcContrast"] = s.xtcContrast;
   doc["imageDither"] = s.imageDither;
 
   // BLE HID controller
@@ -652,6 +653,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
   s.textAntiAliasing = 0;
+  s.useFactoryLUT = (doc["useFactoryLUT"] | 0) ? 1 : 0;
+  setBitmapHelpersUseFactoryLUT(s.useFactoryLUT != 0);
   s.shortPwrBtn = clampEnum(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
   s.orientation = clampEnum(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
   s.sideButtonLayout =
@@ -743,7 +746,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   if (s.darkMode > 1) s.darkMode = 0;
   s.booksFolderOrder = doc["booksFolderOrder"] | (uint8_t)0;
   if (s.booksFolderOrder > 1) s.booksFolderOrder = 0;
-  s.xtcContrast = clampEnum(doc["xtcContrast"] | (uint8_t)0, S::XTC_CONTRAST_COUNT, 0);
   s.imageDither = clampEnum(doc["imageDither"] | (uint8_t)0, S::IMAGE_DITHER_COUNT, 0);
 
   // BLE HID controller

@@ -2314,23 +2314,20 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     pagesUntilFullRefresh--;
   }
 
-  // Apply hardware grayscale overlay for pages with images.
-  // This uses the same LSB/MSB technique as sleep wallpapers to render
-  // true 4-level grayscale, making photographs much more visible on e-ink.
+  // Differential grayscale overlay for image pages. Text + status bar stay on
+  // the BW base above; only the image area gets the 2-bit overlay so other
+  // text-only pages still look "normal" via the standard BW differential path.
   if (pageHasImages && renderer.storeBwBuffer()) {
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
-    page.renderImages(renderer, orientedMarginLeft, contentY);
-    renderer.copyGrayscaleLsbBuffers();
-
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
-    page.renderImages(renderer, orientedMarginLeft, contentY);
-    renderer.copyGrayscaleMsbBuffers();
-
-    renderer.displayGrayBuffer();
+    const Page* pagePtr = &page;
+    const int ml = orientedMarginLeft;
+    const int cy = contentY;
+    auto drawImages = [&, pagePtr, ml, cy]() { pagePtr->renderImages(renderer, ml, cy); };
+    renderer.renderGrayscale(GfxRenderer::GrayscaleMode::Differential, drawImages);
     renderer.restoreBwBuffer();
-    renderer.setRenderMode(GfxRenderer::BW);
+    // Force the next page after an image page to take the HALF_REFRESH branch
+    // above, fully clearing any residual grayscale state so text doesn't ghost
+    // through. Cheaper than a FULL_REFRESH and visually identical.
+    pagesUntilFullRefresh = 1;
   }
 
   renderer.setTextRenderStyle(0);

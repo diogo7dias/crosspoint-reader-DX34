@@ -2,6 +2,13 @@
 
 #include <cstdint>
 
+// Mirrors SETTINGS.useFactoryLUT. Updated from src/ via setBitmapHelpersUseFactoryLUT()
+// at boot and on settings changes. Keeps BitmapHelpers a leaf module (no src/ include).
+static bool g_useFactoryLUT = false;
+
+void setBitmapHelpersUseFactoryLUT(bool enabled) { g_useFactoryLUT = enabled; }
+bool bitmapHelpersUseFactoryLUT() { return g_useFactoryLUT; }
+
 // Brightness/Contrast adjustments:
 constexpr bool USE_BRIGHTNESS = true;        // Apply contrast adjustment before dithering
 constexpr int BRIGHTNESS_BOOST = 0;          // No brightness offset (contrast alone is sufficient)
@@ -36,8 +43,13 @@ static inline int applyContrast(int gray) {
   if (adjusted > 255) adjusted = 255;
   return adjusted;
 }
-// Combined brightness/contrast/gamma adjustment
+// Combined brightness/contrast/gamma adjustment.
+// Factory LUT mode: returns input unchanged. Cover BMPs would otherwise be
+// double-brightened (once at generation, once at render) under the factory
+// waveform's already-soft drive; both passes are skipped to match upstream's
+// blown-out-cover fix.
 int adjustPixel(int gray) {
+  if (bitmapHelpersUseFactoryLUT()) return gray;
   if (!USE_BRIGHTNESS) return gray;
 
   // Order: contrast first, then brightness, then gamma
@@ -50,8 +62,19 @@ int adjustPixel(int gray) {
   return gray;
 }
 // Simple quantization without dithering - divide into 4 levels
-// Thresholds match the Atkinson/Floyd-Steinberg ditherers
+// Thresholds match the Atkinson/Floyd-Steinberg ditherers (see header).
 uint8_t quantizeSimple(int gray) {
+  if (bitmapHelpersUseFactoryLUT()) {
+    if (gray < 43) {
+      return 0;
+    } else if (gray < 128) {
+      return 1;
+    } else if (gray < 213) {
+      return 2;
+    } else {
+      return 3;
+    }
+  }
   if (gray < 40) {
     return 0;
   } else if (gray < 105) {

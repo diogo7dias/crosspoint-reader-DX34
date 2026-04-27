@@ -205,14 +205,6 @@ class CrossPointSettings {
 
   enum HIGHLIGHT_MODE { HIGHLIGHT_WORD = 0, HIGHLIGHT_PAGE = 1, HIGHLIGHT_MODE_COUNT };
 
-  // XTC comic contrast boost (for thin/light-colored text readability)
-  enum XTC_CONTRAST {
-    XTC_CONTRAST_NORMAL = 0,  // Full 4-level grayscale (default)
-    XTC_CONTRAST_HIGH = 1,    // Boost grays one step darker
-    XTC_CONTRAST_MAX = 2,     // All non-white → black (1-bit)
-    XTC_CONTRAST_COUNT
-  };
-
   // Image dithering algorithm
   enum IMAGE_DITHER {
     IMAGE_DITHER_FAST = 0,     // Bayer ordered dither (default, fast)
@@ -293,6 +285,12 @@ class CrossPointSettings {
   uint8_t textRenderMode = TEXT_RENDER_CRISP;
   // Legacy binary-compat field; always 0. Do not remove (breaks serialization).
   uint8_t textAntiAliasing = 0;
+  // Factory LUT grayscale (off-by-default; ships behind a settings toggle for first release).
+  // When 1: image-bearing pages, BMP viewer, and sleep covers render via the panel's factory
+  // waveform — sharper grayscale at the cost of a black flash before each refresh. When 0:
+  // current differential grayscale path. Also gates the dither/brightness retune in
+  // BitmapHelpers tuned for the factory LUT's response curve.
+  uint8_t useFactoryLUT = 0;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
   // EPUB reading orientation settings
@@ -369,9 +367,6 @@ class CrossPointSettings {
   uint8_t darkMode = 0;
   // Books folder display order: 0 = alphabetical (default), 1 = random
   uint8_t booksFolderOrder = 0;
-  // XTC comic contrast boost
-  uint8_t xtcContrast = XTC_CONTRAST_NORMAL;
-
   // Image dithering algorithm: 0=fast (Bayer), 1=quality (Floyd-Steinberg)
   uint8_t imageDither = IMAGE_DITHER_FAST;
 

@@ -14,6 +14,7 @@
 #include <Epub.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
+#include <BitmapHelpers.h>
 #include <GfxRenderer.h>
 #include <HalDisplay.h>
 #include <HalGPIO.h>
@@ -685,6 +686,7 @@ void setup() {
 
   SETTINGS.loadFromFile();
   logHeapStage("after_settings_load");
+  setBitmapHelpersUseFactoryLUT(SETTINGS.useFactoryLUT != 0);
   I18N.setLanguage(static_cast<Language>(SETTINGS.uiLanguage));
   // Retry theme load up to 3 times — a transient SD read failure here would
   // leave the theme list empty, and any later save could overwrite the file.
