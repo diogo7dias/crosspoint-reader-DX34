@@ -14,7 +14,10 @@ namespace {
 
 constexpr const char* kFavoriteSuffix = "_F";
 
-bool isBmpPathInternal(const std::string& path) { return StringUtils::checkFileExtension(path, ".bmp"); }
+bool isImagePath(const std::string& path) {
+  return StringUtils::checkFileExtension(path, ".bmp") ||
+         StringUtils::checkFileExtension(path, ".pxc");
+}
 
 bool startsWith(const std::string& value, const char* prefix) { return value.rfind(prefix, 0) == 0; }
 
@@ -98,7 +101,7 @@ void removeSleepReferencesForPath(const std::string& path) {
 }  // namespace
 
 bool hasFavoriteSuffix(const std::string& filename) {
-  if (!isBmpPathInternal(filename) || filename.size() <= 6) {
+  if (!isImagePath(filename) || filename.size() <= 6) {
     return false;
   }
   const size_t extPos = filename.size() - 4;
@@ -106,7 +109,7 @@ bool hasFavoriteSuffix(const std::string& filename) {
 }
 
 std::string addFavoriteSuffix(const std::string& filename) {
-  if (!isBmpPathInternal(filename) || hasFavoriteSuffix(filename)) {
+  if (!isImagePath(filename) || hasFavoriteSuffix(filename)) {
     return filename;
   }
   return filename.substr(0, filename.size() - 4) + kFavoriteSuffix + filename.substr(filename.size() - 4);
@@ -125,7 +128,7 @@ bool isFavoritePath(const std::string& path) {
 }
 
 bool canPlacePathInSleep(const std::string& path) {
-  if (!isBmpPathInternal(path) || !isFavoritePath(path) || isInSleepFolder(path)) {
+  if (!isImagePath(path) || !isFavoritePath(path) || isInSleepFolder(path)) {
     return true;
   }
   return countProtectedSleepFavorites() < CrossPointState::SLEEP_FAVORITES_MAX;
@@ -152,7 +155,7 @@ size_t countProtectedSleepFavorites() {
 
     file.getName(name, sizeof(name));
     std::string filename(name);
-    if (!filename.empty() && filename[0] != '.' && isBmpPathInternal(filename) &&
+    if (!filename.empty() && filename[0] != '.' && isImagePath(filename) &&
         isFavoritePath("/sleep/" + filename)) {
       ++count;
     }
@@ -193,7 +196,7 @@ const char* limitReachedHomeMessage() {
 }
 
 SetFavoriteResult setFavorite(const std::string& path, const bool favorite, std::string* updatedPath) {
-  if (!isBmpPathInternal(path)) {
+  if (!isImagePath(path)) {
     return SetFavoriteResult::NotImage;
   }
   if (!Storage.exists(path.c_str())) {
