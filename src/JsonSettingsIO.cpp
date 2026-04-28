@@ -179,7 +179,7 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
 // 2. Erase old .bak
 // 3. Rename current to .bak
 // 4. Rename .tmp to current
-static bool safeWriteFile(const char* path, const String& json) {
+bool JsonSettingsIO::safeWriteFile(const char* path, const String& json) {
   // Path + ".corrupt" (longest suffix) must fit in 128-char buffers used below.
   if (!path || strlen(path) > 119) {
     LOG_ERR("JSN", "safeWriteFile: path null or too long");
@@ -844,7 +844,7 @@ bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool
 
 // ---- RecentBooksStore ----
 
-bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* path) {
+String JsonSettingsIO::serializeRecentBooks(const RecentBooksStore& store) {
   JsonDocument doc;
   JsonArray arr = doc["books"].to<JsonArray>();
   for (const auto& book : store.getBooks()) {
@@ -859,7 +859,11 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
 
   String json;
   serializeJson(doc, json);
-  return safeWriteFile(path, json);
+  return json;
+}
+
+bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* path) {
+  return safeWriteFile(path, serializeRecentBooks(store));
 }
 
 bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) {

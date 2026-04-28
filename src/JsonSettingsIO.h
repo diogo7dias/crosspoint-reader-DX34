@@ -24,6 +24,11 @@ namespace JsonSettingsIO {
 // ---- Atomic read/write helper ----
 String safeReadFile(const char* path);
 
+// Atomic write helper: write→.tmp, rotate target→.bak, rename .tmp→target.
+// Exposed so background-write paths (AsyncWriter) can reuse the same atomic
+// rotation as synchronous savers.
+bool safeWriteFile(const char* path, const String& json);
+
 // CrossPointSettings
 bool saveSettings(const CrossPointSettings& s, const char* path);
 bool loadSettings(CrossPointSettings& s, const char* json, bool* needsResave = nullptr);
@@ -39,6 +44,10 @@ bool loadKOReader(KOReaderCredentialStore& store, const char* json, bool* needsR
 // RecentBooksStore
 bool saveRecentBooks(const RecentBooksStore& store, const char* path);
 bool loadRecentBooks(RecentBooksStore& store, const char* json);
+// Serialize the recent-books store to a JSON String without writing to disk.
+// Lets callers snapshot the store on the caller's thread and hand the
+// resulting String off to a background SD writer.
+String serializeRecentBooks(const RecentBooksStore& store);
 
 // ReadingThemeStore
 bool saveReadingTheme(const ReadingTheme& theme, const char* path);

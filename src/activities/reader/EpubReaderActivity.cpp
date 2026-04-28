@@ -1866,22 +1866,28 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
                      static_cast<int32_t>(section->pageCount)},
                     now);
   progress_.flush(now, force);
-  if (force) {
-    // Force-flush callers (onExit, theme/font change, openReaderMenu, deep
-    // sleep) need persistence guarantee, not just enqueue. Drain the async
-    // task before returning.
-    ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
-  }
 
   // Keep the home-screen percent cache fresh. setPercent is a no-op when
   // the value hasn't changed (no SD write), so this is cheap on every
-  // page turn and only persists when the percent actually advances.
+  // page turn and only persists when the percent actually advances. The
+  // persist now goes via AsyncWriter, so this MUST run before the force
+  // drain below — otherwise a recent.json write stays queued and races
+  // with epub.reset()/SD close on the onExit path (FreeRTOS SPI mutex
+  // assertion in xQueueGenericSend).
   const int safePage = (section->currentPage < 0)                     ? 0
                        : (section->currentPage >= section->pageCount) ? section->pageCount - 1
                                                                       : section->currentPage;
   const float chapterProgress = static_cast<float>(safePage) / static_cast<float>(section->pageCount);
   const int percent = static_cast<int>(epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f + 0.5f);
   RECENT_BOOKS.setPercent(epub->getPath(), percent);
+
+  if (force) {
+    // Force-flush callers (onExit, theme/font change, openReaderMenu, deep
+    // sleep) need persistence guarantee, not just enqueue. Drain the async
+    // task before returning. Drain runs LAST so it catches both the
+    // progress write and the recent.json percent write enqueued above.
+    ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
+  }
 }
 
 void EpubReaderActivity::addSessionPagesRead(const uint32_t amount) { APP_STATE.sessionPagesRead += amount; }

@@ -74,6 +74,14 @@ class RecentBooksStore {
 
   bool saveToFile() const;
 
+  // Background-task save path. Builds the JSON snapshot synchronously on the
+  // caller's thread (so the recentBooks vector isn't read mid-mutation), then
+  // submits the actual SD atomic-write to AsyncWriter. Used by setPercent on
+  // the per-page-turn path so a percent tick (~120 ms safeWriteFile) doesn't
+  // block button polling. Lifecycle drains in persistAppState() / deep sleep
+  // entry guarantee queued writes hit disk before power-down.
+  void saveToFileAsync() const;
+
   // Per-book Bold Swap preference. Lookup is by book path; unknown paths
   // return false so first-time opens always start with bold swap OFF.
   // setBoldSwap is a no-op on unknown paths (logs an error) — callers must

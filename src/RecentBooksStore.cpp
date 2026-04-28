@@ -13,6 +13,7 @@
 
 #include "CrossPointState.h"
 #include "Paths.h"
+#include "persist/AsyncWriter.h"
 #include "util/StringUtils.h"
 
 namespace {
@@ -136,7 +137,13 @@ void RecentBooksStore::setPercent(const std::string& path, int percent) {
   const int clamped = (percent < 0) ? -1 : (percent > 100 ? 100 : percent);
   if (it->percent == clamped) return;  // No change, skip the disk write.
   it->percent = static_cast<int8_t>(clamped);
-  saveToFile();
+  // Per-page-turn hot path: route through AsyncWriter so the ~120 ms atomic
+  // rotation runs on a background task and doesn't block button polling.
+  // Lifecycle drains in persistAppState() (every activity transition + deep
+  // sleep entry) guarantee queued writes hit SD before power-down. Worst-case
+  // data loss on a hard reset mid-tick is the percent advancing one integer
+  // late; the percent recomputes from progress on next book open anyway.
+  saveToFileAsync();
 }
 
 int RecentBooksStore::getCachedPercent(const std::string& path) const {
@@ -242,6 +249,20 @@ bool RecentBooksStore::saveToFile() const {
     LOG_ERR("RBS", "Failed to save recent books to %s", RECENT_BOOKS_FILE_JSON);
   }
   return ok;
+}
+
+void RecentBooksStore::saveToFileAsync() const {
+  // Snapshot JSON on caller thread (vector is read here, not from the bg
+  // task) so a concurrent addBook/removeBook can't corrupt serialization.
+  // The actual atomic-write rotation moves to AsyncWriter and no longer
+  // blocks the main loop on per-page-turn percent ticks.
+  Storage.mkdir(Paths::kDataDir);
+  String json = JsonSettingsIO::serializeRecentBooks(*this);
+  ::crosspoint::persist::AsyncWriter::instance().submit([json = std::move(json)]() {
+    if (!JsonSettingsIO::safeWriteFile(RECENT_BOOKS_FILE_JSON, json)) {
+      LOG_ERR("RBS", "Failed to async-save recent books to %s", RECENT_BOOKS_FILE_JSON);
+    }
+  });
 }
 
 bool RecentBooksStore::getBoldSwap(const std::string& path) const {
