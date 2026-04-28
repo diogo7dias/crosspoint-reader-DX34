@@ -7,10 +7,6 @@
     <title>CrossPoint Sleep Converter</title>
     <link rel="stylesheet" href="/css/brutalist.css" />
     <style>
-      :root {
-        --pad: 16px;
-        --gap: 12px;
-      }
       h1 {
         font-size: clamp(28px, 6vw, 44px);
         font-weight: 700;
@@ -105,6 +101,26 @@
       }
       .preview-wrap canvas.panning { cursor: grabbing; }
 
+      /* Mobile: pin preview to top of viewport while user scrolls
+         through controls, and cap its height so controls remain in view.
+         Canvas keeps aspect ratio via max-width + max-height. */
+      @media (max-width: 799px) {
+        .preview-wrap {
+          position: sticky;
+          top: 0;
+          z-index: 5;
+          max-height: 50vh;
+          padding: 4px 0;
+          border-bottom: 1px dashed var(--dash);
+        }
+        .preview-wrap canvas {
+          max-height: calc(50vh - 8px);
+          width: auto;
+          max-width: 100%;
+          object-fit: contain;
+        }
+      }
+
       .controls { display: grid; gap: var(--gap); align-content: start; }
       .row { display: grid; grid-template-columns: 1fr; gap: 8px; }
       .row label {
@@ -159,7 +175,11 @@
         flex-wrap: wrap;
         margin-top: var(--gap);
       }
-      .actions button { flex: 1 1 200px; padding: 14px; }
+      .actions button { flex: 1 1 140px; padding: 14px; }
+      @media (max-width: 480px) {
+        .actions { flex-direction: column; }
+        .actions button { flex: 1 1 auto; width: 100%; }
+      }
 
       .status {
         font-size: 11px;
@@ -172,10 +192,15 @@
       .status.ok { color: var(--green); }
 
       .topbar {
-        display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+        display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center;
         font-size: 11px; letter-spacing: 0.16em; color: var(--muted);
       }
-      .topbar select { padding: 4px 8px; font-size: 11px; }
+      .topbar select { padding: 4px 8px; font-size: 11px; min-height: 32px; }
+      .topbar #queue-count { margin-left: auto; }
+      @media (max-width: 480px) {
+        .topbar { gap: 6px 10px; }
+        .topbar #queue-count { margin-left: 0; flex-basis: 100%; }
+      }
 
       .hidden { display: none !important; }
     </style>
