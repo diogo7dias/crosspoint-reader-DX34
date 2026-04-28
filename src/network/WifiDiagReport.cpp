@@ -1,0 +1,412 @@
+#include "WifiDiagReport.h"
+
+#include <Arduino.h>
+#include <HalStorage.h>
+#include <Logging.h>
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <esp_wifi_types.h>
+
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+
+#ifndef CROSSPOINT_VERSION
+#define CROSSPOINT_VERSION "unknown"
+#endif
+
+namespace WifiDiagReport {
+
+namespace {
+
+constexpr const char* REPORT_PATH = "/wifi_report.txt";
+constexpr size_t TIMELINE_CAPACITY = 32;
+
+enum class EntryKind : uint8_t {
+  Status,
+  Event,
+};
+
+struct TimelineEntry {
+  uint32_t msOffset;
+  EntryKind kind;
+  uint16_t code;  // wl_status_t for Status, arduino_event_id_t for Event
+  int32_t aux;    // disconnect reason / channel / 0
+};
+
+// All state in BSS — no heap usage. Module is single-attempt: each
+// noteAttemptStart resets the buffer.
+TimelineEntry s_timeline[TIMELINE_CAPACITY];
+size_t s_timelineCount = 0;
+uint32_t s_attemptStartMs = 0;
+bool s_attemptInProgress = false;
+
+size_t s_targetSsidLen = 0;
+size_t s_savedCount = 0;
+bool s_targetRequiresPassword = false;
+bool s_targetUsedSavedPassword = false;
+bool s_targetAutoConnecting = false;
+
+bool s_scanRecorded = false;
+size_t s_scanTotal = 0;
+bool s_scanTargetFound = false;
+int32_t s_scanTargetRssi = 0;
+int32_t s_scanTargetChannel = 0;
+uint8_t s_scanTargetAuthMode = 0xFF;
+
+int32_t s_lastDisconnectReason = -1;
+int32_t s_assocChannel = -1;
+uint8_t s_assocAuthMode = 0xFF;
+
+wl_status_t s_lastStatus = WL_NO_SHIELD;
+
+uint32_t s_minFreeHeapSeen = UINT32_MAX;
+
+bool s_eventHandlerRegistered = false;
+bool s_countryCodeApplied = false;
+
+void recordTimeline(EntryKind kind, uint16_t code, int32_t aux) {
+  if (s_timelineCount >= TIMELINE_CAPACITY) {
+    return;  // drop — first frames are most informative
+  }
+  const uint32_t now = millis();
+  TimelineEntry& e = s_timeline[s_timelineCount++];
+  e.msOffset = s_attemptInProgress ? (now - s_attemptStartMs) : 0;
+  e.kind = kind;
+  e.code = code;
+  e.aux = aux;
+}
+
+void updateMinHeap() {
+  const uint32_t free = ESP.getFreeHeap();
+  if (free < s_minFreeHeapSeen) {
+    s_minFreeHeapSeen = free;
+  }
+}
+
+const char* statusName(wl_status_t s) {
+  switch (s) {
+    case WL_NO_SHIELD: return "WL_NO_SHIELD";
+    case WL_IDLE_STATUS: return "WL_IDLE_STATUS";
+    case WL_NO_SSID_AVAIL: return "WL_NO_SSID_AVAIL";
+    case WL_SCAN_COMPLETED: return "WL_SCAN_COMPLETED";
+    case WL_CONNECTED: return "WL_CONNECTED";
+    case WL_CONNECT_FAILED: return "WL_CONNECT_FAILED";
+    case WL_CONNECTION_LOST: return "WL_CONNECTION_LOST";
+    case WL_DISCONNECTED: return "WL_DISCONNECTED";
+    default: return "WL_UNKNOWN";
+  }
+}
+
+const char* eventName(arduino_event_id_t id) {
+  switch (id) {
+    case ARDUINO_EVENT_WIFI_STA_START: return "STA_START";
+    case ARDUINO_EVENT_WIFI_STA_STOP: return "STA_STOP";
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED: return "STA_CONNECTED";
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: return "STA_DISCONNECTED";
+    case ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE: return "STA_AUTHMODE_CHANGE";
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP: return "STA_GOT_IP";
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP: return "STA_LOST_IP";
+    case ARDUINO_EVENT_WIFI_SCAN_DONE: return "SCAN_DONE";
+    default: return "OTHER_EVENT";
+  }
+}
+
+const char* authModeName(uint8_t m) {
+  switch (m) {
+    case WIFI_AUTH_OPEN: return "OPEN";
+    case WIFI_AUTH_WEP: return "WEP";
+    case WIFI_AUTH_WPA_PSK: return "WPA_PSK";
+    case WIFI_AUTH_WPA2_PSK: return "WPA2_PSK";
+    case WIFI_AUTH_WPA_WPA2_PSK: return "WPA_WPA2_PSK";
+    case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2_ENTERPRISE";
+    case WIFI_AUTH_WPA3_PSK: return "WPA3_PSK";
+    case WIFI_AUTH_WPA2_WPA3_PSK: return "WPA2_WPA3_PSK";
+    case WIFI_AUTH_WAPI_PSK: return "WAPI_PSK";
+    default: return "UNKNOWN";
+  }
+}
+
+// Subset of wifi_err_reason_t — common cases readers care about. The numeric
+// reason is always written; this just adds a human label when known.
+const char* disconnectReasonName(int32_t r) {
+  switch (r) {
+    case 1: return "UNSPECIFIED";
+    case 2: return "AUTH_EXPIRE";
+    case 3: return "AUTH_LEAVE";
+    case 4: return "ASSOC_EXPIRE";
+    case 5: return "ASSOC_TOOMANY";
+    case 6: return "NOT_AUTHED";
+    case 7: return "NOT_ASSOCED";
+    case 8: return "ASSOC_LEAVE";
+    case 15: return "4WAY_HANDSHAKE_TIMEOUT";
+    case 16: return "GROUP_KEY_UPDATE_TIMEOUT";
+    case 17: return "IE_IN_4WAY_DIFFERS";
+    case 18: return "GROUP_CIPHER_INVALID";
+    case 19: return "PAIRWISE_CIPHER_INVALID";
+    case 20: return "AKMP_INVALID";
+    case 23: return "IEEE_802_1X_AUTH_FAILED";
+    case 24: return "CIPHER_SUITE_REJECTED";
+    case 200: return "BEACON_TIMEOUT";
+    case 201: return "NO_AP_FOUND";
+    case 202: return "AUTH_FAIL";
+    case 203: return "ASSOC_FAIL";
+    case 204: return "HANDSHAKE_TIMEOUT";
+    case 205: return "CONNECTION_FAIL";
+    case 206: return "AP_TSF_RESET";
+    case 207: return "ROAMING";
+    default: return "UNKNOWN";
+  }
+}
+
+// Best-effort plain-language hint for the most common failure shapes. Used
+// only for the final RESULT line; never replaces the numeric reason code.
+const char* failureHint(FailureKind kind, int32_t reason, bool sawConnected) {
+  if (kind == FailureKind::NoSsidAvail || reason == 201) {
+    return "AP not found in scan — wrong SSID, AP off, out of range, or channel 12/13 with wrong country code.";
+  }
+  switch (reason) {
+    case 15:
+    case 204:
+      return "Handshake timeout — almost always wrong password, or PMF/WPA3 mismatch.";
+    case 202:
+      return "Auth fail — wrong password.";
+    case 17:
+    case 18:
+    case 19:
+    case 20:
+      return "Cipher/AKMP mismatch — likely WPA3-only AP; ESP32-C3 needs WPA2-compat enabled on router.";
+    case 200:
+      return "Beacon timeout — RSSI too weak or AP went away mid-connect.";
+    case 8:
+    case 4:
+    case 5:
+      return "AP disassociated us — could be MAC filter, client cap reached, or band-steer.";
+    case 203:
+    case 205:
+      return "Association failed — radio or AP rejection; check channel/regulatory.";
+    default:
+      break;
+  }
+  if (kind == FailureKind::Timeout) {
+    return sawConnected
+               ? "Reached STA_CONNECTED but never got IP — DHCP issue or AP not forwarding."
+               : "Never reached STA_CONNECTED in 15 s — RSSI/auth/regulatory; check reason codes above.";
+  }
+  return "See reason code above.";
+}
+
+void onWifiEvent(arduino_event_id_t event, arduino_event_info_t info) {
+  updateMinHeap();
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      s_assocChannel = info.wifi_sta_connected.channel;
+      s_assocAuthMode = info.wifi_sta_connected.authmode;
+      recordTimeline(EntryKind::Event, static_cast<uint16_t>(event), s_assocChannel);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      s_lastDisconnectReason = info.wifi_sta_disconnected.reason;
+      recordTimeline(EntryKind::Event, static_cast<uint16_t>(event), s_lastDisconnectReason);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_START:
+    case ARDUINO_EVENT_WIFI_STA_STOP:
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+    case ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE:
+      recordTimeline(EntryKind::Event, static_cast<uint16_t>(event), 0);
+      break;
+    default:
+      break;
+  }
+}
+
+void appendf(HalFile& f, const char* fmt, ...) {
+  char buf[160];
+  va_list ap;
+  va_start(ap, fmt);
+  const int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  if (n > 0) {
+    f.write(buf, static_cast<size_t>(n < static_cast<int>(sizeof(buf)) ? n : static_cast<int>(sizeof(buf)) - 1));
+  }
+}
+
+}  // namespace
+
+void begin() {
+  if (s_eventHandlerRegistered) {
+    return;
+  }
+  WiFi.onEvent(onWifiEvent);
+  s_eventHandlerRegistered = true;
+  s_minFreeHeapSeen = ESP.getFreeHeap();
+  LOG_INF("WIFI_DIAG", "Wi-Fi diagnostic reporter armed");
+}
+
+void ensureCountryCodeApplied() {
+  if (s_countryCodeApplied) {
+    return;
+  }
+  // "01" = worldwide / generic, with 802.11d enabled so we adopt the AP's
+  // advertised regulatory domain. ietf=true makes channels 12/13 usable when
+  // the AP advertises a country IE permitting them. Safe default.
+  const esp_err_t err = esp_wifi_set_country_code("01", true);
+  if (err == ESP_OK) {
+    s_countryCodeApplied = true;
+    LOG_INF("WIFI_DIAG", "Country code applied: 01 (worldwide, 802.11d)");
+  } else {
+    LOG_ERR("WIFI_DIAG", "esp_wifi_set_country_code failed: %s", esp_err_to_name(err));
+  }
+}
+
+void noteAttemptStart(size_t targetSsidLen, size_t savedCount, bool requiresPassword, bool usedSavedPassword,
+                      bool autoConnecting) {
+  s_timelineCount = 0;
+  s_attemptStartMs = millis();
+  s_attemptInProgress = true;
+  s_targetSsidLen = targetSsidLen;
+  s_savedCount = savedCount;
+  s_targetRequiresPassword = requiresPassword;
+  s_targetUsedSavedPassword = usedSavedPassword;
+  s_targetAutoConnecting = autoConnecting;
+  s_lastDisconnectReason = -1;
+  s_assocChannel = -1;
+  s_assocAuthMode = 0xFF;
+  s_lastStatus = WL_NO_SHIELD;
+  updateMinHeap();
+}
+
+void noteStatus(wl_status_t status) {
+  updateMinHeap();
+  if (status == s_lastStatus) {
+    return;
+  }
+  s_lastStatus = status;
+  recordTimeline(EntryKind::Status, static_cast<uint16_t>(status), 0);
+}
+
+void noteScanSummary(size_t totalNetworks, bool targetFound, int32_t targetRssi, int32_t targetChannel,
+                     uint8_t targetAuthMode) {
+  s_scanRecorded = true;
+  s_scanTotal = totalNetworks;
+  s_scanTargetFound = targetFound;
+  s_scanTargetRssi = targetRssi;
+  s_scanTargetChannel = targetChannel;
+  s_scanTargetAuthMode = targetAuthMode;
+}
+
+void writeReportOnFailure(FailureKind kind) {
+  s_attemptInProgress = false;
+
+  HalFile f = Storage.open(REPORT_PATH, O_WRITE | O_CREAT | O_TRUNC);
+  if (!f) {
+    LOG_ERR("WIFI_DIAG", "Failed to open %s for writing", REPORT_PATH);
+    return;
+  }
+
+  // Header
+  appendf(f, "CrossPoint Wi-Fi Diagnostic Report\n");
+  appendf(f, "Firmware:        %s\n", CROSSPOINT_VERSION);
+  appendf(f, "ESP-IDF:         %s\n", esp_get_idf_version());
+  appendf(f, "Reset reason:    %d\n", static_cast<int>(esp_reset_reason()));
+  appendf(f, "Free heap now:   %u bytes\n", static_cast<unsigned>(ESP.getFreeHeap()));
+  appendf(f, "Min free heap:   %u bytes\n",
+          static_cast<unsigned>(s_minFreeHeapSeen == UINT32_MAX ? 0 : s_minFreeHeapSeen));
+
+  // Country code
+  wifi_country_t country{};
+  if (esp_wifi_get_country(&country) == ESP_OK) {
+    char cc[4] = {0};
+    cc[0] = country.cc[0] ? country.cc[0] : '?';
+    cc[1] = country.cc[1] ? country.cc[1] : '?';
+    cc[2] = country.cc[2] ? country.cc[2] : '\0';
+    appendf(f, "Country code:    %s (ch %u..%u, policy=%d)\n", cc, country.schan,
+            static_cast<unsigned>(country.schan + country.nchan - 1), static_cast<int>(country.policy));
+  } else {
+    appendf(f, "Country code:    <unavailable>\n");
+  }
+
+  appendf(f, "Saved networks:  %u\n", static_cast<unsigned>(s_savedCount));
+  appendf(f, "\n");
+
+  // Target (no SSID, length only)
+  appendf(f, "Target network (sanitized):\n");
+  appendf(f, "  SSID length:   %u    (value redacted)\n", static_cast<unsigned>(s_targetSsidLen));
+  appendf(f, "  Encrypted:     %s\n", s_targetRequiresPassword ? "yes" : "no (open)");
+  appendf(f, "  Saved cred:    %s\n", s_targetUsedSavedPassword ? "yes" : "no");
+  appendf(f, "  Auto-connect:  %s\n", s_targetAutoConnecting ? "yes" : "no");
+
+  if (s_scanRecorded) {
+    appendf(f, "  Found in scan: %s\n", s_scanTargetFound ? "yes" : "no");
+    if (s_scanTargetFound) {
+      appendf(f, "  RSSI:          %d dBm\n", static_cast<int>(s_scanTargetRssi));
+      appendf(f, "  Channel:       %d\n", static_cast<int>(s_scanTargetChannel));
+      appendf(f, "  Auth mode:     %s (%u)\n", authModeName(s_scanTargetAuthMode),
+              static_cast<unsigned>(s_scanTargetAuthMode));
+    }
+  } else {
+    appendf(f, "  Scan not run this attempt (auto-connect path or skipped).\n");
+  }
+  appendf(f, "\n");
+
+  if (s_scanRecorded) {
+    appendf(f, "Scan summary:\n");
+    appendf(f, "  Networks seen: %u\n", static_cast<unsigned>(s_scanTotal));
+    appendf(f, "  (SSIDs and BSSIDs intentionally omitted)\n\n");
+  }
+
+  // Association detail captured from STA_CONNECTED event
+  if (s_assocChannel >= 0) {
+    appendf(f, "Association (from STA_CONNECTED):\n");
+    appendf(f, "  Channel:       %d\n", static_cast<int>(s_assocChannel));
+    appendf(f, "  Auth mode:     %s (%u)\n", authModeName(s_assocAuthMode),
+            static_cast<unsigned>(s_assocAuthMode));
+    appendf(f, "\n");
+  }
+
+  // Timeline
+  appendf(f, "Connect timeline (ms since attempt start):\n");
+  bool sawConnected = false;
+  for (size_t i = 0; i < s_timelineCount; ++i) {
+    const TimelineEntry& e = s_timeline[i];
+    if (e.kind == EntryKind::Status) {
+      appendf(f, "  %6u ms  STATUS  %s (%u)\n", static_cast<unsigned>(e.msOffset),
+              statusName(static_cast<wl_status_t>(e.code)), static_cast<unsigned>(e.code));
+    } else {
+      const auto eventId = static_cast<arduino_event_id_t>(e.code);
+      if (eventId == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
+        sawConnected = true;
+        appendf(f, "  %6u ms  EVENT   %s (channel=%d)\n", static_cast<unsigned>(e.msOffset),
+                eventName(eventId), static_cast<int>(e.aux));
+      } else if (eventId == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+        appendf(f, "  %6u ms  EVENT   %s reason=%d (%s)\n", static_cast<unsigned>(e.msOffset),
+                eventName(eventId), static_cast<int>(e.aux), disconnectReasonName(e.aux));
+      } else {
+        appendf(f, "  %6u ms  EVENT   %s\n", static_cast<unsigned>(e.msOffset), eventName(eventId));
+      }
+    }
+  }
+  if (s_timelineCount == 0) {
+    appendf(f, "  (no timeline entries — attempt failed before any state change)\n");
+  } else if (s_timelineCount >= TIMELINE_CAPACITY) {
+    appendf(f, "  (timeline truncated at %u entries)\n", static_cast<unsigned>(TIMELINE_CAPACITY));
+  }
+  appendf(f, "\n");
+
+  // Result
+  const char* kindName = (kind == FailureKind::Timeout)         ? "TIMEOUT (15 s)"
+                         : (kind == FailureKind::NoSsidAvail)   ? "NO_SSID_AVAIL"
+                                                                : "CONNECT_FAILED";
+  appendf(f, "Result:          %s\n", kindName);
+  appendf(f, "Last reason:     %d (%s)\n", static_cast<int>(s_lastDisconnectReason),
+          disconnectReasonName(s_lastDisconnectReason));
+  appendf(f, "Hint:            %s\n", failureHint(kind, s_lastDisconnectReason, sawConnected));
+  appendf(f, "\nEnd of report.\n");
+
+  f.flush();
+  f.close();
+  LOG_INF("WIFI_DIAG", "Wrote %s (kind=%s, reason=%d)", REPORT_PATH, kindName,
+          static_cast<int>(s_lastDisconnectReason));
+}
+
+}  // namespace WifiDiagReport

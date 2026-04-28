@@ -51,6 +51,7 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiDiagReport.h"
 #include "fonts/CustomBinFontIds.h"
 #include "fonts/CustomBinFontManager.h"
 #include "lifecycle/ActivityRouter.h"
@@ -662,6 +663,10 @@ void setup() {
   // Dump crash report to SD card if we rebooted from a panic
   HalSystem::checkPanic();
   HalSystem::clearPanic();
+
+  // Arm the Wi-Fi diagnostic reporter — registers the WiFi.onEvent handler
+  // so disconnect reason codes are captured for /wifi_report.txt on failure.
+  WifiDiagReport::begin();
 
   if (!ensureCrosspointDataDir()) {
     LOG_ERR("MAIN", "Storage layout error: cannot access /.crosspoint");

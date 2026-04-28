@@ -12,6 +12,7 @@
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiDiagReport.h"
 
 void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
@@ -99,6 +100,7 @@ void WifiSelectionActivity::startWifiScan() {
 
   // Set WiFi mode to station
   WiFi.mode(WIFI_STA);
+  WifiDiagReport::ensureCountryCodeApplied();
   WiFi.disconnect();
   delay(100);
 
@@ -162,6 +164,27 @@ void WifiSelectionActivity::processWifiScanResults() {
     return a.hasSavedPassword && !b.hasSavedPassword;
   });
 
+  // Cache scan summary for the diag report (length-equality match — never the
+  // SSID itself).
+  lastScanCount = networks.size();
+  lastScanTargetFound = false;
+  lastScanTargetRssi = 0;
+  lastScanTargetChannel = 0;
+  lastScanTargetAuthMode = 0xFF;
+  if (!selectedSSID.empty()) {
+    for (int i = 0; i < scanResult; i++) {
+      String entrySsid = WiFi.SSID(i);
+      if (entrySsid.length() == selectedSSID.size() &&
+          memcmp(entrySsid.c_str(), selectedSSID.c_str(), selectedSSID.size()) == 0) {
+        lastScanTargetFound = true;
+        lastScanTargetRssi = WiFi.RSSI(i);
+        lastScanTargetChannel = WiFi.channel(i);
+        lastScanTargetAuthMode = static_cast<uint8_t>(WiFi.encryptionType(i));
+        break;
+      }
+    }
+  }
+
   WiFi.scanDelete();
   state = WifiSelectionState::NETWORK_LIST;
   selectedNetworkIndex = 0;
@@ -223,8 +246,14 @@ void WifiSelectionActivity::attemptConnection() {
   connectionError.clear();
   requestUpdate();
 
+  WifiDiagReport::noteAttemptStart(selectedSSID.size(), WIFI_STORE.getCredentials().size(),
+                                   selectedRequiresPassword, usedSavedPassword, autoConnecting);
+  WifiDiagReport::noteScanSummary(lastScanCount, lastScanTargetFound, lastScanTargetRssi, lastScanTargetChannel,
+                                  lastScanTargetAuthMode);
+
   WiFi.persistent(false);  // Credentials are managed by WifiCredentialStore; suppress SDK NVS auto-connect
   WiFi.mode(WIFI_STA);
+  WifiDiagReport::ensureCountryCodeApplied();
   WiFi.disconnect(true, true);  // Abort any in-progress SDK auto-connect and clear NVS-saved SSID
   delay(100);
 
@@ -247,6 +276,7 @@ void WifiSelectionActivity::checkConnectionStatus() {
   }
 
   const wl_status_t status = WiFi.status();
+  WifiDiagReport::noteStatus(status);
 
   if (status == WL_CONNECTED) {
     // Successfully connected
@@ -284,6 +314,8 @@ void WifiSelectionActivity::checkConnectionStatus() {
     if (status == WL_NO_SSID_AVAIL) {
       connectionError = tr(STR_ERROR_NETWORK_NOT_FOUND);
     }
+    WifiDiagReport::writeReportOnFailure(status == WL_NO_SSID_AVAIL ? WifiDiagReport::FailureKind::NoSsidAvail
+                                                                    : WifiDiagReport::FailureKind::StatusFailed);
     state = WifiSelectionState::CONNECTION_FAILED;
     requestUpdate();
     return;
@@ -293,6 +325,7 @@ void WifiSelectionActivity::checkConnectionStatus() {
   if (millis() - connectionStartTime > CONNECTION_TIMEOUT_MS) {
     WiFi.disconnect();
     connectionError = tr(STR_ERROR_CONNECTION_TIMEOUT);
+    WifiDiagReport::writeReportOnFailure(WifiDiagReport::FailureKind::Timeout);
     state = WifiSelectionState::CONNECTION_FAILED;
     requestUpdate();
     return;

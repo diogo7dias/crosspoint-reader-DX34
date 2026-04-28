@@ -80,6 +80,16 @@ class WifiSelectionActivity final : public ActivityWithSubactivity {
   static constexpr unsigned long CONNECTION_TIMEOUT_MS = 15000;
   unsigned long connectionStartTime = 0;
 
+  // Cached scan summary, fed to WifiDiagReport on attemptConnection. Holds
+  // scan-time facts about the target network (RSSI, channel, auth mode) so a
+  // failure report can include them without re-scanning. SSIDs themselves
+  // never leave the activity — only length-equality match against the target.
+  size_t lastScanCount = 0;
+  bool lastScanTargetFound = false;
+  int32_t lastScanTargetRssi = 0;
+  int32_t lastScanTargetChannel = 0;
+  uint8_t lastScanTargetAuthMode = 0xFF;
+
   void renderNetworkList() const;
   void renderPasswordEntry() const;
   void renderConnecting() const;
