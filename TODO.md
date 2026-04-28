@@ -10,6 +10,8 @@ _(no items pending — last drained for v2.1.0)_
 
 ## Active
 
+- [ ] **Bump OTA JSON content-length cap from 8 KB → 16 KB** in [src/network/OtaUpdater.cpp:61](src/network/OtaUpdater.cpp:61). Long release-note bodies push the GitHub `/releases/latest` JSON over 8192 bytes, which makes `checkForUpdate()` return HTTP_ERROR before the user is even offered the download. Hit on v2.1.0 — body was ~9 KB, had to trim post-publish to unblock OTA. 16 KB is still safe on ~26 KB free heap (one-shot allocation, freed before download begins). Worth a comment explaining the tradeoff so the next release-note author isn't surprised.
+
 - [x] ~~**PXC visibility in MyLibrary file browser.** Today `.pxc` files are only picked up when dropped directly into `/sleep/`. Wiring needed:~~
   ~~- [MyLibraryActivity.cpp](src/activities/home/MyLibraryActivity.cpp): add `isPxcFile()`, expand `isManagedFile()` to OR it. PXC files should appear in the browser list.~~
   ~~- Action menu for PXC files: Move-to-Sleep + Delete + Rename. Skip the BMP-only "Open Image" item (no PXC viewer yet).~~
