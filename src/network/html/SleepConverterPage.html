@@ -34,7 +34,12 @@
         color: var(--muted);
         text-transform: uppercase;
         font-weight: 700;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
+      /* Defensive: never let a stray long token (iOS NSItemProvider names,
+         error strings) push the page wider than the viewport. */
+      body { overflow-x: hidden; }
       .drop {
         padding: 32px var(--pad);
         text-align: center;
@@ -80,7 +85,9 @@
         display: grid;
         grid-template-columns: 1fr;
         gap: var(--pad);
+        min-width: 0;
       }
+      .editor > * { min-width: 0; }
       @media (min-width: 800px) {
         .editor { grid-template-columns: 1fr 1.2fr; }
       }
@@ -114,15 +121,15 @@
           border-bottom: 1px dashed var(--dash);
         }
         .preview-wrap canvas {
+          width: 100%;
+          height: auto;
           max-height: calc(50vh - 8px);
-          width: auto;
-          max-width: 100%;
           object-fit: contain;
         }
       }
 
-      .controls { display: grid; gap: var(--gap); align-content: start; }
-      .row { display: grid; grid-template-columns: 1fr; gap: 8px; }
+      .controls { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
+      .row { display: grid; grid-template-columns: 1fr; gap: 8px; min-width: 0; }
       .row label {
         font-size: 10px;
         letter-spacing: 0.2em;
@@ -187,6 +194,7 @@
         color: var(--muted);
         text-transform: uppercase;
         margin-top: 8px;
+        overflow-wrap: anywhere;
       }
       .status.err { color: var(--red); }
       .status.ok { color: var(--green); }
