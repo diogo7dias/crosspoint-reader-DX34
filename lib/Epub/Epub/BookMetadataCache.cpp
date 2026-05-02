@@ -9,7 +9,14 @@
 #include "FsHelpers.h"
 
 namespace {
-constexpr uint8_t BOOK_CACHE_VERSION = 5;
+// Bump this whenever book.bin format OR any TOC/spine parser logic changes
+// in a way that could leave existing caches with wrong/empty TOC entries.
+// On mismatch, BookMetadataCache::load() returns false and Epub::load()
+// rebuilds book.bin from scratch, also wiping stale sections/*.bin since
+// those are keyed by spine index and become invalid if spine layout shifts.
+//   v6 (2026-05-02): force rebuild after upstream parser picks (#128/#129)
+//                    that left some users with "Unnamed" chapter titles.
+constexpr uint8_t BOOK_CACHE_VERSION = 6;
 constexpr char bookBinFile[] = "/book.bin";
 constexpr char tmpSpineBinFile[] = "/spine.bin.tmp";
 constexpr char tmpTocBinFile[] = "/toc.bin.tmp";
