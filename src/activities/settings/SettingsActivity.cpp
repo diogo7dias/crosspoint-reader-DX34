@@ -245,18 +245,22 @@ void SettingsActivity::buildSettingsList() {
   flatRows.clear();
   categoryHeaderRowIndices.clear();
 
-  for (auto& setting : getSettingsList()) {
+  // getSettingsList() is now a const reference to a function-static cache
+  // (A2). Copy each entry into its category vector — entries are then
+  // mutated locally (dynamicLabels, margin filtering) without touching the
+  // shared cache.
+  for (const auto& setting : getSettingsList()) {
     if (setting.category == StrId::STR_NONE_OPT) continue;
     if (setting.category == StrId::STR_CAT_DISPLAY) {
-      displaySettings.push_back(std::move(setting));
+      displaySettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_READER) {
-      readerSettings.push_back(std::move(setting));
+      readerSettings.push_back(setting);
     } else if (setting.category == StrId::STR_STATUS_BAR) {
-      statusBarSettings.push_back(std::move(setting));
+      statusBarSettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_CONTROLS) {
-      controlsSettings.push_back(std::move(setting));
+      controlsSettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_SYSTEM) {
-      systemSettings.push_back(std::move(setting));
+      systemSettings.push_back(setting);
     }
     // Web-only categories (KOReader Sync, OPDS Browser) are skipped for device UI
   }

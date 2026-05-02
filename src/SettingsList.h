@@ -11,9 +11,16 @@
 // Shared settings list used by both the device settings UI and the web settings API.
 // Each entry has a key (for JSON API) and category (for grouping).
 // ACTION-type entries and entries without a key are device-only.
-inline std::vector<SettingInfo> getSettingsList() {
-  std::vector<SettingInfo> s;
-  s.reserve(80);
+//
+// Cached behind a function-static (A2): the list contents are language-
+// agnostic (StrId values, not translated text) and structurally fixed for
+// the firmware version, so we build it once on first call and return a
+// const reference thereafter. Saves the 80-entry vector + nested
+// initializer-list churn on every Settings open.
+inline const std::vector<SettingInfo>& getSettingsList() {
+  static const std::vector<SettingInfo> kCached = [] {
+    std::vector<SettingInfo> s;
+    s.reserve(80);
 
   // --- Display ---
   s.push_back(
@@ -242,5 +249,7 @@ inline std::vector<SettingInfo> getSettingsList() {
   s.push_back(SettingInfo::String(StrId::STR_PASSWORD, SETTINGS.opdsPassword, sizeof(SETTINGS.opdsPassword),
                                   "opdsPassword", StrId::STR_OPDS_BROWSER));
 
-  return s;
+    return s;
+  }();
+  return kCached;
 }
