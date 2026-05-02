@@ -1,5 +1,7 @@
 #include "WallpaperPlaylistV2.h"
 
+#include <esp_heap_caps.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -15,6 +17,18 @@ namespace {
 constexpr const char* kSleepDir = "/sleep";
 constexpr const char* kSleepPauseDir = "/sleep pause";
 constexpr size_t kHeaderMaxLen = 32;
+
+// Headroom over the requested allocation when probing the heap. Covers the
+// transient std::string growth peak (capacity often rounded up to the next
+// power-of-two on libstdc++) plus small ancillary allocs the caller does
+// while the buffer is in flight. Build with -fno-exceptions, so a bad_alloc
+// here would abort — we must probe before allocating big buffers.
+constexpr size_t kAllocProbeHeadroomBytes = 4 * 1024;
+
+bool heapHasContiguous(size_t needBytes) {
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+  return largest >= needBytes + kAllocProbeHeadroomBytes;
+}
 
 std::string makeSleepPath(const std::string& filename) {
   if (filename.empty()) return {};
@@ -124,6 +138,15 @@ void WallpaperPlaylistV2::writeBuffer(const std::vector<std::string>& names, siz
   size_t total = 0;
   for (const auto& n : names) total += n.size() + 1;
   buffer_.clear();
+  cursor_ = 0;
+  // Build is compiled with -fno-exceptions; a bad_alloc inside reserve would
+  // abort the process. Probe the heap first and leave buffer_ empty if the
+  // contiguous block is too small — caller (reshuffle) treats empty buffer
+  // as "playlist unavailable", SleepActivity then routes to the direct pick
+  // fallback so the user still sees a wallpaper this cycle.
+  if (!heapHasContiguous(total)) {
+    return;
+  }
   buffer_.reserve(total);
   for (const auto& n : names) {
     buffer_.append(n);
@@ -318,7 +341,17 @@ void WallpaperPlaylistV2::reconcile() {
     // due to internal vs IRAM regioning). Allocating new = old + insertion
     // exactly keeps the transient peak as two ~equal allocations rather
     // than one doubled one — fragmentation-tolerant.
+    //
+    // Build compiled with -fno-exceptions — a bad_alloc inside the rebuild
+    // would abort. Probe the heap for the exact-size reserve (old + insertion)
+    // before allocating. If it would not fit, bail with old buffer_ intact;
+    // dirty_ stays true so the next advance() can retry once heap recovers,
+    // and SleepActivity routes around playlist work via the direct pick
+    // fallback in the meantime.
     const size_t newSize = buffer_.size() + insertion.size();
+    if (!heapHasContiguous(newSize)) {
+      return;
+    }
     std::string newBuffer;
     newBuffer.reserve(newSize);
     newBuffer.append(buffer_.data(), cursor_);
