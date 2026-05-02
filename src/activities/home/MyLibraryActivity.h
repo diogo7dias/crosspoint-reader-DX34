@@ -66,6 +66,10 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   size_t fileLoadLimit = 200;
   bool hasMoreFiles = false;
   bool folderHasBooks = false;
+  // Paint-then-load flag (A3): true after onEnter sets up a loading frame and
+  // before loop() runs the SD scan. Render path draws a placeholder while
+  // set; loop bails out of input handling so user can't act on stale state.
+  bool pendingLibraryLoad = false;
 
   // Callbacks
   const std::function<void(const std::string& path)> onSelectBook;

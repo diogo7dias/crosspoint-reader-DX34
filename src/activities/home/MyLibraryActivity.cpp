@@ -836,7 +836,16 @@ void MyLibraryActivity::displayFrame() {
 void MyLibraryActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
-  loadFiles();
+  // A3 paint-then-load: defer the SD directory scan to the next loop tick so
+  // we paint a "Loading library…" placeholder first instead of blocking the
+  // first frame for 200–800 ms on large folders. Hot-path callers of
+  // loadFiles() (rename / delete / loadMore) keep synchronous behaviour.
+  files.clear();
+  filteredFileIndexes.clear();
+  hasMoreFiles = false;
+  folderHasBooks = false;
+  pendingLibraryLoad = true;
+
   selectorIndex = 0;
   pendingSearchQuery.clear();
   pendingSearchSubmit = false;
@@ -857,6 +866,17 @@ void MyLibraryActivity::onExit() {
 }
 
 void MyLibraryActivity::loop() {
+  // A3 paint-then-load: first tick after onEnter — placeholder frame already
+  // painted, now run the actual SD scan. Skip input handling entirely until
+  // the load completes so the user cannot act on a stale empty list.
+  if (pendingLibraryLoad) {
+    loadFiles();
+    pendingLibraryLoad = false;
+    rebuildFilteredFileIndexes();
+    requestUpdate();
+    return;
+  }
+
   if (subActivity) {
     loopSubActivity();
     return;
@@ -1396,6 +1416,20 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   const int listW = pageWidth;
   const int textX = listX + metrics.contentSidePadding;
   const int textW = listW - metrics.contentSidePadding * 2 - 3;
+
+  // A3 paint-then-load placeholder: SD scan deferred to next loop tick.
+  // Draw a centered "Loading library…" indicator in the list area so the
+  // first frame is meaningful instead of an empty list.
+  if (pendingLibraryLoad) {
+    const int loadingFont = UI_10_FONT_ID;
+    const char* msg = tr(STR_LOADING_LIBRARY);
+    const int msgW = renderer.getTextWidth(loadingFont, msg);
+    const int msgH = renderer.getLineHeight(loadingFont);
+    const int msgX = listX + (listW - msgW) / 2;
+    const int msgY = listTop + (listHeight - msgH) / 2;
+    renderer.drawText(loadingFont, msgX, msgY, msg);
+    return;
+  }
 
   clampSelectorIndex();
   const int selected = static_cast<int>(selectorIndex);
