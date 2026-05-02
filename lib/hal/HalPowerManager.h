@@ -20,6 +20,9 @@ class HalPowerManager {
   LockMode currentLockMode = None;
   SemaphoreHandle_t modeMutex = nullptr;  // Protect access to currentLockMode
 
+  // EMA-smoothed battery percent, scaled x10 (0 = uninitialised)
+  mutable int _batteryCachedPercent = 0;
+
  public:
   static constexpr int LOW_POWER_FREQ = 10;                    // MHz
   static constexpr unsigned long IDLE_POWER_SAVING_MS = 3000;  // ms
