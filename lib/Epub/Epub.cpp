@@ -497,6 +497,16 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   LOG_DBG("EBP", "Cache not found, building spine/TOC cache");
   setupCacheDir();
 
+  // book.bin is about to be rebuilt with the current parser. Any pre-existing
+  // sections/*.bin are keyed by the OLD spine layout and may carry stale TOC
+  // mappings — wipe them so they get regenerated against the fresh book.bin.
+  // No-op on first-time book open (sections/ doesn't exist yet).
+  const auto sectionsDir = cachePath + "/sections";
+  if (Storage.exists(sectionsDir.c_str())) {
+    LOG_DBG("EBP", "Wiping stale sections/ before rebuild: %s", sectionsDir.c_str());
+    Storage.removeDir(sectionsDir.c_str());
+  }
+
   const uint32_t indexingStart = millis();
 
   // Begin building cache - stream entries to disk immediately

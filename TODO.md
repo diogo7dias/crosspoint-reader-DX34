@@ -6,7 +6,9 @@ Open follow-ups for this firmware. Prioritised top-down. Workflow per item: buil
 
 Items already merged to `main` that should be called out in the release notes for the next version. Move into the release body when cutting the tag, then clear this section.
 
-_(no items pending — last drained for v2.1.0)_
+### v2.1.2
+
+- **fix(reader): force book.bin rebuild on upgrade to recover lost chapter titles.** Bumped `BOOK_CACHE_VERSION` 5→6 in [BookMetadataCache.cpp](lib/Epub/Epub/BookMetadataCache.cpp). Some users saw chapters disappear or render as "Unnamed" after upgrading past the upstream parser picks (#128/#129) — the cached `book.bin` was stale relative to current parser output, but no version bump invalidated it. Also wipes `cachePath/sections/` on cache miss in [Epub.cpp](lib/Epub/Epub.cpp) so spine-indexed section files don't outlive the rebuilt `book.bin`. One-time slow re-index per book on first open after upgrade; subsequent opens hit cache as before.
 
 ## Active
 
