@@ -7,6 +7,7 @@
 #include <Logging.h>
 #include <Txt.h>
 #include <Xtc.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -28,6 +29,30 @@
 #include "util/StringUtils.h"
 
 namespace {
+
+// Largest contiguous heap block (bytes) required to safely run the V2
+// playlist reconcile / reshuffle path. Below this we bypass the playlist
+// entirely and stream-pick a single file by directory index — no big
+// std::string buffer rebuild, no vector<SleepBmpEntry> trim listing.
+// Threshold sized for ~15 KB buffer + transient peak headroom on ESP32-C3.
+constexpr size_t kSleepLargestBlockSafeBytes = 40 * 1024;
+
+// Direct fragment-safe wallpaper pick. Uses ISleepFs streaming primitives
+// (countSleepBmps + nthSleepBmp) — both O(1) heap beyond the returned
+// filename. Returns empty string if /sleep is empty or fs not wired.
+std::string pickSleepFileDirect() {
+#if FEATURE_WALLPAPER_V2
+  auto* fs = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().deps().fs;
+  if (!fs) return {};
+  const size_t count = fs->countSleepBmps(crosspoint::sleep::v2::kSleepFolderCap);
+  if (count == 0) return {};
+  const size_t idx = static_cast<size_t>(random(static_cast<long>(count)));
+  return fs->nthSleepBmp(idx);
+#else
+  return {};
+#endif
+}
+
 // Sleep rendering runs inside SleepActivity::onEnter, called AFTER
 // enterDeepSleep's persistAppState flushAll and milliseconds before the CPU
 // enters deep sleep. saveToFile() is debounced — the next main-loop tick
@@ -173,6 +198,19 @@ void SleepActivity::renderCustomSleepScreen() const {
     }
   }
 
+  // Heap-fragmentation gate: V2 reconcile/reshuffle rebuild a ~15 KB
+  // contiguous std::string with a transient doubling peak that has been
+  // observed to throw bad_alloc when largest free block is around 32 KB
+  // (post-WebServer fragmented heap). Skip playlist work entirely below
+  // the safe threshold and pick a wallpaper directly from /sleep via
+  // streaming primitives — the user still sees an image, no crash.
+  const size_t largestFreeBlock = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+  const bool useDirectPick = largestFreeBlock < kSleepLargestBlockSafeBytes;
+  if (useDirectPick) {
+    LOG_DBG("SLP", "Largest free %u < %u, using direct sleep pick", static_cast<unsigned>(largestFreeBlock),
+            static_cast<unsigned>(kSleepLargestBlockSafeBytes));
+  }
+
   // Retry advance on parse/open failure so a handful of corrupt BMPs don't
   // waste a sleep render. Each retry calls advance() again, which skips the
   // bad file forward (Large: lex-next; Small: rotates head to tail).
@@ -180,11 +218,22 @@ void SleepActivity::renderCustomSleepScreen() const {
   std::string selectedImage;
   bool rendered = false;
   for (int attempt = 0; attempt < kMaxParseRetries && !rendered; ++attempt) {
+    if (useDirectPick) {
+      selectedImage = pickSleepFileDirect();
+    } else {
 #if FEATURE_WALLPAPER_V2
-    selectedImage = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().advance();
+      // V2 reconcile/writeBuffer probe the heap internally before reserving
+      // and bail (leaving buffer_ empty) if the contiguous block is too small.
+      // After such a bail advance() returns "" and we fall through to direct
+      // pick on the next retry iteration.
+      selectedImage = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().advance();
+      if (selectedImage.empty()) {
+        selectedImage = pickSleepFileDirect();
+      }
 #else
-    selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
+      selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
 #endif
+    }
     if (selectedImage.empty()) break;
     const auto filename = "/sleep/" + selectedImage;
     if (StringUtils::checkFileExtension(selectedImage, ".pxc")) {
