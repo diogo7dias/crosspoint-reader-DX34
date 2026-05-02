@@ -377,7 +377,7 @@ class CrossPointSettings {
   static CrossPointSettings& getInstance() { return instance; }
 
   uint16_t getPowerButtonDuration() const {
-    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 500;
+    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 700;
   }
   static uint8_t normalizeFontFamily(uint8_t family);
   static uint8_t fontFamilyToDisplayIndex(uint8_t family);
