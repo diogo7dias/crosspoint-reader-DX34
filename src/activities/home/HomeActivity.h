@@ -16,8 +16,11 @@ class HomeActivity final : public ActivityWithSubactivity {
   int scrollOffset = 0;         // First visible book index in recents list
   int firstVisibleBookIdx = 0;  // Updated by renderer each frame
   int lastVisibleBookIdx = 0;   // Updated by renderer each frame
+  // Paint-then-load: true between onEnter() and the first loop() tick that
+  // runs the SD scan. While set, render() draws a "Loading recents…"
+  // placeholder in the recents area and loop() bails out before any input
+  // handling so the user can't act on a stale empty list.
   bool recentsLoading = false;
-  bool recentsLoaded = false;
   bool firstRenderDone = false;
   bool hasOpdsUrl = false;
   bool sleepFavoritesFull = false;
