@@ -246,8 +246,8 @@ void WifiSelectionActivity::attemptConnection() {
   connectionError.clear();
   requestUpdate();
 
-  WifiDiagReport::noteAttemptStart(selectedSSID.size(), WIFI_STORE.getCredentials().size(),
-                                   selectedRequiresPassword, usedSavedPassword, autoConnecting);
+  WifiDiagReport::noteAttemptStart(selectedSSID.size(), WIFI_STORE.getCredentials().size(), selectedRequiresPassword,
+                                   usedSavedPassword, autoConnecting);
   WifiDiagReport::noteScanSummary(lastScanCount, lastScanTargetFound, lastScanTargetRssi, lastScanTargetChannel,
                                   lastScanTargetAuthMode);
 
