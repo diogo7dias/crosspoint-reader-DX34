@@ -13,9 +13,9 @@
 namespace WifiDiagReport {
 
 enum class FailureKind : uint8_t {
-  StatusFailed,    // WL_CONNECT_FAILED
-  NoSsidAvail,     // WL_NO_SSID_AVAIL
-  Timeout,         // 15 s timeout in checkConnectionStatus
+  StatusFailed,  // WL_CONNECT_FAILED
+  NoSsidAvail,   // WL_NO_SSID_AVAIL
+  Timeout,       // 15 s timeout in checkConnectionStatus
 };
 
 // Register the WiFi event handler. Call once from setup(). Idempotent.

@@ -86,44 +86,72 @@ void updateMinHeap() {
 
 const char* statusName(wl_status_t s) {
   switch (s) {
-    case WL_NO_SHIELD: return "WL_NO_SHIELD";
-    case WL_IDLE_STATUS: return "WL_IDLE_STATUS";
-    case WL_NO_SSID_AVAIL: return "WL_NO_SSID_AVAIL";
-    case WL_SCAN_COMPLETED: return "WL_SCAN_COMPLETED";
-    case WL_CONNECTED: return "WL_CONNECTED";
-    case WL_CONNECT_FAILED: return "WL_CONNECT_FAILED";
-    case WL_CONNECTION_LOST: return "WL_CONNECTION_LOST";
-    case WL_DISCONNECTED: return "WL_DISCONNECTED";
-    default: return "WL_UNKNOWN";
+    case WL_NO_SHIELD:
+      return "WL_NO_SHIELD";
+    case WL_IDLE_STATUS:
+      return "WL_IDLE_STATUS";
+    case WL_NO_SSID_AVAIL:
+      return "WL_NO_SSID_AVAIL";
+    case WL_SCAN_COMPLETED:
+      return "WL_SCAN_COMPLETED";
+    case WL_CONNECTED:
+      return "WL_CONNECTED";
+    case WL_CONNECT_FAILED:
+      return "WL_CONNECT_FAILED";
+    case WL_CONNECTION_LOST:
+      return "WL_CONNECTION_LOST";
+    case WL_DISCONNECTED:
+      return "WL_DISCONNECTED";
+    default:
+      return "WL_UNKNOWN";
   }
 }
 
 const char* eventName(arduino_event_id_t id) {
   switch (id) {
-    case ARDUINO_EVENT_WIFI_STA_START: return "STA_START";
-    case ARDUINO_EVENT_WIFI_STA_STOP: return "STA_STOP";
-    case ARDUINO_EVENT_WIFI_STA_CONNECTED: return "STA_CONNECTED";
-    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: return "STA_DISCONNECTED";
-    case ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE: return "STA_AUTHMODE_CHANGE";
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP: return "STA_GOT_IP";
-    case ARDUINO_EVENT_WIFI_STA_LOST_IP: return "STA_LOST_IP";
-    case ARDUINO_EVENT_WIFI_SCAN_DONE: return "SCAN_DONE";
-    default: return "OTHER_EVENT";
+    case ARDUINO_EVENT_WIFI_STA_START:
+      return "STA_START";
+    case ARDUINO_EVENT_WIFI_STA_STOP:
+      return "STA_STOP";
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      return "STA_CONNECTED";
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      return "STA_DISCONNECTED";
+    case ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE:
+      return "STA_AUTHMODE_CHANGE";
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      return "STA_GOT_IP";
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      return "STA_LOST_IP";
+    case ARDUINO_EVENT_WIFI_SCAN_DONE:
+      return "SCAN_DONE";
+    default:
+      return "OTHER_EVENT";
   }
 }
 
 const char* authModeName(uint8_t m) {
   switch (m) {
-    case WIFI_AUTH_OPEN: return "OPEN";
-    case WIFI_AUTH_WEP: return "WEP";
-    case WIFI_AUTH_WPA_PSK: return "WPA_PSK";
-    case WIFI_AUTH_WPA2_PSK: return "WPA2_PSK";
-    case WIFI_AUTH_WPA_WPA2_PSK: return "WPA_WPA2_PSK";
-    case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2_ENTERPRISE";
-    case WIFI_AUTH_WPA3_PSK: return "WPA3_PSK";
-    case WIFI_AUTH_WPA2_WPA3_PSK: return "WPA2_WPA3_PSK";
-    case WIFI_AUTH_WAPI_PSK: return "WAPI_PSK";
-    default: return "UNKNOWN";
+    case WIFI_AUTH_OPEN:
+      return "OPEN";
+    case WIFI_AUTH_WEP:
+      return "WEP";
+    case WIFI_AUTH_WPA_PSK:
+      return "WPA_PSK";
+    case WIFI_AUTH_WPA2_PSK:
+      return "WPA2_PSK";
+    case WIFI_AUTH_WPA_WPA2_PSK:
+      return "WPA_WPA2_PSK";
+    case WIFI_AUTH_WPA2_ENTERPRISE:
+      return "WPA2_ENTERPRISE";
+    case WIFI_AUTH_WPA3_PSK:
+      return "WPA3_PSK";
+    case WIFI_AUTH_WPA2_WPA3_PSK:
+      return "WPA2_WPA3_PSK";
+    case WIFI_AUTH_WAPI_PSK:
+      return "WAPI_PSK";
+    default:
+      return "UNKNOWN";
   }
 }
 
@@ -131,31 +159,56 @@ const char* authModeName(uint8_t m) {
 // reason is always written; this just adds a human label when known.
 const char* disconnectReasonName(int32_t r) {
   switch (r) {
-    case 1: return "UNSPECIFIED";
-    case 2: return "AUTH_EXPIRE";
-    case 3: return "AUTH_LEAVE";
-    case 4: return "ASSOC_EXPIRE";
-    case 5: return "ASSOC_TOOMANY";
-    case 6: return "NOT_AUTHED";
-    case 7: return "NOT_ASSOCED";
-    case 8: return "ASSOC_LEAVE";
-    case 15: return "4WAY_HANDSHAKE_TIMEOUT";
-    case 16: return "GROUP_KEY_UPDATE_TIMEOUT";
-    case 17: return "IE_IN_4WAY_DIFFERS";
-    case 18: return "GROUP_CIPHER_INVALID";
-    case 19: return "PAIRWISE_CIPHER_INVALID";
-    case 20: return "AKMP_INVALID";
-    case 23: return "IEEE_802_1X_AUTH_FAILED";
-    case 24: return "CIPHER_SUITE_REJECTED";
-    case 200: return "BEACON_TIMEOUT";
-    case 201: return "NO_AP_FOUND";
-    case 202: return "AUTH_FAIL";
-    case 203: return "ASSOC_FAIL";
-    case 204: return "HANDSHAKE_TIMEOUT";
-    case 205: return "CONNECTION_FAIL";
-    case 206: return "AP_TSF_RESET";
-    case 207: return "ROAMING";
-    default: return "UNKNOWN";
+    case 1:
+      return "UNSPECIFIED";
+    case 2:
+      return "AUTH_EXPIRE";
+    case 3:
+      return "AUTH_LEAVE";
+    case 4:
+      return "ASSOC_EXPIRE";
+    case 5:
+      return "ASSOC_TOOMANY";
+    case 6:
+      return "NOT_AUTHED";
+    case 7:
+      return "NOT_ASSOCED";
+    case 8:
+      return "ASSOC_LEAVE";
+    case 15:
+      return "4WAY_HANDSHAKE_TIMEOUT";
+    case 16:
+      return "GROUP_KEY_UPDATE_TIMEOUT";
+    case 17:
+      return "IE_IN_4WAY_DIFFERS";
+    case 18:
+      return "GROUP_CIPHER_INVALID";
+    case 19:
+      return "PAIRWISE_CIPHER_INVALID";
+    case 20:
+      return "AKMP_INVALID";
+    case 23:
+      return "IEEE_802_1X_AUTH_FAILED";
+    case 24:
+      return "CIPHER_SUITE_REJECTED";
+    case 200:
+      return "BEACON_TIMEOUT";
+    case 201:
+      return "NO_AP_FOUND";
+    case 202:
+      return "AUTH_FAIL";
+    case 203:
+      return "ASSOC_FAIL";
+    case 204:
+      return "HANDSHAKE_TIMEOUT";
+    case 205:
+      return "CONNECTION_FAIL";
+    case 206:
+      return "AP_TSF_RESET";
+    case 207:
+      return "ROAMING";
+    default:
+      return "UNKNOWN";
   }
 }
 
@@ -189,9 +242,8 @@ const char* failureHint(FailureKind kind, int32_t reason, bool sawConnected) {
       break;
   }
   if (kind == FailureKind::Timeout) {
-    return sawConnected
-               ? "Reached STA_CONNECTED but never got IP — DHCP issue or AP not forwarding."
-               : "Never reached STA_CONNECTED in 15 s — RSSI/auth/regulatory; check reason codes above.";
+    return sawConnected ? "Reached STA_CONNECTED but never got IP — DHCP issue or AP not forwarding."
+                        : "Never reached STA_CONNECTED in 15 s — RSSI/auth/regulatory; check reason codes above.";
   }
   return "See reason code above.";
 }
@@ -359,8 +411,7 @@ void writeReportOnFailure(FailureKind kind) {
   if (s_assocChannel >= 0) {
     appendf(f, "Association (from STA_CONNECTED):\n");
     appendf(f, "  Channel:       %d\n", static_cast<int>(s_assocChannel));
-    appendf(f, "  Auth mode:     %s (%u)\n", authModeName(s_assocAuthMode),
-            static_cast<unsigned>(s_assocAuthMode));
+    appendf(f, "  Auth mode:     %s (%u)\n", authModeName(s_assocAuthMode), static_cast<unsigned>(s_assocAuthMode));
     appendf(f, "\n");
   }
 
@@ -376,11 +427,11 @@ void writeReportOnFailure(FailureKind kind) {
       const auto eventId = static_cast<arduino_event_id_t>(e.code);
       if (eventId == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
         sawConnected = true;
-        appendf(f, "  %6u ms  EVENT   %s (channel=%d)\n", static_cast<unsigned>(e.msOffset),
-                eventName(eventId), static_cast<int>(e.aux));
+        appendf(f, "  %6u ms  EVENT   %s (channel=%d)\n", static_cast<unsigned>(e.msOffset), eventName(eventId),
+                static_cast<int>(e.aux));
       } else if (eventId == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
-        appendf(f, "  %6u ms  EVENT   %s reason=%d (%s)\n", static_cast<unsigned>(e.msOffset),
-                eventName(eventId), static_cast<int>(e.aux), disconnectReasonName(e.aux));
+        appendf(f, "  %6u ms  EVENT   %s reason=%d (%s)\n", static_cast<unsigned>(e.msOffset), eventName(eventId),
+                static_cast<int>(e.aux), disconnectReasonName(e.aux));
       } else {
         appendf(f, "  %6u ms  EVENT   %s\n", static_cast<unsigned>(e.msOffset), eventName(eventId));
       }
@@ -394,9 +445,9 @@ void writeReportOnFailure(FailureKind kind) {
   appendf(f, "\n");
 
   // Result
-  const char* kindName = (kind == FailureKind::Timeout)         ? "TIMEOUT (15 s)"
-                         : (kind == FailureKind::NoSsidAvail)   ? "NO_SSID_AVAIL"
-                                                                : "CONNECT_FAILED";
+  const char* kindName = (kind == FailureKind::Timeout)       ? "TIMEOUT (15 s)"
+                         : (kind == FailureKind::NoSsidAvail) ? "NO_SSID_AVAIL"
+                                                              : "CONNECT_FAILED";
   appendf(f, "Result:          %s\n", kindName);
   appendf(f, "Last reason:     %d (%s)\n", static_cast<int>(s_lastDisconnectReason),
           disconnectReasonName(s_lastDisconnectReason));
