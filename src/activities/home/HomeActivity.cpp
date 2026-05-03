@@ -171,8 +171,16 @@ void HomeActivity::onEnter() {
   selectorIndex = 1;  // Default focus on first recent book
   scrollOffset = 0;
 
-  auto metrics = BaseMetrics::values;
-  loadRecentBooks(metrics.homeRecentBooksCount);
+  // Paint-then-load: defer the recent-books SD scan to the first loop tick so
+  // the popup ("Loading home…") is replaced by a real frame in <100 ms instead
+  // of waiting for the per-book Storage.exists() probes. The SD layer can be
+  // unresponsive for several seconds right after a file-transfer session
+  // (15+ uploads dirties the SdFat cluster cache and contends the storage
+  // mutex with the AsyncWriter drain), which previously left the user staring
+  // at the popup over the file-transfer screen for the entire scan window.
+  recentBooks.clear();
+  recentsLoading = true;
+
   // Half refresh on first render to clear ghosting from previous activity
   renderer.requestHalfRefresh();
   // Trigger first update
@@ -182,6 +190,18 @@ void HomeActivity::onEnter() {
 void HomeActivity::onExit() { Activity::onExit(); }
 
 void HomeActivity::loop() {
+  // Paint-then-load: first tick after onEnter — placeholder frame is already
+  // painting (or just painted), now run the actual SD scan. Skip input
+  // handling entirely until the load completes so the user cannot act on a
+  // stale empty list.
+  if (recentsLoading) {
+    auto metrics = BaseMetrics::values;
+    loadRecentBooks(metrics.homeRecentBooksCount);
+    recentsLoading = false;
+    requestUpdate();
+    return;
+  }
+
   // Let sub-activity (e.g. confirm dialog) handle input when active
   if (subActivity) {
     ActivityWithSubactivity::loop();
@@ -373,21 +393,34 @@ void HomeActivity::render(Activity::RenderLock&&) {
   const int recentAreaBottomGap = 8;
   const int recentAreaY = warningBottomY;
   const int recentAreaHeight = std::max(0, menuY - recentAreaBottomGap - recentAreaY);
-  switch (SETTINGS.homeLayout) {
-    case CrossPointSettings::HOME_LAYOUT_SINGLE_COVER: {
-      GUI.drawRecentBookSingleCover(renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
-                                    selectorIndex - 1, scrollOffset);
-      break;
-    }
-    default: {
-      auto vis = GUI.drawRecentBookCover(renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
-                                         selectorIndex - 1, scrollOffset);
-      firstVisibleBookIdx = vis.firstVisible;
-      lastVisibleBookIdx = vis.lastVisible;
-      // Sync scrollOffset with renderer's adjusted position
-      // (renderer may have adjusted it to keep the selected book visible)
-      scrollOffset = vis.firstVisible;
-      break;
+  if (recentsLoading) {
+    // Paint-then-load placeholder: SD scan runs on next loop tick. Centered
+    // status text in the recents region keeps the rest of the home frame
+    // (header, session counter, menu) usable so the popup goes away quickly
+    // even when /sleep is dirty from a just-finished file transfer.
+    const char* msg = tr(STR_LOADING_RECENTS);
+    const int msgW = renderer.getTextWidth(UI_10_FONT_ID, msg);
+    const int msgH = renderer.getLineHeight(UI_10_FONT_ID);
+    const int msgX = (pageWidth - msgW) / 2;
+    const int msgY = recentAreaY + std::max(0, (recentAreaHeight - msgH) / 2);
+    renderer.drawText(UI_10_FONT_ID, msgX, msgY, msg);
+  } else {
+    switch (SETTINGS.homeLayout) {
+      case CrossPointSettings::HOME_LAYOUT_SINGLE_COVER: {
+        GUI.drawRecentBookSingleCover(renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
+                                      selectorIndex - 1, scrollOffset);
+        break;
+      }
+      default: {
+        auto vis = GUI.drawRecentBookCover(renderer, Rect{0, recentAreaY, pageWidth, recentAreaHeight}, recentBooks,
+                                           selectorIndex - 1, scrollOffset);
+        firstVisibleBookIdx = vis.firstVisible;
+        lastVisibleBookIdx = vis.lastVisible;
+        // Sync scrollOffset with renderer's adjusted position
+        // (renderer may have adjusted it to keep the selected book visible)
+        scrollOffset = vis.firstVisible;
+        break;
+      }
     }
   }
 
@@ -427,7 +460,10 @@ void HomeActivity::render(Activity::RenderLock&&) {
 
   renderer.displayBuffer();
 
-  if (!firstRenderDone) {
+  // Defer the post-HALF_REFRESH RED-RAM baseline render until the recents
+  // load has finished — otherwise we'd burn an extra refresh on the
+  // placeholder frame that the next loop tick would immediately overwrite.
+  if (!firstRenderDone && !recentsLoading) {
     firstRenderDone = true;
     requestUpdate();
   }
