@@ -30,10 +30,10 @@ Manual: `pio run -t upload`. Build, flash, and host-test setup in [docs/developm
 ## Features
 
 - **[EPUB reader](./docs/reader.md)** — in-book menu, 16 Reading Themes per book, highlights, 20 bookmarks per book, footnotes, live text settings
-- **[Fonts](./docs/fonts.md)** — ChareInk, Bookerly, Vollkorn at 12–17 pt with regular/bold/italic; Unifont fallback
+- **[Fonts](./docs/fonts.md)** — ChareInk, Bookerly, Vollkorn at 12–17 pt R/B/I; Bitter at 10/12/14/16 R/B/I; Galmuri (Korean) regular; user-uploadable custom `.bin` font; Unifont fallback
 - **[Sleep wallpapers](./docs/wallpapers.md)** — nine modes, managed `/sleep` folder, favorites with auto-trim, in-book triage, native `.pxc` pre-dithered format ([converter](https://crosspoint-pxc-converter.pages.dev/))
 - **[Device controls](./docs/controls.md)** — button remapping, auto-sleep, refresh frequency, custom boot image, orientation
-- **[Wi-Fi & sync](./docs/webserver.md)** — web file transfer with resume, OPDS, Calibre wireless, KOReader progress sync, OTA from GitHub releases with downgrade guard
+- **[Wi-Fi & web server](./docs/webserver.md)** — file manager (upload/download/rename/move/preview), WebDAV mount, WebSocket fast upload, in-browser sleep-wallpaper converter, custom font upload, OPDS, Calibre-Web, KOReader progress sync, OTA from GitHub releases with downgrade guard
 - **Home & library** — recents (up to 100), file browser with search and QR sharing, Classic and Single-Cover layouts
 
 ## Formats
