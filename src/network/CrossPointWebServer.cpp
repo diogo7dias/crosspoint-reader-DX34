@@ -223,8 +223,8 @@ void CrossPointWebServer::begin() {
 
   // Ensure the SDK reconnects the STA link if the router flickers or
   // the client device briefly drops. Keeps the web session alive
-  // across the blip; the activity's render path only shows a
-  // "Reconnecting…" banner rather than exiting.
+  // across the blip; the activity's loss-recovery loop relies on
+  // these driver retries before abandoning after WIFI_ABANDON_MS.
   if (!apMode) WiFi.setAutoReconnect(true);
 
   // Note: WebServer class doesn't have setNoDelay() in the standard ESP32 library.

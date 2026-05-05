@@ -29,6 +29,16 @@ constexpr uint8_t AP_MAX_CONNECTIONS = 4;
 // DNS server for captive portal (redirects all DNS queries to our IP)
 std::unique_ptr<DNSServer> dnsServer;
 constexpr uint16_t DNS_PORT = 53;
+
+// 0..4 bars from RSSI (dBm), with 3 dBm hysteresis on currentBars to suppress flicker.
+int barsForRssi(int rssi, int currentBars) {
+  static constexpr int RISE_DBM[] = {-85, -75, -65, -55};
+  static constexpr int FALL_DBM[] = {-88, -78, -68, -58};
+  int bars = std::clamp(currentBars, 0, 4);
+  while (bars < 4 && rssi >= RISE_DBM[bars]) bars++;
+  while (bars > 0 && rssi < FALL_DBM[bars - 1]) bars--;
+  return bars;
+}
 }  // namespace
 
 void CrossPointWebServerActivity::onEnter() {
@@ -231,6 +241,7 @@ void CrossPointWebServerActivity::startWebServer() {
   if (webServer->isRunning()) {
     state = WebServerActivityState::SERVER_RUNNING;
     LOG_DBG("WEBACT", "Web server started successfully");
+    lastWifiBars = isApMode ? 0 : barsForRssi(WiFi.RSSI(), 0);
 
     // Force an immediate render since we're transitioning from a subactivity
     // that had its own rendering task. We need to make sure our display is shown.
@@ -280,21 +291,48 @@ void CrossPointWebServerActivity::loop() {
       static unsigned long lastWifiCheck = 0;
       if (millis() - lastWifiCheck > 2000) {
         lastWifiCheck = millis();
-        const bool up = (WiFi.status() == WL_CONNECTED);
-        if (!up && !wifiDropped) {
-          LOG_DBG("WEBACT", "WiFi link lost; showing reconnect banner");
-          wifiDropped = true;
-          requestUpdate();
-        } else if (up && wifiDropped) {
-          LOG_DBG("WEBACT", "WiFi link restored");
-          wifiDropped = false;
-          // IP may have changed on DHCP renewal — refresh the label.
-          const auto ip = WiFi.localIP();
-          char ipStr[16];
-          snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-          connectedIP = ipStr;
-          requestUpdate();
+        const wl_status_t wifiStatus = WiFi.status();
+        // Driver auto-reconnect handles retries; abandon (via onGoBack) only
+        // after WIFI_ABANDON_MS, otherwise the activity freezes on a blip.
+        bool repaint = false;
+        if (wifiStatus != WL_CONNECTED) {
+          if (consecutiveDisconnects == 0) {
+            firstDisconnectAt = millis();
+            repaint = true;
+          }
+          consecutiveDisconnects++;
+          LOG_DBG("WEBACT", "WiFi not connected (status=%d, consecutive=%d, total=%lu ms)", wifiStatus,
+                  consecutiveDisconnects, millis() - firstDisconnectAt);
+          if (millis() - firstDisconnectAt > WIFI_ABANDON_MS) {
+            LOG_DBG("WEBACT", "WiFi unavailable for >%lu s; returning to network selection", WIFI_ABANDON_MS / 1000UL);
+            state = WebServerActivityState::SHUTTING_DOWN;
+            onGoBack();
+            return;
+          }
+        } else {
+          if (consecutiveDisconnects > 0) {
+            LOG_DBG("WEBACT", "WiFi recovered after %d failed checks (%lu ms)", consecutiveDisconnects,
+                    millis() - firstDisconnectAt);
+            // IP may have changed on DHCP renewal — refresh the label.
+            const auto ip = WiFi.localIP();
+            char ipStr[16];
+            snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+            connectedIP = ipStr;
+            repaint = true;
+          }
+          consecutiveDisconnects = 0;
+          firstDisconnectAt = 0;
+          const int rssi = WiFi.RSSI();
+          if (rssi < -75) {
+            LOG_DBG("WEBACT", "Warning: Weak WiFi signal: %d dBm", rssi);
+          }
+          const int bars = barsForRssi(rssi, lastWifiBars);
+          if (bars != lastWifiBars) {
+            lastWifiBars = bars;
+            repaint = true;
+          }
         }
+        if (repaint) requestUpdate();
       }
     }
 
@@ -382,6 +420,10 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
   renderer.drawCenteredText(UI_12_FONT_ID, 15, tr(STR_FILE_TRANSFER), true, EpdFontFamily::REGULAR);
 
+  if (!isApMode) {
+    renderWifiIndicator(15);
+  }
+
   if (isApMode) {
     // AP mode display - center the content block
     int startY = 55;
@@ -446,7 +488,41 @@ void CrossPointWebServerActivity::renderServerRunning() const {
   // STA-only link-loss banner. Sits under the title so it doesn't
   // push the QR code around. Disappears automatically when the link
   // comes back.
-  if (wifiDropped && !isApMode) {
+  if (consecutiveDisconnects > 0 && !isApMode) {
     renderer.drawCenteredText(SMALL_FONT_ID, 36, "Reconnecting to Wi-Fi...", true, EpdFontFamily::REGULAR);
+  }
+}
+
+void CrossPointWebServerActivity::renderWifiIndicator(int subHeaderTop) const {
+  constexpr int BAR_COUNT = 4;
+  constexpr int BAR_WIDTH = 4;
+  constexpr int BAR_GAP = 2;
+  constexpr int ICON_HEIGHT = 14;
+  // DX34 has no UITheme metrics; use hardcoded layout to anchor indicator
+  // in the top-right corner near the title.
+  constexpr int CONTENT_SIDE_PADDING = 12;
+  const int iconWidth = BAR_COUNT * BAR_WIDTH + (BAR_COUNT - 1) * BAR_GAP;
+  const int iconRight = renderer.getScreenWidth() - CONTENT_SIDE_PADDING;
+  const int iconLeft = iconRight - iconWidth;
+  const int iconBottom = subHeaderTop + ICON_HEIGHT;
+
+  const bool wifiUp = (WiFi.status() == WL_CONNECTED) && (consecutiveDisconnects == 0);
+  if (wifiUp) {
+    for (int i = 0; i < BAR_COUNT; i++) {
+      const int barHeight = (i + 1) * ICON_HEIGHT / BAR_COUNT;
+      const int x = iconLeft + i * (BAR_WIDTH + BAR_GAP);
+      const int y = iconBottom - barHeight;
+      if (i < lastWifiBars) {
+        renderer.fillRect(x, y, BAR_WIDTH, barHeight, true);
+      } else {
+        renderer.drawRect(x, y, BAR_WIDTH, barHeight, true);
+      }
+    }
+  } else {
+    const int xSize = ICON_HEIGHT;
+    const int x0 = iconRight - xSize;
+    const int y0 = iconBottom - xSize;
+    renderer.drawLine(x0, y0, x0 + xSize, y0 + xSize, 2, true);
+    renderer.drawLine(x0, y0 + xSize, x0 + xSize, y0, 2, true);
   }
 }
