@@ -183,8 +183,17 @@ void HomeActivity::onEnter() {
 
   // Half refresh on first render to clear ghosting from previous activity
   renderer.requestHalfRefresh();
-  // Trigger first update
-  requestUpdate();
+  // Trigger first update. Use requestUpdateAndWait so the render task gets
+  // scheduled before the main thread enters loop() and blocks on the
+  // loadRecentBooks SD scan. On single-core ESP32-C3, same-priority round-
+  // robin alone wasn't enough — after a heavy file-transfer session the SD
+  // mutex was uncontended (mutex take returns immediately, no yield) so the
+  // render task could be starved for the entire scan window and the
+  // "Loading home..." popup would sit on screen until the scan finished.
+  // The 250 ms wait is a head start, not a full-frame guarantee — the
+  // render task takes the renderingMutex and starts painting; the display
+  // hardware refresh that follows yields the CPU back to main on its own.
+  requestUpdateAndWait();
 }
 
 void HomeActivity::onExit() { Activity::onExit(); }
