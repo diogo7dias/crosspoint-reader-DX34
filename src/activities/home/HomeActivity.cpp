@@ -68,6 +68,8 @@ std::vector<HomeMenuItem> buildHomeMenuItems(bool hasOpdsUrl) {
 
 }  // namespace
 
+std::vector<RecentBook> HomeActivity::recentBooks;
+
 int HomeActivity::getMenuItemCount() const {
   return getRecentSlotCount() + 1 + static_cast<int>(buildHomeMenuItems(hasOpdsUrl).size());
 }
@@ -178,8 +180,16 @@ void HomeActivity::onEnter() {
   // (15+ uploads dirties the SdFat cluster cache and contends the storage
   // mutex with the AsyncWriter drain), which previously left the user staring
   // at the popup over the file-transfer screen for the entire scan window.
-  recentBooks.clear();
-  recentsLoading = true;
+  //
+  // First-ever entry (cold boot): no cached list, draw placeholder + block
+  // input until the scan completes. Re-entry: keep the cached list visible
+  // and refresh silently in the background so users don't see a brief
+  // "Loading recents…" flash every time they exit a book.
+  if (recentBooks.empty()) {
+    recentsLoading = true;
+  } else {
+    recentsStale = true;
+  }
 
   // Half refresh on first render to clear ghosting from previous activity
   renderer.requestHalfRefresh();
@@ -209,6 +219,15 @@ void HomeActivity::loop() {
     recentsLoading = false;
     requestUpdate();
     return;
+  }
+  if (recentsStale) {
+    // Background refresh on re-entry: cached list already painted, rescan
+    // SD to pick up changes (deleted books, updated percentages), then
+    // request a redraw and fall through to normal input handling.
+    auto metrics = BaseMetrics::values;
+    recentsStale = false;
+    loadRecentBooks(metrics.homeRecentBooksCount);
+    requestUpdate();
   }
 
   // Let sub-activity (e.g. confirm dialog) handle input when active
