@@ -283,6 +283,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
   esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
   if (esp_err != ESP_OK) {
     LOG_DBG("OTA", "HTTP OTA Begin Failed: %s", esp_err_to_name(esp_err));
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
     return INTERNAL_UPDATE_ERROR;
   }
 
