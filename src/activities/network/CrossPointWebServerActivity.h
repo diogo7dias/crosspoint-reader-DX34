@@ -49,11 +49,17 @@ class CrossPointWebServerActivity final : public ActivityWithSubactivity {
   // Performance monitoring
   unsigned long lastHandleClientTime = 0;
 
-  // STA-only: set when the WiFi link drops; cleared when it recovers.
-  // Drives the "Reconnecting…" overlay but never exits the activity.
-  bool wifiDropped = false;
+  // Sustained WiFi-loss tracking; abandon only after WIFI_ABANDON_MS.
+  // While consecutiveDisconnects>0, render shows the "Reconnecting…" banner.
+  int consecutiveDisconnects = 0;
+  unsigned long firstDisconnectAt = 0;
+  static constexpr unsigned long WIFI_ABANDON_MS = 5UL * 60UL * 1000UL;
+
+  // Cached signal-strength bracket (0..4) for the WiFi indicator.
+  int lastWifiBars = 0;
 
   void renderServerRunning() const;
+  void renderWifiIndicator(int subHeaderTop) const;
 
   void onNetworkModeSelected(NetworkMode mode);
   void onWifiSelectionComplete(bool connected);

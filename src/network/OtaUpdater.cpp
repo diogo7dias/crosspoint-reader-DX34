@@ -1,7 +1,7 @@
 #include "OtaUpdater.h"
 
-#include <ArduinoJson.h>
 #include <Logging.h>
+#include <ReleaseJsonParser.h>
 
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
@@ -26,12 +26,6 @@ const char* findSemverStart(const char* str) {
   return str;
 }
 
-/* Buffer and length tracker for incremental HTTP response from latestReleaseUrl.
- * Static storage is zero-initialized by C++, but explicit init makes intent clear
- * and guards against future refactors that might move these to non-static scope. */
-char* local_buf = nullptr;
-int output_len = 0;
-
 /*
  * When esp_crt_bundle.h included, it is pointing wrong header file
  * which is something under WifiClientSecure because of our framework based on
@@ -46,76 +40,34 @@ esp_err_t http_client_set_header_cb(esp_http_client_handle_t http_client) {
   return esp_http_client_set_header(http_client, "User-Agent", "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
 }
 
+size_t totalBytesReceived = 0;
+
 esp_err_t event_handler(esp_http_client_event_t* event) {
-  /* We do interested in only HTTP_EVENT_ON_DATA event only */
   if (event->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
-
-  if (!esp_http_client_is_chunked_response(event->client)) {
-    int content_len = esp_http_client_get_content_length(event->client);
-    int copy_len = 0;
-
-    if (local_buf == NULL) {
-      /* Guard against bogus or malicious content-length values.
-       * GitHub API /releases/latest JSON is typically 2-4 KB;
-       * 8 KB is generous while staying safe on ~180 KB free heap. */
-      if (content_len <= 0 || content_len > 8192) {
-        LOG_ERR("OTA", "Rejecting content_len %d (max 8192)", content_len);
-        return ESP_ERR_NO_MEM;
-      }
-      /* local_buf life span is tracked by caller checkForUpdate */
-      local_buf = static_cast<char*>(calloc(content_len + 1, sizeof(char)));
-      output_len = 0;
-      if (local_buf == NULL) {
-        LOG_ERR("OTA", "HTTP Client Out of Memory Failed, Allocation %d", content_len);
-        return ESP_ERR_NO_MEM;
-      }
-    }
-    copy_len = min(event->data_len, (content_len - output_len));
-    // Defensive: local_buf is null-checked above on first alloc, but guard
-    // here too in case a follow-up event fires after an intervening failure.
-    if (copy_len && local_buf != nullptr) {
-      memcpy(local_buf + output_len, event->data, copy_len);
-      output_len += copy_len;
-    }
-  } else {
-    /* Code might be hits here, It happened once (for version checking) but I
-     * need more logs to handle that */
-    int chunked_len;
-    esp_http_client_get_chunk_length(event->client, &chunked_len);
-    LOG_DBG("OTA", "esp_http_client_is_chunked_response failed, chunked_len: %d", chunked_len);
-  }
-
+  totalBytesReceived += event->data_len;
+  auto* parser = static_cast<ReleaseJsonParser*>(event->user_data);
+  parser->feed(static_cast<const char*>(event->data), event->data_len);
   return ESP_OK;
-} /* event_handler */
-} /* namespace */
+}
+}  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
-  JsonDocument filter;
   esp_err_t esp_err;
-  JsonDocument doc;
+  ReleaseJsonParser releaseParser;
 
   esp_http_client_config_t client_config = {
       .url = latestReleaseUrl,
       .event_handler = event_handler,
-      /* Default HTTP client buffer size 512 byte only */
       .buffer_size = 8192,
       .buffer_size_tx = 8192,
+      .user_data = &releaseParser,
       .skip_cert_common_name_check = true,
       .crt_bundle_attach = esp_crt_bundle_attach,
       .keep_alive_enable = true,
   };
 
-  /* To track life time of local_buf, dtor will be called on exit from that
-   * function */
-  struct localBufCleaner {
-    char** bufPtr;
-    ~localBufCleaner() {
-      if (*bufPtr) {
-        free(*bufPtr);
-        *bufPtr = NULL;
-      }
-    }
-  } localBufCleaner = {&local_buf};
+  totalBytesReceived = 0;
+  LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
 
   esp_http_client_handle_t client_handle = esp_http_client_init(&client_config);
   if (!client_handle) {
@@ -155,48 +107,25 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
     return HTTP_ERROR;
   }
 
-  filter["tag_name"] = true;
-  filter["assets"][0]["name"] = true;
-  filter["assets"][0]["browser_download_url"] = true;
-  filter["assets"][0]["size"] = true;
-  const DeserializationError error = deserializeJson(doc, local_buf, DeserializationOption::Filter(filter));
-  if (error) {
-    LOG_ERR("OTA", "JSON parse failed: %s", error.c_str());
+  LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
+
+  if (!releaseParser.foundTag()) {
+    LOG_ERR("OTA", "No tag_name in release JSON");
     return JSON_PARSE_ERROR;
   }
 
-  if (!doc["tag_name"].is<std::string>()) {
-    LOG_ERR("OTA", "No tag_name found");
-    return JSON_PARSE_ERROR;
-  }
-
-  if (!doc["assets"].is<JsonArray>()) {
-    LOG_ERR("OTA", "No assets found");
-    return JSON_PARSE_ERROR;
-  }
-
-  latestVersion = doc["tag_name"].as<std::string>();
-
-  for (int i = 0; i < doc["assets"].size(); i++) {
-    if (doc["assets"][i]["name"] == "firmware.bin") {
-      if (!doc["assets"][i]["browser_download_url"].is<std::string>() || !doc["assets"][i]["size"].is<size_t>()) {
-        LOG_ERR("OTA", "firmware.bin asset missing url or size fields");
-        return JSON_PARSE_ERROR;
-      }
-      otaUrl = doc["assets"][i]["browser_download_url"].as<std::string>();
-      otaSize = doc["assets"][i]["size"].as<size_t>();
-      totalSize = otaSize;
-      updateAvailable = true;
-      break;
-    }
-  }
-
-  if (!updateAvailable) {
+  if (!releaseParser.foundFirmware()) {
     LOG_ERR("OTA", "No firmware.bin asset found");
     return NO_UPDATE;
   }
 
-  LOG_DBG("OTA", "Found update: %s", latestVersion.c_str());
+  latestVersion = releaseParser.getTagName();
+  otaUrl = releaseParser.getFirmwareUrl();
+  otaSize = releaseParser.getFirmwareSize();
+  totalSize = otaSize;
+  updateAvailable = true;
+
+  LOG_DBG("OTA", "Found update: tag=%s size=%zu", latestVersion.c_str(), otaSize);
   return OK;
 }
 
