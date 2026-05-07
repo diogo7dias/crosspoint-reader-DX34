@@ -16,15 +16,11 @@ class HomeActivity final : public ActivityWithSubactivity {
   int scrollOffset = 0;         // First visible book index in recents list
   int firstVisibleBookIdx = 0;  // Updated by renderer each frame
   int lastVisibleBookIdx = 0;   // Updated by renderer each frame
-  // Paint-then-load: true on the very first home entry (cold boot) when no
-  // cached list is available. While set, render() draws a "Loading recents…"
-  // placeholder in the recents area and loop() bails out before any input
-  // handling so the user can't act on a stale empty list.
-  bool recentsLoading = false;
   // Re-entry refresh: true when home is re-entered with a cached list still
-  // in memory. The cached list is rendered immediately (no placeholder), and
-  // the SD scan runs on the first loop tick to refresh in place. Avoids the
-  // brief "Loading recents…" flash on every back-from-reader/library.
+  // in memory. The cached list is rendered immediately, and the SD scan runs
+  // on the first loop tick to refresh in place. On cold boot the scan runs
+  // synchronously inside onEnter() (covered by the "Loading home…" transition
+  // popup) so the recents list is fully populated by the first frame.
   bool recentsStale = false;
   bool firstRenderDone = false;
   bool hasOpdsUrl = false;
