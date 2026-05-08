@@ -417,7 +417,20 @@ bool WallpaperPlaylistV2::reshuffle() {
       std::swap(names[i], names[j]);
     }
   }
-  writeBuffer(names, 0);
+  // Anti-repeat: after Fisher-Yates the just-shown name has a 1/N chance of
+  // landing at index 0. With small libraries (4-6 favorites) that produces
+  // visible back-to-back repeats almost every lap. Rotate the just-shown name
+  // to position 0 and start the cursor past it so the next advance() skips
+  // it. Mirrors V1 migrateToSmall (WallpaperPlaylist.cpp).
+  size_t startCursor = 0;
+  if (deps_.lastShownFilename && !deps_.lastShownFilename->empty() && names.size() > 1) {
+    auto it = std::find(names.begin(), names.end(), *deps_.lastShownFilename);
+    if (it != names.end()) {
+      std::rotate(names.begin(), it, it + 1);
+      startCursor = names[0].size() + 1;
+    }
+  }
+  writeBuffer(names, startCursor);
   loaded_ = true;
   return true;
 }
