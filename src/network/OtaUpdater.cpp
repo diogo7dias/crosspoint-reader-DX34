@@ -57,6 +57,12 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
 
   esp_http_client_config_t client_config = {
       .url = latestReleaseUrl,
+      // ESP-IDF default is 5 s, which is too tight for the full DNS + TLS +
+      // GitHub-API roundtrip on a marginal WiFi: a single slow DNS lookup or
+      // TLS retransmit pushed the whole request into ESP_ERR_TIMEOUT, surfacing
+      // as "Update failed (Code 2)" before the retry loop's backoff helped.
+      // 15 s matches installUpdate() and gives the retry loop a fair shot.
+      .timeout_ms = 15000,
       .event_handler = event_handler,
       .buffer_size = 8192,
       .buffer_size_tx = 8192,

@@ -156,6 +156,33 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
     renderer.drawCenteredText(UI_10_FONT_ID, 300, tr(STR_UPDATE_FAILED), true, EpdFontFamily::REGULAR);
     if (lastError == OtaUpdater::RATE_LIMITED) {
       renderer.drawCenteredText(UI_10_FONT_ID, 340, "Try again in a few minutes");
+    } else {
+      // Surface the failure branch on screen so users without a serial console
+      // can report exactly which step failed. Codes match OtaUpdater::OtaUpdaterError.
+      const char* hint = "";
+      switch (lastError) {
+        case OtaUpdater::HTTP_ERROR:
+          hint = "Code 2: network/TLS to GitHub";
+          break;
+        case OtaUpdater::JSON_PARSE_ERROR:
+          hint = "Code 3: release JSON parse";
+          break;
+        case OtaUpdater::UPDATE_OLDER_ERROR:
+          hint = "Code 4: latest is older";
+          break;
+        case OtaUpdater::INTERNAL_UPDATE_ERROR:
+          hint = "Code 5: install/partition";
+          break;
+        case OtaUpdater::OOM_ERROR:
+          hint = "Code 6: out of memory";
+          break;
+        default:
+          hint = "";
+          break;
+      }
+      if (hint[0] != '\0') {
+        renderer.drawCenteredText(UI_10_FONT_ID, 340, hint);
+      }
     }
     renderer.displayBuffer();
     return;
