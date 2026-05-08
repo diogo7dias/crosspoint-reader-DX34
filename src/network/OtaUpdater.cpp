@@ -1,8 +1,15 @@
 #include "OtaUpdater.h"
 
+#include <HTTPClient.h>
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
 
+#include <cstdio>
+#include <memory>
+
+#include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_wifi.h"
@@ -26,92 +33,114 @@ const char* findSemverStart(const char* str) {
   return str;
 }
 
-/*
- * When esp_crt_bundle.h included, it is pointing wrong header file
- * which is something under WifiClientSecure because of our framework based on
- * arduno platform. To manage this obstacle, don't include anything, just extern
- * and it will point correct one.
- */
-extern "C" {
-extern esp_err_t esp_crt_bundle_attach(void* conf);
-}
-
 esp_err_t http_client_set_header_cb(esp_http_client_handle_t http_client) {
   return esp_http_client_set_header(http_client, "User-Agent", "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
 }
 
 size_t totalBytesReceived = 0;
-
-esp_err_t event_handler(esp_http_client_event_t* event) {
-  if (event->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
-  totalBytesReceived += event->data_len;
-  auto* parser = static_cast<ReleaseJsonParser*>(event->user_data);
-  parser->feed(static_cast<const char*>(event->data), event->data_len);
-  return ESP_OK;
-}
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   esp_err_t esp_err;
   ReleaseJsonParser releaseParser;
 
-  esp_http_client_config_t client_config = {
-      .url = latestReleaseUrl,
-      // ESP-IDF default is 5 s, which is too tight for the full DNS + TLS +
-      // GitHub-API roundtrip on a marginal WiFi: a single slow DNS lookup or
-      // TLS retransmit pushed the whole request into ESP_ERR_TIMEOUT, surfacing
-      // as "Update failed (Code 2)" before the retry loop's backoff helped.
-      // 15 s matches installUpdate() and gives the retry loop a fair shot.
-      .timeout_ms = 15000,
-      .event_handler = event_handler,
-      .buffer_size = 8192,
-      .buffer_size_tx = 8192,
-      .user_data = &releaseParser,
-      .skip_cert_common_name_check = true,
-      .crt_bundle_attach = esp_crt_bundle_attach,
-      .keep_alive_enable = true,
-  };
+  // Diagnostic: pre-flight DNS + plain-TCP probe + heap snapshot. Surfaces on
+  // the failure screen so the user can self-report without serial. The TCP
+  // probe distinguishes "TCP blocked / unroutable" from "TLS handshake fail":
+  //   - tcp=OK  → TCP connect works, failure is in TLS handshake
+  //   - tcp=FAIL → blocked at TCP layer (firewall, port closed, captive portal)
+  static char diagBuf[120];
+  IPAddress resolved;
+  bool dnsOk = WiFi.hostByName("api.github.com", resolved);
+  bool tcpOk = false;
+  if (dnsOk) {
+    WiFiClient probe;
+    probe.setTimeout(5);  // seconds
+    tcpOk = probe.connect(resolved, 443);
+    probe.stop();
+  }
+  size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+  if (dnsOk) {
+    std::snprintf(diagBuf, sizeof(diagBuf), "dns=%s tcp=%s heap=%u", resolved.toString().c_str(),
+                  tcpOk ? "OK" : "FAIL", freeHeap);
+  } else {
+    std::snprintf(diagBuf, sizeof(diagBuf), "dns=FAIL heap=%u", freeHeap);
+  }
+  preflightDiag = diagBuf;
+  LOG_INF("OTA", "Pre-flight: %s", diagBuf);
 
+  // Use Arduino HTTPClient + WiFiClientSecure (with setInsecure) instead of
+  // ESP-IDF's esp_http_client. This mirrors KOReaderSyncClient and is the
+  // stack proven to handshake successfully against TLS hosts on the C3's
+  // tight heap (~28 KB free). esp_http_client + mbedtls full handshake was
+  // failing with ESP_ERR_HTTP_CONNECT after TCP connect succeeded, even with
+  // no CA bundle attached — symptomatic of an OOM mid-handshake that the
+  // ESP-IDF transport layer doesn't surface as ESP_ERR_NO_MEM.
   totalBytesReceived = 0;
+  lastEspErrName = nullptr;
   LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
 
-  esp_http_client_handle_t client_handle = esp_http_client_init(&client_config);
-  if (!client_handle) {
-    LOG_ERR("OTA", "HTTP Client Handle Failed");
+  WiFiClientSecure secureClient;
+  secureClient.setInsecure();
+  HTTPClient http;
+  http.setUserAgent("CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
+  http.setTimeout(15000);
+  // Allow GitHub's redirect path (api.github.com may issue 301/302 in some
+  // configurations); FOLLOW_REDIRECTS_FORCED reuses the same secure client.
+  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+
+  if (!http.begin(secureClient, latestReleaseUrl)) {
+    LOG_ERR("OTA", "HTTPClient::begin failed");
     return INTERNAL_UPDATE_ERROR;
   }
 
-  esp_err = esp_http_client_set_header(client_handle, "User-Agent", "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_set_header Failed : %s", esp_err_to_name(esp_err));
-    esp_http_client_cleanup(client_handle);
-    return INTERNAL_UPDATE_ERROR;
-  }
-
-  esp_err = esp_http_client_perform(client_handle);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_perform Failed : %s", esp_err_to_name(esp_err));
-    esp_http_client_cleanup(client_handle);
+  const int statusCode = http.GET();
+  if (statusCode < 0) {
+    // Arduino HTTPClient negative codes describe the failure mode (e.g.
+    // HTTPC_ERROR_CONNECTION_REFUSED, _SEND_HEADER_FAILED, _READ_TIMEOUT).
+    // Stash a static-buffered description so the failure screen can show it.
+    static char httpErrBuf[64];
+    const String desc = HTTPClient::errorToString(statusCode);
+    std::snprintf(httpErrBuf, sizeof(httpErrBuf), "HTTPC %d: %s", statusCode, desc.c_str());
+    lastEspErrName = httpErrBuf;
+    LOG_ERR("OTA", "%s", httpErrBuf);
+    http.end();
     return HTTP_ERROR;
-  }
-
-  int statusCode = esp_http_client_get_status_code(client_handle);
-
-  /* esp_http_client_close will be called inside cleanup as well*/
-  esp_err = esp_http_client_cleanup(client_handle);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s", esp_err_to_name(esp_err));
-    return INTERNAL_UPDATE_ERROR;
   }
 
   if (statusCode == 403 || statusCode == 429) {
     LOG_ERR("OTA", "GitHub API rate limited (HTTP %d)", statusCode);
+    http.end();
     return RATE_LIMITED;
   }
   if (statusCode != 200) {
     LOG_ERR("OTA", "Unexpected HTTP status %d from GitHub API", statusCode);
+    http.end();
     return HTTP_ERROR;
   }
+
+  // Stream the response body in 1 KB chunks into the SAX-style release parser.
+  // Avoids buffering the full ~30 KB JSON in heap.
+  WiFiClient* stream = http.getStreamPtr();
+  if (stream == nullptr) {
+    LOG_ERR("OTA", "HTTPClient stream is null");
+    http.end();
+    return INTERNAL_UPDATE_ERROR;
+  }
+  char chunk[1024];
+  unsigned long lastDataMs = millis();
+  while (http.connected() && (stream->available() > 0 || (millis() - lastDataMs) < 5000)) {
+    int n = stream->read(reinterpret_cast<uint8_t*>(chunk), sizeof(chunk));
+    if (n > 0) {
+      releaseParser.feed(chunk, n);
+      totalBytesReceived += n;
+      lastDataMs = millis();
+    } else {
+      delay(10);
+      if (stream->available() <= 0 && !http.connected()) break;
+    }
+  }
+  http.end();
 
   LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
 
@@ -193,6 +222,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
   /* Signal for OtaUpdateActivity */
   render = false;
 
+  // No CA bundle attached: same stance as checkForUpdate above. The OTA
+  // download URL redirects (releases/download → objects.githubusercontent.com)
+  // so RX buffer stays at 8 KB to fit redirect headers cleanly.
   esp_http_client_config_t client_config = {
       .url = otaUrl.c_str(),
       .timeout_ms = 15000,
@@ -203,7 +235,6 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
       .buffer_size = 8192,
       .buffer_size_tx = 8192,
       .skip_cert_common_name_check = true,
-      .crt_bundle_attach = esp_crt_bundle_attach,
       .keep_alive_enable = true,
   };
 
@@ -215,11 +246,13 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
   /* For better timing and connectivity, we disable power saving for WiFi */
   esp_wifi_set_ps(WIFI_PS_NONE);
 
+  lastEspErrName = nullptr;
   esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
   if (esp_err != ESP_OK) {
-    LOG_DBG("OTA", "HTTP OTA Begin Failed: %s", esp_err_to_name(esp_err));
+    lastEspErrName = esp_err_to_name(esp_err);
+    LOG_ERR("OTA", "HTTP OTA Begin Failed: %s", lastEspErrName);
     esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-    return INTERNAL_UPDATE_ERROR;
+    return OTA_BEGIN_ERROR;
   }
 
   do {
@@ -235,21 +268,25 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
   esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s", esp_err_to_name(esp_err));
+    lastEspErrName = esp_err_to_name(esp_err);
+    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s", lastEspErrName);
     esp_https_ota_finish(ota_handle);
     return HTTP_ERROR;
   }
 
   if (!esp_https_ota_is_complete_data_received(ota_handle)) {
-    LOG_ERR("OTA", "esp_https_ota_is_complete_data_received Failed: %s", esp_err_to_name(esp_err));
+    // The perform-loop exited with ESP_OK, so esp_err here is not a meaningful
+    // signal. Surface processed/total bytes instead — that's the actual gap.
+    LOG_ERR("OTA", "Download incomplete: %zu / %zu bytes", processedSize, totalSize);
     esp_https_ota_finish(ota_handle);
-    return INTERNAL_UPDATE_ERROR;
+    return OTA_INCOMPLETE_ERROR;
   }
 
   esp_err = esp_https_ota_finish(ota_handle);
   if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", esp_err_to_name(esp_err));
-    return INTERNAL_UPDATE_ERROR;
+    lastEspErrName = esp_err_to_name(esp_err);
+    LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", lastEspErrName);
+    return OTA_FINISH_ERROR;
   }
 
   LOG_INF("OTA", "Update completed");
