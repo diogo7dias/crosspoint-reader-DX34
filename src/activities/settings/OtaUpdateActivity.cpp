@@ -175,10 +175,19 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
           desc = "latest is older";
           break;
         case OtaUpdater::INTERNAL_UPDATE_ERROR:
-          desc = "install/partition";
+          desc = "check setup";
           break;
         case OtaUpdater::OOM_ERROR:
           desc = "out of memory";
+          break;
+        case OtaUpdater::OTA_BEGIN_ERROR:
+          desc = "download start (TLS/redirect)";
+          break;
+        case OtaUpdater::OTA_INCOMPLETE_ERROR:
+          desc = "download truncated";
+          break;
+        case OtaUpdater::OTA_FINISH_ERROR:
+          desc = "image validate/partition";
           break;
         default:
           break;
@@ -187,6 +196,21 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
         char hintBuf[64];
         std::snprintf(hintBuf, sizeof(hintBuf), "Code %d: %s", static_cast<int>(lastError), desc);
         renderer.drawCenteredText(UI_10_FONT_ID, 340, hintBuf);
+      }
+      // For install-path failures, render the underlying ESP error name (or
+      // bytes-received gap for OTA_INCOMPLETE_ERROR) so users can self-report
+      // without serial. Always rendered below the hint when present.
+      if (lastError == OtaUpdater::OTA_INCOMPLETE_ERROR) {
+        char gapBuf[80];
+        std::snprintf(gapBuf, sizeof(gapBuf), "%zu / %zu bytes", updater.getProcessedSize(), updater.getTotalSize());
+        renderer.drawCenteredText(UI_10_FONT_ID, 360, gapBuf);
+      } else if (updater.getLastEspErrName() != nullptr) {
+        renderer.drawCenteredText(UI_10_FONT_ID, 360, updater.getLastEspErrName());
+      }
+      // Pre-flight diagnostic (DNS resolve + heap). Useful to differentiate
+      // network reachability vs TLS handshake vs OOM as the underlying cause.
+      if (updater.getPreflightDiag() != nullptr) {
+        renderer.drawCenteredText(UI_10_FONT_ID, 380, updater.getPreflightDiag());
       }
     }
     renderer.displayBuffer();

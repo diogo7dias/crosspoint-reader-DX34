@@ -19,6 +19,14 @@ class OtaUpdater {
   size_t processedSize = 0;
   size_t totalSize = 0;
   bool render = false;
+  // esp_err_to_name() returns a static C string from rodata, so a non-owning
+  // pointer is safe to expose for on-screen rendering on failure paths.
+  const char* lastEspErrName = nullptr;
+  // Pre-flight diagnostic line (DNS resolve + heap free). Set at the start of
+  // checkForUpdate so the failure screen can show whether DNS works and how
+  // much heap is available — narrows network vs TLS vs OOM root cause without
+  // a serial console. Non-owning pointer to a static buffer.
+  const char* preflightDiag = nullptr;
 
  public:
   enum OtaUpdaterError {
@@ -30,6 +38,11 @@ class OtaUpdater {
     INTERNAL_UPDATE_ERROR,
     OOM_ERROR,
     RATE_LIMITED,
+    // Install-path failures, split out from INTERNAL_UPDATE_ERROR so the
+    // failure screen can pinpoint which step broke without a serial console.
+    OTA_BEGIN_ERROR,       // esp_https_ota_begin failed (TLS/redirect/DNS)
+    OTA_INCOMPLETE_ERROR,  // download finished but Content-Length not satisfied
+    OTA_FINISH_ERROR,      // image hash / signature / partition validate failed
   };
 
   size_t getOtaSize() const { return otaSize; }
@@ -39,6 +52,10 @@ class OtaUpdater {
   size_t getTotalSize() const { return totalSize; }
 
   bool getRender() const { return render; }
+
+  const char* getLastEspErrName() const { return lastEspErrName; }
+
+  const char* getPreflightDiag() const { return preflightDiag; }
 
   OtaUpdater() = default;
   bool isUpdateNewer() const;
