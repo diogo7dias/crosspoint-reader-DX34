@@ -253,6 +253,38 @@ void test_advance_skips_files_deleted_since_reconcile() {
   }
 }
 
+void test_reshuffle_does_not_repeat_just_shown_wallpaper() {
+  // 4 files. With seed 0 the FY shuffle ends "f3, f0, f1, f2" — index 0 is
+  // f3, which would also be the last file shown by lap 1 under that same
+  // PRNG sequence. Pre-fix: f3 shows again immediately after reshuffle.
+  Fixture fx;
+  for (int i = 0; i < 4; ++i) fx.fs.seed(std::string("f") + char('0' + i) + ".bmp", 100 + i);
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+
+  std::string lastInLap;
+  for (int i = 0; i < 4; ++i) lastInLap = wp.advance();
+  TEST_ASSERT_FALSE(lastInLap.empty());
+
+  // Drive several reshuffle cycles under different PRNG seeds. The first
+  // wallpaper of each new lap must never equal the last of the previous lap.
+  for (int trial = 0; trial < 16; ++trial) {
+    fx.fakeRandomSeed = static_cast<long>(trial * 31 + 7);
+    const auto firstAfterReshuffle = wp.advance();
+    TEST_ASSERT_FALSE(firstAfterReshuffle.empty());
+    TEST_ASSERT_TRUE_MESSAGE(firstAfterReshuffle != lastInLap, "Just-shown wallpaper appeared again after reshuffle");
+    lastInLap = firstAfterReshuffle;
+    // Walk to end of this lap to set up the next reshuffle.
+    for (int i = 0; i < 2; ++i) {
+      const auto n = wp.advance();
+      if (!n.empty()) lastInLap = n;
+    }
+  }
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -264,5 +296,6 @@ int main(int, char**) {
   RUN_TEST(test_favorites_full_blocks_new_uploads);
   RUN_TEST(test_reshuffle_clears_buffer_when_sleep_empty);
   RUN_TEST(test_advance_skips_files_deleted_since_reconcile);
+  RUN_TEST(test_reshuffle_does_not_repeat_just_shown_wallpaper);
   return UNITY_END();
 }
