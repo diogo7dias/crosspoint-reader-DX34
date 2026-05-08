@@ -4,6 +4,8 @@
 #include <I18n.h>
 #include <WiFi.h>
 
+#include <cstdio>
+
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -156,6 +158,36 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
     renderer.drawCenteredText(UI_10_FONT_ID, 300, tr(STR_UPDATE_FAILED), true, EpdFontFamily::REGULAR);
     if (lastError == OtaUpdater::RATE_LIMITED) {
       renderer.drawCenteredText(UI_10_FONT_ID, 340, "Try again in a few minutes");
+    } else {
+      // Surface the failure branch on screen so users without a serial console
+      // can report exactly which step failed. The numeric code is rendered
+      // from the enum value at runtime so it can't drift if OtaUpdaterError
+      // is reordered.
+      const char* desc = "";
+      switch (lastError) {
+        case OtaUpdater::HTTP_ERROR:
+          desc = "network/TLS to GitHub";
+          break;
+        case OtaUpdater::JSON_PARSE_ERROR:
+          desc = "release JSON parse";
+          break;
+        case OtaUpdater::UPDATE_OLDER_ERROR:
+          desc = "latest is older";
+          break;
+        case OtaUpdater::INTERNAL_UPDATE_ERROR:
+          desc = "install/partition";
+          break;
+        case OtaUpdater::OOM_ERROR:
+          desc = "out of memory";
+          break;
+        default:
+          break;
+      }
+      if (desc[0] != '\0') {
+        char hintBuf[64];
+        std::snprintf(hintBuf, sizeof(hintBuf), "Code %d: %s", static_cast<int>(lastError), desc);
+        renderer.drawCenteredText(UI_10_FONT_ID, 340, hintBuf);
+      }
     }
     renderer.displayBuffer();
     return;
