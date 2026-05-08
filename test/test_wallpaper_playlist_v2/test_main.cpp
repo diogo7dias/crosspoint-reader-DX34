@@ -275,8 +275,7 @@ void test_reshuffle_does_not_repeat_just_shown_wallpaper() {
     fx.fakeRandomSeed = static_cast<long>(trial * 31 + 7);
     const auto firstAfterReshuffle = wp.advance();
     TEST_ASSERT_FALSE(firstAfterReshuffle.empty());
-    TEST_ASSERT_TRUE_MESSAGE(firstAfterReshuffle != lastInLap,
-                             "Just-shown wallpaper appeared again after reshuffle");
+    TEST_ASSERT_TRUE_MESSAGE(firstAfterReshuffle != lastInLap, "Just-shown wallpaper appeared again after reshuffle");
     lastInLap = firstAfterReshuffle;
     // Walk to end of this lap to set up the next reshuffle.
     for (int i = 0; i < 2; ++i) {
