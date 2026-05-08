@@ -4,6 +4,8 @@
 #include <I18n.h>
 #include <WiFi.h>
 
+#include <cstdio>
+
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -158,30 +160,33 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
       renderer.drawCenteredText(UI_10_FONT_ID, 340, "Try again in a few minutes");
     } else {
       // Surface the failure branch on screen so users without a serial console
-      // can report exactly which step failed. Codes match OtaUpdater::OtaUpdaterError.
-      const char* hint = "";
+      // can report exactly which step failed. The numeric code is rendered
+      // from the enum value at runtime so it can't drift if OtaUpdaterError
+      // is reordered.
+      const char* desc = "";
       switch (lastError) {
         case OtaUpdater::HTTP_ERROR:
-          hint = "Code 2: network/TLS to GitHub";
+          desc = "network/TLS to GitHub";
           break;
         case OtaUpdater::JSON_PARSE_ERROR:
-          hint = "Code 3: release JSON parse";
+          desc = "release JSON parse";
           break;
         case OtaUpdater::UPDATE_OLDER_ERROR:
-          hint = "Code 4: latest is older";
+          desc = "latest is older";
           break;
         case OtaUpdater::INTERNAL_UPDATE_ERROR:
-          hint = "Code 5: install/partition";
+          desc = "install/partition";
           break;
         case OtaUpdater::OOM_ERROR:
-          hint = "Code 6: out of memory";
+          desc = "out of memory";
           break;
         default:
-          hint = "";
           break;
       }
-      if (hint[0] != '\0') {
-        renderer.drawCenteredText(UI_10_FONT_ID, 340, hint);
+      if (desc[0] != '\0') {
+        char hintBuf[64];
+        std::snprintf(hintBuf, sizeof(hintBuf), "Code %d: %s", static_cast<int>(lastError), desc);
+        renderer.drawCenteredText(UI_10_FONT_ID, 340, hintBuf);
       }
     }
     renderer.displayBuffer();
