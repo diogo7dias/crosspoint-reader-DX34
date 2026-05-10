@@ -18,6 +18,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "CustomBinFontIds.h"
+#include "persist/SettingsStore.h"
 
 namespace crosspoint {
 namespace fonts {
@@ -490,7 +491,13 @@ void bootInitializeCustomFonts(GfxRenderer& renderer, CrossPointSettings& settin
     settings.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
     settings.customFontName.clear();
     settings.customFontSizePt = 0;
+    // Boot-time fallback persistence is one of the few moments where the
+    // 1500 ms debounce window can leave a regression latent (firmware
+    // crashes between fallback and first activity transition → fallback
+    // re-runs next boot, harmlessly, but the user's deleted custom font
+    // never gets cleared from settings.json). Force a sync flush here.
     settings.saveToFile();
+    crosspoint::persist::settingsStore().flushNow();
   }
 
   LOG_DIAG(kModule, "boot fallback done: ff=%u customFont='%s' cfsPt=%u", static_cast<unsigned>(settings.fontFamily),

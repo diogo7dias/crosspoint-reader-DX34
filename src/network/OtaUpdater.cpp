@@ -14,6 +14,26 @@
 #include "esp_https_ota.h"
 #include "esp_wifi.h"
 
+// Static contract between OtaUpdater's outcome tags and the literal-value
+// switch tables in WifiDiagReport.cpp's report writer. If anyone reorders
+// these enums the report will silently print wrong tag names — pin the
+// numeric values here so the build fails instead.
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::UpdateAvailable) == 0, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::AlreadyLatest) == 1, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::NoFirmwareAsset) == 2, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::HttpClientError) == 3, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::HttpStatusError) == 4, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::RateLimited) == 5, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::JsonParseError) == 6, "CheckOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(CheckOutcome::Tag::InternalError) == 7, "CheckOutcome::Tag values pinned");
+
+static_assert(static_cast<uint8_t>(InstallOutcome::Tag::Success) == 0, "InstallOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(InstallOutcome::Tag::NotNewer) == 1, "InstallOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(InstallOutcome::Tag::BeginFailed) == 2, "InstallOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(InstallOutcome::Tag::PerformFailed) == 3, "InstallOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(InstallOutcome::Tag::Incomplete) == 4, "InstallOutcome::Tag values pinned");
+static_assert(static_cast<uint8_t>(InstallOutcome::Tag::FinishFailed) == 5, "InstallOutcome::Tag values pinned");
+
 namespace {
 constexpr char latestReleaseUrl[] =
     "https://api.github.com/repos/diogo7dias/crosspoint-reader-DX34/releases/"
