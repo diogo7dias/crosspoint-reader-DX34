@@ -356,12 +356,7 @@ String JsonSettingsIO::safeReadFile(const char* path) {
 
 // ---- CrossPointSettings ----
 
-bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
-  LOG_DIAG("CPS", "saveSettings: enter ff=%u fs=%u lsp=%u customFont='%s' cfsPt=%u path=%s", (unsigned)s.fontFamily,
-           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, s.customFontName.c_str(), (unsigned)s.customFontSizePt,
-           path);
-  JsonDocument doc;
-
+void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocument& doc) {
   doc["homeLayout"] = s.homeLayout;
   doc["sleepScreen"] = s.sleepScreen;
   doc["sleepScreenCoverMode"] = s.sleepScreenCoverMode;
@@ -441,6 +436,14 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["darkMode"] = s.darkMode;
   doc["booksFolderOrder"] = s.booksFolderOrder;
   doc["imageDither"] = s.imageDither;
+}
+
+bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
+  LOG_DIAG("CPS", "saveSettings: enter ff=%u fs=%u lsp=%u customFont='%s' cfsPt=%u path=%s", (unsigned)s.fontFamily,
+           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, s.customFontName.c_str(), (unsigned)s.customFontSizePt,
+           path);
+  JsonDocument doc;
+  populateSettingsDoc(s, doc);
 
   String json;
   serializeJson(doc, json);

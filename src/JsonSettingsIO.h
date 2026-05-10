@@ -10,6 +10,7 @@
  * missing keys (from older firmware versions) silently fall back to defaults.
  */
 #pragma once
+#include <ArduinoJson.h>
 #include <WString.h>
 
 class CrossPointSettings;
@@ -32,6 +33,12 @@ bool safeWriteFile(const char* path, const String& json);
 // CrossPointSettings
 bool saveSettings(const CrossPointSettings& s, const char* path);
 bool loadSettings(CrossPointSettings& s, const char* json, bool* needsResave = nullptr);
+
+// Populate a JsonDocument with the settings schema. Shared between
+// saveSettings (string + safeWrite path) and the streaming serializer in
+// CrossPointSettingsJson.cpp (heap-safe stream-to-tmp path) so the schema
+// lives in exactly one place.
+void populateSettingsDoc(const CrossPointSettings& s, JsonDocument& doc);
 
 // WifiCredentialStore
 bool saveWifi(const WifiCredentialStore& store, const char* path);

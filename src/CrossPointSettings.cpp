@@ -15,10 +15,19 @@
 #include "fontIds.h"
 #include "fonts/CustomBinFontIds.h"
 #include "fonts/CustomBinFontManager.h"
+#include "persist/CrossPointSettingsJson.h"
+#include "persist/PersistManager.h"
+#include "persist/SettingsStore.h"
 #include "util/StringUtils.h"
 
-// Initialize the static instance
-CrossPointSettings CrossPointSettings::instance;
+CrossPointSettings& CrossPointSettings::getInstance() {
+  // The store owns the canonical instance. unsafeMut() preserves the
+  // direct-field-write idiom that the existing accessors rely on
+  // (`SETTINGS.fontFamily = X` flows through to data_ in the store).
+  // Mutations don't auto-mark-dirty here; saveToFile() (now flushSoon)
+  // is the explicit dirty trigger, matching pre-RFC #147 semantics.
+  return crosspoint::persist::settingsStore().unsafeMut();
+}
 
 void readAndValidate(FsFile& file, uint8_t& member, const uint8_t maxValue) {
   uint8_t tempValue;
@@ -199,51 +208,63 @@ bool CrossPointSettings::saveToFile() const {
   // Mirror the toggle into BitmapHelpers so an in-UI flip takes effect on the
   // very next render; loadFromFile syncs the same global on cold start.
   setBitmapHelpersUseFactoryLUT(useFactoryLUT != 0);
-  return JsonSettingsIO::saveSettings(*this, SETTINGS_FILE_JSON);
+  // Pre-RFC #147 callers expected synchronous I/O. Now: schedule a
+  // debounced flush; PersistManager().flushAll() drains us at activity
+  // transitions and pre-deep-sleep — the windows where durability
+  // genuinely matters. Battery-yank within the debounce window can lose
+  // a toggle, same risk APP_STATE has carried since RFC #20.
+  crosspoint::persist::settingsStore().flushSoon();
+  return true;
 }
 
 bool CrossPointSettings::loadFromFile() {
-  // Try JSON first
-  String json = JsonSettingsIO::safeReadFile(SETTINGS_FILE_JSON);
-  if (!json.isEmpty()) {
-    bool resave = false;
-    bool result = JsonSettingsIO::loadSettings(*this, json.c_str(), &resave);
-    if (result && resave) {
-      if (saveToFile()) {
-        LOG_DBG("CPS", "Resaved settings to update format");
-      } else {
-        LOG_ERR("CPS", "Failed to resave settings after format update");
+  // Stage-1 retains the legacy binary-format bootstrap as a one-shot
+  // prequel: if no JSON exists, walk the binary fallback chain and write
+  // a fresh JSON file via the legacy path. The store load below then
+  // picks that JSON up. Stage-2 (RFC #147) folds this into a versioned
+  // migration chain; for now the conservative compat path stays.
+  if (!Storage.exists(SETTINGS_FILE_JSON)) {
+    if (Storage.exists(SETTINGS_FILE_BIN)) {
+      if (loadFromBinaryFile()) {
+        if (JsonSettingsIO::saveSettings(*this, SETTINGS_FILE_JSON)) {
+          Storage.rename(SETTINGS_FILE_BIN, SETTINGS_FILE_BAK);
+          LOG_DBG("CPS", "Migrated settings.bin to settings.json");
+        } else {
+          LOG_ERR("CPS", "Failed to save migrated settings to JSON");
+        }
       }
-    }
-    return result;
-  }
-
-  // Fall back to binary migration
-  if (Storage.exists(SETTINGS_FILE_BIN)) {
-    if (loadFromBinaryFile()) {
-      if (saveToFile()) {
+    } else if (Storage.exists(SETTINGS_FILE_BAK)) {
+      Storage.rename(SETTINGS_FILE_BAK, SETTINGS_FILE_BIN);
+      if (loadFromBinaryFile() && JsonSettingsIO::saveSettings(*this, SETTINGS_FILE_JSON)) {
         Storage.rename(SETTINGS_FILE_BIN, SETTINGS_FILE_BAK);
-        LOG_DBG("CPS", "Migrated settings.bin to settings.json");
-        return true;
-      } else {
-        LOG_ERR("CPS", "Failed to save migrated settings to JSON");
-        return false;
+        LOG_DBG("CPS", "Recovered settings from settings.bin.bak");
       }
     }
   }
 
-  // Fallback to old backed up settings if .json was destroyed in a crash
-  if (Storage.exists(SETTINGS_FILE_BAK)) {
-    // temporarily swap name and load it as binary
-    Storage.rename(SETTINGS_FILE_BAK, SETTINGS_FILE_BIN);
-    bool didLoad = loadFromBinaryFile();
-    if (didLoad && saveToFile()) {
-      Storage.rename(SETTINGS_FILE_BIN, SETTINGS_FILE_BAK);
-      LOG_DBG("CPS", "Recovered settings from settings.bin.bak");
-      return true;
-    }
+  auto& store = crosspoint::persist::settingsStore();
+  const auto report = store.load();
+  // The deserializer (CrossPointSettingsJson.cpp) sets a sticky flag when
+  // JsonSettingsIO::loadSettings reports needsResave. Touch the store so
+  // the upgraded payload rewrites on the next tickPersist.
+  if (crosspoint::persist::consumeSettingsResaveSticky()) {
+    store.touch();
   }
-
+  switch (report.status) {
+    case crosspoint::persist::LoadReport::kOk:
+      LOG_DBG("CPS", "settings load: ok");
+      return true;
+    case crosspoint::persist::LoadReport::kRecoveredFromBak:
+      LOG_INF("CPS", "settings load: recovered from .bak");
+      store.touch();
+      return true;
+    case crosspoint::persist::LoadReport::kCorrupt:
+      LOG_ERR("CPS", "settings load: corrupt; defaults used");
+      return false;
+    case crosspoint::persist::LoadReport::kMissing:
+      LOG_DBG("CPS", "settings load: missing; defaults used");
+      return false;
+  }
   return false;
 }
 

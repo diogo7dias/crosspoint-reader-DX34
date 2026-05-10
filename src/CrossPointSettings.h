@@ -18,17 +18,14 @@
 #include <string>
 
 class CrossPointSettings {
- private:
-  // Private constructor for singleton
-  CrossPointSettings() = default;
-
-  // Static instance
-  static CrossPointSettings instance;
-
  public:
-  // Delete copy constructor and assignment
-  CrossPointSettings(const CrossPointSettings&) = delete;
-  CrossPointSettings& operator=(const CrossPointSettings&) = delete;
+  // Default-constructible + copy-assignable so PersistentStore<T> can hold
+  // and reload the value. Activities still touch the canonical instance
+  // via getInstance(); the only legitimate copy/assign sites are inside
+  // PersistentStore::load() (parsed -> data_) and tests.
+  CrossPointSettings() = default;
+  CrossPointSettings(const CrossPointSettings&) = default;
+  CrossPointSettings& operator=(const CrossPointSettings&) = default;
 
   enum SLEEP_SCREEN_MODE {
     DARK = 0,
@@ -373,8 +370,11 @@ class CrossPointSettings {
 
   ~CrossPointSettings() = default;
 
-  // Get singleton instance
-  static CrossPointSettings& getInstance() { return instance; }
+  // Get singleton instance. Backed by PersistentStore<CrossPointSettings>'s
+  // owned data — defined in CrossPointSettings.cpp so the header does not
+  // pull SettingsStore + PersistentStore + IFileIO into every translation
+  // unit that includes settings.
+  static CrossPointSettings& getInstance();
 
   uint16_t getPowerButtonDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 700;
