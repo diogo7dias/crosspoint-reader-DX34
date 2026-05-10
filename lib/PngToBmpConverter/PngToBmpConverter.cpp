@@ -350,7 +350,7 @@ static void convertScanlineToGray(const PngDecodeContext& ctx, uint8_t* grayRow)
   switch (ctx.colorType) {
     case PNG_COLOR_GRAYSCALE:
       if (ctx.bitDepth == 8) {
-        memcpy(grayRow, src, w);
+        memcpy(grayRow, src, ctx.rawRowBytes);
       } else if (ctx.bitDepth == 16) {
         for (uint32_t x = 0; x < w; x++) grayRow[x] = src[x * 2];
       } else {
