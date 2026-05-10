@@ -24,7 +24,17 @@ class OtaUpdateActivity : public ActivityWithSubactivity {
   State state = WIFI_SELECTION;
   unsigned int lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
   OtaUpdater updater;
-  OtaUpdater::OtaUpdaterError lastError = OtaUpdater::OK;
+
+  // Typed outcome carriers (RFC #146). Populated during the check / install
+  // phases; rendered by switching on tag. .tag default values mean
+  // "no failure observed yet" so the FAILED render can safely inspect both.
+  CheckOutcome lastCheck;
+  InstallOutcome lastInstall;
+  bool lastInstallPresent = false;
+  // Live progress bytes — updated from inside the install ProgressFn so the
+  // render path no longer polls a getRender() flag plus two getter sizes.
+  uint32_t progressBytesDone = 0;
+  uint32_t progressBytesTotal = 1;  // 1 to avoid div-by-zero before first chunk
 
   void onWifiSelectionComplete(bool success);
 

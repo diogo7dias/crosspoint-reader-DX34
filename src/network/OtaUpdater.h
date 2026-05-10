@@ -1,65 +1,116 @@
 /**
  * @file OtaUpdater.h
- * @brief Over-the-air firmware update checker and installer.
+ * @brief Over-the-air firmware update checker and installer (RFC #146 typed outcomes).
  *
  * Queries the GitHub Releases API for the latest firmware, compares version
- * strings, and performs ESP-IDF HTTPS OTA if a newer version is found.
- * Uses the device's secondary OTA partition (app1) for safe rollback.
+ * strings, and performs ESP-IDF HTTPS OTA if a newer version is found. Uses
+ * the device's secondary OTA partition (app1) for safe rollback.
+ *
+ * Two transports stay separate (Arduino HTTPClient for the metadata fetch,
+ * esp_https_ota for the install) — both proven on the C3's tight heap.
+ * Failure surfaces are typed sum types per phase, so the UI switches on a
+ * tag with structured per-case fields and never parses const char* strings
+ * that point into static buffers.
  */
 #pragma once
 
+#include <esp_err.h>
+
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <string>
 
-class OtaUpdater {
-  bool updateAvailable = false;
-  std::string latestVersion;
-  std::string otaUrl;
-  size_t otaSize = 0;
-  size_t processedSize = 0;
-  size_t totalSize = 0;
-  bool render = false;
-  // esp_err_to_name() returns a static C string from rodata, so a non-owning
-  // pointer is safe to expose for on-screen rendering on failure paths.
-  const char* lastEspErrName = nullptr;
-  // Pre-flight diagnostic line (DNS resolve + heap free). Set at the start of
-  // checkForUpdate so the failure screen can show whether DNS works and how
-  // much heap is available — narrows network vs TLS vs OOM root cause without
-  // a serial console. Non-owning pointer to a static buffer.
-  const char* preflightDiag = nullptr;
+// ---- Pre-flight network probe (cheap, runs once at start of checkForUpdate) ----
+// Plain POD. Captured by value; lives on the caller's stack / activity.
+struct NetPreflight {
+  enum class Dns : uint8_t { Ok, Failed };
+  enum class Tcp : uint8_t { Ok, Failed, Skipped };  // Skipped if Dns::Failed
 
- public:
-  enum OtaUpdaterError {
-    OK = 0,
-    NO_UPDATE,
-    HTTP_ERROR,
-    JSON_PARSE_ERROR,
-    UPDATE_OLDER_ERROR,
-    INTERNAL_UPDATE_ERROR,
-    OOM_ERROR,
-    RATE_LIMITED,
-    // Install-path failures, split out from INTERNAL_UPDATE_ERROR so the
-    // failure screen can pinpoint which step broke without a serial console.
-    OTA_BEGIN_ERROR,       // esp_https_ota_begin failed (TLS/redirect/DNS)
-    OTA_INCOMPLETE_ERROR,  // download finished but Content-Length not satisfied
-    OTA_FINISH_ERROR,      // image hash / signature / partition validate failed
+  Dns dns = Dns::Failed;
+  Tcp tcp = Tcp::Skipped;
+  uint32_t resolvedIpV4 = 0;     // 0 if Dns::Failed
+  uint32_t freeHeapBytes = 0;
+  // Reserved for the diag::Log unification (RFC #146 follow-up). Today: 0.
+  uint16_t lastWifiReason = 0;
+};
+
+// ---- Outcome of checkForUpdate() — Arduino HTTPClient transport ----
+struct CheckOutcome {
+  enum class Tag : uint8_t {
+    UpdateAvailable,    // newer release found, ready for installUpdate()
+    AlreadyLatest,      // server reachable; tag matches current or is older
+    NoFirmwareAsset,    // tag present but no firmware.bin attachment
+    HttpClientError,    // HTTPClient negative code (transport-level)
+    HttpStatusError,    // server returned non-2xx (and not 403/429)
+    RateLimited,        // 403 / 429
+    JsonParseError,     // SAX parser found no tag_name
+    InternalError,      // begin() / null stream / etc.
   };
 
-  size_t getOtaSize() const { return otaSize; }
+  Tag tag = Tag::InternalError;
+  NetPreflight preflight;
 
-  size_t getProcessedSize() const { return processedSize; }
+  // Per-tag payload. Read only the field matching `tag`.
+  union U {
+    uint32_t latestSize;     // updateAvailable
+    int      httpcCode;      // httpClientError (negative HTTPC_*)
+    int      httpStatus;     // httpStatusError or rateLimited (4xx/5xx)
+    U() : latestSize(0) {}
+  } u;
 
-  size_t getTotalSize() const { return totalSize; }
+  // Populated on UpdateAvailable / AlreadyLatest. Empty otherwise.
+  std::string latestVersion;
+};
 
-  bool getRender() const { return render; }
+// ---- Streaming install progress (passed to ProgressFn per perform iteration) ----
+struct InstallProgress {
+  uint32_t bytesProcessed = 0;
+  uint32_t bytesExpected = 0;
+};
 
-  const char* getLastEspErrName() const { return lastEspErrName; }
+// ---- Outcome of installUpdate() — esp_https_ota transport ----
+struct InstallOutcome {
+  enum class Tag : uint8_t {
+    Success,
+    NotNewer,           // installUpdate called without prior UpdateAvailable
+    BeginFailed,        // esp_https_ota_begin (TLS / DNS / redirect)
+    PerformFailed,      // esp_https_ota_perform mid-stream
+    Incomplete,         // exited OK but Content-Length not satisfied
+    FinishFailed,       // hash / signature / partition validate
+  };
 
-  const char* getPreflightDiag() const { return preflightDiag; }
+  Tag         tag = Tag::NotNewer;
+  uint32_t    bytesProcessed = 0;
+  uint32_t    bytesExpected = 0;
+  esp_err_t   espErr = ESP_OK;
+  const char* espErrName = nullptr;  // rodata via esp_err_to_name; null if espErr == ESP_OK
+};
+
+class OtaUpdater {
+ public:
+  using ProgressFn = std::function<void(const InstallProgress&)>;
 
   OtaUpdater() = default;
-  bool isUpdateNewer() const;
-  const std::string& getLatestVersion() const;
-  OtaUpdaterError checkForUpdate();
-  OtaUpdaterError installUpdate(std::function<void()> onProgress = nullptr);
+
+  CheckOutcome   checkForUpdate();
+  InstallOutcome installUpdate(ProgressFn onProgress = {});
+
+  // Held between checkForUpdate() and installUpdate(). Caller may also read
+  // these from CheckOutcome.latestVersion / .u.updateAvailable.latestSize
+  // — exposed here so legacy render paths that already grab the version
+  // for the confirmation screen do not need to thread the outcome through.
+  bool               hasPendingUpdate() const { return pending_.has; }
+  const std::string& latestVersion() const { return pending_.version; }
+  uint32_t           latestSize() const { return pending_.size; }
+
+ private:
+  struct Pending {
+    bool has = false;
+    std::string version;
+    std::string url;
+    uint32_t size = 0;
+  } pending_;
+
+  static NetPreflight runPreflight();
 };

@@ -11,6 +11,15 @@
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "network/OtaUpdater.h"
+#include "network/WifiDiagReport.h"
+
+namespace {
+// Unpack NetPreflight.resolvedIpV4 (network-byte-packed uint32) into "a.b.c.d"
+// for the failure screen. Returns chars written, ≤ 16 incl. NUL.
+size_t formatIpV4(uint32_t ip, char* buf, size_t cap) {
+  return std::snprintf(buf, cap, "%u.%u.%u.%u", (ip >> 24) & 0xFF, (ip >> 16) & 0xFF, (ip >> 8) & 0xFF, ip & 0xFF);
+}
+}  // namespace
 
 void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   exitActivity();
@@ -29,45 +38,46 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   }
   requestUpdateAndWait();
 
-  OtaUpdater::OtaUpdaterError res = OtaUpdater::HTTP_ERROR;
+  CheckOutcome res;
   for (int attempt = 0; attempt <= OTA_CHECK_MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       LOG_INF("OTA", "Retry attempt %d/%d", attempt, OTA_CHECK_MAX_RETRIES);
       delay(2000 * attempt);
     }
     res = updater.checkForUpdate();
-    if (res == OtaUpdater::OK || res == OtaUpdater::NO_UPDATE) break;
-    if (res == OtaUpdater::RATE_LIMITED && attempt < OTA_CHECK_MAX_RETRIES) {
+    if (res.tag == CheckOutcome::Tag::UpdateAvailable || res.tag == CheckOutcome::Tag::AlreadyLatest ||
+        res.tag == CheckOutcome::Tag::NoFirmwareAsset) {
+      break;
+    }
+    if (res.tag == CheckOutcome::Tag::RateLimited && attempt < OTA_CHECK_MAX_RETRIES) {
       LOG_INF("OTA", "Rate limited, waiting before retry...");
       delay(5000);
       continue;
     }
   }
 
-  if (res != OtaUpdater::OK) {
-    LOG_DBG("OTA", "Update check failed: %d", res);
-    {
+  switch (res.tag) {
+    case CheckOutcome::Tag::UpdateAvailable: {
       RenderLock lock(*this);
-      lastError = res;
-      state = FAILED;
+      lastCheck = std::move(res);
+      state = WAITING_CONFIRMATION;
+      break;
     }
-    requestUpdate();
-    return;
-  }
-
-  if (!updater.isUpdateNewer()) {
-    LOG_DBG("OTA", "No new update available");
-    {
+    case CheckOutcome::Tag::AlreadyLatest:
+    case CheckOutcome::Tag::NoFirmwareAsset: {
       RenderLock lock(*this);
+      lastCheck = std::move(res);
       state = NO_UPDATE;
+      break;
     }
-    requestUpdate();
-    return;
-  }
-
-  {
-    RenderLock lock(*this);
-    state = WAITING_CONFIRMATION;
+    default: {
+      LOG_DBG("OTA", "Update check failed: tag=%d", static_cast<int>(res.tag));
+      RenderLock lock(*this);
+      lastCheck = std::move(res);
+      state = FAILED;
+      WifiDiagReport::writeReportOnFailure(WifiDiagReport::FailureKind::OtaCheckFailed);
+      break;
+    }
   }
   requestUpdate();
 }
@@ -103,8 +113,8 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
 
   float updaterProgress = 0;
   if (state == UPDATE_IN_PROGRESS) {
-    LOG_DBG("OTA", "Update progress: %d / %d", updater.getProcessedSize(), updater.getTotalSize());
-    updaterProgress = static_cast<float>(updater.getProcessedSize()) / static_cast<float>(updater.getTotalSize());
+    LOG_DBG("OTA", "Update progress: %u / %u", (unsigned)progressBytesDone, (unsigned)progressBytesTotal);
+    updaterProgress = static_cast<float>(progressBytesDone) / static_cast<float>(progressBytesTotal);
     // Only redraw every 5% to limit e-paper refresh cost during download
     const int currentPct = static_cast<int>(updaterProgress * 100);
     if (currentPct != 100 && currentPct - lastUpdaterPercentage < 5) {
@@ -127,7 +137,7 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
   if (state == WAITING_CONFIRMATION) {
     renderer.drawCenteredText(UI_10_FONT_ID, 200, tr(STR_NEW_UPDATE), true, EpdFontFamily::REGULAR);
     renderer.drawText(UI_10_FONT_ID, 20, 250, (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
-    renderer.drawText(UI_10_FONT_ID, 20, 270, (std::string(tr(STR_NEW_VERSION)) + updater.getLatestVersion()).c_str());
+    renderer.drawText(UI_10_FONT_ID, 20, 270, (std::string(tr(STR_NEW_VERSION)) + updater.latestVersion()).c_str());
 
     const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_UPDATE), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
@@ -143,7 +153,7 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
                               (std::to_string(static_cast<int>(updaterProgress * 100)) + "%").c_str());
     renderer.drawCenteredText(
         UI_10_FONT_ID, 440,
-        (std::to_string(updater.getProcessedSize()) + " / " + std::to_string(updater.getTotalSize())).c_str());
+        (std::to_string(progressBytesDone) + " / " + std::to_string(progressBytesTotal)).c_str());
     renderer.displayBuffer();
     return;
   }
@@ -156,62 +166,95 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
 
   if (state == FAILED) {
     renderer.drawCenteredText(UI_10_FONT_ID, 300, tr(STR_UPDATE_FAILED), true, EpdFontFamily::REGULAR);
-    if (lastError == OtaUpdater::RATE_LIMITED) {
-      renderer.drawCenteredText(UI_10_FONT_ID, 340, "Try again in a few minutes");
+    char hintBuf[64];
+    char detailBuf[80];
+    const char* hint = nullptr;
+    const char* detail = nullptr;
+
+    if (lastInstallPresent) {
+      switch (lastInstall.tag) {
+        case InstallOutcome::Tag::BeginFailed:
+          hint = "download start (TLS/redirect)";
+          detail = lastInstall.espErrName;
+          break;
+        case InstallOutcome::Tag::PerformFailed:
+          hint = "download interrupted";
+          std::snprintf(detailBuf, sizeof(detailBuf), "%s @ %u / %u",
+                        lastInstall.espErrName ? lastInstall.espErrName : "esp_err",
+                        (unsigned)lastInstall.bytesProcessed, (unsigned)lastInstall.bytesExpected);
+          detail = detailBuf;
+          break;
+        case InstallOutcome::Tag::Incomplete:
+          hint = "download truncated";
+          std::snprintf(detailBuf, sizeof(detailBuf), "%u / %u bytes", (unsigned)lastInstall.bytesProcessed,
+                        (unsigned)lastInstall.bytesExpected);
+          detail = detailBuf;
+          break;
+        case InstallOutcome::Tag::FinishFailed:
+          hint = "image validate/partition";
+          detail = lastInstall.espErrName;
+          break;
+        case InstallOutcome::Tag::NotNewer:
+          hint = "latest is older";
+          break;
+        case InstallOutcome::Tag::Success:
+          break;  // not a failure path
+      }
     } else {
-      // Surface the failure branch on screen so users without a serial console
-      // can report exactly which step failed. The numeric code is rendered
-      // from the enum value at runtime so it can't drift if OtaUpdaterError
-      // is reordered.
-      const char* desc = "";
-      switch (lastError) {
-        case OtaUpdater::HTTP_ERROR:
-          desc = "network/TLS to GitHub";
+      switch (lastCheck.tag) {
+        case CheckOutcome::Tag::HttpClientError:
+          hint = "network/TLS to GitHub";
+          std::snprintf(detailBuf, sizeof(detailBuf), "HTTPC %d", lastCheck.u.httpcCode);
+          detail = detailBuf;
           break;
-        case OtaUpdater::JSON_PARSE_ERROR:
-          desc = "release JSON parse";
+        case CheckOutcome::Tag::HttpStatusError:
+          hint = "server error";
+          std::snprintf(detailBuf, sizeof(detailBuf), "HTTP %d", lastCheck.u.httpStatus);
+          detail = detailBuf;
           break;
-        case OtaUpdater::UPDATE_OLDER_ERROR:
-          desc = "latest is older";
+        case CheckOutcome::Tag::RateLimited:
+          hint = "Try again in a few minutes";
           break;
-        case OtaUpdater::INTERNAL_UPDATE_ERROR:
-          desc = "check setup";
+        case CheckOutcome::Tag::JsonParseError:
+          hint = "release JSON parse";
           break;
-        case OtaUpdater::OOM_ERROR:
-          desc = "out of memory";
+        case CheckOutcome::Tag::NoFirmwareAsset:
+          hint = "no firmware.bin in latest tag";
           break;
-        case OtaUpdater::OTA_BEGIN_ERROR:
-          desc = "download start (TLS/redirect)";
+        case CheckOutcome::Tag::InternalError:
+          hint = "check setup";
           break;
-        case OtaUpdater::OTA_INCOMPLETE_ERROR:
-          desc = "download truncated";
-          break;
-        case OtaUpdater::OTA_FINISH_ERROR:
-          desc = "image validate/partition";
-          break;
-        default:
-          break;
+        case CheckOutcome::Tag::UpdateAvailable:
+        case CheckOutcome::Tag::AlreadyLatest:
+          break;  // not a failure path
       }
-      if (desc[0] != '\0') {
-        char hintBuf[64];
-        std::snprintf(hintBuf, sizeof(hintBuf), "Code %d: %s", static_cast<int>(lastError), desc);
-        renderer.drawCenteredText(UI_10_FONT_ID, 340, hintBuf);
-      }
-      // For install-path failures, render the underlying ESP error name (or
-      // bytes-received gap for OTA_INCOMPLETE_ERROR) so users can self-report
-      // without serial. Always rendered below the hint when present.
-      if (lastError == OtaUpdater::OTA_INCOMPLETE_ERROR) {
-        char gapBuf[80];
-        std::snprintf(gapBuf, sizeof(gapBuf), "%zu / %zu bytes", updater.getProcessedSize(), updater.getTotalSize());
-        renderer.drawCenteredText(UI_10_FONT_ID, 360, gapBuf);
-      } else if (updater.getLastEspErrName() != nullptr) {
-        renderer.drawCenteredText(UI_10_FONT_ID, 360, updater.getLastEspErrName());
-      }
-      // Pre-flight diagnostic (DNS resolve + heap). Useful to differentiate
-      // network reachability vs TLS handshake vs OOM as the underlying cause.
-      if (updater.getPreflightDiag() != nullptr) {
-        renderer.drawCenteredText(UI_10_FONT_ID, 380, updater.getPreflightDiag());
-      }
+    }
+
+    if (hint != nullptr) {
+      std::snprintf(hintBuf, sizeof(hintBuf), "%s", hint);
+      renderer.drawCenteredText(UI_10_FONT_ID, 340, hintBuf);
+    }
+    if (detail != nullptr && detail[0] != '\0') {
+      renderer.drawCenteredText(UI_10_FONT_ID, 360, detail);
+    }
+
+    // Pre-flight diagnostic line — DNS resolve outcome + heap snapshot.
+    // Differentiates network reachability vs TLS handshake vs OOM as the
+    // underlying cause. Rendered for any check-phase failure.
+    const auto& pf = lastCheck.preflight;
+    char preflightBuf[80];
+    if (pf.dns == NetPreflight::Dns::Ok) {
+      char ipBuf[16];
+      formatIpV4(pf.resolvedIpV4, ipBuf, sizeof(ipBuf));
+      std::snprintf(preflightBuf, sizeof(preflightBuf), "dns=%s tcp=%s heap=%u", ipBuf,
+                    pf.tcp == NetPreflight::Tcp::Ok ? "OK" : "FAIL", (unsigned)pf.freeHeapBytes);
+    } else if (pf.freeHeapBytes != 0) {
+      std::snprintf(preflightBuf, sizeof(preflightBuf), "dns=FAIL heap=%u", (unsigned)pf.freeHeapBytes);
+    } else {
+      preflightBuf[0] = '\0';
+    }
+    if (preflightBuf[0] != '\0') {
+      renderer.drawCenteredText(UI_10_FONT_ID, 380, preflightBuf);
     }
     renderer.displayBuffer();
     return;
@@ -227,10 +270,6 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
 }
 
 void OtaUpdateActivity::loop() {
-  if (updater.getRender()) {
-    requestUpdate();
-  }
-
   if (subActivity) {
     subActivity->loop();
     return;
@@ -242,18 +281,28 @@ void OtaUpdateActivity::loop() {
       {
         RenderLock lock(*this);
         state = UPDATE_IN_PROGRESS;
+        progressBytesDone = 0;
+        progressBytesTotal = updater.latestSize() ? updater.latestSize() : 1;
       }
       requestUpdate();
       requestUpdateAndWait();
-      const auto res = updater.installUpdate([this]() { requestUpdate(); });
+      // ProgressFn fires per esp_https_ota_perform iteration with typed
+      // bytes-processed/expected — replaces the old getRender() polled flag.
+      const auto res = updater.installUpdate([this](const InstallProgress& p) {
+        progressBytesDone = p.bytesProcessed;
+        if (p.bytesExpected > 0) progressBytesTotal = p.bytesExpected;
+        requestUpdate();
+      });
 
-      if (res != OtaUpdater::OK) {
-        LOG_DBG("OTA", "Update failed: %d", res);
+      if (res.tag != InstallOutcome::Tag::Success) {
+        LOG_DBG("OTA", "Update failed: tag=%d", static_cast<int>(res.tag));
         {
           RenderLock lock(*this);
-          lastError = res;
+          lastInstall = res;
+          lastInstallPresent = true;
           state = FAILED;
         }
+        WifiDiagReport::writeReportOnFailure(WifiDiagReport::FailureKind::OtaInstallFailed);
         requestUpdate();
         return;
       }

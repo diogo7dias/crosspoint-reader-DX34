@@ -19,7 +19,7 @@ namespace WifiDiagReport {
 
 namespace {
 
-constexpr const char* REPORT_PATH = "/wifi_report.txt";
+constexpr const char* REPORT_PATH = "/diag_report.txt";
 constexpr size_t TIMELINE_CAPACITY = 32;
 
 enum class EntryKind : uint8_t {
@@ -64,6 +64,26 @@ uint32_t s_minFreeHeapSeen = UINT32_MAX;
 
 bool s_eventHandlerRegistered = false;
 bool s_countryCodeApplied = false;
+
+// ---- OTA breadcrumb state (RFC #146 stage 1) ----
+// All in BSS; reset by noteOtaAttemptStart().
+bool s_otaPreflightRecorded = false;
+bool s_otaPreflightDnsOk = false;
+bool s_otaPreflightTcpOk = false;
+uint32_t s_otaPreflightIpV4 = 0;
+uint32_t s_otaPreflightFreeHeap = 0;
+
+bool s_otaCheckRecorded = false;
+uint8_t s_otaCheckTag = 0;
+int s_otaCheckHttpcCode = 0;
+int s_otaCheckHttpStatus = 0;
+
+bool s_otaInstallRecorded = false;
+uint8_t s_otaInstallTag = 0;
+int32_t s_otaInstallEspErr = 0;
+const char* s_otaInstallEspErrName = nullptr;
+uint32_t s_otaInstallBytesProcessed = 0;
+uint32_t s_otaInstallBytesExpected = 0;
 
 void recordTimeline(EntryKind kind, uint16_t code, int32_t aux) {
   if (s_timelineCount >= TIMELINE_CAPACITY) {
@@ -212,6 +232,37 @@ const char* disconnectReasonName(int32_t r) {
   }
 }
 
+// Names for the OTA outcome tags. Values mirror the corresponding enum
+// declared in OtaUpdater.h; intentionally untyped here so this TU does not
+// pull HTTPClient + esp_https_ota transitively. If the enum reorders the
+// names list must be updated in lockstep — guarded by inline static_assert
+// below the noteOta* setters.
+const char* otaCheckTagName(uint8_t t) {
+  switch (t) {
+    case 0: return "UpdateAvailable";
+    case 1: return "AlreadyLatest";
+    case 2: return "NoFirmwareAsset";
+    case 3: return "HttpClientError";
+    case 4: return "HttpStatusError";
+    case 5: return "RateLimited";
+    case 6: return "JsonParseError";
+    case 7: return "InternalError";
+    default: return "?";
+  }
+}
+
+const char* otaInstallTagName(uint8_t t) {
+  switch (t) {
+    case 0: return "Success";
+    case 1: return "NotNewer";
+    case 2: return "BeginFailed";
+    case 3: return "PerformFailed";
+    case 4: return "Incomplete";
+    case 5: return "FinishFailed";
+    default: return "?";
+  }
+}
+
 // Best-effort plain-language hint for the most common failure shapes. Used
 // only for the final RESULT line; never replaces the numeric reason code.
 const char* failureHint(FailureKind kind, int32_t reason, bool sawConnected) {
@@ -244,6 +295,12 @@ const char* failureHint(FailureKind kind, int32_t reason, bool sawConnected) {
   if (kind == FailureKind::Timeout) {
     return sawConnected ? "Reached STA_CONNECTED but never got IP — DHCP issue or AP not forwarding."
                         : "Never reached STA_CONNECTED in 15 s — RSSI/auth/regulatory; check reason codes above.";
+  }
+  if (kind == FailureKind::OtaCheckFailed) {
+    return "OTA check failed before download. See preflight + check tag above.";
+  }
+  if (kind == FailureKind::OtaInstallFailed) {
+    return "OTA install failed. See install tag + esp_err name above.";
   }
   return "See reason code above.";
 }
@@ -347,8 +404,50 @@ void noteScanSummary(size_t totalNetworks, bool targetFound, int32_t targetRssi,
   s_scanTargetAuthMode = targetAuthMode;
 }
 
+void noteOtaAttemptStart() {
+  s_otaPreflightRecorded = false;
+  s_otaCheckRecorded = false;
+  s_otaInstallRecorded = false;
+  s_otaInstallEspErrName = nullptr;
+  s_otaInstallEspErr = 0;
+  s_otaInstallBytesProcessed = 0;
+  s_otaInstallBytesExpected = 0;
+  s_otaCheckHttpcCode = 0;
+  s_otaCheckHttpStatus = 0;
+  updateMinHeap();
+}
+
+void noteOtaPreflight(bool dnsOk, bool tcpOk, uint32_t resolvedIpV4, uint32_t freeHeapBytes) {
+  s_otaPreflightRecorded = true;
+  s_otaPreflightDnsOk = dnsOk;
+  s_otaPreflightTcpOk = tcpOk;
+  s_otaPreflightIpV4 = resolvedIpV4;
+  s_otaPreflightFreeHeap = freeHeapBytes;
+  updateMinHeap();
+}
+
+void noteOtaCheckResult(uint8_t tagAsByte, int httpcCode, int httpStatus) {
+  s_otaCheckRecorded = true;
+  s_otaCheckTag = tagAsByte;
+  s_otaCheckHttpcCode = httpcCode;
+  s_otaCheckHttpStatus = httpStatus;
+  updateMinHeap();
+}
+
+void noteOtaInstallResult(uint8_t tagAsByte, int32_t espErr, const char* espErrName, uint32_t bytesProcessed,
+                          uint32_t bytesExpected) {
+  s_otaInstallRecorded = true;
+  s_otaInstallTag = tagAsByte;
+  s_otaInstallEspErr = espErr;
+  s_otaInstallEspErrName = espErrName;
+  s_otaInstallBytesProcessed = bytesProcessed;
+  s_otaInstallBytesExpected = bytesExpected;
+  updateMinHeap();
+}
+
 void writeReportOnFailure(FailureKind kind) {
   s_attemptInProgress = false;
+  const bool isOtaKind = (kind == FailureKind::OtaCheckFailed || kind == FailureKind::OtaInstallFailed);
 
   HalFile f = Storage.open(REPORT_PATH, O_WRITE | O_CREAT | O_TRUNC);
   if (!f) {
@@ -357,7 +456,7 @@ void writeReportOnFailure(FailureKind kind) {
   }
 
   // Header
-  appendf(f, "CrossPoint Wi-Fi Diagnostic Report\n");
+  appendf(f, "CrossPoint Diagnostic Report\n");
   appendf(f, "Firmware:        %s\n", CROSSPOINT_VERSION);
   appendf(f, "ESP-IDF:         %s\n", esp_get_idf_version());
   appendf(f, "Reset reason:    %d\n", static_cast<int>(esp_reset_reason()));
@@ -444,13 +543,52 @@ void writeReportOnFailure(FailureKind kind) {
   }
   appendf(f, "\n");
 
+  // ---- OTA section (only printed when an OTA attempt left breadcrumbs) ----
+  if (s_otaPreflightRecorded || s_otaCheckRecorded || s_otaInstallRecorded) {
+    appendf(f, "OTA breadcrumbs:\n");
+    if (s_otaPreflightRecorded) {
+      if (s_otaPreflightDnsOk) {
+        appendf(f, "  Preflight:     dns=%u.%u.%u.%u tcp=%s heap=%u bytes\n", (s_otaPreflightIpV4 >> 24) & 0xFF,
+                (s_otaPreflightIpV4 >> 16) & 0xFF, (s_otaPreflightIpV4 >> 8) & 0xFF, s_otaPreflightIpV4 & 0xFF,
+                s_otaPreflightTcpOk ? "OK" : "FAIL", static_cast<unsigned>(s_otaPreflightFreeHeap));
+      } else {
+        appendf(f, "  Preflight:     dns=FAIL heap=%u bytes\n", static_cast<unsigned>(s_otaPreflightFreeHeap));
+      }
+    }
+    if (s_otaCheckRecorded) {
+      appendf(f, "  Check tag:     %u (%s)\n", static_cast<unsigned>(s_otaCheckTag), otaCheckTagName(s_otaCheckTag));
+      if (s_otaCheckHttpcCode != 0) appendf(f, "  HTTPC code:    %d\n", s_otaCheckHttpcCode);
+      if (s_otaCheckHttpStatus != 0) appendf(f, "  HTTP status:   %d\n", s_otaCheckHttpStatus);
+    }
+    if (s_otaInstallRecorded) {
+      appendf(f, "  Install tag:   %u (%s)\n", static_cast<unsigned>(s_otaInstallTag),
+              otaInstallTagName(s_otaInstallTag));
+      if (s_otaInstallEspErrName != nullptr) {
+        appendf(f, "  esp_err:       %s (%d)\n", s_otaInstallEspErrName, static_cast<int>(s_otaInstallEspErr));
+      }
+      if (s_otaInstallBytesExpected > 0) {
+        appendf(f, "  Bytes:         %u / %u\n", static_cast<unsigned>(s_otaInstallBytesProcessed),
+                static_cast<unsigned>(s_otaInstallBytesExpected));
+      }
+    }
+    appendf(f, "\n");
+  }
+
   // Result
-  const char* kindName = (kind == FailureKind::Timeout)       ? "TIMEOUT (15 s)"
-                         : (kind == FailureKind::NoSsidAvail) ? "NO_SSID_AVAIL"
-                                                              : "CONNECT_FAILED";
+  const char* kindName;
+  switch (kind) {
+    case FailureKind::Timeout:          kindName = "TIMEOUT (15 s)"; break;
+    case FailureKind::NoSsidAvail:      kindName = "NO_SSID_AVAIL"; break;
+    case FailureKind::OtaCheckFailed:   kindName = "OTA_CHECK_FAILED"; break;
+    case FailureKind::OtaInstallFailed: kindName = "OTA_INSTALL_FAILED"; break;
+    case FailureKind::StatusFailed:
+    default:                            kindName = "CONNECT_FAILED"; break;
+  }
   appendf(f, "Result:          %s\n", kindName);
-  appendf(f, "Last reason:     %d (%s)\n", static_cast<int>(s_lastDisconnectReason),
-          disconnectReasonName(s_lastDisconnectReason));
+  if (!isOtaKind) {
+    appendf(f, "Last reason:     %d (%s)\n", static_cast<int>(s_lastDisconnectReason),
+            disconnectReasonName(s_lastDisconnectReason));
+  }
   appendf(f, "Hint:            %s\n", failureHint(kind, s_lastDisconnectReason, sawConnected));
   appendf(f, "\nEnd of report.\n");
 
