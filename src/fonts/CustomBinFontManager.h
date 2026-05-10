@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+class CrossPointSettings;
 class GfxRenderer;
 
 namespace crosspoint {
@@ -110,6 +111,19 @@ class CustomBinFontManager {
 // under /custom-font/. Guarded by a state.json flag; runs at most
 // once per SD card.
 size_t cleanupLegacyBdfFiles();
+
+// Boot-time custom-font initialization. Stashes the renderer on the
+// manager singleton, scans /custom-font/ for installed families, and
+// reconciles `settings.fontFamily` with on-disk reality. If the
+// active custom font is missing on disk or its CPBN header is
+// malformed, settings are reset to the default built-in family
+// (CHAREINK 12, crisp render mode) and persisted via saveToFile().
+//
+// Single call replaces the multi-step orchestration that used to live
+// in main.cpp (setRenderer + scan + size lookup + header validate +
+// settings mutation + save). Caller no longer needs to know the
+// fallback policy or SETTINGS schema for fonts.
+void bootInitializeCustomFonts(GfxRenderer& renderer, CrossPointSettings& settings);
 
 }  // namespace fonts
 }  // namespace crosspoint

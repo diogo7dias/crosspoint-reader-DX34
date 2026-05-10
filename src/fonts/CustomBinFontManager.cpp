@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "CustomBinFontIds.h"
 
@@ -442,6 +443,58 @@ size_t cleanupLegacyBdfFiles() {
   state.saveToFile();
   if (removed > 0) LOG_INF(kModule, "legacy cleanup removed %u files", static_cast<unsigned>(removed));
   return removed;
+}
+
+void bootInitializeCustomFonts(GfxRenderer& renderer, CrossPointSettings& settings) {
+  auto& mgr = CustomBinFontManager::instance();
+  mgr.setRenderer(&renderer);
+  mgr.scan();
+
+  LOG_DIAG(kModule, "boot fallback check: ff=%u customFont='%s' cfsPt=%u", static_cast<unsigned>(settings.fontFamily),
+           settings.customFontName.c_str(), static_cast<unsigned>(settings.customFontSizePt));
+
+  if (settings.fontFamily != CrossPointSettings::CUSTOM_FAMILY) {
+    LOG_DIAG(kModule, "boot fallback done: ff=%u customFont='%s' cfsPt=%u", static_cast<unsigned>(settings.fontFamily),
+             settings.customFontName.c_str(), static_cast<unsigned>(settings.customFontSizePt));
+    return;
+  }
+
+  // Validate (size installed AND header parses). Failure → revert to the
+  // built-in default so the reader cannot silently render empty text from
+  // a deleted upload, a missing SD card, or a corrupted CPBN header.
+  bool ok = false;
+  const char* failReason = "missing";
+  if (!settings.customFontName.empty()) {
+    bool sizeInstalled = false;
+    const auto sizes = mgr.installedSizesFor(settings.customFontName);
+    for (uint8_t s : sizes) {
+      if (s == settings.customFontSizePt) {
+        sizeInstalled = true;
+        break;
+      }
+    }
+    if (sizeInstalled) {
+      if (CustomBinFontManager::validateInstalledRegular(settings.customFontName, settings.customFontSizePt)) {
+        ok = true;
+      } else {
+        failReason = "invalid CPBN header";
+      }
+    }
+  }
+
+  if (!ok) {
+    LOG_DIAG(kModule, "boot revert: active custom font '%s' size=%u %s; falling back to CHAREINK 12 crisp",
+             settings.customFontName.c_str(), static_cast<unsigned>(settings.customFontSizePt), failReason);
+    settings.fontFamily = CrossPointSettings::CHAREINK;
+    settings.fontSize = CrossPointSettings::SIZE_12;
+    settings.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
+    settings.customFontName.clear();
+    settings.customFontSizePt = 0;
+    settings.saveToFile();
+  }
+
+  LOG_DIAG(kModule, "boot fallback done: ff=%u customFont='%s' cfsPt=%u", static_cast<unsigned>(settings.fontFamily),
+           settings.customFontName.c_str(), static_cast<unsigned>(settings.customFontSizePt));
 }
 
 }  // namespace fonts

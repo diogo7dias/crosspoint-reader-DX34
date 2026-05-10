@@ -822,53 +822,12 @@ void setup() {
   // in state.json keeps this from re-running every boot.
   crosspoint::fonts::cleanupLegacyBdfFiles();
 
-  auto& customFonts = crosspoint::fonts::CustomBinFontManager::instance();
-  customFonts.setRenderer(&renderer);
-  customFonts.scan();
+  // Stash renderer, scan /custom-font/, and revert SETTINGS to the
+  // built-in default if the active custom font is missing on disk or its
+  // CPBN header is malformed. Single call replaces the boot fallback
+  // orchestration that lived inline here.
+  crosspoint::fonts::bootInitializeCustomFonts(renderer, SETTINGS);
 
-  // Safety net: if SETTINGS picks a custom family whose named .bin is
-  // not actually installed (e.g. deleted via the web UI, SD pulled,
-  // etc.), or the regular variant exists but its CPBN header is
-  // malformed (corrupted upload, FW format change), fall back to the
-  // default built-in family so the reader doesn't silently render empty
-  // text. The header validation runs once at boot via the static
-  // validateFile helper — no file is held open afterward.
-  LOG_DIAG("CFONT", "boot fallback check: ff=%u customFont='%s' cfsPt=%u", (unsigned)SETTINGS.fontFamily,
-           SETTINGS.customFontName.c_str(), (unsigned)SETTINGS.customFontSizePt);
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    bool ok = false;
-    const char* failReason = "missing";
-    if (!SETTINGS.customFontName.empty()) {
-      bool sizeInstalled = false;
-      const auto sizes = customFonts.installedSizesFor(SETTINGS.customFontName);
-      for (uint8_t s : sizes) {
-        if (s == SETTINGS.customFontSizePt) {
-          sizeInstalled = true;
-          break;
-        }
-      }
-      if (sizeInstalled) {
-        if (crosspoint::fonts::CustomBinFontManager::validateInstalledRegular(SETTINGS.customFontName,
-                                                                              SETTINGS.customFontSizePt)) {
-          ok = true;
-        } else {
-          failReason = "invalid CPBN header";
-        }
-      }
-    }
-    if (!ok) {
-      LOG_DIAG("CFONT", "boot revert: active custom font '%s' size=%u %s; falling back to CHAREINK 12 crisp",
-               SETTINGS.customFontName.c_str(), static_cast<unsigned>(SETTINGS.customFontSizePt), failReason);
-      SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
-      SETTINGS.fontSize = CrossPointSettings::SIZE_12;
-      SETTINGS.textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
-      SETTINGS.customFontName.clear();
-      SETTINGS.customFontSizePt = 0;
-      SETTINGS.saveToFile();
-    }
-  }
-  LOG_DIAG("CFONT", "boot fallback done: ff=%u customFont='%s' cfsPt=%u", (unsigned)SETTINGS.fontFamily,
-           SETTINGS.customFontName.c_str(), (unsigned)SETTINGS.customFontSizePt);
   launchBootDestination();
 
   // Ensure we're not still holding the power button before leaving setup
