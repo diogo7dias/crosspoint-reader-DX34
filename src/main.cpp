@@ -410,6 +410,47 @@ static void openHomeInline() {
 
 void onGoHome() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""}); }
 
+// Wire ActivityRouter Deps + route factories (RFC #23). All transitions flow
+// through the router: per-route persist/trim policy is applied before the
+// factory runs, and deep-sleep entry follows the fixed hook sequence in
+// ActivityRouter::enterDeepSleep. Lambdas capture file-scope statics
+// (currentActivity, renderer, mappedInputManager, display, gpio, t1/t2,
+// powerManager, APP_STATE) and the inline route openers above.
+static void wireActivityRouter() {
+  auto& router = lifecycle::ActivityRouter::instance();
+
+  lifecycle::ActivityRouter::Deps deps;
+  deps.currentActivitySlot = &currentActivity;
+  deps.persistAppState = &::persistAppState;
+  deps.trimSleepFolderIfDirty = &::trimSleepFolderIfDirty;
+  deps.onBeforeDeepSleep = [](bool fromReader) { APP_STATE.lastSleepFromReader = fromReader; };
+  deps.onAfterDeepSleep = []() {
+    display.deepSleep();
+    LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);
+    LOG_DBG("MAIN", "Entering deep sleep");
+    powerManager.startDeepSleep(gpio);
+  };
+  deps.enterSleepActivity = []() { enterNewActivity(new SleepActivity(renderer, mappedInputManager)); };
+  router.setDeps(std::move(deps));
+
+  router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
+    TransitionFeedback::show(renderer, tr(STR_LOADING_SETTINGS));
+    exitActivity();
+    enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
+  });
+  router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) { openReaderInline(payload); });
+  router.setRouteFactory(lifecycle::RouteId::MyLibrary,
+                         [](const std::string& /*payload*/) { openMyLibraryInline(""); });
+  router.setRouteFactory(lifecycle::RouteId::MyLibraryAt,
+                         [](const std::string& payload) { openMyLibraryInline(payload); });
+  router.setRouteFactory(lifecycle::RouteId::RecentBooks,
+                         [](const std::string& /*payload*/) { openRecentBooksInline(); });
+  router.setRouteFactory(lifecycle::RouteId::FileTransfer,
+                         [](const std::string& /*payload*/) { openFileTransferInline(); });
+  router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) { openBrowserInline(); });
+  router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) { openHomeInline(); });
+}
+
 // Heap allocator failure hook. ESP-IDF invokes this synchronously on
 // the failing task before deciding whether to retry the allocation.
 // Bare requirements: must not allocate (would re-enter), must be fast,
@@ -759,44 +800,7 @@ void setup() {
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
-  // Wire ActivityRouter with Deps + route factories (RFC #23). All transitions
-  // flow through the router: per-route persist/trim policy is applied before
-  // the factory runs, and deep-sleep entry follows the fixed hook sequence in
-  // ActivityRouter::enterDeepSleep.
-  {
-    auto& router = lifecycle::ActivityRouter::instance();
-
-    lifecycle::ActivityRouter::Deps deps;
-    deps.currentActivitySlot = &currentActivity;
-    deps.persistAppState = &::persistAppState;
-    deps.trimSleepFolderIfDirty = &::trimSleepFolderIfDirty;
-    deps.onBeforeDeepSleep = [](bool fromReader) { APP_STATE.lastSleepFromReader = fromReader; };
-    deps.onAfterDeepSleep = []() {
-      display.deepSleep();
-      LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);
-      LOG_DBG("MAIN", "Entering deep sleep");
-      powerManager.startDeepSleep(gpio);
-    };
-    deps.enterSleepActivity = []() { enterNewActivity(new SleepActivity(renderer, mappedInputManager)); };
-    router.setDeps(std::move(deps));
-
-    router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
-      TransitionFeedback::show(renderer, tr(STR_LOADING_SETTINGS));
-      exitActivity();
-      enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
-    });
-    router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) { openReaderInline(payload); });
-    router.setRouteFactory(lifecycle::RouteId::MyLibrary,
-                           [](const std::string& /*payload*/) { openMyLibraryInline(""); });
-    router.setRouteFactory(lifecycle::RouteId::MyLibraryAt,
-                           [](const std::string& payload) { openMyLibraryInline(payload); });
-    router.setRouteFactory(lifecycle::RouteId::RecentBooks,
-                           [](const std::string& /*payload*/) { openRecentBooksInline(); });
-    router.setRouteFactory(lifecycle::RouteId::FileTransfer,
-                           [](const std::string& /*payload*/) { openFileTransferInline(); });
-    router.setRouteFactory(lifecycle::RouteId::Browser, [](const std::string& /*payload*/) { openBrowserInline(); });
-    router.setRouteFactory(lifecycle::RouteId::Home, [](const std::string& /*payload*/) { openHomeInline(); });
-  }
+  wireActivityRouter();
 
   bootActivity->setProgress(100, goHome ? "Opening home" : "Opening book");
 
