@@ -60,13 +60,8 @@
 #include "persist/PersistManager.h"
 #include "persist/SdFatFileIO.h"
 #include "persist/Trash.h"
-#include "sleep/SdFatSleepFs.h"
-#include "sleep/WallpaperPlaylist.h"
-#if FEATURE_WALLPAPER_V2
-#include "sleep/WallpaperPlaylistV2.h"
-#endif
+#include "sleep/Wallpaper.h"
 #include "util/ButtonNavigator.h"
-#include "util/FavoriteImage.h"
 #include "util/TransitionFeedback.h"
 
 HalDisplay display;
@@ -332,82 +327,14 @@ void onGoHome();
 void onGoToMyLibraryWithPath(const std::string& path);
 void onGoToRecentBooks();
 
-// Folder-dirty state lives in crosspoint::sleep::WallpaperPlaylist; it is
-// marked dirty before entering activities that can modify /sleep (e.g. file
-// transfer) and reconciled by trimSleepFolderIfDirty() on the Home route.
+// Sleep wallpaper rotation lives behind the wallpaper:: facade in
+// src/sleep/Wallpaper.{h,cpp}. Production deps (fs, IFileIO, APP_STATE
+// pointers, sync deep-sleep flush) are lazy-wired on first call. The boot
+// route still calls trimSleepFolderIfDirty() — kept as a no-op shim so
+// the ActivityRouter wiring stays valid; reconcile is heap-gated and runs
+// from inside wallpaper::advance().
 
-static crosspoint::sleep::SdFatSleepFs s_sleepFs;
-
-static void wireWallpaperPlaylist() {
-  crosspoint::sleep::WallpaperPlaylist::Deps deps;
-  deps.fs = &s_sleepFs;
-  deps.playlist = &APP_STATE.sleepImagePlaylist;
-  deps.lastShownFilename = &APP_STATE.lastShownSleepFilename;
-  deps.cursor = &APP_STATE.lastSleepImage;
-  deps.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
-  // WallpaperPlaylist::advance() runs inside SleepActivity::onEnter, AFTER
-  // enterDeepSleep's persistAppState flush and milliseconds before the CPU
-  // enters deep sleep. saveToFile() is debounced — the debounce window
-  // never fires, so the new lastShownSleepFilename is lost and the next
-  // boot loads the stale value (same wallpaper every wake). Force a sync
-  // flush so rotation survives the deep-sleep boundary.
-  deps.saveState = []() {
-    const bool ok = APP_STATE.saveToFile();
-    crosspoint::persist::PersistManager().flushAll();
-    return ok;
-  };
-  deps.randomFn = [](long mod) -> long { return ::random(mod); };
-  deps.isFavorite = [](const std::string& path) { return FavoriteImage::isFavoritePath(path); };
-  deps.onPathRenamed = [](const std::string& from, const std::string& to) {
-    FavoriteImage::replacePathReferences(from, to);
-  };
-  deps.onBeforeTrimMove = []() {};  // no popup in current call sites
-  crosspoint::sleep::WallpaperPlaylist::instance().setDeps(deps);
-
-#if FEATURE_WALLPAPER_V2
-  // V2: parallel wiring for unified shuffled rotation. Same APP_STATE pointers
-  // (paused mode + lastShownSleepFilename are shared with V1 fallback). Buffer
-  // + cursor live in /.crosspoint/sleep_order.txt via a dedicated stateless
-  // SdFatFileIO instance.
-  static crosspoint::persist::SdFatFileIO s_v2FileIO;
-  crosspoint::sleep::v2::WallpaperPlaylistV2::Deps v2deps;
-  v2deps.fs = &s_sleepFs;
-  v2deps.fileIO = &s_v2FileIO;
-  v2deps.lastShownFilename = &APP_STATE.lastShownSleepFilename;
-  v2deps.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
-  v2deps.saveAppState = []() {
-    const bool ok = APP_STATE.saveToFile();
-    crosspoint::persist::PersistManager().flushAll();
-    return ok;
-  };
-  v2deps.randomFn = [](long mod) -> long { return ::random(mod); };
-  v2deps.isFavorite = [](const std::string& path) { return FavoriteImage::isFavoritePath(path); };
-  v2deps.onPathRenamed = [](const std::string& from, const std::string& to) {
-    FavoriteImage::replacePathReferences(from, to);
-  };
-  // PR2: wire to APP_STATE notification flags consumed by HomeActivity.
-  v2deps.onTrimMoved = [](uint16_t /*moved*/) {};
-  v2deps.onFavoritesCapBlocked = []() {};
-  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().setDeps(v2deps);
-#endif
-}
-
-static void trimSleepFolderIfDirty() {
-#if FEATURE_WALLPAPER_V2
-  // V2 reconcile reads /.crosspoint/sleep_order.txt as one std::string —
-  // ~10 KB at typical /sleep sizes. On a fragmented boot/home-route heap
-  // that allocation can throw bad_alloc → terminate (no exceptions in this
-  // build). The rich-sleep heap-budget gate (30 KB free) protects the sleep
-  // entry path; reconcile from there is safe. Skip on home route so deep-
-  // sleep boot does not trip the bug.
-  // Trade-off: new files dropped via USB transfer become visible on the
-  // next sleep cycle, not the home screen immediately after disconnect —
-  // which matches the natural flow (drop wallpapers → put device down).
-#else
-  auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
-  if (wp.dirty()) wp.reconcile();
-#endif
-}
+static void trimSleepFolderIfDirty() { crosspoint::sleep::wallpaper::reconcileIfDirty(); }
 
 // Inline Reader activity construction. Used by both the V2 factory and the
 // boot-time resume path in setup() (which bypasses the router since the main
@@ -432,11 +359,7 @@ void onGoToReader(const std::string& initialEpubPath) {
 
 static void openFileTransferInline() {
   TransitionFeedback::show(renderer, tr(STR_STARTING_SERVER));
-#if FEATURE_WALLPAPER_V2
-  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
-#else
-  crosspoint::sleep::WallpaperPlaylist::instance().markFolderDirty();
-#endif
+  crosspoint::sleep::wallpaper::markFolderDirty();
   exitActivity();
   enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
 }
@@ -780,10 +703,9 @@ void setup() {
   APP_STATE.loadFromFile();
   logHeapStage("after_app_state");
 
-  // Wire crosspoint::sleep::WallpaperPlaylist deps now that APP_STATE is populated — all
-  // subsequent sleep paths (trimSleepFolderIfDirty, SleepActivity) read through
-  // the module.
-  wireWallpaperPlaylist();
+  // wallpaper:: facade lazy-wires production deps on first call (e.g.
+  // markFolderDirty during file transfer, advance() inside SleepActivity).
+  // No explicit setup call needed here.
 
   LOG_INF("MAIN", "Booting complete, checking initial activity");
 
@@ -829,17 +751,11 @@ void setup() {
   // Defer sleep cache trimming until home screen is actually needed.
   if (goHome) {
     bootActivity->setProgress(60, "Refreshing sleep cache");
-#if FEATURE_WALLPAPER_V2
-    // V2 boot reconcile: see trimSleepFolderIfDirty() comment. ensureLoaded
-    // would safeRead a multi-KB sleep_order.txt as a single std::string,
-    // which the boot heap cannot guarantee. Mark dirty only; first sleep
-    // entry consumes it under the rich-sleep heap-budget gate.
-    crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
-#else
-    auto& wp = crosspoint::sleep::WallpaperPlaylist::instance();
-    wp.markFolderDirty();
-    wp.reconcile();
-#endif
+    // Boot reconcile: ensureLoaded would safeRead a multi-KB sleep_order.txt
+    // as a single std::string, which the boot heap cannot guarantee. Mark
+    // dirty only; first sleep entry consumes it under the rich-sleep
+    // heap-budget gate.
+    crosspoint::sleep::wallpaper::markFolderDirty();
   }
   bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 

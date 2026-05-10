@@ -20,10 +20,7 @@
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
 #include "persist/PersistManager.h"
-#include "sleep/WallpaperPlaylist.h"
-#if FEATURE_WALLPAPER_V2
-#include "sleep/WallpaperPlaylistV2.h"
-#endif
+#include "sleep/Wallpaper.h"
 #include "util/FavoriteImage.h"
 #include "util/PxcRenderer.h"
 #include "util/StringUtils.h"
@@ -41,16 +38,12 @@ constexpr size_t kSleepLargestBlockSafeBytes = 40 * 1024;
 // (countSleepBmps + nthSleepBmp) — both O(1) heap beyond the returned
 // filename. Returns empty string if /sleep is empty or fs not wired.
 std::string pickSleepFileDirect() {
-#if FEATURE_WALLPAPER_V2
-  auto* fs = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().deps().fs;
+  auto* fs = crosspoint::sleep::wallpaper::fs();
   if (!fs) return {};
-  const size_t count = fs->countSleepBmps(crosspoint::sleep::v2::kSleepFolderCap);
+  const size_t count = fs->countSleepBmps(crosspoint::sleep::wallpaper::kSleepFolderCap);
   if (count == 0) return {};
   const size_t idx = static_cast<size_t>(random(static_cast<long>(count)));
   return fs->nthSleepBmp(idx);
-#else
-  return {};
-#endif
 }
 
 // Sleep rendering runs inside SleepActivity::onEnter, called AFTER
@@ -221,18 +214,14 @@ void SleepActivity::renderCustomSleepScreen() const {
     if (useDirectPick) {
       selectedImage = pickSleepFileDirect();
     } else {
-#if FEATURE_WALLPAPER_V2
       // V2 reconcile/writeBuffer probe the heap internally before reserving
       // and bail (leaving buffer_ empty) if the contiguous block is too small.
       // After such a bail advance() returns "" and we fall through to direct
       // pick on the next retry iteration.
-      selectedImage = crosspoint::sleep::v2::WallpaperPlaylistV2::instance().advance();
+      selectedImage = crosspoint::sleep::wallpaper::advance();
       if (selectedImage.empty()) {
         selectedImage = pickSleepFileDirect();
       }
-#else
-      selectedImage = crosspoint::sleep::WallpaperPlaylist::instance().advance();
-#endif
     }
     if (selectedImage.empty()) break;
     const auto filename = "/sleep/" + selectedImage;
@@ -299,38 +288,27 @@ void SleepActivity::renderCustomSleepScreen() const {
   renderDefaultSleepScreen();
 }
 
-bool SleepActivity::randomizeSleepImagePlaylist() {
-#if FEATURE_WALLPAPER_V2
-  return crosspoint::sleep::v2::WallpaperPlaylistV2::instance().reshuffle();
-#else
-  return crosspoint::sleep::WallpaperPlaylist::instance().reshuffle();
-#endif
-}
+bool SleepActivity::randomizeSleepImagePlaylist() { return crosspoint::sleep::wallpaper::reshuffle(); }
 
 size_t SleepActivity::cachedSleepFavoriteCount() {
-#if FEATURE_WALLPAPER_V2
-  // PR2: V2 will track cached favorite count via its trim path.
+  // V2 tracks cap-blocked / favorites-overflow internally via the
+  // onFavoritesCapBlocked deps slot, not as a queryable count. Callers
+  // that surface a UI hint should consume the eventual Notice signal
+  // (RFC #145 follow-up) instead of polling.
   return 0;
-#else
-  return crosspoint::sleep::WallpaperPlaylist::instance().cachedFavoriteCount();
-#endif
 }
 
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   (void)popupRenderer;  // No caller passes a non-null renderer today.
-#if FEATURE_WALLPAPER_V2
-  // V2: only mark dirty. Calling reconcile() inline here (e.g. from
+  // Only mark dirty. Calling reconcile() inline here (e.g. from
   // MyLibraryActivity move-to-sleep) runs on the file-browser heap which is
-  // fragmented enough that the buffer_.insert() string growth (~28 KB
-  // observed allocation fail) throws bad_alloc → terminate. Reconcile fires
-  // safely on next sleep entry from advance(), under the rich-sleep heap-
-  // budget gate (30 KB free required). Net effect: file moved to /sleep is
+  // fragmented enough that buffer_.insert() string growth (~28 KB observed
+  // allocation fail) throws bad_alloc → terminate. Reconcile fires safely
+  // on next sleep entry from advance(), under the rich-sleep heap-budget
+  // gate (30 KB free required). Net effect: file moved to /sleep is
   // visible on the user's next sleep cycle, which is the natural moment
   // they care about.
-  crosspoint::sleep::v2::WallpaperPlaylistV2::instance().markFolderDirty();
-#else
-  crosspoint::sleep::WallpaperPlaylist::instance().trimToLimit();
-#endif
+  crosspoint::sleep::wallpaper::markFolderDirty();
 }
 
 void SleepActivity::renderDefaultSleepScreen() const {
