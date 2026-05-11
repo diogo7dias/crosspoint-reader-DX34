@@ -3,6 +3,10 @@
 #include <cstring>
 #include <string>
 
+#ifndef UNIT_TEST_HOST
+#include "AsyncWriter.h"
+#endif
+
 namespace crosspoint {
 namespace persist {
 
@@ -20,6 +24,42 @@ std::string basename(const char* path) {
 PersistManagerImpl& PersistManager() {
   static PersistManagerImpl inst;
   return inst;
+}
+
+IAsyncRunner* PersistManagerImpl::ensureRunner() {
+  if (asyncRunner_ != nullptr) return asyncRunner_;
+#ifndef UNIT_TEST_HOST
+  // Default device wiring: lazy-bind to the singleton FreeRTOS-backed
+  // runner. start() is idempotent so this is safe even if main.cpp has
+  // already brought it online at boot.
+  asyncRunner_ = &AsyncWriter::instance();
+  asyncRunner_->start();
+#endif
+  return asyncRunner_;
+}
+
+void PersistManagerImpl::requestFlush(const char* name) {
+  if (!name) return;
+  for (auto& s : stores_) {
+    if (strcmp(s.name, name) != 0) continue;
+    if (s.mode == WriteMode::Sync) {
+      if (s.flushNow) s.flushNow();
+      return;
+    }
+    // Async mode.
+    IAsyncRunner* runner = ensureRunner();
+    if (runner == nullptr) {
+      // No runner bound (host build without test seam). Best-effort
+      // fallback: run synchronously so data is not lost.
+      if (s.flushNow) s.flushNow();
+      return;
+    }
+    auto fn = s.flushNow;  // copy std::function — runs on the runner.
+    runner->submit([fn]() {
+      if (fn) fn();
+    });
+    return;
+  }
 }
 
 bool PersistManagerImpl::backupSidecarIfNewFirmware(IFileIO& io, const char* version) {

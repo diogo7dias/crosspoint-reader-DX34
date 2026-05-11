@@ -18,9 +18,13 @@
 
 #include "persist/IAsyncRunner.h"
 #include "persist/InlineRunner.h"
+#include "persist/PersistManager.h"
 
 using crosspoint::persist::IAsyncRunner;
 using crosspoint::persist::InlineRunner;
+using crosspoint::persist::PersistManager;
+using crosspoint::persist::PersistManagerImpl;
+using crosspoint::persist::WriteMode;
 
 namespace {
 InlineRunner g_runner;
@@ -89,6 +93,129 @@ void test_iasyncrunner_polymorphic_use() {
   TEST_ASSERT_EQUAL_size_t(0, port.droppedCount());
 }
 
+// ===== PersistManager::requestFlush — Sync + Async dispatch =====
+
+namespace {
+
+PersistManagerImpl& freshPM() {
+  PersistManagerImpl& pm = PersistManager();
+  pm.clearForTest();
+  pm.setAsyncRunnerForTest(nullptr);
+  return pm;
+}
+
+}  // namespace
+
+void test_requestFlush_sync_store_runs_inline() {
+  PersistManagerImpl& pm = freshPM();
+  int flushCount = 0;
+  pm.registerStore(PersistManagerImpl::Entry{
+      [](uint32_t) { return false; },
+      [&flushCount]() {
+        ++flushCount;
+        return true;
+      },
+      []() { return false; },
+      "sync_store",
+      "/sync.json",
+      WriteMode::Sync,
+  });
+
+  pm.requestFlush("sync_store");
+  TEST_ASSERT_EQUAL_INT(1, flushCount);
+}
+
+void test_requestFlush_async_store_uses_runner() {
+  PersistManagerImpl& pm = freshPM();
+  InlineRunner inline_;
+  pm.setAsyncRunnerForTest(&inline_);
+
+  int flushCount = 0;
+  pm.registerStore(PersistManagerImpl::Entry{
+      [](uint32_t) { return false; },
+      [&flushCount]() {
+        ++flushCount;
+        return true;
+      },
+      []() { return false; },
+      "async_store",
+      "/async.json",
+      WriteMode::Async,
+  });
+
+  pm.requestFlush("async_store");
+  // InlineRunner runs the submission synchronously, so flushNow has
+  // executed by the time requestFlush returns.
+  TEST_ASSERT_EQUAL_INT(1, flushCount);
+  TEST_ASSERT_EQUAL_size_t(1, inline_.submittedCount());
+}
+
+void test_requestFlush_unknown_name_is_noop() {
+  PersistManagerImpl& pm = freshPM();
+  InlineRunner inline_;
+  pm.setAsyncRunnerForTest(&inline_);
+  int flushCount = 0;
+  pm.registerStore(PersistManagerImpl::Entry{
+      [](uint32_t) { return false; },
+      [&flushCount]() {
+        ++flushCount;
+        return true;
+      },
+      []() { return false; },
+      "real_store",
+      "/real.json",
+      WriteMode::Async,
+  });
+
+  pm.requestFlush("does_not_exist");
+  TEST_ASSERT_EQUAL_INT(0, flushCount);
+  TEST_ASSERT_EQUAL_size_t(0, inline_.submittedCount());
+}
+
+void test_requestFlush_async_fallback_to_sync_when_no_runner() {
+  PersistManagerImpl& pm = freshPM();
+  // No runner bound: host build with no test seam.
+  int flushCount = 0;
+  pm.registerStore(PersistManagerImpl::Entry{
+      [](uint32_t) { return false; },
+      [&flushCount]() {
+        ++flushCount;
+        return true;
+      },
+      []() { return false; },
+      "async_store",
+      "/async.json",
+      WriteMode::Async,
+  });
+
+  pm.requestFlush("async_store");
+  // Falls back to sync so data is never lost in host builds.
+  TEST_ASSERT_EQUAL_INT(1, flushCount);
+}
+
+void test_requestFlush_sync_is_default_mode() {
+  PersistManagerImpl& pm = freshPM();
+  InlineRunner inline_;
+  pm.setAsyncRunnerForTest(&inline_);
+  int flushCount = 0;
+  // Note: mode omitted from designated init — defaults to Sync.
+  pm.registerStore(PersistManagerImpl::Entry{
+      [](uint32_t) { return false; },
+      [&flushCount]() {
+        ++flushCount;
+        return true;
+      },
+      []() { return false; },
+      "default_store",
+      "/default.json",
+  });
+
+  pm.requestFlush("default_store");
+  TEST_ASSERT_EQUAL_INT(1, flushCount);
+  // Sync path: runner must not have been consulted.
+  TEST_ASSERT_EQUAL_size_t(0, inline_.submittedCount());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_start_is_idempotent);
@@ -98,5 +225,10 @@ int main(int, char**) {
   RUN_TEST(test_drainBlocking_returns_when_idle);
   RUN_TEST(test_droppedCount_is_zero_on_healthy_runner);
   RUN_TEST(test_iasyncrunner_polymorphic_use);
+  RUN_TEST(test_requestFlush_sync_store_runs_inline);
+  RUN_TEST(test_requestFlush_async_store_uses_runner);
+  RUN_TEST(test_requestFlush_unknown_name_is_noop);
+  RUN_TEST(test_requestFlush_async_fallback_to_sync_when_no_runner);
+  RUN_TEST(test_requestFlush_sync_is_default_mode);
   return UNITY_END();
 }

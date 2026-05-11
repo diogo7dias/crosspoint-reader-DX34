@@ -12,10 +12,17 @@
 #include <functional>
 #include <vector>
 
+#include "IAsyncRunner.h"
 #include "IFileIO.h"
 
 namespace crosspoint {
 namespace persist {
+
+// How a store wants its writes dispatched when callers invoke
+// requestFlush(name). Sync runs flushNow on the caller's thread; Async
+// hands flushNow to the persistence runner (FreeRTOS task on device,
+// inline executor in host tests).
+enum class WriteMode : uint8_t { Sync, Async };
 
 class PersistManagerImpl {
  public:
@@ -26,9 +33,26 @@ class PersistManagerImpl {
     std::function<bool()> isDirty;
     const char* name;
     const char* path;
+    WriteMode mode = WriteMode::Sync;
   };
 
   void registerStore(Entry e) { stores_.push_back(std::move(e)); }
+
+  // Honors the registered store's WriteMode. Sync: runs flushNow inline.
+  // Async: submits flushNow to the persistence runner; returns immediately
+  // (<1ms target on the page-turn hot path). Unknown name is a no-op.
+  void requestFlush(const char* name);
+
+  // Test seam: inject a synchronous IAsyncRunner so persistence logic can
+  // be exercised without FreeRTOS. Pass nullptr to revert to the default
+  // (lazy-binds to AsyncWriter::instance() on the next Async flush).
+  // Must not be called concurrently with requestFlush.
+  void setAsyncRunnerForTest(IAsyncRunner* runner) { asyncRunner_ = runner; }
+
+  // Diagnostics passthrough. Returns 0 if no runner has been bound yet.
+  size_t asyncDroppedCount() const {
+    return asyncRunner_ ? asyncRunner_->droppedCount() : 0;
+  }
 
   // Call from main loop. Ticks every store; returns count of flushes performed.
   size_t tick(uint32_t nowMs) {
@@ -61,7 +85,13 @@ class PersistManagerImpl {
   void clearForTest() { stores_.clear(); }
 
  private:
+  // Resolves a runner for an Async flush. On device builds, lazy-binds
+  // to AsyncWriter::instance() on first use. On host builds without a
+  // test seam set, returns nullptr (caller falls back to sync flush).
+  IAsyncRunner* ensureRunner();
+
   std::vector<Entry> stores_;
+  IAsyncRunner* asyncRunner_ = nullptr;  // non-owning; lazy-bound on device.
 };
 
 // Process-wide instance.
