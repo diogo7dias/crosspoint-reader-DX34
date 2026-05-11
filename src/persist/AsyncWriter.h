@@ -15,6 +15,8 @@
 #include <cstddef>
 #include <functional>
 
+#include "IAsyncRunner.h"
+
 extern "C" {
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -24,24 +26,24 @@ extern "C" {
 namespace crosspoint {
 namespace persist {
 
-class AsyncWriter {
+class AsyncWriter : public IAsyncRunner {
  public:
   static AsyncWriter& instance();
 
   // Idempotent. Creates the task on first call. Safe to call from setup().
-  void start();
+  void start() override;
 
   // Enqueue a callback. Returns immediately. If queue at capacity, the
   // OLDEST pending job is dropped (latest write always wins; older snapshots
   // are stale anyway).
-  void submit(std::function<void()> fn);
+  void submit(std::function<void()> fn) override;
 
   // Block caller until queue empty AND any in-flight job has completed.
   // Use at lifecycle boundaries before powering down or destroying captured
   // state. Polls every 1 ms; cheap on lifecycle paths.
-  void drainBlocking();
+  void drainBlocking() override;
 
-  size_t droppedCount() const { return dropped_; }
+  std::size_t droppedCount() const override { return dropped_; }
 
  private:
   AsyncWriter() = default;
