@@ -27,6 +27,13 @@ void AsyncWriter::start() {
   if (ok != pdPASS) {
     LOG_ERR("AWR", "xTaskCreate failed");
     task_ = nullptr;
+    // Release the mutex too so a later start() retry begins from a clean
+    // slate (otherwise we leave the semaphore handle pinned to this
+    // singleton with no task to take it).
+    if (mtx_ != nullptr) {
+      vSemaphoreDelete(mtx_);
+      mtx_ = nullptr;
+    }
   }
 }
 
