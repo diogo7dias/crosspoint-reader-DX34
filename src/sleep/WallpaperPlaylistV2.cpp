@@ -1,6 +1,8 @@
 #include "WallpaperPlaylistV2.h"
 
+#ifndef UNIT_TEST_HOST
 #include <esp_heap_caps.h>
+#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -26,8 +28,15 @@ constexpr size_t kHeaderMaxLen = 32;
 constexpr size_t kAllocProbeHeadroomBytes = 4 * 1024;
 
 bool heapHasContiguous(size_t needBytes) {
+#ifdef UNIT_TEST_HOST
+  // Host tests run on a desktop with effectively unlimited heap; the probe
+  // only matters on the device where MALLOC_CAP_DEFAULT can fragment.
+  (void)needBytes;
+  return true;
+#else
   const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
   return largest >= needBytes + kAllocProbeHeadroomBytes;
+#endif
 }
 
 std::string makeSleepPath(const std::string& filename) {
