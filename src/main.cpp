@@ -845,6 +845,32 @@ void loop() {
 
   gpio.update();
 
+#if BUTTON_DEBUG_CADENCE
+  // Cadence probe: measures the gap between successive gpio.update() calls.
+  // That gap == the real button polling rate. Quick taps shorter than the
+  // gap are dropped. Buckets: <10 / 10-20 / 20-50 / 50-100 / 100-200 /
+  // 200-500 / 500-1k / >1k ms. Dumps to Serial every 5s. Revert after capture.
+  {
+    static uint16_t buckets[8] = {0};
+    static unsigned long lastUpdate = 0;
+    static unsigned long lastReport = 0;
+    const unsigned long now = millis();
+    if (lastUpdate != 0) {
+      const unsigned long dt = now - lastUpdate;
+      const int b = (dt < 10) ? 0 : (dt < 20) ? 1 : (dt < 50) ? 2 : (dt < 100) ? 3
+                  : (dt < 200) ? 4 : (dt < 500) ? 5 : (dt < 1000) ? 6 : 7;
+      buckets[b]++;
+    }
+    lastUpdate = now;
+    if (now - lastReport > 5000) {
+      logSerial.printf("[BTN-CADENCE] <10:%u 10-20:%u 20-50:%u 50-100:%u 100-200:%u 200-500:%u 500-1k:%u >1k:%u\n",
+                       buckets[0], buckets[1], buckets[2], buckets[3],
+                       buckets[4], buckets[5], buckets[6], buckets[7]);
+      lastReport = now;
+    }
+  }
+#endif
+
   // Drain any coalesced dirty writes. Stores flush only when debounce
   // window has elapsed since the last markDirty; most ticks are no-ops.
   crosspoint::persist::PersistManager().tick(static_cast<uint32_t>(loopStartTime));
@@ -949,11 +975,12 @@ void loop() {
     yield();                             // Give FreeRTOS a chance to run tasks, but return immediately
   } else {
     if (millis() - lastActivityTime >= HalPowerManager::IDLE_POWER_SAVING_MS) {
-      // If we've been inactive for a while, increase the delay to save power
-      powerManager.setPowerSaving(true);  // Lower CPU frequency after extended inactivity
-      delay(50);
+      // Drop CPU frequency on extended idle, but keep poll cadence at 10ms so
+      // gpio.update() runs ~100x/s. Longer idle delays starve button polling and
+      // brief taps fall entirely inside the delay window.
+      powerManager.setPowerSaving(true);
+      delay(10);
     } else {
-      // Short delay to prevent tight loop while still being responsive
       delay(10);
     }
   }
