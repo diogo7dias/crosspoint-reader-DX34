@@ -246,8 +246,18 @@ void EpubReaderActivity::onEnter() {
     }
   }
 
-  invalidateStatusBarCaches();
-  clearPageCache();
+  // ActivityWithSubactivity::onEnter (above) already started the render
+  // task, which can call buildStatusBarLayout and read/write
+  // statusBarCache_ at any time. Take RenderLock so this reset is not
+  // racing the render task's first paint. Other invalidation sites
+  // (orientation change, settings reload) are already wrapped in a
+  // RenderLock for the same reason; onExit's invalidate runs after the
+  // base onExit has joined the render task and needs no lock.
+  {
+    RenderLock lock(*this);
+    invalidateStatusBarCaches();
+    clearPageCache();
+  }
 
   // Trigger first update
   requestUpdate();
