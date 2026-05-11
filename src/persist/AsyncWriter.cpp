@@ -51,6 +51,10 @@ void AsyncWriter::submit(std::function<void()> fn) {
     head_ = (head_ + 1) % kMaxQueue;
     --count_;
     ++dropped_;
+    // Surface drops: queue saturation means the producer is outpacing SD
+    // throughput and reader-progress snapshots are being silently
+    // superseded. Log every drop so it shows up in diag reports.
+    LOG_ERR("AWR", "queue full, dropped oldest write (total dropped=%u)", (unsigned)dropped_);
   }
   queue_[tail_] = std::move(fn);
   tail_ = (tail_ + 1) % kMaxQueue;
