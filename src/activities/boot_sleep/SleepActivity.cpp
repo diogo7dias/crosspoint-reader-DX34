@@ -31,8 +31,17 @@ namespace {
 // playlist reconcile / reshuffle path. Below this we bypass the playlist
 // entirely and stream-pick a single file by directory index — no big
 // std::string buffer rebuild, no vector<SleepBmpEntry> trim listing.
-// Threshold sized for ~15 KB buffer + transient peak headroom on ESP32-C3.
-constexpr size_t kSleepLargestBlockSafeBytes = 40 * 1024;
+//
+// Sized to cover the worst path: reconcile() → listSleepBmpsWithMtime
+// (~18 KB vector for ~564 entries) → trimToCap which builds three more
+// transient vectors (favs, nonFav, surviving) of similar size before
+// std::move() collapses them. Peak alive is ~4× the per-vector size +
+// std::string heap nodes, and surviving.reserve() throws bad_alloc when
+// the residual largest contiguous block can't fit the new buffer. 64 KB
+// gives that allocation enough room even when the first three vectors
+// have already fragmented the heap. Observed crash at 47 KB largest —
+// previous 40 KB threshold was below the trim-peak demand.
+constexpr size_t kSleepLargestBlockSafeBytes = 64 * 1024;
 
 // Direct fragment-safe wallpaper pick. Uses ISleepFs streaming primitives
 // (countSleepBmps + nthSleepBmp) — both O(1) heap beyond the returned
