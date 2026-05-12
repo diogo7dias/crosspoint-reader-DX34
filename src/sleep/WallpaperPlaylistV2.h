@@ -60,6 +60,12 @@ class WallpaperPlaylistV2 {
     std::function<void(const std::string& /*from*/, const std::string& /*to*/)> onPathRenamed;
     std::function<void(uint16_t /*movedCount*/)> onTrimMoved;
     std::function<void()> onFavoritesCapBlocked;
+    // Returns the largest contiguous free heap block in bytes. Production
+    // wires heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT). Host
+    // tests inject a stub to simulate fragmentation. If unset, the playlist
+    // assumes unlimited heap (treats every reserve as safe) — matches the
+    // pre-RFC #156 host behaviour where the heap probe was ifdef'd out.
+    std::function<size_t()> largestFreeBlockFn;
   };
 
   static WallpaperPlaylistV2& instance();
@@ -97,6 +103,13 @@ class WallpaperPlaylistV2 {
   // building the (~500-element) hash_set that materializing bufferEntries()
   // would require. O(name + buffer_size) per query.
   bool nameIsInBuffer(const std::string& name) const;
+
+  // Probe the heap for a contiguous block large enough for `needBytes`
+  // plus the standard 4 KB transient-growth headroom. Consults
+  // deps_.largestFreeBlockFn; if unset, treats the heap as unlimited.
+  // Build is compiled -fno-exceptions so the playlist must probe before
+  // any std::string::reserve that might bad_alloc.
+  bool heapHasContiguous(size_t needBytes) const;
 
   Deps deps_;
   std::string buffer_;

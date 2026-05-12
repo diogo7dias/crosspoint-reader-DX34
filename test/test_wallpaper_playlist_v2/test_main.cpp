@@ -90,6 +90,9 @@ struct Fixture {
   int favoritesCapBlockedLog = 0;
   std::function<bool(const std::string&)> isFavoriteFn;
   long fakeRandomSeed = 0;
+  // RFC #156 C2: scripted heap probe. Default unlimited. Tests set this to
+  // simulate fragmentation and verify the playlist's heap-gated bail paths.
+  std::function<size_t()> largestFreeBlockFn;
 
   void wire(crosspoint::sleep::v2::WallpaperPlaylistV2& wp) {
     crosspoint::sleep::v2::WallpaperPlaylistV2::Deps d;
@@ -114,6 +117,7 @@ struct Fixture {
     d.onPathRenamed = [](const std::string&, const std::string&) {};
     d.onTrimMoved = [this](uint16_t n) { trimMovedLog.push_back(n); };
     d.onFavoritesCapBlocked = [this]() { ++favoritesCapBlockedLog; };
+    d.largestFreeBlockFn = largestFreeBlockFn;  // empty std::function → unlimited
     wp.setDeps(d);
   }
 };
@@ -285,6 +289,64 @@ void test_reshuffle_does_not_repeat_just_shown_wallpaper() {
   }
 }
 
+// RFC #156 C2: heap-probe injection lets host tests exercise the
+// fragmentation-cliff branch that the device-only #ifdef previously
+// short-circuited. The probe is consulted before writeBuffer() reserves
+// the contiguous buffer; if the reported largest block is below
+// (needBytes + 4 KB headroom), the playlist bails with an empty buffer
+// and advance() returns "" so the caller (e.g. SleepActivity) can
+// fall back to streaming direct pick.
+
+void test_fragmented_heap_blocks_initial_reshuffle_buffer_stays_empty() {
+  Fixture fx;
+  fx.fs.seed("a.bmp", 100);
+  fx.fs.seed("b.bmp", 101);
+  fx.fs.seed("c.bmp", 102);
+  // Probe reports 1 KB largest free block — far below needBytes + 4 KB
+  // headroom for any non-zero buffer. Reshuffle's writeBuffer must bail.
+  fx.largestFreeBlockFn = []() -> size_t { return 1024; };
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+
+  const auto first = wp.advance();
+  TEST_ASSERT_TRUE(first.empty());            // bailed — no buffer to walk
+  TEST_ASSERT_TRUE(wp.bufferForTest().empty());
+}
+
+void test_healthy_heap_allows_reshuffle_and_advance_returns_name() {
+  Fixture fx;
+  fx.fs.seed("a.bmp", 100);
+  fx.fs.seed("b.bmp", 101);
+  fx.fs.seed("c.bmp", 102);
+  // Probe reports plenty of headroom — playlist behaves as before C2.
+  fx.largestFreeBlockFn = []() -> size_t { return 256 * 1024; };
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+
+  const auto first = wp.advance();
+  TEST_ASSERT_FALSE(first.empty());           // reshuffle succeeded
+  TEST_ASSERT_FALSE(wp.bufferForTest().empty());
+}
+
+void test_unset_heap_probe_treats_heap_as_unlimited() {
+  // Mirrors pre-C2 host behaviour: with no probe wired, the playlist must
+  // not gate any reserve — every existing test in this file relies on this
+  // implicit default. Verify it explicitly so a future refactor that
+  // changes the default policy fails loudly here instead of silently
+  // breaking the rest of the suite.
+  Fixture fx;
+  fx.fs.seed("a.bmp", 100);
+  // fx.largestFreeBlockFn deliberately left empty.
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+
+  const auto first = wp.advance();
+  TEST_ASSERT_FALSE(first.empty());
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -297,5 +359,8 @@ int main(int, char**) {
   RUN_TEST(test_reshuffle_clears_buffer_when_sleep_empty);
   RUN_TEST(test_advance_skips_files_deleted_since_reconcile);
   RUN_TEST(test_reshuffle_does_not_repeat_just_shown_wallpaper);
+  RUN_TEST(test_fragmented_heap_blocks_initial_reshuffle_buffer_stays_empty);
+  RUN_TEST(test_healthy_heap_allows_reshuffle_and_advance_returns_name);
+  RUN_TEST(test_unset_heap_probe_treats_heap_as_unlimited);
   return UNITY_END();
 }

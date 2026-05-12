@@ -1,9 +1,5 @@
 #include "WallpaperPlaylistV2.h"
 
-#ifndef UNIT_TEST_HOST
-#include <esp_heap_caps.h>
-#endif
-
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -26,18 +22,6 @@ constexpr size_t kHeaderMaxLen = 32;
 // while the buffer is in flight. Build with -fno-exceptions, so a bad_alloc
 // here would abort — we must probe before allocating big buffers.
 constexpr size_t kAllocProbeHeadroomBytes = 4 * 1024;
-
-bool heapHasContiguous(size_t needBytes) {
-#ifdef UNIT_TEST_HOST
-  // Host tests run on a desktop with effectively unlimited heap; the probe
-  // only matters on the device where MALLOC_CAP_DEFAULT can fragment.
-  (void)needBytes;
-  return true;
-#else
-  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
-  return largest >= needBytes + kAllocProbeHeadroomBytes;
-#endif
-}
 
 std::string makeSleepPath(const std::string& filename) {
   if (filename.empty()) return {};
@@ -257,6 +241,16 @@ uint16_t WallpaperPlaylistV2::trimToCap(std::vector<SleepBmpEntry>& entries, boo
   for (size_t i = toMove; i < nonFav.size(); ++i) surviving.push_back(std::move(nonFav[i]));
   entries = std::move(surviving);
   return moved;
+}
+
+bool WallpaperPlaylistV2::heapHasContiguous(size_t needBytes) const {
+  if (!deps_.largestFreeBlockFn) {
+    // No probe wired — caller (host test or pre-RFC-#156 production) is on
+    // a heap we cannot interrogate. Assume the reserve will succeed; this
+    // matches the previous #ifdef UNIT_TEST_HOST short-circuit.
+    return true;
+  }
+  return deps_.largestFreeBlockFn() >= needBytes + kAllocProbeHeadroomBytes;
 }
 
 bool WallpaperPlaylistV2::nameIsInBuffer(const std::string& name) const {

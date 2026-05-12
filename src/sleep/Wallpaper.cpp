@@ -63,6 +63,13 @@ void ensureConfigured() {
   };
   d.onTrimMoved           = [](uint16_t /*moved*/) {};
   d.onFavoritesCapBlocked = []() {};
+  // Heap probe (RFC #156 C2): inject the device's contiguous-block query
+  // through the playlist so the same code path runs under host tests with
+  // a scripted heap. UNIT_TEST_HOST builds don't link esp_heap_caps; the
+  // playlist treats nullptr as "unlimited heap".
+#ifndef UNIT_TEST_HOST
+  d.largestFreeBlockFn = []() { return heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT); };
+#endif
 
   v2::WallpaperPlaylistV2::instance().setDeps(d);
 }
@@ -89,11 +96,12 @@ constexpr int kNextSleepFileRetries = 5;
 constexpr size_t kNextSleepFileHeapGateBytes = 64 * 1024;
 
 size_t largestFreeBlockBytes() {
-#ifdef UNIT_TEST_HOST
-  return SIZE_MAX;
-#else
-  return heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
-#endif
+  // Route through the playlist's injected probe so production + host tests
+  // see the same value. ensureConfigured() (called by nextSleepFile before
+  // this is invoked) wires the production lambda; tests inject their own
+  // via Configure(). nullptr → assume unlimited (matches pre-C2 host).
+  const auto& fn = v2::WallpaperPlaylistV2::instance().deps().largestFreeBlockFn;
+  return fn ? fn() : SIZE_MAX;
 }
 
 // Streaming fragment-safe pick — direct mirror of SleepActivity's
@@ -212,6 +220,7 @@ void Configure(const Config& c) {
   d.onPathRenamed         = c.onPathRenamed;
   d.onTrimMoved           = c.onTrimMoved;
   d.onFavoritesCapBlocked = c.onFavoritesCapBlocked;
+  d.largestFreeBlockFn    = c.largestFreeBlockFn;
 
   v2::WallpaperPlaylistV2::instance().setDeps(d);
 }

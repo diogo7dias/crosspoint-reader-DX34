@@ -108,6 +108,12 @@ struct Config {
   std::function<void(const std::string& /*from*/, const std::string& /*to*/)> onPathRenamed;
   std::function<void(uint16_t /*movedCount*/)> onTrimMoved;
   std::function<void()> onFavoritesCapBlocked;
+  // Optional host-test seam: returns the largest contiguous free heap block
+  // in bytes. Production lazy init wires heap_caps_get_largest_free_block
+  // (MALLOC_CAP_DEFAULT) automatically; tests inject a stub to simulate
+  // fragmentation cliffs. If left unset, the playlist treats the heap as
+  // unlimited — matches the pre-RFC #156 host behaviour.
+  std::function<size_t()> largestFreeBlockFn;
 };
 
 void Configure(const Config&);
