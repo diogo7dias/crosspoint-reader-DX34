@@ -911,9 +911,26 @@ void loop() {
   auto triggerDeepSleep = []() {
     // Shown on both auto-sleep (inactivity timeout) and power-button-hold paths
     // so the device never blanks silently. renderer is a file-scope global.
+    //
+    // Tear down the current activity FIRST so its background render task
+    // can't race the popup. Without this, ActivityWithSubactivity-derived
+    // activities (Reader) keep painting the shared framebuffer between
+    // show() and SleepActivity::onEnter: the render task fires a paint
+    // that overwrites the popup pixels in BW and calls displayBuffer(),
+    // which is forced to HALF_REFRESH by the pendingHalfRefresh flag set
+    // by show(). The popup is wiped before the user perceives it.
+    //
+    // Capture fromReader BEFORE exitActivity destroys the slot; pass to
+    // enterDeepSleep. enterDeepSleep's slot->onExit guard already handles
+    // a nullptr slot (test_enter_deep_sleep_sequence_not_from_reader
+    // exercises that path). The first persistAppState inside enterDeepSleep
+    // still drains any async writes queued during onExit, so progress
+    // durability is preserved.
+    const bool fromReader = currentActivity && currentActivity->isReaderActivity();
+    exitActivity();
     TransitionFeedback::resetStacking();
     TransitionFeedback::show(renderer, tr(STR_GOING_TO_SLEEP));
-    const bool fromReader = currentActivity && currentActivity->isReaderActivity();
+    TransitionFeedback::ensureMinDisplayElapsed();
     lifecycle::ActivityRouter::instance().enterDeepSleep(fromReader);
   };
 
