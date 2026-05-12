@@ -35,6 +35,39 @@ constexpr size_t kSleepFolderCap = 500;
 // APP_STATE so rotation survives the deep-sleep boundary.
 std::string advance();
 
+// Outcome of nextSleepFile() — everything the caller needs to render the
+// picked wallpaper without consulting APP_STATE or recomputing the
+// favorite display name.
+struct SleepPick {
+  std::string fullPath;     // "/sleep/foo.bmp" or empty if no image available
+  std::string basename;     // basename portion, or empty for paused branch
+  std::string displayName;  // FavoriteImage::displayNameForPath(fullPath)
+  bool isPaused = false;    // facade routed via paused-rotation branch
+
+  bool hasImage() const { return !fullPath.empty(); }
+};
+
+// Caller-supplied render attempt. Returns true if `pick.fullPath` was
+// rendered successfully. Returning false signals a transient open/parse
+// failure — the facade will pick another candidate and call probe again
+// up to an internal retry budget.
+using RenderProbe = std::function<bool(const SleepPick&)>;
+
+// Hot-path entry point that hides heap-fragmentation strategy, the
+// paused-rotation branch, the playlist-vs-direct-pick decision, the
+// parse/open retry loop, and the post-render lastShown bookkeeping
+// (RFC #156). Picks the next wallpaper given current heap state and
+// on-disk content, drives `probe` until one renders successfully or the
+// retry budget is exhausted.
+//
+// Returns the SleepPick that ultimately rendered (fullPath non-empty)
+// or an empty pick if /sleep is empty or every retry failed.
+//
+// During the migration window this coexists with `advance()`; both
+// share the same playlist state. New code should prefer this entry
+// point.
+SleepPick nextSleepFile(const RenderProbe& probe);
+
 // Cold path: mark /sleep as needing a reconcile. Cheap. Reconcile work
 // runs lazily inside the next advance() under the rich-sleep heap-budget
 // gate. New files dropped via USB transfer become visible on the next

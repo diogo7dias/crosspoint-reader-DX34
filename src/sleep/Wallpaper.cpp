@@ -1,6 +1,11 @@
 #include "Wallpaper.h"
 
 #include <Arduino.h>
+#include <HalStorage.h>
+
+#ifndef UNIT_TEST_HOST
+#include <esp_heap_caps.h>
+#endif
 
 #include "../CrossPointState.h"
 #include "../persist/PersistManager.h"
@@ -67,6 +72,104 @@ void ensureConfigured() {
 std::string advance() {
   ensureConfigured();
   return v2::WallpaperPlaylistV2::instance().advance();
+}
+
+namespace {
+
+// Retry budget for nextSleepFile's probe loop. Mirrors the
+// kMaxParseRetries constant currently in SleepActivity. Until C4 of
+// RFC #156 lands, both copies coexist.
+constexpr int kNextSleepFileRetries = 5;
+
+// Heap-fragmentation gate. Mirrors kSleepLargestBlockSafeBytes in
+// SleepActivity; copy lives here so the facade owns the decision when
+// callers migrate. C2 of RFC #156 replaces this with an injected lambda
+// so host tests can simulate fragmentation; today the host build always
+// reports unlimited heap (preserves existing test invariants).
+constexpr size_t kNextSleepFileHeapGateBytes = 64 * 1024;
+
+size_t largestFreeBlockBytes() {
+#ifdef UNIT_TEST_HOST
+  return SIZE_MAX;
+#else
+  return heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+#endif
+}
+
+// Streaming fragment-safe pick — direct mirror of SleepActivity's
+// pickSleepFileDirect helper. Touches O(1) heap beyond the returned
+// basename. Empty if /sleep is empty or fs not wired.
+std::string pickDirectBasename() {
+  auto* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
+  if (!sfs) return {};
+  const size_t count = sfs->countSleepBmps(kSleepFolderCap);
+  if (count == 0) return {};
+  const size_t idx = static_cast<size_t>(::random(static_cast<long>(count)));
+  return sfs->nthSleepBmp(idx);
+}
+
+SleepPick makePickFromBasename(const std::string& basename) {
+  SleepPick p;
+  if (basename.empty()) return p;
+  p.basename = basename;
+  p.fullPath = "/sleep/" + basename;
+  p.displayName = FavoriteImage::displayNameForPath(p.fullPath);
+  return p;
+}
+
+}  // namespace
+
+SleepPick nextSleepFile(const RenderProbe& probe) {
+  ensureConfigured();
+  if (!probe) return SleepPick{};
+
+  // Paused-rotation branch: re-show the previously rendered wallpaper
+  // without advancing the playlist cursor. Mirrors the early-return at
+  // renderCustomSleepScreen line 165, hidden inside the facade.
+  if (APP_STATE.wallpaperRotationPaused && !APP_STATE.lastSleepWallpaperPath.empty() &&
+      Storage.exists(APP_STATE.lastSleepWallpaperPath.c_str())) {
+    SleepPick paused;
+    paused.fullPath = APP_STATE.lastSleepWallpaperPath;
+    paused.displayName = FavoriteImage::displayNameForPath(paused.fullPath);
+    paused.isPaused = true;
+    if (probe(paused)) {
+      return paused;
+    }
+    // Paused render failed (file vanished mid-flight, parse error, etc.).
+    // Fall through to the normal pick path so the user still sees an
+    // image, matching the existing renderCustomSleepScreen behaviour
+    // where a failed paused render falls into the rotation loop.
+  }
+
+  const bool useDirectPick = largestFreeBlockBytes() < kNextSleepFileHeapGateBytes;
+
+  for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
+    std::string basename;
+    if (useDirectPick) {
+      basename = pickDirectBasename();
+    } else {
+      // Buffer-backed playlist advance. Internal heap probes (see
+      // WallpaperPlaylistV2::reconcile / writeBuffer) bail to empty if
+      // the contiguous block is too small — we then fall through to the
+      // streaming direct pick on the same iteration.
+      basename = v2::WallpaperPlaylistV2::instance().advance();
+      if (basename.empty()) {
+        basename = pickDirectBasename();
+      }
+    }
+    if (basename.empty()) {
+      break;  // /sleep is empty — no point retrying.
+    }
+    SleepPick pick = makePickFromBasename(basename);
+    if (probe(pick)) {
+      v2::WallpaperPlaylistV2::instance().rememberRendered(pick.fullPath, pick.basename);
+      return pick;
+    }
+    // Probe rejected this candidate. Loop around — advance() will pick
+    // a different file on its next call; direct-pick will re-roll.
+  }
+
+  return SleepPick{};
 }
 
 void markFolderDirty() {
