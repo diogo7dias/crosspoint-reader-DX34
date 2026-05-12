@@ -50,8 +50,12 @@ void markOpenComplete();
 constexpr int kStartY = 60;
 // Gap between stacked popups.
 constexpr int kGap = 8;
-// Minimum visible display time for a popup, in milliseconds.
-constexpr unsigned long kMinDisplayMs = 500;
+// Minimum visible display time for a popup, in milliseconds. FAST_REFRESH
+// itself is ~400 ms (blocking) and the popup is visible the whole time, so
+// any value at or below ~400 makes ensureMinDisplayElapsed a no-op on the
+// normal path — kept as a floor for the rare case where show() is followed
+// almost immediately by a HALF_REFRESH from a warm-cached destination.
+constexpr unsigned long kMinDisplayMs = 250;
 // Interval between reassurance repaints of the "Opening book..." popup
 // on long book opens — each fire resets the stack and redraws, then
 // restarts the timer, giving visible proof-of-life every N ms without

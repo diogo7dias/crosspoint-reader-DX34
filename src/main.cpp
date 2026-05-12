@@ -219,6 +219,12 @@ void enterNewActivity(Activity* activity) {
   // Suppress stale button events from the previous activity so that
   // a press/release that closed the old screen doesn't leak into the new one.
   gpio.suppressUntilAllReleased();
+  // Guarantee any transition popup drawn by the route factory has been
+  // visible for the floor duration before the destination's first render
+  // (forced HALF_REFRESH via requestHalfRefresh in show()) overwrites it.
+  // On warm/cached destinations onEnter() reaches displayBuffer too quickly
+  // and the popup is wiped before the user perceives it.
+  TransitionFeedback::ensureMinDisplayElapsed();
   currentActivity = activity;
   currentActivity->onEnter();
   if (!currentActivity->didEntryFail()) {
