@@ -43,10 +43,10 @@ void ensureConfigured() {
   s_configured = true;
 
   v2::WallpaperPlaylistV2::Deps d;
-  d.fs                = &defaultFs();
-  d.fileIO            = &defaultFileIO();
+  d.fs = &defaultFs();
+  d.fileIO = &defaultFileIO();
   d.lastShownFilename = &APP_STATE.lastShownSleepFilename;
-  d.lastRenderedPath  = &APP_STATE.lastSleepWallpaperPath;
+  d.lastRenderedPath = &APP_STATE.lastSleepWallpaperPath;
   // advance() runs inside SleepActivity::onEnter, milliseconds before the
   // CPU enters deep sleep. The PersistManager debounce window never fires
   // before sleep, so we force a synchronous flush so rotation state
@@ -56,12 +56,12 @@ void ensureConfigured() {
     crosspoint::persist::PersistManager().flushAll();
     return ok;
   };
-  d.randomFn      = [](long mod) -> long { return ::random(mod); };
-  d.isFavorite    = [](const std::string& path) { return FavoriteImage::isFavoritePath(path); };
+  d.randomFn = [](long mod) -> long { return ::random(mod); };
+  d.isFavorite = [](const std::string& path) { return FavoriteImage::isFavoritePath(path); };
   d.onPathRenamed = [](const std::string& from, const std::string& to) {
     FavoriteImage::replacePathReferences(from, to);
   };
-  d.onTrimMoved           = [](uint16_t /*moved*/) {};
+  d.onTrimMoved = [](uint16_t /*moved*/) {};
   d.onFavoritesCapBlocked = []() {};
   // Heap probe (RFC #156 C2): inject the device's contiguous-block query
   // through the playlist so the same code path runs under host tests with
@@ -209,18 +209,18 @@ void Configure(const Config& c) {
   s_configured = true;
 
   v2::WallpaperPlaylistV2::Deps d;
-  d.fs                    = c.fs;
-  d.fileIO                = c.fileIO;
-  d.orderFilePath         = c.orderFilePath;
-  d.lastShownFilename     = c.lastShownFilename;
-  d.lastRenderedPath      = c.lastRenderedPath;
-  d.saveAppState          = c.saveAppState;
-  d.randomFn              = c.randomFn;
-  d.isFavorite            = c.isFavorite;
-  d.onPathRenamed         = c.onPathRenamed;
-  d.onTrimMoved           = c.onTrimMoved;
+  d.fs = c.fs;
+  d.fileIO = c.fileIO;
+  d.orderFilePath = c.orderFilePath;
+  d.lastShownFilename = c.lastShownFilename;
+  d.lastRenderedPath = c.lastRenderedPath;
+  d.saveAppState = c.saveAppState;
+  d.randomFn = c.randomFn;
+  d.isFavorite = c.isFavorite;
+  d.onPathRenamed = c.onPathRenamed;
+  d.onTrimMoved = c.onTrimMoved;
   d.onFavoritesCapBlocked = c.onFavoritesCapBlocked;
-  d.largestFreeBlockFn    = c.largestFreeBlockFn;
+  d.largestFreeBlockFn = c.largestFreeBlockFn;
 
   v2::WallpaperPlaylistV2::instance().setDeps(d);
 }

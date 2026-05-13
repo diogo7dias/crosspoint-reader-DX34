@@ -310,7 +310,7 @@ void test_fragmented_heap_blocks_initial_reshuffle_buffer_stays_empty() {
   fx.wire(wp);
 
   const auto first = wp.advance();
-  TEST_ASSERT_TRUE(first.empty());            // bailed — no buffer to walk
+  TEST_ASSERT_TRUE(first.empty());  // bailed — no buffer to walk
   TEST_ASSERT_TRUE(wp.bufferForTest().empty());
 }
 
@@ -326,7 +326,7 @@ void test_healthy_heap_allows_reshuffle_and_advance_returns_name() {
   fx.wire(wp);
 
   const auto first = wp.advance();
-  TEST_ASSERT_FALSE(first.empty());           // reshuffle succeeded
+  TEST_ASSERT_FALSE(first.empty());  // reshuffle succeeded
   TEST_ASSERT_FALSE(wp.bufferForTest().empty());
 }
 
