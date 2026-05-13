@@ -10,6 +10,8 @@
 #include "WifiDiagReport.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
+
+extern "C" esp_err_t esp_crt_bundle_attach(void* conf);
 #include "esp_https_ota.h"
 #include "esp_wifi.h"
 
@@ -144,6 +146,7 @@ CheckOutcome OtaUpdater::checkForUpdate() {
   cfg.timeout_ms = 15000;
   cfg.buffer_size = 2048;
   cfg.buffer_size_tx = 1024;
+  cfg.crt_bundle_attach = esp_crt_bundle_attach;
   cfg.skip_cert_common_name_check = true;
   cfg.user_agent = "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION;
   cfg.keep_alive_enable = false;
