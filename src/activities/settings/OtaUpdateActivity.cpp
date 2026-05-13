@@ -1,8 +1,11 @@
 #include "OtaUpdateActivity.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <WiFi.h>
+
+#include "esp_heap_caps.h"
 
 #include <cstdio>
 
@@ -37,6 +40,20 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
     state = CHECKING_FOR_UPDATE;
   }
   requestUpdateAndWait();
+
+  // TLS handshake needs ~10 KB contiguous for mbedTLS session buffers.
+  // On the C3's tight heap (~27 KB free) the font cache often fragments
+  // memory enough to cause a -1 (HTTPC_ERROR_CONNECTION_REFUSED) during
+  // the handshake. Drop reclaimable caches before attempting.
+  const size_t heapBefore = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    fcm->clearCache();
+    const size_t heapAfter = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (heapAfter > heapBefore) {
+      LOG_INF("OTA", "Heap recovered via cache evict: %u -> %u", static_cast<unsigned>(heapBefore),
+              static_cast<unsigned>(heapAfter));
+    }
+  }
 
   CheckOutcome res;
   for (int attempt = 0; attempt <= OTA_CHECK_MAX_RETRIES; attempt++) {
