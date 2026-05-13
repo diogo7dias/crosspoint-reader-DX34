@@ -234,8 +234,22 @@ void CrossPointWebServer::begin() {
   // Store AP mode flag for later use (e.g., in handleStatus)
   apMode = isInApMode;
 
-  LOG_DIAG("WEB", "[HEAP] s0_begin_entry free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+  LOG_DIAG("WEB", "[HEAP] s0_begin_entry free=%u min=%u largest=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
+           heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
   LOG_DBG("WEB", "Network mode: %s", apMode ? "AP" : "STA");
+
+  // Drop font-decompressor hot buffers before the WebServer allocation.
+  // Same rationale as the OTA path (dbc8f0f): on ESP32-C3 with ~27 KB free,
+  // the font cache can fragment the heap enough that `new WebServer` fails.
+  auto* fcm = renderer.getFontCacheManager();
+  if (fcm) {
+    const size_t before = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    fcm->clearCache();
+    const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (after > before) {
+      LOG_DBG("WEB", "Heap recovered via cache evict: %u -> %u", before, after);
+    }
+  }
 
   LOG_DBG("WEB", "Creating web server on port %d...", port);
   server.reset(new WebServer(port));
