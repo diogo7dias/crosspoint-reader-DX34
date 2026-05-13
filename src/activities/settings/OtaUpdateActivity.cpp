@@ -35,24 +35,19 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
 
   LOG_DBG("OTA", "WiFi connected, checking for update");
 
-  {
-    RenderLock lock(*this);
-    state = CHECKING_FOR_UPDATE;
-  }
-  requestUpdateAndWait();
+  // Set state but do NOT render yet. Drawing the "Checking..." text
+  // decompresses font glyphs into the cache, fragmenting the heap right
+  // before the TLS handshake that needs a ~16.7 KB contiguous block.
+  // The e-ink still shows the WiFi selection screen; we render after the
+  // check completes (result screen in the switch/case below).
+  state = CHECKING_FOR_UPDATE;
 
-  // TLS handshake needs ~10 KB contiguous for mbedTLS session buffers.
-  // On the C3's tight heap (~27 KB free) the font cache often fragments
-  // memory enough to cause a -1 (HTTPC_ERROR_CONNECTION_REFUSED) during
-  // the handshake. Drop reclaimable caches before attempting.
-  const size_t heapBefore = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  // Final cache eviction right before TLS — same rationale as dbc8f0f.
   if (auto* fcm = renderer.getFontCacheManager()) {
+    const size_t before = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     fcm->clearCache();
-    const size_t heapAfter = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    if (heapAfter > heapBefore) {
-      LOG_INF("OTA", "Heap recovered via cache evict: %u -> %u", static_cast<unsigned>(heapBefore),
-              static_cast<unsigned>(heapAfter));
-    }
+    const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    LOG_INF("OTA", "Pre-TLS cache evict: largest %u -> %u", (unsigned)before, (unsigned)after);
   }
 
   CheckOutcome res;
