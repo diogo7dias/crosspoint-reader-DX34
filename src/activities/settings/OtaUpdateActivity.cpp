@@ -37,13 +37,9 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
 
   state = CHECKING_FOR_UPDATE;
 
-  // Release the TLS heap reservation. This frees a guaranteed 17 KB
-  // contiguous block that WiFi couldn't fragment.
-  if (tlsHeapReservation) {
-    free(tlsHeapReservation);
-    tlsHeapReservation = nullptr;
-    LOG_DBG("OTA", "TLS reservation released, largest=%u",
-            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  // Evict font cache before TLS — reclaim what we can.
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    fcm->clearCache();
   }
 
   CheckOutcome res;
@@ -101,17 +97,6 @@ void OtaUpdateActivity::onEnter() {
     LOG_DBG("OTA", "Pre-WiFi cache evict: largest %u -> %u", (unsigned)before, (unsigned)after);
   }
 
-  // Reserve a 17 KB block BEFORE WiFi starts. WiFi's internal allocations
-  // (~30 KB) fragment the heap arena, leaving no contiguous block >= 16,717
-  // bytes for mbedTLS. By holding this block, WiFi is forced to carve up
-  // other regions. Releasing it right before the TLS handshake gives
-  // mbedTLS a guaranteed contiguous block.
-  static constexpr size_t kTlsReservation = 17 * 1024;
-  tlsHeapReservation = heap_caps_malloc(kTlsReservation, MALLOC_CAP_8BIT);
-  if (tlsHeapReservation) {
-    LOG_DBG("OTA", "TLS heap reservation: %u bytes at %p", (unsigned)kTlsReservation, tlsHeapReservation);
-  }
-
   // Turn on WiFi immediately
   LOG_DBG("OTA", "Turning on WiFi...");
   WiFi.mode(WIFI_STA);
@@ -124,11 +109,6 @@ void OtaUpdateActivity::onEnter() {
 
 void OtaUpdateActivity::onExit() {
   ActivityWithSubactivity::onExit();
-
-  if (tlsHeapReservation) {
-    free(tlsHeapReservation);
-    tlsHeapReservation = nullptr;
-  }
 
   // Turn off wifi
   WiFi.disconnect(false);  // false = don't erase credentials, send disconnect frame
