@@ -1,5 +1,7 @@
 #include "OtaUpdater.h"
 
+#include <FontCacheManager.h>
+#include <GfxRenderer.h>
 #include <HTTPClient.h>
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
@@ -13,6 +15,8 @@
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_wifi.h"
+
+extern GfxRenderer renderer;
 
 // Static contract between OtaUpdater's outcome tags and the literal-value
 // switch tables in WifiDiagReport.cpp's report writer. If anyone reorders
@@ -136,6 +140,16 @@ CheckOutcome OtaUpdater::checkForUpdate() {
   // failing with ESP_ERR_HTTP_CONNECT after TCP connect succeeded, even with
   // no CA bundle attached — symptomatic of an OOM mid-handshake that the
   // ESP-IDF transport layer doesn't surface as ESP_ERR_NO_MEM.
+  // Preflight's TCP probe allocates/frees WiFiClient buffers, fragmenting
+  // the heap further. Evict font cache here — after preflight is done but
+  // before the 16.7 KB mbedTLS session allocation — to coalesce free blocks.
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    const size_t before = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    fcm->clearCache();
+    const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    LOG_INF("OTA", "Post-preflight cache evict: largest %u -> %u", (unsigned)before, (unsigned)after);
+  }
+
   ReleaseJsonParser releaseParser;
   size_t totalBytesReceived = 0;
   LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
