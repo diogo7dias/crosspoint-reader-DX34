@@ -160,4 +160,20 @@ class CrossPointWebServer {
   void handleDeleteFont();
 
   void handleSleepConverterPage() const;
+
+  // Firmware install: browser POSTs raw firmware.bin bytes (no multipart).
+  // Bytes stream into the inactive OTA partition via esp_ota_*. On success
+  // the device reboots into the new firmware. No TLS — browser handled
+  // the GitHub download, device just receives a binary stream.
+  struct FirmwareUploadState {
+    void* otaHandle = nullptr;  // esp_ota_handle_t (kept as void* to avoid esp_ota_ops.h in header)
+    size_t bytesWritten = 0;
+    bool started = false;
+    bool aborted = false;
+    String error;
+  } firmwareUpload;
+
+  void handleFirmwareUpload();
+  void handleFirmwareUploadDone();
+  void handleUpdatePage() const;
 };

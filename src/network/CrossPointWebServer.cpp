@@ -14,6 +14,9 @@
 #include <WiFi.h>
 #include <Xtc.h>
 #include <esp_heap_caps.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+#include <esp_system.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -323,6 +326,14 @@ void CrossPointWebServer::begin() {
       "/api/fonts/upload", HTTP_POST, [this] { handleUploadFontPost(fontUpload); },
       [this] { handleUploadFont(fontUpload); });
   server->on("/api/fonts/delete", HTTP_POST, [this] { handleDeleteFont(); });
+
+  // Firmware install. Browser POSTs raw firmware.bin bytes (no multipart);
+  // ESP32 streams them straight to the inactive OTA partition. On success
+  // the device reboots into the new firmware. The browser handles the
+  // GitHub TLS download — device only sees plain HTTP from the LAN.
+  server->on(
+      "/api/firmware/install", HTTP_POST, [this] { handleFirmwareUploadDone(); }, [this] { handleFirmwareUpload(); });
+  server->on("/update", HTTP_GET, [this] { handleUpdatePage(); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DIAG("WEB", "[HEAP] s3_after_route_setup free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
@@ -2190,4 +2201,271 @@ void CrossPointWebServer::handleWsUploadData(uint8_t num, uint8_t* payload, size
     wsServer->sendTXT(num, "DONE");
     wsUploadLastProgressSent = 0;
   }
+}
+
+// ============================================================================
+// Firmware install (browser does GitHub TLS, device just receives bytes)
+// ============================================================================
+
+void CrossPointWebServer::handleFirmwareUpload() {
+  esp_task_wdt_reset();
+  if (!running || !server) return;
+
+  const HTTPUpload& upload = server->upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    firmwareUpload.bytesWritten = 0;
+    firmwareUpload.started = false;
+    firmwareUpload.aborted = false;
+    firmwareUpload.error = "";
+
+    const esp_partition_t* target = esp_ota_get_next_update_partition(nullptr);
+    if (!target) {
+      firmwareUpload.error = "no OTA partition available";
+      LOG_ERR("FWUP", "esp_ota_get_next_update_partition returned null");
+      return;
+    }
+    LOG_DBG("FWUP", "START → partition %s offset 0x%x size %u", target->label, target->address, target->size);
+
+    esp_ota_handle_t handle = 0;
+    const esp_err_t err = esp_ota_begin(target, OTA_WITH_SEQUENTIAL_WRITES, &handle);
+    if (err != ESP_OK) {
+      firmwareUpload.error = String("esp_ota_begin failed: ") + esp_err_to_name(err);
+      LOG_ERR("FWUP", "esp_ota_begin: %s", esp_err_to_name(err));
+      return;
+    }
+    firmwareUpload.otaHandle = reinterpret_cast<void*>(handle);
+    firmwareUpload.started = true;
+
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!firmwareUpload.started || firmwareUpload.aborted) return;
+
+    const esp_ota_handle_t handle = reinterpret_cast<esp_ota_handle_t>(firmwareUpload.otaHandle);
+    const esp_err_t err = esp_ota_write(handle, upload.buf, upload.currentSize);
+    if (err != ESP_OK) {
+      firmwareUpload.error = String("esp_ota_write failed: ") + esp_err_to_name(err);
+      firmwareUpload.aborted = true;
+      esp_ota_abort(handle);
+      firmwareUpload.otaHandle = nullptr;
+      LOG_ERR("FWUP", "esp_ota_write @ %u: %s", (unsigned)firmwareUpload.bytesWritten, esp_err_to_name(err));
+      return;
+    }
+    firmwareUpload.bytesWritten += upload.currentSize;
+    if ((firmwareUpload.bytesWritten % (256 * 1024)) < upload.currentSize) {
+      LOG_DBG("FWUP", "wrote %u bytes", (unsigned)firmwareUpload.bytesWritten);
+    }
+    esp_task_wdt_reset();
+
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (!firmwareUpload.started || firmwareUpload.aborted) return;
+
+    const esp_ota_handle_t handle = reinterpret_cast<esp_ota_handle_t>(firmwareUpload.otaHandle);
+    const esp_err_t endErr = esp_ota_end(handle);
+    firmwareUpload.otaHandle = nullptr;
+    if (endErr != ESP_OK) {
+      firmwareUpload.error = String("esp_ota_end failed: ") + esp_err_to_name(endErr);
+      firmwareUpload.aborted = true;
+      LOG_ERR("FWUP", "esp_ota_end: %s", esp_err_to_name(endErr));
+      return;
+    }
+
+    const esp_partition_t* target = esp_ota_get_next_update_partition(nullptr);
+    const esp_err_t bootErr = esp_ota_set_boot_partition(target);
+    if (bootErr != ESP_OK) {
+      firmwareUpload.error = String("esp_ota_set_boot_partition failed: ") + esp_err_to_name(bootErr);
+      firmwareUpload.aborted = true;
+      LOG_ERR("FWUP", "esp_ota_set_boot_partition: %s", esp_err_to_name(bootErr));
+      return;
+    }
+    LOG_INF("FWUP", "DONE: %u bytes written, boot partition switched", (unsigned)firmwareUpload.bytesWritten);
+
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    if (firmwareUpload.started && firmwareUpload.otaHandle) {
+      esp_ota_abort(reinterpret_cast<esp_ota_handle_t>(firmwareUpload.otaHandle));
+      firmwareUpload.otaHandle = nullptr;
+    }
+    firmwareUpload.aborted = true;
+    firmwareUpload.error = "upload aborted by client";
+    LOG_ERR("FWUP", "ABORTED at %u bytes", (unsigned)firmwareUpload.bytesWritten);
+  }
+}
+
+void CrossPointWebServer::handleFirmwareUploadDone() {
+  if (!running || !server) return;
+
+  if (firmwareUpload.aborted || !firmwareUpload.error.isEmpty()) {
+    server->send(500, "text/plain", firmwareUpload.error.isEmpty() ? "upload failed" : firmwareUpload.error);
+    return;
+  }
+  if (!firmwareUpload.started || firmwareUpload.bytesWritten == 0) {
+    server->send(400, "text/plain", "no firmware data received");
+    return;
+  }
+
+  String body = "OK: ";
+  body += String(firmwareUpload.bytesWritten);
+  body += " bytes installed. Rebooting...";
+  server->send(200, "text/plain", body);
+
+  // Give the response a moment to flush, then reboot into the new image.
+  delay(500);
+  esp_restart();
+}
+
+void CrossPointWebServer::handleUpdatePage() const {
+  if (!running || !server) return;
+
+  String html = R"(<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CrossPoint Update</title>
+<link rel="stylesheet" href="/css/brutalist.css">
+<style>
+.row { margin: 16px 0; }
+button { padding: 12px 20px; font-size: 16px; }
+button:disabled { opacity: 0.5; }
+input[type=file] { margin: 8px 0; }
+progress { width: 100%; height: 20px; }
+.manual { margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--dash, #444); font-size: 13px; opacity: 0.75; }
+</style>
+</head><body>
+<h1>Firmware Update</h1>
+<p>Current: <code id="cur">)";
+  html += CROSSPOINT_VERSION;
+  html += R"(</code></p>
+<p>Latest: <code id="latest">checking...</code></p>
+<p id="status"></p>
+
+<div class="row">
+  <button id="install" disabled>Install latest</button>
+</div>
+
+<progress id="prog" value="0" max="100" style="display:none"></progress>
+
+<div class="manual">
+  <p><b>Manual fallback</b> (if auto-download fails):</p>
+  <p>1. <a id="dl" href="#" target="_blank" rel="noopener">Download firmware.bin</a> from GitHub</p>
+  <p>2. Pick the file: <input type="file" id="file" accept=".bin,application/octet-stream"></p>
+  <p>3. <button id="installManual" disabled>Install picked file</button></p>
+</div>
+
+<p><a href="/">Back to Home</a></p>
+
+<script>
+const REPO = 'diogo7dias/crosspoint-reader-DX34';
+// raw.githubusercontent.com serves the `firmware` branch with
+// Access-Control-Allow-Origin: *, so the browser can fetch the binary
+// directly (GitHub release CDN does NOT send CORS headers).
+const FIRMWARE_URL = `https://raw.githubusercontent.com/${REPO}/firmware/firmware.bin`;
+
+const cur = document.getElementById('cur').textContent.trim();
+const latestEl = document.getElementById('latest');
+const statusEl = document.getElementById('status');
+const dlLink = document.getElementById('dl');
+const fileInput = document.getElementById('file');
+const installBtn = document.getElementById('install');
+const installManualBtn = document.getElementById('installManual');
+const prog = document.getElementById('prog');
+
+let latestTag = null;
+let latestAssetUrl = null;
+let latestSize = 0;
+
+function setStatus(s) { statusEl.textContent = s; }
+
+async function uploadBlob(blob) {
+  prog.style.display = 'block';
+  prog.value = 0;
+  setStatus(`Uploading ${(blob.size/1024/1024).toFixed(2)} MB to device...`);
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/firmware/install');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) prog.value = (e.loaded / e.total) * 100;
+    };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+      ? resolve()
+      : reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
+    xhr.onerror = () => reject(new Error('upload failed'));
+    const fd = new FormData();
+    fd.append('firmware', blob, 'firmware.bin');
+    xhr.send(fd);
+  });
+  prog.value = 100;
+  setStatus('Install complete. Device is rebooting. WiFi will reconnect on the new firmware.');
+}
+
+(async () => {
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+    if (!r.ok) throw new Error(`GitHub API ${r.status}`);
+    const j = await r.json();
+    latestTag = j.tag_name;
+    latestEl.textContent = latestTag;
+    const asset = (j.assets || []).find(a => a.name === 'firmware.bin');
+    if (asset) {
+      latestAssetUrl = asset.browser_download_url;
+      latestSize = asset.size;
+      dlLink.href = latestAssetUrl;
+      dlLink.textContent = `Download firmware.bin (${(latestSize/1024/1024).toFixed(2)} MB)`;
+    }
+    if (cur === latestTag) {
+      setStatus(`Already on latest (${latestTag}). You can reinstall if you want.`);
+    } else {
+      setStatus(`Update available: ${cur} → ${latestTag}` + (latestSize ? ` (${(latestSize/1024/1024).toFixed(2)} MB)` : ''));
+    }
+    installBtn.disabled = false;
+  } catch (e) {
+    latestEl.textContent = 'error';
+    setStatus('Could not reach GitHub: ' + e.message);
+  }
+})();
+
+installBtn.addEventListener('click', async () => {
+  installBtn.disabled = true;
+  try {
+    setStatus('Downloading firmware...');
+    prog.style.display = 'block';
+    prog.value = 0;
+    // raw.githubusercontent.com gives CORS, so fetch streams the body.
+    const resp = await fetch(FIRMWARE_URL, { cache: 'no-cache' });
+    if (!resp.ok) throw new Error(`download ${resp.status}`);
+    const total = parseInt(resp.headers.get('content-length') || '0', 10);
+    const reader = resp.body.getReader();
+    const chunks = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (total) prog.value = (received / total) * 50;  // first half of bar = download
+      setStatus(`Downloading firmware: ${(received/1024/1024).toFixed(2)} MB`);
+    }
+    const blob = new Blob(chunks);
+    await uploadBlob(blob);
+  } catch (e) {
+    setStatus('Failed: ' + e.message + ' — try the manual fallback below.');
+    installBtn.disabled = false;
+  }
+});
+
+fileInput.addEventListener('change', () => {
+  installManualBtn.disabled = !fileInput.files.length;
+});
+
+installManualBtn.addEventListener('click', async () => {
+  if (!fileInput.files.length) return;
+  installManualBtn.disabled = true;
+  fileInput.disabled = true;
+  try {
+    await uploadBlob(fileInput.files[0]);
+  } catch (e) {
+    setStatus('Failed: ' + e.message);
+    installManualBtn.disabled = false;
+    fileInput.disabled = false;
+  }
+});
+</script>
+</body></html>)";
+  server->send(200, "text/html", html);
 }
