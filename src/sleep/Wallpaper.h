@@ -95,12 +95,12 @@ void reconcileIfDirty();
 // init wires production adapters automatically. Tests call resetForTest()
 // then Configure() with fakes.
 struct Config {
-  ISleepFs*         fs            = nullptr;
-  persist::IFileIO* fileIO        = nullptr;
-  std::string       orderFilePath = "/.crosspoint/sleep_order.txt";
+  ISleepFs* fs = nullptr;
+  persist::IFileIO* fileIO = nullptr;
+  std::string orderFilePath = "/.crosspoint/sleep_order.txt";
 
   std::string* lastShownFilename = nullptr;
-  std::string* lastRenderedPath  = nullptr;
+  std::string* lastRenderedPath = nullptr;
 
   std::function<bool()> saveAppState;
   std::function<long(long)> randomFn;

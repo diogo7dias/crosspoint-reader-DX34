@@ -50,9 +50,7 @@ class PersistManagerImpl {
   void setAsyncRunnerForTest(IAsyncRunner* runner) { asyncRunner_ = runner; }
 
   // Diagnostics passthrough. Returns 0 if no runner has been bound yet.
-  size_t asyncDroppedCount() const {
-    return asyncRunner_ ? asyncRunner_->droppedCount() : 0;
-  }
+  size_t asyncDroppedCount() const { return asyncRunner_ ? asyncRunner_->droppedCount() : 0; }
 
   // Call from main loop. Ticks every store; returns count of flushes performed.
   size_t tick(uint32_t nowMs) {

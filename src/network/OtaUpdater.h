@@ -29,7 +29,7 @@ struct NetPreflight {
 
   Dns dns = Dns::Failed;
   Tcp tcp = Tcp::Skipped;
-  uint32_t resolvedIpV4 = 0;     // 0 if Dns::Failed
+  uint32_t resolvedIpV4 = 0;  // 0 if Dns::Failed
   uint32_t freeHeapBytes = 0;
   // Reserved for the diag::Log unification (RFC #146 follow-up). Today: 0.
   uint16_t lastWifiReason = 0;
@@ -38,14 +38,14 @@ struct NetPreflight {
 // ---- Outcome of checkForUpdate() — Arduino HTTPClient transport ----
 struct CheckOutcome {
   enum class Tag : uint8_t {
-    UpdateAvailable,    // newer release found, ready for installUpdate()
-    AlreadyLatest,      // server reachable; tag matches current or is older
-    NoFirmwareAsset,    // tag present but no firmware.bin attachment
-    HttpClientError,    // HTTPClient negative code (transport-level)
-    HttpStatusError,    // server returned non-2xx (and not 403/429)
-    RateLimited,        // 403 / 429
-    JsonParseError,     // SAX parser found no tag_name
-    InternalError,      // begin() / null stream / etc.
+    UpdateAvailable,  // newer release found, ready for installUpdate()
+    AlreadyLatest,    // server reachable; tag matches current or is older
+    NoFirmwareAsset,  // tag present but no firmware.bin attachment
+    HttpClientError,  // HTTPClient negative code (transport-level)
+    HttpStatusError,  // server returned non-2xx (and not 403/429)
+    RateLimited,      // 403 / 429
+    JsonParseError,   // SAX parser found no tag_name
+    InternalError,    // begin() / null stream / etc.
   };
 
   Tag tag = Tag::InternalError;
@@ -53,9 +53,9 @@ struct CheckOutcome {
 
   // Per-tag payload. Read only the field matching `tag`.
   union U {
-    uint32_t latestSize;     // updateAvailable
-    int      httpcCode;      // httpClientError (negative HTTPC_*)
-    int      httpStatus;     // httpStatusError or rateLimited (4xx/5xx)
+    uint32_t latestSize;  // updateAvailable
+    int httpcCode;        // httpClientError (negative HTTPC_*)
+    int httpStatus;       // httpStatusError or rateLimited (4xx/5xx)
     U() : latestSize(0) {}
   } u;
 
@@ -73,17 +73,17 @@ struct InstallProgress {
 struct InstallOutcome {
   enum class Tag : uint8_t {
     Success,
-    NotNewer,           // installUpdate called without prior UpdateAvailable
-    BeginFailed,        // esp_https_ota_begin (TLS / DNS / redirect)
-    PerformFailed,      // esp_https_ota_perform mid-stream
-    Incomplete,         // exited OK but Content-Length not satisfied
-    FinishFailed,       // hash / signature / partition validate
+    NotNewer,       // installUpdate called without prior UpdateAvailable
+    BeginFailed,    // esp_https_ota_begin (TLS / DNS / redirect)
+    PerformFailed,  // esp_https_ota_perform mid-stream
+    Incomplete,     // exited OK but Content-Length not satisfied
+    FinishFailed,   // hash / signature / partition validate
   };
 
-  Tag         tag = Tag::NotNewer;
-  uint32_t    bytesProcessed = 0;
-  uint32_t    bytesExpected = 0;
-  esp_err_t   espErr = ESP_OK;
+  Tag tag = Tag::NotNewer;
+  uint32_t bytesProcessed = 0;
+  uint32_t bytesExpected = 0;
+  esp_err_t espErr = ESP_OK;
   const char* espErrName = nullptr;  // rodata via esp_err_to_name; null if espErr == ESP_OK
 };
 
@@ -93,16 +93,16 @@ class OtaUpdater {
 
   OtaUpdater() = default;
 
-  CheckOutcome   checkForUpdate();
+  CheckOutcome checkForUpdate();
   InstallOutcome installUpdate(ProgressFn onProgress = {});
 
   // Held between checkForUpdate() and installUpdate(). Caller may also read
   // these from CheckOutcome.latestVersion / .u.updateAvailable.latestSize
   // — exposed here so legacy render paths that already grab the version
   // for the confirmation screen do not need to thread the outcome through.
-  bool               hasPendingUpdate() const { return pending_.has; }
+  bool hasPendingUpdate() const { return pending_.has; }
   const std::string& latestVersion() const { return pending_.version; }
-  uint32_t           latestSize() const { return pending_.size; }
+  uint32_t latestSize() const { return pending_.size; }
 
  private:
   struct Pending {

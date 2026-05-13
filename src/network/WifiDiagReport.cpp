@@ -239,27 +239,43 @@ const char* disconnectReasonName(int32_t r) {
 // below the noteOta* setters.
 const char* otaCheckTagName(uint8_t t) {
   switch (t) {
-    case 0: return "UpdateAvailable";
-    case 1: return "AlreadyLatest";
-    case 2: return "NoFirmwareAsset";
-    case 3: return "HttpClientError";
-    case 4: return "HttpStatusError";
-    case 5: return "RateLimited";
-    case 6: return "JsonParseError";
-    case 7: return "InternalError";
-    default: return "?";
+    case 0:
+      return "UpdateAvailable";
+    case 1:
+      return "AlreadyLatest";
+    case 2:
+      return "NoFirmwareAsset";
+    case 3:
+      return "HttpClientError";
+    case 4:
+      return "HttpStatusError";
+    case 5:
+      return "RateLimited";
+    case 6:
+      return "JsonParseError";
+    case 7:
+      return "InternalError";
+    default:
+      return "?";
   }
 }
 
 const char* otaInstallTagName(uint8_t t) {
   switch (t) {
-    case 0: return "Success";
-    case 1: return "NotNewer";
-    case 2: return "BeginFailed";
-    case 3: return "PerformFailed";
-    case 4: return "Incomplete";
-    case 5: return "FinishFailed";
-    default: return "?";
+    case 0:
+      return "Success";
+    case 1:
+      return "NotNewer";
+    case 2:
+      return "BeginFailed";
+    case 3:
+      return "PerformFailed";
+    case 4:
+      return "Incomplete";
+    case 5:
+      return "FinishFailed";
+    default:
+      return "?";
   }
 }
 
@@ -577,12 +593,22 @@ void writeReportOnFailure(FailureKind kind) {
   // Result
   const char* kindName;
   switch (kind) {
-    case FailureKind::Timeout:          kindName = "TIMEOUT (15 s)"; break;
-    case FailureKind::NoSsidAvail:      kindName = "NO_SSID_AVAIL"; break;
-    case FailureKind::OtaCheckFailed:   kindName = "OTA_CHECK_FAILED"; break;
-    case FailureKind::OtaInstallFailed: kindName = "OTA_INSTALL_FAILED"; break;
+    case FailureKind::Timeout:
+      kindName = "TIMEOUT (15 s)";
+      break;
+    case FailureKind::NoSsidAvail:
+      kindName = "NO_SSID_AVAIL";
+      break;
+    case FailureKind::OtaCheckFailed:
+      kindName = "OTA_CHECK_FAILED";
+      break;
+    case FailureKind::OtaInstallFailed:
+      kindName = "OTA_INSTALL_FAILED";
+      break;
     case FailureKind::StatusFailed:
-    default:                            kindName = "CONNECT_FAILED"; break;
+    default:
+      kindName = "CONNECT_FAILED";
+      break;
   }
   appendf(f, "Result:          %s\n", kindName);
   if (!isOtaKind) {

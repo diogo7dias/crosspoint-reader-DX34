@@ -151,9 +151,8 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
     renderer.fillRect(24, 354, static_cast<int>(updaterProgress * static_cast<float>(pageWidth - 44)), 42);
     renderer.drawCenteredText(UI_10_FONT_ID, 420,
                               (std::to_string(static_cast<int>(updaterProgress * 100)) + "%").c_str());
-    renderer.drawCenteredText(
-        UI_10_FONT_ID, 440,
-        (std::to_string(progressBytesDone) + " / " + std::to_string(progressBytesTotal)).c_str());
+    renderer.drawCenteredText(UI_10_FONT_ID, 440,
+                              (std::to_string(progressBytesDone) + " / " + std::to_string(progressBytesTotal)).c_str());
     renderer.displayBuffer();
     return;
   }

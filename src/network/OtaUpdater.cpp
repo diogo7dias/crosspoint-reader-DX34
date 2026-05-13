@@ -80,9 +80,9 @@ struct CheckExitGuard {
   const CheckOutcome& out;
   ~CheckExitGuard() {
     const int httpc = (out.tag == CheckOutcome::Tag::HttpClientError) ? out.u.httpcCode : 0;
-    const int httpStatus =
-        (out.tag == CheckOutcome::Tag::HttpStatusError || out.tag == CheckOutcome::Tag::RateLimited) ? out.u.httpStatus
-                                                                                                     : 0;
+    const int httpStatus = (out.tag == CheckOutcome::Tag::HttpStatusError || out.tag == CheckOutcome::Tag::RateLimited)
+                               ? out.u.httpStatus
+                               : 0;
     WifiDiagReport::noteOtaCheckResult(static_cast<uint8_t>(out.tag), httpc, httpStatus);
   }
 };
@@ -123,9 +123,8 @@ CheckOutcome OtaUpdater::checkForUpdate() {
   WifiDiagReport::noteOtaPreflight(out.preflight.dns == NetPreflight::Dns::Ok,
                                    out.preflight.tcp == NetPreflight::Tcp::Ok, out.preflight.resolvedIpV4,
                                    out.preflight.freeHeapBytes);
-  LOG_INF("OTA", "Pre-flight: dns=%s tcp=%s heap=%u",
-          out.preflight.dns == NetPreflight::Dns::Ok ? "OK" : "FAIL",
-          out.preflight.tcp == NetPreflight::Tcp::Ok    ? "OK"
+  LOG_INF("OTA", "Pre-flight: dns=%s tcp=%s heap=%u", out.preflight.dns == NetPreflight::Dns::Ok ? "OK" : "FAIL",
+          out.preflight.tcp == NetPreflight::Tcp::Ok       ? "OK"
           : out.preflight.tcp == NetPreflight::Tcp::Failed ? "FAIL"
                                                            : "SKIP",
           (unsigned)out.preflight.freeHeapBytes);
