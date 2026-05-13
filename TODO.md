@@ -6,12 +6,6 @@ Open follow-ups for this firmware. Prioritised top-down. Workflow per item: buil
 
 Items already merged to `main` that should be called out in the release notes for the next version. Move into the release body when cutting the tag, then clear this section.
 
-### v2.1.2
-
-- **fix(reader): force book.bin rebuild on upgrade to recover lost chapter titles.** Bumped `BOOK_CACHE_VERSION` 5→6 in [BookMetadataCache.cpp](lib/Epub/Epub/BookMetadataCache.cpp). Some users saw chapters disappear or render as "Unnamed" after upgrading past the upstream parser picks (#128/#129) — the cached `book.bin` was stale relative to current parser output, but no version bump invalidated it. Also wipes `cachePath/sections/` on cache miss in [Epub.cpp](lib/Epub/Epub.cpp) so spine-indexed section files don't outlive the rebuilt `book.bin`. One-time slow re-index per book on first open after upgrade; subsequent opens hit cache as before.
-
-- **fix(ota): split error codes, surface diagnostics, swap to Arduino HTTPClient for check (#143).** OTA failure screens now show a specific reason instead of a single ambiguous "install/partition" line: `OTA_BEGIN_ERROR` / `OTA_INCOMPLETE_ERROR` / `OTA_FINISH_ERROR` for the three install-path failure sites; the underlying esp_err name (or processed/total bytes for incomplete downloads); and a pre-flight `dns=<IP> tcp=OK|FAIL heap=<bytes>` diagnostic line. `checkForUpdate` swapped to Arduino `WiFiClientSecure::setInsecure` + `HTTPClient` to mirror the proven KOSync stack on this heap-tight C3; CA bundle dropped from both check and install paths (matches KOSync's stance, saves ~70 KB of mbedtls cert-parsing pressure during the handshake, and ~64 KB of flash). Future OTA failures self-report on screen, no serial console required.
-
 ## Active
 
 - [x] ~~**Bump OTA JSON content-length cap from 8 KB → 16 KB** in `src/network/OtaUpdater.cpp`. Long release-note bodies push the GitHub `/releases/latest` JSON over 8192 bytes, which makes `checkForUpdate()` return HTTP_ERROR before the user is even offered the download.~~
