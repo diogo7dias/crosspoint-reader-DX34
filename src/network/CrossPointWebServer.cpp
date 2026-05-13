@@ -1797,8 +1797,8 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
                   static_cast<unsigned>(before), static_cast<unsigned>(largest), static_cast<unsigned>(kNeeded));
         } else {
           state.error = "out of memory (try again from desktop browser)";
-          LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u", static_cast<unsigned>(largest),
-                  ESP.getFreeHeap(), ESP.getMinFreeHeap());
+          LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
+                  static_cast<unsigned>(largest), ESP.getFreeHeap(), ESP.getMinFreeHeap());
           return;
         }
       }
