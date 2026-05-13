@@ -36,6 +36,10 @@ class OtaUpdateActivity : public ActivityWithSubactivity {
   uint32_t progressBytesDone = 0;
   uint32_t progressBytesTotal = 1;  // 1 to avoid div-by-zero before first chunk
 
+  // Heap reservation: a block held before WiFi starts, freed before TLS.
+  // Prevents WiFi stack from fragmenting the region mbedTLS needs.
+  void* tlsHeapReservation = nullptr;
+
   void onWifiSelectionComplete(bool success);
 
  public:
