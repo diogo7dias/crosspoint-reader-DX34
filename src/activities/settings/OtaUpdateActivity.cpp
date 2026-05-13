@@ -102,6 +102,18 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
 void OtaUpdateActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
+  // Drop font caches early, while the heap is still clean (~60 KB free).
+  // WiFi + TLS together need ~16 KB contiguous; if the font decompressor's
+  // hot-group sits in the middle of the arena the resulting fragmentation
+  // pushes largest-free-block below that threshold. Evicting here gives
+  // WiFi's internal allocations a single large region to carve from.
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    const size_t before = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    fcm->clearCache();
+    const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    LOG_DBG("OTA", "Pre-WiFi cache evict: largest %u -> %u", (unsigned)before, (unsigned)after);
+  }
+
   // Turn on WiFi immediately
   LOG_DBG("OTA", "Turning on WiFi...");
   WiFi.mode(WIFI_STA);
