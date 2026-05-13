@@ -35,11 +35,24 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
 
   LOG_DBG("OTA", "WiFi connected, checking for update");
 
-  state = CHECKING_FOR_UPDATE;
+  {
+    RenderLock lock(*this);
+    state = CHECKING_FOR_UPDATE;
+  }
+  requestUpdateAndWait();
 
-  // Evict font cache before TLS — reclaim what we can.
+  // TLS handshake needs ~10 KB contiguous for mbedTLS session buffers.
+  // On the C3's tight heap (~27 KB free) the font cache often fragments
+  // memory enough to cause a -1 (HTTPC_ERROR_CONNECTION_REFUSED) during
+  // the handshake. Drop reclaimable caches before attempting.
+  const size_t heapBefore = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
   if (auto* fcm = renderer.getFontCacheManager()) {
     fcm->clearCache();
+    const size_t heapAfter = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (heapAfter > heapBefore) {
+      LOG_INF("OTA", "Heap recovered via cache evict: %u -> %u", static_cast<unsigned>(heapBefore),
+              static_cast<unsigned>(heapAfter));
+    }
   }
 
   CheckOutcome res;
@@ -88,14 +101,6 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
 
 void OtaUpdateActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
-
-  // Drop font caches early, while the heap is still clean (~60 KB free).
-  if (auto* fcm = renderer.getFontCacheManager()) {
-    const size_t before = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    fcm->clearCache();
-    const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    LOG_DBG("OTA", "Pre-WiFi cache evict: largest %u -> %u", (unsigned)before, (unsigned)after);
-  }
 
   // Turn on WiFi immediately
   LOG_DBG("OTA", "Turning on WiFi...");

@@ -1,17 +1,16 @@
 #include "OtaUpdater.h"
 
-#include <Arduino.h>
+#include <HTTPClient.h>
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 #include <cstdio>
 
 #include "WifiDiagReport.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
-
-extern "C" esp_err_t esp_crt_bundle_attach(void* conf);
 #include "esp_https_ota.h"
 #include "esp_wifi.h"
 
@@ -130,72 +129,79 @@ CheckOutcome OtaUpdater::checkForUpdate() {
                                                            : "SKIP",
           (unsigned)out.preflight.freeHeapBytes);
 
-  // Use ESP-IDF esp_http_client instead of Arduino WiFiClientSecure.
-  // Arduino's WiFiClientSecure allocates a 16,717-byte mbedTLS input
-  // buffer that exceeds the largest contiguous block after WiFi fragments
-  // the heap (~16,372). esp_http_client uses esp_tls with configurable
-  // transport buffers that fit within the available heap.
+  // Use Arduino HTTPClient + WiFiClientSecure (with setInsecure) instead of
+  // ESP-IDF's esp_http_client. This mirrors KOReaderSyncClient and is the
+  // stack proven to handshake successfully against TLS hosts on the C3's
+  // tight heap (~28 KB free). esp_http_client + mbedtls full handshake was
+  // failing with ESP_ERR_HTTP_CONNECT after TCP connect succeeded, even with
+  // no CA bundle attached — symptomatic of an OOM mid-handshake that the
+  // ESP-IDF transport layer doesn't surface as ESP_ERR_NO_MEM.
   ReleaseJsonParser releaseParser;
   size_t totalBytesReceived = 0;
   LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
-  LOG_DBG("OTA", "Heap before check: free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
-          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
-  esp_http_client_config_t cfg = {};
-  cfg.url = latestReleaseUrl;
-  cfg.timeout_ms = 15000;
-  cfg.buffer_size = 2048;
-  cfg.buffer_size_tx = 1024;
-  cfg.crt_bundle_attach = esp_crt_bundle_attach;
-  cfg.skip_cert_common_name_check = true;
-  cfg.user_agent = "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION;
-  cfg.keep_alive_enable = false;
+  WiFiClientSecure secureClient;
+  secureClient.setInsecure();
+  HTTPClient http;
+  http.setUserAgent("CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
+  http.setTimeout(15000);
+  // Allow GitHub's redirect path (api.github.com may issue 301/302 in some
+  // configurations); FOLLOW_REDIRECTS_FORCED reuses the same secure client.
+  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
-  esp_http_client_handle_t client = esp_http_client_init(&cfg);
-  if (!client) {
-    LOG_ERR("OTA", "esp_http_client_init failed");
+  if (!http.begin(secureClient, latestReleaseUrl)) {
+    LOG_ERR("OTA", "HTTPClient::begin failed");
     out.tag = CheckOutcome::Tag::InternalError;
     return out;
   }
 
-  esp_err_t err = esp_http_client_open(client, 0);
-  if (err != ESP_OK) {
-    LOG_ERR("OTA", "esp_http_client_open failed: %s", esp_err_to_name(err));
+  const int statusCode = http.GET();
+  if (statusCode < 0) {
     out.tag = CheckOutcome::Tag::HttpClientError;
-    out.u.httpcCode = -1;
-    esp_http_client_cleanup(client);
+    out.u.httpcCode = statusCode;
+    LOG_ERR("OTA", "HTTPC %d: %s", statusCode, HTTPClient::errorToString(statusCode).c_str());
+    http.end();
     return out;
   }
-
-  const int contentLength = esp_http_client_fetch_headers(client);
-  const int statusCode = esp_http_client_get_status_code(client);
-  LOG_DBG("OTA", "HTTP %d, content-length=%d", statusCode, contentLength);
 
   if (statusCode == 403 || statusCode == 429) {
     LOG_ERR("OTA", "GitHub API rate limited (HTTP %d)", statusCode);
     out.tag = CheckOutcome::Tag::RateLimited;
     out.u.httpStatus = statusCode;
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
+    http.end();
     return out;
   }
   if (statusCode != 200) {
     LOG_ERR("OTA", "Unexpected HTTP status %d from GitHub API", statusCode);
     out.tag = CheckOutcome::Tag::HttpStatusError;
     out.u.httpStatus = statusCode;
-    esp_http_client_close(client);
-    esp_http_client_cleanup(client);
+    http.end();
     return out;
   }
 
-  char chunk[1024];
-  int n;
-  while ((n = esp_http_client_read(client, chunk, sizeof(chunk))) > 0) {
-    releaseParser.feed(chunk, n);
-    totalBytesReceived += n;
+  // Stream the response body in 1 KB chunks into the SAX-style release parser.
+  // Avoids buffering the full ~30 KB JSON in heap.
+  WiFiClient* stream = http.getStreamPtr();
+  if (stream == nullptr) {
+    LOG_ERR("OTA", "HTTPClient stream is null");
+    http.end();
+    out.tag = CheckOutcome::Tag::InternalError;
+    return out;
   }
-  esp_http_client_close(client);
-  esp_http_client_cleanup(client);
+  char chunk[1024];
+  unsigned long lastDataMs = millis();
+  while (http.connected() && (stream->available() > 0 || (millis() - lastDataMs) < 5000)) {
+    int n = stream->read(reinterpret_cast<uint8_t*>(chunk), sizeof(chunk));
+    if (n > 0) {
+      releaseParser.feed(chunk, n);
+      totalBytesReceived += n;
+      lastDataMs = millis();
+    } else {
+      delay(10);
+      if (stream->available() <= 0 && !http.connected()) break;
+    }
+  }
+  http.end();
 
   LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
 
