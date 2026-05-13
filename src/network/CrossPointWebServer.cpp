@@ -5,7 +5,9 @@
 #include <EpdBinFontLoader.h>
 #include <EpdBinFormat.h>
 #include <Epub.h>
+#include <FontCacheManager.h>
 #include <FsHelpers.h>
+#include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Txt.h>
@@ -43,6 +45,10 @@
 #include "html/js/pako_minJs.generated.h"
 #include "network/ws/WsUploadSession.h"
 #include "util/StringUtils.h"
+
+// Global renderer defined in main.cpp. We only need it for the upload-path
+// heap-relief helper below; see tryReleaseHeapForUpload().
+extern GfxRenderer renderer;
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -93,6 +99,25 @@ std::string bookCachePath(const std::string& filePath) {
     return BookFingerprint::cacheDirName("txt", filePath, Paths::kDataDir);
   }
   return {};
+}
+
+// Drop the font-decompressor's hot-group + page-slot buffers and re-probe
+// the largest contiguous free block. This is the only cache-drop primitive
+// reachable from the upload callback that is safe from any task — same
+// rationale documented on the heap alloc-failure hook in main.cpp: FCM is a
+// single-instance subsystem behind a global renderer, no locks needed, and
+// free() coalesces adjacent blocks in-place so `largest` reflects the merged
+// region on return. Returns true iff post-drop largest >= `needed`.
+//
+// Heavier primitives (page cache, CSS parser, Epub::clearCache, removeDir)
+// either need the active reader's render lock or do SD I/O — both off-limits
+// here.
+bool tryReleaseHeapForUpload(size_t needed) {
+  auto* fcm = renderer.getFontCacheManager();
+  if (!fcm) return false;
+  fcm->clearCache();
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  return largest >= needed;
 }
 
 // Clear book cache for a file (all book types, not just epub)
@@ -1151,13 +1176,23 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     // (-fno-exceptions), so a bad_alloc inside resize would call terminate()
     // and abort the firmware. Phone-on-STA after fetching the 64 KB JS bundle
     // hits this path: heap can fragment below the buffer size mid-upload.
+    // Before bailing, drop reclaimable caches and re-probe — most often the
+    // fragmentation is glyph hot-group + page slots from rendering the UI.
     if (state.buffer.size() != UploadState::UPLOAD_BUFFER_SIZE) {
-      const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-      if (largest < UploadState::UPLOAD_BUFFER_SIZE + 1024) {
-        state.error = "out of memory (try again from desktop browser)";
-        LOG_ERR("WEB", "[UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u", static_cast<unsigned>(largest),
-                ESP.getFreeHeap(), ESP.getMinFreeHeap());
-        return;
+      constexpr size_t kNeeded = UploadState::UPLOAD_BUFFER_SIZE + 1024;
+      size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+      if (largest < kNeeded) {
+        const size_t before = largest;
+        if (tryReleaseHeapForUpload(kNeeded)) {
+          largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+          LOG_INF("WEB", "[UPLOAD] heap recovered via cache evict: %u -> %u (need %u)", static_cast<unsigned>(before),
+                  static_cast<unsigned>(largest), static_cast<unsigned>(kNeeded));
+        } else {
+          state.error = "out of memory (try again from desktop browser)";
+          LOG_ERR("WEB", "[UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u", static_cast<unsigned>(largest),
+                  ESP.getFreeHeap(), ESP.getMinFreeHeap());
+          return;
+        }
       }
       state.buffer.resize(UploadState::UPLOAD_BUFFER_SIZE);
     }
@@ -1748,15 +1783,24 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     state.finalPath = "";
     // Pre-flight heap check (exceptions disabled — bad_alloc would abort).
     // Phone-on-STA after fetching the 64 KB JS bundle hits this path; heap
-    // can fragment below the 4 KB buffer size. Bail gracefully so
-    // handleUploadFontPost returns a 400 JSON error instead of crashing.
+    // can fragment below the 4 KB buffer size. Before bailing, drop
+    // reclaimable caches and re-probe so a fragmented-but-recoverable heap
+    // doesn't force the user back to a desktop browser.
     if (state.buffer.size() != FontUploadState::UPLOAD_BUFFER_SIZE) {
-      const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-      if (largest < FontUploadState::UPLOAD_BUFFER_SIZE + 1024) {
-        state.error = "out of memory (try again from desktop browser)";
-        LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u", static_cast<unsigned>(largest),
-                ESP.getFreeHeap(), ESP.getMinFreeHeap());
-        return;
+      constexpr size_t kNeeded = FontUploadState::UPLOAD_BUFFER_SIZE + 1024;
+      size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+      if (largest < kNeeded) {
+        const size_t before = largest;
+        if (tryReleaseHeapForUpload(kNeeded)) {
+          largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+          LOG_INF("WEB", "[FONT-UPLOAD] heap recovered via cache evict: %u -> %u (need %u)",
+                  static_cast<unsigned>(before), static_cast<unsigned>(largest), static_cast<unsigned>(kNeeded));
+        } else {
+          state.error = "out of memory (try again from desktop browser)";
+          LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
+                  static_cast<unsigned>(largest), ESP.getFreeHeap(), ESP.getMinFreeHeap());
+          return;
+        }
       }
       state.buffer.resize(FontUploadState::UPLOAD_BUFFER_SIZE);
     }
