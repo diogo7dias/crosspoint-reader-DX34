@@ -237,8 +237,6 @@ void CrossPointWebServer::begin() {
   // Store AP mode flag for later use (e.g., in handleStatus)
   apMode = isInApMode;
 
-  LOG_DIAG("WEB", "[HEAP] s0_begin_entry free=%u min=%u largest=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
-           heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
   LOG_DBG("WEB", "Network mode: %s", apMode ? "AP" : "STA");
 
   // Drop font-decompressor hot buffers before the WebServer allocation.
@@ -256,12 +254,10 @@ void CrossPointWebServer::begin() {
 
   LOG_DBG("WEB", "Creating web server on port %d...", port);
   server.reset(new WebServer(port));
-  LOG_DIAG("WEB", "[HEAP] s1_after_new_WebServer free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Disable WiFi sleep to improve responsiveness and prevent 'unreachable' errors.
   // This is critical for reliable web server operation on ESP32.
   WiFi.setSleep(false);
-  LOG_DIAG("WEB", "[HEAP] s2_after_setSleep_false free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Ensure the SDK reconnects the STA link if the router flickers or
   // the client device briefly drops. Keeps the web session alive
@@ -336,7 +332,6 @@ void CrossPointWebServer::begin() {
   server->on("/update", HTTP_GET, [this] { handleUpdatePage(); });
 
   server->onNotFound([this] { handleNotFound(); });
-  LOG_DIAG("WEB", "[HEAP] s3_after_route_setup free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
 #if defined(CROSSPOINT_HAS_WEBDAV)
   // Collect WebDAV headers and register handler
@@ -346,7 +341,6 @@ void CrossPointWebServer::begin() {
   LOG_DBG("WEB", "WebDAV handler initialized");
 #endif
   server->begin();
-  LOG_DIAG("WEB", "[HEAP] s4_after_server_begin free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // WebSocket server, UDP discovery, and mDNS responder are all skipped
   // unconditionally for v2.0.0. The combined ~10 KB resident commit was
@@ -358,12 +352,8 @@ void CrossPointWebServer::begin() {
   // Document in release notes; revisit when async esp_http_server lands in
   // a later release.
   LOG_DBG("WEB", "Skipping WebSocket server (heap budget — HTTP POST only)");
-  LOG_DIAG("WEB", "[HEAP] s5_after_wsServer_begin free=%u min=%u apMode=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
-           apMode ? 1 : 0);
 
   udpActive = false;
-  LOG_DIAG("WEB", "[HEAP] s6_after_udp_begin free=%u min=%u udpActive=%d", ESP.getFreeHeap(), ESP.getMinFreeHeap(),
-           udpActive ? 1 : 0);
 
   // WsUploadSession deps bind the file-scope upload state (wsUploadFile,
   // wsUploadFileName, wsUploadPath, wsUploadSize, wsLastCompleteName/Size/At)
@@ -431,7 +421,6 @@ void CrossPointWebServer::begin() {
   const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
   LOG_DBG("WEB", "Access at http://%s/", ipAddr.c_str());
   LOG_DBG("WEB", "WebSocket at ws://%s:%d/", ipAddr.c_str(), wsPort);
-  LOG_DIAG("WEB", "[HEAP] s7_begin_done free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }
 
 void CrossPointWebServer::abortWsUpload(const char* tag) {
@@ -642,8 +631,6 @@ void CrossPointWebServer::stop() {
     String tmp;
     std::swap(tmp, wsLastCompleteName);
   }
-
-  LOG_DIAG("WEB", "[HEAP] stop() done free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }
 
 void CrossPointWebServer::handleClient() {

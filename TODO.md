@@ -6,7 +6,42 @@ Open follow-ups for this firmware. Prioritised top-down. Workflow per item: buil
 
 Items already merged to `main` that should be called out in the release notes for the next version. Move into the release body when cutting the tag, then clear this section.
 
+- **Snappiness pass (commit `2dfbb69`).** `StatusPopup::showConfirmation` hold reduced from 1 s → 250 ms; boot-stage `logHeapStage()` probes gated behind `-DENABLE_BOOT_HEAP_TRACE` (no-op in default builds); removed always-on `[HEAP] sN_*` LOG_DIAG probes from `CrossPointWebServer` begin/stop and `CrossPointWebServerActivity` onEnter/onExit/STA/AP/DNS paths; demoted `Activity::onEnter`/`onExit` heap snapshots from LOG_DIAG to LOG_DBG. Net: 16-line RTC crash-report ring no longer crowded by per-boot/per-activity boilerplate, so panic reports carry more pre-incident context, and `showConfirmation` is no longer a hard 1-second block.
+- **SD Card cleanup setting (commit `16c86d0`).** New System-category action "Clean SD Card (Safe)" — removes orphan `*.tmp`, `*.tmp2`, `*.junk-*` files at `/` and `/.crosspoint/`, plus the pre-RFC-#146 `/wifi_report.txt`. Preserves all books, per-book progress/bookmarks, custom fonts, sleep wallpapers, every `.bak` file, every primary store.
+- **Silent-restart on WiFi activity exit (commit `380e239`).** Port of upstream `7acc31b` (PR #1908). Wires `silentRestart()` / `silentRestartToReader()` into the onExit of File Transfer, OPDS Browser, Calibre Connect, and KOReader Sync activities. Clears WiFi/LWIP heap fragmentation (~50 KB recovered) via `ESP.restart()` with an RTC_NOINIT magic that survives the reboot so setup() can route the user back to home (or to the open EPUB for KOSync) without a boot splash. Root-cause fix for the OTA/web-server heap-fragmentation bandaids that accumulated over the past 7 commits. **Verified on-device 2026-05-17**: File Transfer → join WiFi → exit triggers visible screen flash + lands on Home as designed.
+- **CleanupStorageActivity tombstone-skip + truncate fallback (commit `c556f02`).** Followup to commit `16c86d0` discovered during 2026-05-17 on-device testing. Real SD cards accumulate corrupt-FAT-entry tombstones (`/.crosspoint/settings.json.tmp.junk-N`) that SdFat cannot delete by any in-device API path — `Storage.remove()` returns false, `openFileForWrite()` returns false, even renaming fails. The activity now skips files whose `size()` returns UINT32_MAX (SdFat's "can't read FAT chain" sentinel) so cleanup reports "Nothing to clean up" instead of a perpetual "FAILED". Also adds the truncate-then-remove fallback that `main.cpp` boot `sweepOrphanTmp` uses for non-tombstoned stuck files. CLEANUP / silent-restart logs promoted from LOG_DBG/LOG_INF/LOG_ERR → LOG_DIAG so they're visible in default builds.
+
 ## Active
+
+- [ ] **Reader section-cache fragmentation — pre-existing memory bug surfaced during v2.3.9 testing on 2026-05-17.** Two on-device crashes during the test session, both from `Section::createSectionFile` allocation pressure:
+    - Crash 1 (after ~6 min reading, book A, custom-font Georgia): `[HEAP] alloc-fail size=14336 caps=6144 fn=heap_caps_malloc` → abort() → `RTC_SW_SYS_RST`. Pre-flight gate had logged `largest=25588 below 49152, running defrag pass / post-defrag largest=25588 (was 25588)` — defrag pass was a complete no-op.
+    - Crash 2 (after ~47 sec reading, book B, ChareInk): `[HEAP] alloc-fail size=59456 caps=6144` — this one was handled (no abort, just malloc returned NULL). Pre-flight had logged `free=81512 largest=42996 min=26596`; by the time the alloc fired, largest had crumbled to 6 KB.
+
+  Root cause: ESP32-C3 heap is non-moving and `releaseMaxResources()` in `EpubReaderActivity.cpp:323` only clears pageCache + CSS + font-cache, which are already mostly empty during a fresh section load. Freed-but-non-adjacent blocks don't coalesce, so largest_free_block doesn't change. Then peak allocations during `createSectionFile` (ZIP decompress ~44 KB, CSS reload ~100 KB, expat read buffer, page LUT) push largest below the 14 KB / 59 KB request. Crash 1 was a `new X` that throws `std::bad_alloc` and aborts because we build with `-fno-exceptions`.
+
+  Fix needs design work — not a 1-line patch:
+    - Pre-allocate the section-load working buffers once at `EpubReaderActivity::onEnter` so they live in a contiguous reserved region (heap pool pattern). Free at onExit.
+    - Or switch the layout to a streaming parser whose working set fits in <16 KB at any point (tracked as the "streaming-layout work" mentioned in the `kMinLargestBlockHardFloor` comment, was a follow-up to PR #100).
+    - Or replace every `new X` in the section-load path with `new (std::nothrow) X` + null-check so bad_alloc never reaches abort(). Doesn't fix the underlying frag but turns crash-and-reboot into recovery-screen-and-back-out.
+    - The `releaseMaxResources()` "defrag pass" comment in EpubReaderActivity.cpp:331 even acknowledges the limitation — "heap is non-moving"; the pass exists more to keep released memory from blocking the NEXT contiguous request than to fix the current one.
+
+  This is the second root cause of "memory issues" the user originally described; silent-restart only fixes WiFi-induced fragmentation. The two are independent.
+
+- [ ] **Verify silent-restart port (commit `380e239`) on device, then drop the heap-fragmentation bandaids.** The 4 WiFi-using activities now `silentRestart()` on exit, additively (after existing teardown). Once on-device smoke tests confirm:
+    - File Transfer → exit → device reboots silently, lands on home, free heap ~50 KB higher than before exit
+    - KOSync → upload progress → exit → silent reboot lands back in the open EPUB at the same page
+    - OPDS Browser → exit → silent reboot to home
+    - Calibre Connect → exit → silent reboot to home
+    - Mode-selection back-out (no WiFi joined) does NOT trigger a reboot
+  ...then a cleanup commit can remove the now-redundant bandaids in `src/network/CrossPointWebServer.cpp` and `src/network/OtaUpdater.cpp` (font-cache evictions before TLS, 17 KB heap-reserve, deferred renders). The bandaids are the 7 commits `b962c8a`, `0952f61`, `2d3ff19`, `e49aaaf`, `678ebdb`, `e10876a`, `dbc8f0f`. They become belt-and-suspenders once the root cause is fixed.
+  - If silent-restart misbehaves, the per-activity rollback is a 1-line `silentRestart()` deletion — the old teardown was kept intact precisely for this. Worst case: revert commit `380e239` wholesale.
+
+- [ ] **Backport upstream stability hardening** (smaller commits since our last sync, `cced777`, 2026-04-15):
+  - `8377ac9` — non-throwing memory allocation + scoped cleanup utils. Adopt at OTA/web/font load sites that currently rely on `new` throwing.
+  - `3efc863` — CRC32 checksum verification for font files. Catches SD corruption before it crashes the font cache.
+  - `181ed6c` — graceful fallback when a font is missing a variant. Today we crash on first glyph lookup if a variant is missing.
+  - `db3bb85` — advance-table + prewarm fallbacks. Hardens the prewarm scan path.
+  - `93e81da` — prune missing books from recent list. Drops dangling refs so MyLibrary doesn't keep stale entries pointing at deleted files.
 
 - [x] ~~**Bump OTA JSON content-length cap from 8 KB → 16 KB** in `src/network/OtaUpdater.cpp`. Long release-note bodies push the GitHub `/releases/latest` JSON over 8192 bytes, which makes `checkForUpdate()` return HTTP_ERROR before the user is even offered the download.~~
   *(Resolved by #143: `checkForUpdate` now streams the response body in 1 KB chunks via Arduino `HTTPClient::getStreamPtr()` directly into the SAX-style `ReleaseJsonParser`. No content-length buffer is allocated, so there's no cap to bump — release-note size no longer affects OTA.)*

@@ -13,6 +13,7 @@
 
 #include "MappedInputManager.h"
 #include "NetworkModeSelectionActivity.h"
+#include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -44,8 +45,6 @@ int barsForRssi(int rssi, int currentBars) {
 void CrossPointWebServerActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
-  LOG_DIAG("WEBACT", "[HEAP] onEnter free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
-
   // Reset state
   state = WebServerActivityState::MODE_SELECTION;
   networkMode = NetworkMode::JOIN_NETWORK;
@@ -65,8 +64,6 @@ void CrossPointWebServerActivity::onEnter() {
 
 void CrossPointWebServerActivity::onExit() {
   ActivityWithSubactivity::onExit();
-
-  LOG_DIAG("WEBACT", "[HEAP] onExit start free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   state = WebServerActivityState::SHUTTING_DOWN;
 
@@ -100,7 +97,13 @@ void CrossPointWebServerActivity::onExit() {
   WiFi.mode(WIFI_OFF);
   delay(30);  // Allow WiFi hardware to power down
 
-  LOG_DIAG("WEBACT", "[HEAP] onExit end free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
+  // WiFi/LWIP teardown scatters long-lived allocations across the heap; the
+  // contiguous space lost (~50 KB) is unrecoverable without a reboot. Silent
+  // restart clears the fragmentation cleanly. Guarded so backing out of mode
+  // selection without ever joining a network doesn't trigger a reboot cycle.
+  if (WiFi.getMode() != WIFI_MODE_NULL) {
+    silentRestart();
+  }
 }
 
 void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) {
@@ -158,12 +161,10 @@ void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) 
 
     exitActivity();
 
-    LOG_DIAG("WEBACT", "[HEAP] sta0_after_wifi_connect free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
     // mDNS responder skipped for v2.0.0 — its ~6.5 KB resident commit was
     // pushing the STA-mode heap pool below the fragmentation floor needed
     // for parallel asset fetches on phone browsers. Users open the device
     // by typed IP; the IP is shown on screen after pairing.
-    LOG_DIAG("WEBACT", "[HEAP] sta1_skipped_mdns free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
     // Start the web server
     startWebServer();
@@ -212,20 +213,17 @@ void CrossPointWebServerActivity::startAccessPoint() {
   LOG_DBG("WEBACT", "Access Point started!");
   LOG_DBG("WEBACT", "SSID: %s", AP_SSID);
   LOG_DBG("WEBACT", "IP: %s", connectedIP.c_str());
-  LOG_DIAG("WEBACT", "[HEAP] a0_after_softAP free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Skip mDNS in AP mode: the DNS captive portal below already redirects every
   // hostname to apIP, so the MDNS responder is dead weight (~6.5 KB heap) on a
   // chip whose AP-mode baseline is already tight. Phones type the IP or land
   // via captive-portal probe regardless.
-  LOG_DIAG("WEBACT", "[HEAP] a1_skipped_mdns_ap free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start DNS server for captive portal behavior
   // This redirects all DNS queries to our IP, making any domain typed resolve to us
   dnsServer.reset(new DNSServer());
   dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
   dnsServer->start(DNS_PORT, "*", apIP);
-  LOG_DIAG("WEBACT", "[HEAP] a2_after_dnsServer_start free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
 
   // Start the web server
   startWebServer();

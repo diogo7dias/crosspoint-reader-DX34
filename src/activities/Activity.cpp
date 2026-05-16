@@ -69,8 +69,10 @@ void Activity::onEnter() {
     return;
   }
   LOG_DBG("ACT", "Entering activity: %s", name.c_str());
-  LOG_DIAG("ACT", "heap on enter '%s': free=%u largest=%u min=%u", name.c_str(), (unsigned)ESP.getFreeHeap(),
-           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+  // Heap snapshot is debug-only: LOG_DIAG would crowd the 16-line RTC ring
+  // on every activity transition, evicting the more useful pre-panic context.
+  LOG_DBG("ACT", "heap on enter '%s': free=%u largest=%u min=%u", name.c_str(), (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
 }
 
 void Activity::onExit() {
@@ -87,8 +89,8 @@ void Activity::onExit() {
   }
 
   LOG_DBG("ACT", "Exiting activity: %s", name.c_str());
-  LOG_DIAG("ACT", "heap on exit '%s': free=%u largest=%u min=%u", name.c_str(), (unsigned)ESP.getFreeHeap(),
-           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+  LOG_DBG("ACT", "heap on exit '%s': free=%u largest=%u min=%u", name.c_str(), (unsigned)ESP.getFreeHeap(),
+          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
 }
 
 void Activity::requestUpdate() {

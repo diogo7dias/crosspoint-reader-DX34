@@ -7,6 +7,7 @@
 #include <esp_task_wdt.h>
 
 #include "MappedInputManager.h"
+#include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -52,6 +53,12 @@ void CalibreConnectActivity::onExit() {
   delay(30);
   WiFi.mode(WIFI_OFF);
   delay(30);
+
+  // Clear WiFi/LWIP heap fragmentation via reboot. Skip if user backed out
+  // of mode selection without joining a network.
+  if (WiFi.getMode() != WIFI_MODE_NULL) {
+    silentRestart();
+  }
 }
 
 void CalibreConnectActivity::onWifiSelectionComplete(const bool connected) {
