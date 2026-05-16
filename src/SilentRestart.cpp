@@ -18,7 +18,10 @@ constexpr uint32_t SILENT_REBOOT_TARGET_READER = 1;
 void armAndRestart(uint32_t target, const char* label) {
   silentRebootTarget = target;
   silentRebootMagic = SILENT_REBOOT_MAGIC;
-  LOG_DBG("MAIN", "Silent restart (target=%s)", label);
+  // LOG_DIAG (not LOG_DBG): silent restarts are rare events tied to WiFi
+  // session exits, and seeing them in the RTC ring is genuinely useful for
+  // diagnosing future fragmentation regressions even on production builds.
+  LOG_DIAG("MAIN", "Silent restart (target=%s)", label);
   // 50 ms is upstream's value — gives the LOG line time to drain to USB CDC
   // and the WiFi disconnect frame above this call time to leave the radio.
   delay(50);

@@ -71,16 +71,44 @@ void cleanupOrphansInDir(const char* dirPath, CleanupResult& result) {
   }
   dir.close();
 
-  // Pass 2: delete.
+  // Pass 2: delete. SdFat sometimes refuses Storage.remove() on a file whose
+  // directory entry is in an odd state (interrupted prior write, FAT
+  // inconsistency). Mirror the truncate-then-remove fallback used by the
+  // boot sweepOrphanTmp() in main.cpp before declaring failure.
   for (const auto& v : victims) {
+    // Skip tombstoned files: when SdFat can't read a file's FAT chain it
+    // returns UINT32_MAX from size(), and remove() / openFileForWrite()
+    // both fail downstream. Boot sweepOrphanTmp would already have renamed
+    // any such .tmp to .junk-<millis>, making the file inert (no longer
+    // confused with a live atomic-write tmp). Treating these as failures
+    // would make every cleanup invocation report a non-removable error
+    // for a file that no SdFat path can ever delete — better to skip
+    // quietly. Real cleanup is to pull the SD into a host OS and delete
+    // the file there, or full-format the card.
+    if (v.size == UINT32_MAX) {
+      LOG_DIAG("CLEANUP", "skip tombstoned (corrupt FAT entry): %s", v.path.c_str());
+      continue;
+    }
     if (Storage.remove(v.path.c_str())) {
       result.removed++;
       result.bytesFreed += v.size;
-      LOG_INF("CLEANUP", "Removed orphan: %s (%u bytes)", v.path.c_str(), (unsigned)v.size);
-    } else {
-      result.failed++;
-      LOG_ERR("CLEANUP", "Failed to remove orphan: %s", v.path.c_str());
+      LOG_DIAG("CLEANUP", "removed orphan: %s (%u B)", v.path.c_str(), (unsigned)v.size);
+      continue;
     }
+    // Reopen for write to truncate, close, then retry remove. On SdFat this
+    // often unsticks a directory entry that plain remove() rejects.
+    FsFile f;
+    if (Storage.openFileForWrite("CLEANUP", v.path.c_str(), f)) {
+      f.close();
+      if (Storage.remove(v.path.c_str())) {
+        result.removed++;
+        result.bytesFreed += v.size;
+        LOG_DIAG("CLEANUP", "removed orphan after truncate: %s (%u B)", v.path.c_str(), (unsigned)v.size);
+        continue;
+      }
+    }
+    result.failed++;
+    LOG_DIAG("CLEANUP", "FAILED to remove orphan: %s (size=%u)", v.path.c_str(), (unsigned)v.size);
   }
 }
 
@@ -99,10 +127,10 @@ void cleanupLegacyWifiReport(CleanupResult& result) {
   if (Storage.remove(kLegacy)) {
     result.removed++;
     result.bytesFreed += sz;
-    LOG_INF("CLEANUP", "Removed legacy %s (%u bytes)", kLegacy, (unsigned)sz);
+    LOG_DIAG("CLEANUP", "removed legacy %s (%u B)", kLegacy, (unsigned)sz);
   } else {
     result.failed++;
-    LOG_ERR("CLEANUP", "Failed to remove legacy %s", kLegacy);
+    LOG_DIAG("CLEANUP", "FAILED to remove legacy %s", kLegacy);
   }
 }
 
@@ -128,8 +156,8 @@ void CleanupStorageActivity::runCleanup() {
   failedCount = result.failed;
   bytesFreed = result.bytesFreed;
 
-  LOG_INF("CLEANUP", "Done: %d removed, %d failed, %u bytes freed", removedCount, failedCount,
-          (unsigned)bytesFreed);
+  LOG_DIAG("CLEANUP", "done: %d removed, %d failed, %u B freed", removedCount, failedCount,
+           (unsigned)bytesFreed);
 
   if (failedCount > 0 && removedCount == 0) {
     state = FAILED;

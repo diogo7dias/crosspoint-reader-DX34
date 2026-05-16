@@ -624,7 +624,8 @@ void setup() {
   const int silentRebootTarget = consumeSilentRebootTarget();
   const bool isSilentReboot = (silentRebootTarget >= 0);
   if (isSilentReboot) {
-    LOG_DBG("MAIN", "Silent reboot detected (target=%d) — skipping boot splash", silentRebootTarget);
+    // LOG_DIAG so the resume event survives in the RTC ring across boots.
+    LOG_DIAG("MAIN", "Silent reboot detected (target=%d) — skipping boot splash", silentRebootTarget);
   }
 
   // Only start serial if USB connected
