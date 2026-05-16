@@ -13,6 +13,7 @@
 
 #include "MappedInputManager.h"
 #include "NetworkModeSelectionActivity.h"
+#include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -95,6 +96,14 @@ void CrossPointWebServerActivity::onExit() {
   LOG_DBG("WEBACT", "Setting WiFi mode OFF...");
   WiFi.mode(WIFI_OFF);
   delay(30);  // Allow WiFi hardware to power down
+
+  // WiFi/LWIP teardown scatters long-lived allocations across the heap; the
+  // contiguous space lost (~50 KB) is unrecoverable without a reboot. Silent
+  // restart clears the fragmentation cleanly. Guarded so backing out of mode
+  // selection without ever joining a network doesn't trigger a reboot cycle.
+  if (WiFi.getMode() != WIFI_MODE_NULL) {
+    silentRestart();
+  }
 }
 
 void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) {

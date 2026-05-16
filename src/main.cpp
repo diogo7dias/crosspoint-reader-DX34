@@ -53,6 +53,7 @@
 #include "fontIds.h"
 #include "fonts/CustomBinFontIds.h"
 #include "fonts/CustomBinFontManager.h"
+#include "SilentRestart.h"
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -615,6 +616,17 @@ void setup() {
   powerManager.begin();
   HalSystem::begin();
 
+  // Silent-reboot detection (PR upstream #1908). Run-and-clear right after
+  // HalSystem::begin so a panic later in setup() can't loop us back into a
+  // silent reboot. -1 = normal boot, 0 = home target, 1 = reader target.
+  // The flag survives ESP.restart() via RTC_NOINIT memory but is wiped on
+  // hard power loss; cold-boot magic mismatch reads as normal boot.
+  const int silentRebootTarget = consumeSilentRebootTarget();
+  const bool isSilentReboot = (silentRebootTarget >= 0);
+  if (isSilentReboot) {
+    LOG_DBG("MAIN", "Silent reboot detected (target=%d) — skipping boot splash", silentRebootTarget);
+  }
+
   // Only start serial if USB connected
   if (gpio.isUsbConnected()) {
     Serial.begin(115200);
@@ -746,10 +758,16 @@ void setup() {
   logHeapStage("after_display_fonts");
 
   exitActivity();
-  auto* bootActivity = new BootActivity(renderer, mappedInputManager);
-  enterNewActivity(bootActivity);
-
-  bootActivity->setProgress(32, "Restoring state");
+  // Silent-reboot path skips the splash entirely — the screen state from the
+  // pre-reboot session is still on the e-ink panel, so a fresh splash would
+  // be a jarring flash. ActivityRouter::begin below will render the
+  // destination directly.
+  BootActivity* bootActivity = nullptr;
+  if (!isSilentReboot) {
+    bootActivity = new BootActivity(renderer, mappedInputManager);
+    enterNewActivity(bootActivity);
+    bootActivity->setProgress(32, "Restoring state");
+  }
   {
     // Touch the store so it registers with PersistManager before the sidecar
     // backup runs (backup iterates registered store paths).
@@ -773,54 +791,70 @@ void setup() {
   RECENT_BOOKS.loadFromFile();
   logHeapStage("after_recents");
 
-  // Safety: skip straight to reader if Back held or crash-loop detected.
-  const bool forcedHome =
-      mappedInputManager.isPressed(MappedInputManager::Button::Back) || APP_STATE.readerActivityLoadCount > 0;
+  std::string readerPath;
+  bool goHome;
 
-  // Build list of .epub books from recents for boot-into-book logic.
-  std::vector<const RecentBook*> recentEpubs;
-  if (!forcedHome) {
-    for (const auto& b : RECENT_BOOKS.getBooks()) {
-      if (b.path.size() > 5 && b.path.rfind(".epub") == b.path.size() - 5) {
-        recentEpubs.push_back(&b);
+  if (isSilentReboot) {
+    // Silent reboot bypasses the random-book / recents / crash-loop logic.
+    // Target was decided by the exiting activity (KOSync → reader, everything
+    // else → home). Stale openEpubPath + lastSleepFromReader from a prior
+    // session must not trigger the sleep-wake "resume reader" fallback.
+    if (silentRebootTarget == 1 && !APP_STATE.openEpubPath.empty()) {
+      readerPath = APP_STATE.openEpubPath;
+      goHome = false;
+    } else {
+      readerPath.clear();
+      goHome = true;
+    }
+  } else {
+    // Safety: skip straight to reader if Back held or crash-loop detected.
+    const bool forcedHome =
+        mappedInputManager.isPressed(MappedInputManager::Button::Back) || APP_STATE.readerActivityLoadCount > 0;
+
+    // Build list of .epub books from recents for boot-into-book logic.
+    std::vector<const RecentBook*> recentEpubs;
+    if (!forcedHome) {
+      for (const auto& b : RECENT_BOOKS.getBooks()) {
+        if (b.path.size() > 5 && b.path.rfind(".epub") == b.path.size() - 5) {
+          recentEpubs.push_back(&b);
+        }
       }
     }
-  }
 
-  // Determine boot destination.
-  // Always open a book when possible: random pick or most-recent epub.
-  // Fall back to home only if forced or no epubs in recents.
-  std::string readerPath;
-  if (!forcedHome && !recentEpubs.empty()) {
-    if (SETTINGS.randomBookOnBoot && recentEpubs.size() > 1) {
-      readerPath = recentEpubs[random(static_cast<long>(recentEpubs.size()))]->path;
-    } else {
-      readerPath = recentEpubs.front()->path;
+    // Determine boot destination.
+    // Always open a book when possible: random pick or most-recent epub.
+    // Fall back to home only if forced or no epubs in recents.
+    if (!forcedHome && !recentEpubs.empty()) {
+      if (SETTINGS.randomBookOnBoot && recentEpubs.size() > 1) {
+        readerPath = recentEpubs[random(static_cast<long>(recentEpubs.size()))]->path;
+      } else {
+        readerPath = recentEpubs.front()->path;
+      }
     }
-  }
 
-  const bool goHome = readerPath.empty();
+    goHome = readerPath.empty();
 
-  if (!goHome) {
-    APP_STATE.openEpubPath = "";
-    if (APP_STATE.readerActivityLoadCount < 255) APP_STATE.readerActivityLoadCount++;
-    APP_STATE.saveToFile();
+    if (!goHome) {
+      APP_STATE.openEpubPath = "";
+      if (APP_STATE.readerActivityLoadCount < 255) APP_STATE.readerActivityLoadCount++;
+      APP_STATE.saveToFile();
+    }
   }
 
   // Defer sleep cache trimming until home screen is actually needed.
   if (goHome) {
-    bootActivity->setProgress(60, "Refreshing sleep cache");
+    if (bootActivity) bootActivity->setProgress(60, "Refreshing sleep cache");
     // Boot reconcile: ensureLoaded would safeRead a multi-KB sleep_order.txt
     // as a single std::string, which the boot heap cannot guarantee. Mark
     // dirty only; first sleep entry consumes it under the rich-sleep
     // heap-budget gate.
     crosspoint::sleep::wallpaper::markFolderDirty();
   }
-  bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
+  if (bootActivity) bootActivity->setProgress(80, goHome ? "Preparing home" : "Resuming book");
 
   wireActivityRouter();
 
-  bootActivity->setProgress(100, goHome ? "Opening home" : "Opening book");
+  if (bootActivity) bootActivity->setProgress(100, goHome ? "Opening home" : "Opening book");
 
   // Phase 1 BDF custom-font scan. Runs after APP_STATE is loaded so the
   // seen/skipped vectors are populated. If any new BDF is queued, the popup

@@ -10,6 +10,7 @@
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "Paths.h"
+#include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -48,6 +49,12 @@ void OpdsBookBrowserActivity::onExit() {
   // activity can't use until the next browse overwrites it.
   std::vector<OpdsEntry>().swap(entries);
   std::vector<std::string>().swap(navigationHistory);
+
+  // Clear WiFi/LWIP heap fragmentation via reboot. Skip if user backed out
+  // of mode selection without joining a network.
+  if (WiFi.getMode() != WIFI_MODE_NULL) {
+    silentRestart();
+  }
 }
 
 void OpdsBookBrowserActivity::loop() {

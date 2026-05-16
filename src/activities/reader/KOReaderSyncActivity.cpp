@@ -9,6 +9,7 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
 #include "MappedInputManager.h"
+#include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -232,6 +233,14 @@ void KOReaderSyncActivity::onExit() {
   delay(100);
   WiFi.mode(WIFI_OFF);
   delay(100);
+
+  // Clear WiFi/LWIP heap fragmentation via reboot. Route back to the open
+  // EPUB so the user lands where they were before launching sync.
+  // NO_CREDENTIALS state never activates WiFi — only silent-restart if a
+  // session actually touched the radio.
+  if (state != NO_CREDENTIALS) {
+    silentRestartToReader();
+  }
 }
 
 void KOReaderSyncActivity::render(Activity::RenderLock&&) {
