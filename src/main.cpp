@@ -591,9 +591,12 @@ bool ensureCrosspointDataDir() {
   return true;
 }
 
-// Boot heap stage probe: dumps free/largest/free-blocks at named boot
-// checkpoints so we can see which stage strands the heap into small
-// fragments. PR #104 follow-up.
+// Boot heap-stage probe. Originally PR #104 investigation; now gated so the
+// 9 probe sites compile to no-ops in production builds. Re-enable with
+// -DENABLE_BOOT_HEAP_TRACE when investigating fragmentation regressions.
+// Rationale for the gate: unconditional probes crowd the 16-line RTC log
+// ring with stale boot data, evicting the more useful pre-panic context.
+#ifdef ENABLE_BOOT_HEAP_TRACE
 static void logHeapStage(const char* label) {
   multi_heap_info_t info;
   heap_caps_get_info(&info, MALLOC_CAP_8BIT);
@@ -601,6 +604,9 @@ static void logHeapStage(const char* label) {
            (unsigned)info.total_free_bytes, (unsigned)info.largest_free_block, (unsigned)info.free_blocks,
            (unsigned)info.allocated_blocks, (unsigned)(info.total_free_bytes + info.total_allocated_bytes));
 }
+#else
+static inline void logHeapStage(const char*) {}
+#endif
 
 void setup() {
   t1 = millis();

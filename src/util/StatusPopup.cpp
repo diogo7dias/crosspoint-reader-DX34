@@ -27,9 +27,11 @@ void showBlocking(GfxRenderer& renderer, const char* message) { showBlockingImpl
 void showBlocking(GfxRenderer& renderer, const String& message) { showBlockingImpl(renderer, message.c_str()); }
 
 void showConfirmation(GfxRenderer& renderer, const char* message) {
-  // Stack below the progress popup, hold 1s, then clear for next redraw.
+  // Stack below the progress popup, hold briefly, then clear for next redraw.
+  // 250 ms is long enough for the user to register the confirmation while
+  // keeping post-action transitions responsive.
   showBlockingImpl(renderer, message);
-  delay(1000);
+  delay(250);
   TransitionFeedback::resetStacking();
 }
 
