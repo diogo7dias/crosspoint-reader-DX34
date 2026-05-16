@@ -8,6 +8,7 @@
 
 #include "ButtonRemapActivity.h"
 #include "CalibreSettingsActivity.h"
+#include "CleanupStorageActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -315,6 +316,7 @@ void SettingsActivity::buildSettingsList() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEANUP_STORAGE, SettingAction::CleanupStorage));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_MANAGE_CUSTOM_FONTS, SettingAction::ManageCustomFonts));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_REFRESH_HOME_STATS, SettingAction::RefreshHomeStats));
@@ -686,6 +688,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::ClearCache:
         enterSubActivity(new ClearCacheActivity(renderer, mappedInput, onComplete));
+        break;
+      case SettingAction::CleanupStorage:
+        enterSubActivity(new CleanupStorageActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::ManageCustomFonts:
         enterSubActivity(new CustomFontsSettingsActivity(renderer, mappedInput, onComplete));
