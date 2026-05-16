@@ -1,4 +1,5 @@
 #pragma once
+#include <deque>
 #include <functional>
 #include <memory>
 #include <string>
@@ -16,9 +17,18 @@ class Section {
   GfxRenderer& renderer;
   std::string filePath;
   FsFile file;
-  std::vector<uint32_t> pageLut;
-  std::vector<std::pair<std::string, uint16_t>> anchorLut;
-  std::vector<int16_t> pageTocLut;
+  // Deques instead of vectors so growth doesn't require a contiguous
+  // realloc when the chapter has many anchors / pages. The exponential
+  // doubling of std::vector hit `std::bad_alloc → abort` on a fragmented
+  // heap (14 KB request, 6 KB largest contiguous) during long reading
+  // sessions — see TODO.md reader-cache fragmentation entry. Deques
+  // allocate small fixed-size chunks (~512 B max each) so they fit
+  // through tight contiguous gaps. `operator[]` random access is still
+  // O(1) — only the per-element pointer chase is slightly more expensive,
+  // and the LUTs are tiny (max ~thousands of entries).
+  std::deque<uint32_t> pageLut;
+  std::deque<std::pair<std::string, uint16_t>> anchorLut;
+  std::deque<int16_t> pageTocLut;
 
   void writeSectionFileHeader(int fontId, float lineCompression, uint8_t extraParagraphSpacingLevel,
                               uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,

@@ -8,6 +8,7 @@
 #include <esp_task_wdt.h>
 
 #include <algorithm>
+#include <deque>
 
 #include "Page.h"
 #include "parsers/ChapterHtmlSlimParser.h"
@@ -28,7 +29,7 @@ constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) +
                                  sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) + sizeof(uint16_t) +
                                  sizeof(uint32_t);
 
-int getAnchorPage(const std::vector<std::pair<std::string, uint16_t>>& anchors, const std::string& anchor) {
+int getAnchorPage(const std::deque<std::pair<std::string, uint16_t>>& anchors, const std::string& anchor) {
   if (anchor.empty()) {
     return -1;
   }
@@ -42,9 +43,9 @@ int getAnchorPage(const std::vector<std::pair<std::string, uint16_t>>& anchors, 
   return -1;
 }
 
-std::vector<int16_t> buildPageTocLut(const std::shared_ptr<Epub>& epub, const int spineIndex, const uint16_t pageCount,
-                                     const std::vector<std::pair<std::string, uint16_t>>& anchors) {
-  std::vector<int16_t> pageTocLut(pageCount, -1);
+std::deque<int16_t> buildPageTocLut(const std::shared_ptr<Epub>& epub, const int spineIndex, const uint16_t pageCount,
+                                    const std::deque<std::pair<std::string, uint16_t>>& anchors) {
+  std::deque<int16_t> pageTocLut(pageCount, -1);
   if (!epub || pageCount == 0) {
     return pageTocLut;
   }
@@ -213,17 +214,20 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
   file.seek(HEADER_SIZE - sizeof(uint32_t));
   serialization::readPod(file, lutOffset);
 
-  // Pre-check heap: pageLut is pageCount * sizeof(uint32_t)
+  // Pre-check heap budget: pageLut is pageCount * sizeof(uint32_t).
+  // pageLut is a std::deque, which allocates in small fixed-size chunks
+  // rather than a single contiguous block, so we check total free heap
+  // (not largest contiguous block) before deserializing. Deserialization
+  // would otherwise abort mid-loop from per-chunk new() failure.
   {
     const size_t needed = pageCount * sizeof(uint32_t);
-    void* check = malloc(needed);
-    if (!check) {
+    const size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    if (freeHeap < needed) {
       file.close();
-      LOG_ERR("SCT", "Deserialization OOM: pageLut needs %u bytes", (unsigned)needed);
+      LOG_ERR("SCT", "Deserialization OOM: pageLut needs %u bytes, free=%u", (unsigned)needed, (unsigned)freeHeap);
       clearCache();
       return false;
     }
-    free(check);
   }
   pageLut.resize(pageCount);
   anchorLut.clear();
@@ -235,7 +239,8 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
   if (file.position() < file.size()) {
     uint16_t anchorCount = 0;
     serialization::readPod(file, anchorCount);
-    anchorLut.reserve(anchorCount);
+    // No reserve() on std::deque — but per-chunk allocation is small enough
+    // that growth never triggers a large contiguous request.
     for (uint16_t i = 0; i < anchorCount; i++) {
       std::string anchor;
       uint16_t pageIndex = 0;
@@ -403,8 +408,13 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment, viewportWidth,
                          viewportHeight, hyphenationEnabled, wordSpacingPercent, firstLineIndentMode, readerStyleMode,
                          textRenderMode, readerBoldSwap);
-  std::vector<uint32_t> lut = {};
-  std::vector<std::pair<std::string, uint16_t>> anchors = {};
+  // Deques instead of vectors so growth doesn't require a contiguous realloc
+  // when the chapter has many anchors / pages. See member-deque rationale
+  // in Section.h. Crash 1 in the 2026-05-17 v2.3.9 test session was a
+  // vector growth of the anchors pair-of-string list (14 KB request, 6 KB
+  // largest contiguous) → std::bad_alloc → abort.
+  std::deque<uint32_t> lut = {};
+  std::deque<std::pair<std::string, uint16_t>> anchors = {};
 
   // Derive the content base directory and image cache path prefix for the parser
   size_t lastSlash = localPath.find_last_of('/');
