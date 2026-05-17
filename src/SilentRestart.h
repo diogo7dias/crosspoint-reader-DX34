@@ -18,3 +18,14 @@ void silentRestartToReader();  // currently-open EPUB (APP_STATE.openEpubPath)
 //
 // Targets: 0 = home, 1 = reader.
 int consumeSilentRebootTarget();
+
+// Loop guard for caller-initiated auto-restart paths (e.g. reader heap
+// fragmentation recovery). The first two consecutive silent restarts return
+// true and the caller proceeds to call silentRestart*(). After that, this
+// returns false and the caller must fall through to user-facing recovery
+// rather than reboot-looping. Counter resets either on cold boot (RTC magic
+// mismatch) or when the caller explicitly calls clearSilentRestartLoopGuard()
+// after the system reaches a known-good state.
+constexpr uint8_t kMaxConsecutiveAutoRestarts = 2;
+bool tryReserveAutoSilentRestart();
+void clearSilentRestartLoopGuard();

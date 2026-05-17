@@ -28,6 +28,7 @@
 #include "MappedInputManager.h"
 #include "QuotesViewerActivity.h"
 #include "ReaderCommon.h"
+#include "SilentRestart.h"
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
@@ -358,8 +359,22 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
   const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
   LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)after, (unsigned)largest);
   if (after < kMinLargestBlockHardFloor) {
-    LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u), aborting layout", (unsigned)after,
+    LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)after,
              (unsigned)kMinLargestBlockHardFloor);
+    // Try a silent restart to reader as the last-resort recovery. Heap
+    // fragmentation is non-moving on ESP32-C3 and releaseMaxResources()
+    // has already evicted the caches we can drop, so a reboot is the
+    // only reliable way to reclaim the contiguous space the next layout
+    // peak will need. The loop guard bounds this to kMaxConsecutiveAutoRestarts
+    // so a chronically OOM-prone book falls through to the user-facing
+    // recovery screen instead of reboot-looping. silentRestartToReader
+    // routes back to APP_STATE.openEpubPath (set by ReaderCommon when this
+    // activity was launched) so the user lands on the same book.
+    if (tryReserveAutoSilentRestart()) {
+      LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
+      silentRestartToReader();  // does not return
+    }
+    LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
     return false;
   }
   return true;
@@ -1627,6 +1642,10 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   // loadSectionFile on big cached sections.
   TransitionFeedback::maybeShowStillWorkingToast(renderer);
   TransitionFeedback::dismiss(renderer);
+  // Section layout completed without breaching the pre-flight hard floor.
+  // Clear the auto-restart guard so the user gets a fresh budget for the
+  // next fragmentation crisis (e.g. opening a different heavier chapter).
+  clearSilentRestartLoopGuard();
   return true;
 }
 
