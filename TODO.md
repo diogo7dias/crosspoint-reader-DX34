@@ -8,6 +8,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v2.3.9 release notes 2026-05-17.)*
 
+*(Drained into v2.3.10 release notes 2026-05-17.)*
+
 ## Active
 
 - [ ] **Reader section-cache fragmentation — pre-existing memory bug surfaced during v2.3.9 testing on 2026-05-17.** Two on-device crashes during the test session, both from `Section::createSectionFile` allocation pressure:
