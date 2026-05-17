@@ -239,6 +239,20 @@ void enterNewActivity(Activity* activity) {
   delete currentActivity;
   currentActivity = nullptr;
 
+  // If a book is open and we still have auto-restart budget, silent-restart
+  // to the reader instead of showing the OOM screen. ESP32-C3 heap is
+  // non-moving so the contiguous 8 KB FreeRTOS task stack that xTaskCreate
+  // needs can't be recovered without a reboot; the silent reboot is the
+  // root-cause fix. User sees the same brief screen flash as the WiFi-exit
+  // silent reboot and lands back in the same book at the saved page.
+  // The loop guard in tryReserveAutoSilentRestart bounds the attempts so a
+  // chronically OOM-prone book falls through to the OOM screen below
+  // instead of reboot-looping.
+  if (!APP_STATE.openEpubPath.empty() && tryReserveAutoSilentRestart()) {
+    LOG_DIAG("MAIN", "Activity entry OOM with book open — silent-restart-to-reader");
+    silentRestartToReader();  // does not return
+  }
+
   auto* oom = new (std::nothrow)
       FullScreenMessageActivity(renderer, mappedInputManager, "Out of memory\nPress any key", EpdFontFamily::REGULAR);
   if (oom) {
