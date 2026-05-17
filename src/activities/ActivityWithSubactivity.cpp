@@ -4,6 +4,8 @@
 
 #include <new>
 
+#include "CrossPointState.h"
+#include "SilentRestart.h"
 #include "util/FullScreenMessageActivity.h"
 
 void ActivityWithSubactivity::renderTaskLoop() {
@@ -65,6 +67,18 @@ void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
   LOG_ERR("ACT", "Subactivity entry failed — swapping to OOM screen");
   subActivity->onExit();
   subActivity.reset();
+
+  // If a book is open and we still have auto-restart budget, silent-restart
+  // to the reader instead of showing the OOM screen. Same root-cause fix as
+  // the main.cpp top-level fallback: ESP32-C3 heap is non-moving so the
+  // contiguous 8 KB FreeRTOS task stack that xTaskCreate needs can't be
+  // recovered without a reboot. User lands back in the same book at the
+  // saved page after a brief screen flash, instead of having to dismiss an
+  // OOM screen and lose their place.
+  if (!APP_STATE.openEpubPath.empty() && tryReserveAutoSilentRestart()) {
+    LOG_DIAG("ACT", "Subactivity entry OOM with book open — silent-restart-to-reader");
+    silentRestartToReader();  // does not return
+  }
 
   auto* oom = new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, "Out of memory\nPress any key");
   if (!oom) {
