@@ -203,6 +203,56 @@ void test_heap_crumbles_mid_session_no_abort() {
   }
 }
 
+void test_fuzz_random_heap_pressure_over_many_advances() {
+  // Drives advance() through many iterations while the heap probe value
+  // oscillates pseudorandomly between healthy and severe fragmentation.
+  // The contract is: regardless of fragmentation state, neither reconcile()
+  // nor advance() may abort the host process. They may return empty or
+  // refuse to grow the buffer, but the program continues.
+  //
+  // Seed is fixed so failures reproduce.
+  applyScenario(kHealthyBoot);
+  FakeSleepFs fs;
+  for (int i = 0; i < 200; ++i) fs.files.push_back("img_" + std::to_string(i) + ".bmp");
+  InMemoryFileIO io;
+  std::string lastShown, lastRendered;
+
+  auto& playlist = WallpaperPlaylistV2::instance();
+  playlist.resetForTest();
+  playlist.setDeps(makeDeps(&fs, &io, &lastShown, &lastRendered));
+  playlist.markFolderDirty();
+  playlist.reconcile();
+
+  uint32_t lcg = 0xC0FFEEu;
+  auto nextPress = [&]() -> size_t {
+    lcg = lcg * 1664525u + 1013904223u;
+    // 6 bins: 1 KB / 4 KB / 12 KB / 25 KB / 48 KB / 90 KB
+    const size_t bins[] = {1024, 4096, 12288, 25600, 49152, 90000};
+    return bins[lcg % 6];
+  };
+
+  unsigned attempted = 0;
+  unsigned returned = 0;
+  for (int i = 0; i < 500; ++i) {
+    FakeHeap::fragment(nextPress());
+    // Mix in periodic new-file arrivals to drive the splice path.
+    if ((i % 37) == 0) {
+      fs.files.push_back("late_" + std::to_string(i) + ".bmp");
+      playlist.markFolderDirty();
+    }
+    std::string name = playlist.advance();
+    ++attempted;
+    if (!name.empty()) ++returned;
+  }
+
+  // Expect majority of advances to succeed (buffer was built at healthy boot
+  // and lives in RAM; new-file splices may fail under fragmentation but the
+  // existing buffer keeps serving).
+  TEST_ASSERT_GREATER_THAN(400, returned);
+  // The test fundamentally asserts "no abort": if we reach this line, pass.
+  TEST_ASSERT_EQUAL(500, attempted);
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -212,5 +262,6 @@ int main(int, char**) {
   RUN_TEST(test_severely_fragmented_heap_aborts_grow_gracefully);
   RUN_TEST(test_advance_under_fragmentation_returns_or_empty);
   RUN_TEST(test_heap_crumbles_mid_session_no_abort);
+  RUN_TEST(test_fuzz_random_heap_pressure_over_many_advances);
   return UNITY_END();
 }
