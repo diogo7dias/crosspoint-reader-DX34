@@ -6,6 +6,8 @@
 #include <Logging.h>
 #include <esp_heap_caps.h>
 
+#include <new>
+
 #include "CrossPointSettings.h"
 #include "Epub.h"
 #include "EpubReaderActivity.h"
@@ -47,7 +49,12 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
     return nullptr;
   }
 
-  auto epub = std::unique_ptr<Epub>(new Epub(path, Paths::kDataDir));
+  auto epub = std::unique_ptr<Epub>(new (std::nothrow) Epub(path, Paths::kDataDir));
+  if (!epub) {
+    LOG_ERR("READER", "OOM new Epub free=%u largest=%u",
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    return nullptr;
+  }
 
   uint8_t readerStyleMode = SETTINGS.readerStyleMode;
   ReadingTheme savedBookSettings;
@@ -83,7 +90,11 @@ std::unique_ptr<Xtc> ReaderActivity::loadXtc(const std::string& path) {
     return nullptr;
   }
 
-  auto xtc = std::unique_ptr<Xtc>(new Xtc(path, Paths::kDataDir));
+  auto xtc = std::unique_ptr<Xtc>(new (std::nothrow) Xtc(path, Paths::kDataDir));
+  if (!xtc) {
+    LOG_ERR("READER", "OOM new Xtc");
+    return nullptr;
+  }
   if (xtc->load()) {
     return xtc;
   }
@@ -98,7 +109,11 @@ std::unique_ptr<Txt> ReaderActivity::loadTxt(const std::string& path) {
     return nullptr;
   }
 
-  auto txt = std::unique_ptr<Txt>(new Txt(path, Paths::kDataDir));
+  auto txt = std::unique_ptr<Txt>(new (std::nothrow) Txt(path, Paths::kDataDir));
+  if (!txt) {
+    LOG_ERR("READER", "OOM new Txt");
+    return nullptr;
+  }
   if (txt->load()) {
     return txt;
   }
