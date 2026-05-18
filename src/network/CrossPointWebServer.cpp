@@ -418,7 +418,11 @@ void CrossPointWebServer::begin() {
     full += name.c_str();
     clearBookCacheIfNeeded(full);
   };
-  g_wsUploadSession.reset(new crosspoint::ws::WsUploadSession(std::move(wsDeps)));
+  g_wsUploadSession.reset(new (std::nothrow) crosspoint::ws::WsUploadSession(std::move(wsDeps)));
+  if (!g_wsUploadSession) {
+    LOG_ERR("WEB", "OOM new WsUploadSession — uploads disabled this session");
+    // Keep going: the rest of the web server (browsing, settings) still works.
+  }
 
   running = true;
 

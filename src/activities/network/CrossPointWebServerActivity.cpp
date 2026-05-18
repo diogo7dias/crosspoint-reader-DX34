@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <new>
 
 #include "MappedInputManager.h"
 #include "NetworkModeSelectionActivity.h"
@@ -221,9 +222,13 @@ void CrossPointWebServerActivity::startAccessPoint() {
 
   // Start DNS server for captive portal behavior
   // This redirects all DNS queries to our IP, making any domain typed resolve to us
-  dnsServer.reset(new DNSServer());
-  dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
-  dnsServer->start(DNS_PORT, "*", apIP);
+  dnsServer.reset(new (std::nothrow) DNSServer());
+  if (!dnsServer) {
+    LOG_ERR("WEBACT", "OOM new DNSServer — captive portal DNS disabled");
+  } else {
+    dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
+    dnsServer->start(DNS_PORT, "*", apIP);
+  }
 
   // Start the web server
   startWebServer();
@@ -233,7 +238,11 @@ void CrossPointWebServerActivity::startWebServer() {
   LOG_DBG("WEBACT", "Starting web server...");
 
   // Create the web server instance
-  webServer.reset(new CrossPointWebServer());
+  webServer.reset(new (std::nothrow) CrossPointWebServer());
+  if (!webServer) {
+    LOG_ERR("WEBACT", "OOM new CrossPointWebServer — staying in starting state");
+    return;
+  }
   webServer->begin();
 
   if (webServer->isRunning()) {

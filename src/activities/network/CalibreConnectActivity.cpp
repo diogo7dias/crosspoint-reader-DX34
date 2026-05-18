@@ -6,6 +6,8 @@
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 
+#include <new>
+
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
@@ -87,7 +89,13 @@ void CalibreConnectActivity::startWebServer() {
     LOG_DBG("CAL", "mDNS started: http://%s.local/", HOSTNAME);
   }
 
-  webServer.reset(new CrossPointWebServer());
+  webServer.reset(new (std::nothrow) CrossPointWebServer());
+  if (!webServer) {
+    LOG_ERR("CAL", "OOM new CrossPointWebServer");
+    state = CalibreConnectState::ERROR;
+    requestUpdate();
+    return;
+  }
   webServer->begin();
 
   if (webServer->isRunning()) {
