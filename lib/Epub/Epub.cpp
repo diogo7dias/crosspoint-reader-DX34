@@ -10,6 +10,7 @@
 #include <esp_heap_caps.h>
 
 #include <algorithm>
+#include <new>
 
 // Temporary (fix/fonts-stranded-largest branch): include `largest` so we can
 // trace where the top contiguous block collapses across the epub-load
@@ -437,10 +438,23 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   this->progressCallback = progressCallback;
   ProgressReporter reporter(progressCallback);
 
-  // Initialize spine/TOC cache
-  bookMetadataCache.reset(new BookMetadataCache(cachePath));
+  // Initialize spine/TOC cache. -fno-exceptions in the firmware build means
+  // a bare `new` that fails would abort the process — nothrow + null-check
+  // lets the caller route to the LOAD_EPUB_FAILED screen and silent-restart
+  // path rather than RTC_SW_SYS_RST.
+  bookMetadataCache.reset(new (std::nothrow) BookMetadataCache(cachePath));
+  if (!bookMetadataCache) {
+    LOG_ERR("EBP", "OOM new BookMetadataCache (load) free=%u largest=%u",
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    return false;
+  }
   // Always create CssParser - needed for inline style parsing even without CSS files
-  cssParser.reset(new CssParser(cachePath));
+  cssParser.reset(new (std::nothrow) CssParser(cachePath));
+  if (!cssParser) {
+    LOG_ERR("EBP", "OOM new CssParser (load) free=%u largest=%u",
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    return false;
+  }
   reporter.report(0);
 
   // Try to load existing cache first
@@ -605,7 +619,12 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   }
 
   // Reload the cache from disk so it's in the correct state
-  bookMetadataCache.reset(new BookMetadataCache(cachePath));
+  bookMetadataCache.reset(new (std::nothrow) BookMetadataCache(cachePath));
+  if (!bookMetadataCache) {
+    LOG_ERR("EBP", "OOM new BookMetadataCache (reload) free=%u largest=%u",
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    return false;
+  }
   {
     ProgressSpan reloadSpan(reporter, 80, 85);
     if (!bookMetadataCache->load([&reloadSpan](const int percent) { reloadSpan.reportPercent(percent); })) {
@@ -637,7 +656,12 @@ bool Epub::ensureCssCache(const std::function<void(int)>& progressCallback) {
   }
 
   if (!cssParser) {
-    cssParser.reset(new CssParser(cachePath));
+    cssParser.reset(new (std::nothrow) CssParser(cachePath));
+    if (!cssParser) {
+      LOG_ERR("EBP", "OOM new CssParser (ensureCssCache) free=%u largest=%u",
+              (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+      return false;
+    }
   }
 
   if (cssParser->hasCache() && cssParser->loadFromCache()) {
