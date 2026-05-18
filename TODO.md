@@ -10,6 +10,42 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v2.3.10 release notes 2026-05-17.)*
 
+### Pending for next release (memory-hardening branch, 2026-05-19)
+
+Branch: `memory-hardening`. Builds clean; host tests green; not yet flashed.
+User to review + flash + smoke-test on device before merging to `main`.
+
+- Sequential newest-first sleep playlist + front-splice for new uploads.
+- Host-side fragmented-heap test harness (`test/test_memory_harness/`) with
+  6 scenarios incl. 500-iteration fuzz under random heap pressure.
+- Nothrow + null-check conversion sweep across the bare-`new` sites that
+  could abort the firmware under `-fno-exceptions`:
+  - lib/Epub: BookMetadataCache, CssParser (the ~100 KB allocation).
+  - lib/Epub/Epub/converters: JpegToFramebufferConverter,
+    PngToFramebufferConverter (FsFile open).
+  - lib/PngToBmpConverter, lib/JpegToBmpConverter: ditherer alloc +
+    scaling accumulators.
+  - lib/GfxRenderer/Bitmap.cpp: ditherer alloc.
+  - lib/GfxRenderer/BitmapHelpers.h: internal error-row buffers inside
+    Atkinson1Bit / Atkinson / FloydSteinberg + `valid()` predicate so
+    callers can detect constructor-time OOM.
+  - lib/KOReaderSync: 3 WiFiClientSecure sites.
+  - lib/Xtc: XtcParser.
+  - src/activities/reader/ReaderActivity.cpp: Epub / Xtc / Txt construction.
+  - src/activities/network: CrossPointWebServer + DNSServer (captive
+    portal) + CalibreConnect web server.
+  - src/network: HttpDownloader (WiFiClientSecure / WiFiClient),
+    CrossPointWebServer (WebServer + WsUploadSession).
+
+  Outcome: bad_alloc -> abort() -> RTC_SW_SYS_RST replaced by
+  return-false-and-show-recovery-screen / silent-restart for all the
+  large-allocation sites that the on-device crashes were hitting. Three
+  layers of defense intact:
+  1. EpubReaderActivity heapHeadroomOkForLayout() pre-flight (48 KB gate
+     + defrag pass + 20 KB hard-floor silent restart).
+  2. Per-allocation nothrow + null-check propagation up to recovery.
+  3. Reader-heap fragmentation auto silent-restart (commit `86b5a93`).
+
 ## Active
 
 - [ ] **Reader section-cache fragmentation — pre-existing memory bug surfaced during v2.3.9 testing on 2026-05-17.** Two on-device crashes during the test session, both from `Section::createSectionFile` allocation pressure:
@@ -36,7 +72,7 @@ Items already merged to `main` that should be called out in the release notes fo
   - If silent-restart misbehaves, the per-activity rollback is a 1-line `silentRestart()` deletion — the old teardown was kept intact precisely for this. Worst case: revert commit `380e239` wholesale.
 
 - [ ] **Backport upstream stability hardening** (smaller commits since our last sync, `cced777`, 2026-04-15):
-  - `8377ac9` — non-throwing memory allocation + scoped cleanup utils. Adopt at OTA/web/font load sites that currently rely on `new` throwing.
+  - `8377ac9` — non-throwing memory allocation + scoped cleanup utils. *Partially covered by the memory-hardening branch (2026-05-19), which converts the same site list to `new (std::nothrow)` + null-check by hand. A future cleanup pass can extract the per-site checks into the upstream helper for consistency.*
   - `3efc863` — CRC32 checksum verification for font files. Catches SD corruption before it crashes the font cache.
   - `181ed6c` — graceful fallback when a font is missing a variant. Today we crash on first glyph lookup if a variant is missing.
   - `db3bb85` — advance-table + prewarm fallbacks. Hardens the prewarm scan path.
