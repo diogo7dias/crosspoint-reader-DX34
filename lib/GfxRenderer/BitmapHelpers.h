@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <new>
 
 // Helper functions
 uint8_t quantize(int gray, int x, int y);
@@ -28,9 +29,9 @@ void setBitmapHelpersUseFactoryLUT(bool enabled);
 class Atkinson1BitDitherer {
  public:
   explicit Atkinson1BitDitherer(int width) : width(width) {
-    errorRow0 = new int16_t[width + 4]();  // Current row
-    errorRow1 = new int16_t[width + 4]();  // Next row
-    errorRow2 = new int16_t[width + 4]();  // Row after next
+    errorRow0 = new (std::nothrow) int16_t[width + 4]();  // Current row
+    errorRow1 = new (std::nothrow) int16_t[width + 4]();  // Next row
+    errorRow2 = new (std::nothrow) int16_t[width + 4]();  // Row after next
   }
 
   ~Atkinson1BitDitherer() {
@@ -38,6 +39,11 @@ class Atkinson1BitDitherer {
     delete[] errorRow1;
     delete[] errorRow2;
   }
+
+  // True if all three error-diffusion buffers were allocated. Callers must
+  // check this after construction — bare `new` under -fno-exceptions aborts
+  // on OOM, the nothrow form returns nullptr and processPixel() would crash.
+  bool valid() const { return errorRow0 && errorRow1 && errorRow2; }
 
   // EXPLICITLY DELETE THE COPY CONSTRUCTOR
   Atkinson1BitDitherer(const Atkinson1BitDitherer& other) = delete;
@@ -109,9 +115,9 @@ class Atkinson1BitDitherer {
 class AtkinsonDitherer {
  public:
   explicit AtkinsonDitherer(int width) : width(width) {
-    errorRow0 = new int16_t[width + 4]();  // Current row
-    errorRow1 = new int16_t[width + 4]();  // Next row
-    errorRow2 = new int16_t[width + 4]();  // Row after next
+    errorRow0 = new (std::nothrow) int16_t[width + 4]();  // Current row
+    errorRow1 = new (std::nothrow) int16_t[width + 4]();  // Next row
+    errorRow2 = new (std::nothrow) int16_t[width + 4]();  // Row after next
   }
 
   ~AtkinsonDitherer() {
@@ -119,6 +125,11 @@ class AtkinsonDitherer {
     delete[] errorRow1;
     delete[] errorRow2;
   }
+
+  // True if all three error-diffusion buffers were allocated. See note on
+  // Atkinson1BitDitherer::valid() — same rationale.
+  bool valid() const { return errorRow0 && errorRow1 && errorRow2; }
+
   // **1. EXPLICITLY DELETE THE COPY CONSTRUCTOR**
   AtkinsonDitherer(const AtkinsonDitherer& other) = delete;
 
@@ -213,14 +224,16 @@ class AtkinsonDitherer {
 class FloydSteinbergDitherer {
  public:
   explicit FloydSteinbergDitherer(int width) : width(width), rowCount(0) {
-    errorCurRow = new int16_t[width + 2]();  // +2 for boundary handling
-    errorNextRow = new int16_t[width + 2]();
+    errorCurRow = new (std::nothrow) int16_t[width + 2]();  // +2 for boundary handling
+    errorNextRow = new (std::nothrow) int16_t[width + 2]();
   }
 
   ~FloydSteinbergDitherer() {
     delete[] errorCurRow;
     delete[] errorNextRow;
   }
+
+  bool valid() const { return errorCurRow && errorNextRow; }
 
   FloydSteinbergDitherer(const FloydSteinbergDitherer& other) = delete;
   FloydSteinbergDitherer& operator=(const FloydSteinbergDitherer& other) = delete;

@@ -665,12 +665,18 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
     }
   }
   // If a ditherer was requested but OOM, bail before we touch scaling state.
-  // No allocations have been made yet on this path that need to be freed
-  // (rowBuffer/inflate context get cleaned at function exit).
-  if ((oneBit && !atkinson1BitDitherer) ||
-      (!oneBit && !USE_8BIT_OUTPUT && USE_ATKINSON && !atkinsonDitherer) ||
-      (!oneBit && !USE_8BIT_OUTPUT && USE_FLOYD_STEINBERG && !fsDitherer)) {
+  // The ditherer constructor allocates internal error-row buffers — check
+  // both the outer object pointer AND the inner valid() flag.
+  const bool ditherer1BitOom = oneBit && (!atkinson1BitDitherer || !atkinson1BitDitherer->valid());
+  const bool dithererAtkOom = !oneBit && !USE_8BIT_OUTPUT && USE_ATKINSON &&
+                              (!atkinsonDitherer || !atkinsonDitherer->valid());
+  const bool dithererFsOom = !oneBit && !USE_8BIT_OUTPUT && USE_FLOYD_STEINBERG &&
+                             (!fsDitherer || !fsDitherer->valid());
+  if (ditherer1BitOom || dithererAtkOom || dithererFsOom) {
     LOG_ERR("PNG", "OOM ditherer outWidth=%u", (unsigned)outWidth);
+    delete atkinsonDitherer;
+    delete fsDitherer;
+    delete atkinson1BitDitherer;
     free(rowBuffer);
     mz_inflateEnd(&ctx.zstream);
     free(ctx.currentRow);

@@ -170,10 +170,18 @@ BmpReaderError Bitmap::parseHeaders() {
   if (highColor && dithering) {
     if (USE_ATKINSON) {
       atkinsonDitherer = new (std::nothrow) AtkinsonDitherer(width);
-      if (!atkinsonDitherer) return BmpReaderError::OomRowBuffer;
+      if (!atkinsonDitherer || !atkinsonDitherer->valid()) {
+        delete atkinsonDitherer;
+        atkinsonDitherer = nullptr;
+        return BmpReaderError::OomRowBuffer;
+      }
     } else {
       fsDitherer = new (std::nothrow) FloydSteinbergDitherer(width);
-      if (!fsDitherer) return BmpReaderError::OomRowBuffer;
+      if (!fsDitherer || !fsDitherer->valid()) {
+        delete fsDitherer;
+        fsDitherer = nullptr;
+        return BmpReaderError::OomRowBuffer;
+      }
     }
   }
 
