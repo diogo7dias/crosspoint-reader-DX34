@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <new>
 
 #include "BitmapHelpers.h"
 
@@ -335,13 +336,19 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   // Use OUTPUT dimensions for dithering (after prescaling)
   if (oneBit) {
     // For 1-bit output, use Atkinson dithering for better quality
-    atkinson1BitDitherer = new Atkinson1BitDitherer(outWidth);
+    atkinson1BitDitherer = new (std::nothrow) Atkinson1BitDitherer(outWidth);
   } else if (!USE_8BIT_OUTPUT) {
     if (USE_ATKINSON) {
-      atkinsonDitherer = new AtkinsonDitherer(outWidth);
+      atkinsonDitherer = new (std::nothrow) AtkinsonDitherer(outWidth);
     } else if (USE_FLOYD_STEINBERG) {
-      fsDitherer = new FloydSteinbergDitherer(outWidth);
+      fsDitherer = new (std::nothrow) FloydSteinbergDitherer(outWidth);
     }
+  }
+  if ((oneBit && !atkinson1BitDitherer) ||
+      (!oneBit && !USE_8BIT_OUTPUT && USE_ATKINSON && !atkinsonDitherer) ||
+      (!oneBit && !USE_8BIT_OUTPUT && USE_FLOYD_STEINBERG && !fsDitherer)) {
+    LOG_ERR("JPG", "OOM ditherer outWidth=%u", (unsigned)outWidth);
+    return false;
   }
 
   // For scaling: accumulate source rows into scaled output rows
@@ -351,8 +358,12 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   uint32_t nextOutY_srcStart = 0;  // Source Y where next output row starts (16.16 fixed point)
 
   if (needsScaling) {
-    rowAccum = new uint32_t[outWidth]();
-    rowCount = new uint32_t[outWidth]();
+    rowAccum = new (std::nothrow) uint32_t[outWidth]();
+    rowCount = new (std::nothrow) uint32_t[outWidth]();
+    if (!rowAccum || !rowCount) {
+      LOG_ERR("JPG", "OOM scaling accumulators outWidth=%u", (unsigned)outWidth);
+      return false;  // RAII Cleanup frees what was allocated
+    }
     nextOutY_srcStart = scaleY_fp;  // First boundary is at scaleY_fp (source Y for outY=1)
   }
 

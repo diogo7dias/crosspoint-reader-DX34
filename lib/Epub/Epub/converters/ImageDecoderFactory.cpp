@@ -3,6 +3,7 @@
 #include <Logging.h>
 
 #include <memory>
+#include <new>
 #include <string>
 
 #include "JpegToFramebufferConverter.h"
@@ -25,12 +26,20 @@ ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string& im
 
   if (JpegToFramebufferConverter::supportsFormat(ext)) {
     if (!jpegDecoder) {
-      jpegDecoder.reset(new JpegToFramebufferConverter());
+      jpegDecoder.reset(new (std::nothrow) JpegToFramebufferConverter());
+      if (!jpegDecoder) {
+        LOG_ERR("DEC", "OOM new JpegToFramebufferConverter");
+        return nullptr;
+      }
     }
     return jpegDecoder.get();
   } else if (PngToFramebufferConverter::supportsFormat(ext)) {
     if (!pngDecoder) {
-      pngDecoder.reset(new PngToFramebufferConverter());
+      pngDecoder.reset(new (std::nothrow) PngToFramebufferConverter());
+      if (!pngDecoder) {
+        LOG_ERR("DEC", "OOM new PngToFramebufferConverter");
+        return nullptr;
+      }
     }
     return pngDecoder.get();
   }

@@ -6,6 +6,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <new>
 
 #include "BitmapHelpers.h"
 
@@ -655,13 +656,26 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
   Atkinson1BitDitherer* atkinson1BitDitherer = nullptr;
 
   if (oneBit) {
-    atkinson1BitDitherer = new Atkinson1BitDitherer(outWidth);
+    atkinson1BitDitherer = new (std::nothrow) Atkinson1BitDitherer(outWidth);
   } else if (!USE_8BIT_OUTPUT) {
     if (USE_ATKINSON) {
-      atkinsonDitherer = new AtkinsonDitherer(outWidth);
+      atkinsonDitherer = new (std::nothrow) AtkinsonDitherer(outWidth);
     } else if (USE_FLOYD_STEINBERG) {
-      fsDitherer = new FloydSteinbergDitherer(outWidth);
+      fsDitherer = new (std::nothrow) FloydSteinbergDitherer(outWidth);
     }
+  }
+  // If a ditherer was requested but OOM, bail before we touch scaling state.
+  // No allocations have been made yet on this path that need to be freed
+  // (rowBuffer/inflate context get cleaned at function exit).
+  if ((oneBit && !atkinson1BitDitherer) ||
+      (!oneBit && !USE_8BIT_OUTPUT && USE_ATKINSON && !atkinsonDitherer) ||
+      (!oneBit && !USE_8BIT_OUTPUT && USE_FLOYD_STEINBERG && !fsDitherer)) {
+    LOG_ERR("PNG", "OOM ditherer outWidth=%u", (unsigned)outWidth);
+    free(rowBuffer);
+    mz_inflateEnd(&ctx.zstream);
+    free(ctx.currentRow);
+    free(ctx.previousRow);
+    return false;
   }
 
   // Scaling accumulators
@@ -671,8 +685,21 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
   uint32_t nextOutY_srcStart = 0;
 
   if (needsScaling) {
-    rowAccum = new uint32_t[outWidth]();
-    rowCount = new uint16_t[outWidth]();
+    rowAccum = new (std::nothrow) uint32_t[outWidth]();
+    rowCount = new (std::nothrow) uint16_t[outWidth]();
+    if (!rowAccum || !rowCount) {
+      LOG_ERR("PNG", "OOM scaling accumulators outWidth=%u", (unsigned)outWidth);
+      delete[] rowAccum;
+      delete[] rowCount;
+      delete atkinsonDitherer;
+      delete fsDitherer;
+      delete atkinson1BitDitherer;
+      free(rowBuffer);
+      mz_inflateEnd(&ctx.zstream);
+      free(ctx.currentRow);
+      free(ctx.previousRow);
+      return false;
+    }
     nextOutY_srcStart = scaleY_fp;
   }
 
