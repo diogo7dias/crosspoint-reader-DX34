@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <array>
@@ -899,6 +900,23 @@ bool CssParser::loadFromCache() {
   // Reserve the index up-front. 8 bytes per entry; even at MAX_RULES the
   // total is ~12 KB and a single contiguous allocation -- comfortably below
   // any heap-floor that allows the section build to proceed at all.
+  // The build is compiled -fno-exceptions; a bad_alloc inside reserve()
+  // would call std::terminate -> abort -> RTC_SW_SYS_RST. Probe the heap
+  // first and bail with a graceful error if the contiguous block isn't
+  // there. Caller (loadFromCache) propagates false up to the layout path,
+  // which already routes to the OOM recovery screen.
+  {
+    const size_t needBytes = static_cast<size_t>(ruleCount) * sizeof(HashedOffset);
+    const size_t kHeadroomBytes = 4 * 1024;
+    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (largest < needBytes + kHeadroomBytes) {
+      LOG_ERR("CSS", "OOM hashedIndex_ reserve: need=%u + headroom=%u, largest=%u",
+              (unsigned)needBytes, (unsigned)kHeadroomBytes, (unsigned)largest);
+      cacheFile_.close();
+      cacheFileOpen_ = false;
+      return false;
+    }
+  }
   hashedIndex_.reserve(ruleCount);
 
   // Stack buffer for reading selector bytes during index build. We don't

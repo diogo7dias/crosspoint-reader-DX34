@@ -8,6 +8,7 @@
 #include <Logging.h>
 #include <Serialization.h>
 #include <Utf8.h>
+#include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -1249,8 +1250,21 @@ bool TxtReaderActivity::loadPageIndexCache() {
   uint32_t numPages;
   serialization::readPod(f, numPages);
 
-  // Read page offsets
+  // Read page offsets. uint32_t per page; a 100 KB TXT can produce thousands
+  // of pages, so the reserve can request 10+ KB contiguous. Probe heap first
+  // and bail to a rebuild on OOM rather than aborting under -fno-exceptions.
   pageOffsets.clear();
+  {
+    const size_t needBytes = static_cast<size_t>(numPages) * sizeof(uint32_t);
+    const size_t kHeadroomBytes = 4 * 1024;
+    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (largest < needBytes + kHeadroomBytes) {
+      LOG_ERR("TRS", "OOM pageOffsets reserve: need=%u largest=%u",
+              (unsigned)needBytes, (unsigned)largest);
+      f.close();
+      return false;
+    }
+  }
   pageOffsets.reserve(numPages);
 
   for (uint32_t i = 0; i < numPages; i++) {
