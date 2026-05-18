@@ -16,10 +16,13 @@
  * the heap-fragmentation regression that produced PR #104 cannot recur here.
  *
  * Semantics:
- *   - Default order: shuffled (Fisher-Yates on first build / on reshuffle).
- *   - Auto-reshuffle when cursor reaches end of buffer (every "lap").
- *   - New files added to /sleep get inserted at cursor in mtime order so
- *     they appear in the next unlocks.
+ *   - Default order: sequential by mtime descending (newest first / on top).
+ *     Initial build and post-trim rebuild use rebuildSequential() — no shuffle.
+ *   - On lap end, cursor resets to 0 and replays the same order. The buffer
+ *     is NEVER auto-shuffled; only the user-initiated reshuffle() (settings
+ *     "shuffle now") randomizes.
+ *   - New files added to /sleep get spliced at the FRONT of the buffer and
+ *     cursor resets to 0, so freshly uploaded wallpapers show next.
  *   - Strict cap at 500: on overflow, oldest-mtime non-favorites are pushed to
  *     /sleep pause. If favorites alone fill the cap, new uploads land in
  *     /sleep pause and a notification flag fires.
@@ -79,6 +82,9 @@ class WallpaperPlaylistV2 {
 
   void reconcile();
   std::string advance();
+  // User-initiated shuffle (settings "shuffle now"). Fisher-Yates randomize +
+  // cursor reset. Internal lap-end / empty-buffer rebuilds use the sequential
+  // rebuildSequential() path instead.
   bool reshuffle();
   void rememberRendered(const std::string& fullPath, const std::string& filename = "");
   void clearRenderedPath();
@@ -92,6 +98,10 @@ class WallpaperPlaylistV2 {
 
   bool ensureLoaded();
   bool loadFromDisk();
+  // Rebuild buffer from /sleep in sequential newest-first order. Default
+  // rebuild path used by reconcile / advance when buffer_ is empty. Returns
+  // true iff the rebuilt buffer is non-empty.
+  bool rebuildSequential();
   bool saveToDisk() const;
   void writeBuffer(const std::vector<std::string>& names, size_t cursor);
   std::vector<std::string> bufferEntries() const;

@@ -164,7 +164,10 @@ void test_advance_persists_cursor_across_simulated_reboot() {
   TEST_ASSERT_TRUE(second != third);
 }
 
-void test_new_files_inserted_at_cursor_in_mtime_order() {
+void test_new_files_spliced_at_front_newest_mtime_first() {
+  // "New wallpapers on top": fresh uploads land at the FRONT of the buffer,
+  // newest mtime first. Cursor resets to 0 so the freshest upload is the very
+  // next wallpaper shown.
   Fixture fx;
   for (int i = 0; i < 6; ++i) fx.fs.seed(std::string("base_") + char('a' + i) + ".bmp", 100);
   auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
@@ -183,8 +186,8 @@ void test_new_files_inserted_at_cursor_in_mtime_order() {
 
   const auto a = wp.advance();
   const auto b = wp.advance();
-  TEST_ASSERT_EQUAL_STRING("zz_new1.bmp", a.c_str());
-  TEST_ASSERT_EQUAL_STRING("zz_new2.bmp", b.c_str());
+  TEST_ASSERT_EQUAL_STRING("zz_new2.bmp", a.c_str());  // newest mtime → very top
+  TEST_ASSERT_EQUAL_STRING("zz_new1.bmp", b.c_str());
 }
 
 void test_trim_pushes_oldest_mtime_non_favorites() {
@@ -353,7 +356,7 @@ int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_advance_with_4_files_walks_all_then_reshuffles);
   RUN_TEST(test_advance_persists_cursor_across_simulated_reboot);
-  RUN_TEST(test_new_files_inserted_at_cursor_in_mtime_order);
+  RUN_TEST(test_new_files_spliced_at_front_newest_mtime_first);
   RUN_TEST(test_trim_pushes_oldest_mtime_non_favorites);
   RUN_TEST(test_favorites_full_blocks_new_uploads);
   RUN_TEST(test_reshuffle_clears_buffer_when_sleep_empty);

@@ -311,15 +311,15 @@ void WallpaperPlaylistV2::reconcile() {
     return;
   }
 
-  // Sort new files by mtime ascending (oldest first) so multi-drop preserves
-  // upload order in the queue.
+  // Sort new files by mtime DESCENDING (newest first) so the freshest upload
+  // ends up at byte 0 of the buffer when we splice at the front.
   std::sort(newFiles.begin(), newFiles.end(),
-            [](const SleepBmpEntry& a, const SleepBmpEntry& b) { return a.mtime < b.mtime; });
+            [](const SleepBmpEntry& a, const SleepBmpEntry& b) { return a.mtime > b.mtime; });
 
-  // Splice insertion: build a single contiguous payload and inject at cursor_.
-  // buffer_.insert may reallocate (transient peak = old + insertion size), but
-  // that is one allocation, not 500. Cursor stays at byte position of first
-  // new file — next advance() returns it.
+  // Splice insertion: build a single contiguous payload and inject at the
+  // FRONT of buffer_. Cursor resets to 0 so the next advance() returns the
+  // newest file. "New wallpapers on top" semantics: any fresh upload is the
+  // next one shown, ahead of whatever the previous lap was on.
   std::string insertion;
   size_t insLen = 0;
   for (const auto& nf : newFiles) insLen += nf.name.size() + 1;
@@ -329,21 +329,17 @@ void WallpaperPlaylistV2::reconcile() {
     insertion.push_back('\n');
   }
 
-  // If buffer is empty (boot first reconcile, no prior shuffle), build a full
-  // shuffled lap from disk via reshuffle. Otherwise splice at cursor.
+  // If buffer is empty (boot first reconcile, no prior order file), build a
+  // full sequential lap from disk (newest first). NOT a shuffle — shuffles
+  // only happen on the user-initiated settings button.
   if (buffer_.empty()) {
-    // Defer to reshuffle which uses listSleepBmps (vector<string>, smaller and
-    // gated by the user's normal sleep heap budget).
-    reshuffle();
+    rebuildSequential();
   } else {
-    if (cursor_ > buffer_.size()) cursor_ = 0;
     // Exact-size rebuild rather than buffer_.insert() — std::string::insert()
     // doubles capacity which on a 14 KB buffer triggers a 28 KB single
-    // allocation, observed to fail on sleep-entry heap (largest free block
-    // for MALLOC_CAP_DEFAULT was smaller than the nominal "largest" value
-    // due to internal vs IRAM regioning). Allocating new = old + insertion
-    // exactly keeps the transient peak as two ~equal allocations rather
-    // than one doubled one — fragmentation-tolerant.
+    // allocation, observed to fail on sleep-entry heap. Allocating
+    // new = old + insertion exactly keeps the transient peak as two ~equal
+    // allocations rather than one doubled one — fragmentation-tolerant.
     //
     // Build compiled with -fno-exceptions — a bad_alloc inside the rebuild
     // would abort. Probe the heap for the exact-size reserve (old + insertion)
@@ -357,10 +353,10 @@ void WallpaperPlaylistV2::reconcile() {
     }
     std::string newBuffer;
     newBuffer.reserve(newSize);
-    newBuffer.append(buffer_.data(), cursor_);
     newBuffer.append(insertion);
-    newBuffer.append(buffer_.data() + cursor_, buffer_.size() - cursor_);
+    newBuffer.append(buffer_);
     buffer_ = std::move(newBuffer);
+    cursor_ = 0;
     saveToDisk();
   }
 
@@ -379,16 +375,22 @@ std::string WallpaperPlaylistV2::advance() {
   if (dirty_) reconcile();
 
   if (buffer_.empty()) {
-    if (!reshuffle()) return {};
+    if (!rebuildSequential()) return {};
   }
 
   for (int skipBudget = 0; skipBudget < 16; ++skipBudget) {
     if (cursor_ >= buffer_.size()) {
-      if (!reshuffle()) return {};
+      // End of lap: restart from the top in the same sequential order. NEVER
+      // auto-shuffle here — only the user-initiated reshuffle() randomizes.
+      cursor_ = 0;
+      saveToDisk();
+      if (buffer_.empty()) {
+        if (!rebuildSequential()) return {};
+      }
     }
     const std::string candidate = peekAtCursor();
     if (candidate.empty()) {
-      if (!reshuffle()) return {};
+      if (!rebuildSequential()) return {};
       continue;
     }
     if (deps_.fs->exists(makeSleepPath(candidate))) {
@@ -403,6 +405,27 @@ std::string WallpaperPlaylistV2::advance() {
     advanceCursor();
   }
   return {};
+}
+
+bool WallpaperPlaylistV2::rebuildSequential() {
+  if (!deps_.fs) return false;
+  auto entries = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap);
+  if (entries.empty()) {
+    buffer_.clear();
+    cursor_ = 0;
+    saveToDisk();
+    return false;
+  }
+  // Newest mtime → front so "new wallpapers on top". Stable sort keeps a
+  // deterministic order among ties (e.g. a batch import where mtimes match).
+  std::stable_sort(entries.begin(), entries.end(),
+                   [](const SleepBmpEntry& a, const SleepBmpEntry& b) { return a.mtime > b.mtime; });
+  std::vector<std::string> names;
+  names.reserve(entries.size());
+  for (auto& e : entries) names.push_back(std::move(e.name));
+  writeBuffer(names, 0);
+  loaded_ = true;
+  return !buffer_.empty();
 }
 
 bool WallpaperPlaylistV2::reshuffle() {
