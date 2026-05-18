@@ -9,16 +9,19 @@
 
 #include <cstring>
 #include <memory>
+#include <new>
 
 #include "CrossPointSettings.h"
 #include "util/UrlUtils.h"
 
 std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string& url, HTTPClient& http) {
   // Use WiFiClientSecure for HTTPS, regular WiFiClient for HTTP.
-  // With -fno-exceptions, operator new returns nullptr on OOM instead of throwing.
+  // Bare `new` aborts under -fno-exceptions (bad_alloc -> std::terminate ->
+  // abort). The explicit nothrow placement form is the only safe way to
+  // recover from OOM here.
   std::unique_ptr<WiFiClient> client;
   if (UrlUtils::isHttpsUrl(url)) {
-    auto* secureClient = new WiFiClientSecure();
+    auto* secureClient = new (std::nothrow) WiFiClientSecure();
     if (!secureClient) {
       LOG_ERR("HTTP", "OOM: failed to allocate WiFiClientSecure");
       return nullptr;
@@ -26,7 +29,7 @@ std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string& url,
     secureClient->setInsecure();
     client.reset(secureClient);
   } else {
-    auto* plainClient = new WiFiClient();
+    auto* plainClient = new (std::nothrow) WiFiClient();
     if (!plainClient) {
       LOG_ERR("HTTP", "OOM: failed to allocate WiFiClient");
       return nullptr;

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <new>
 #include <unordered_set>
 #include <utility>
 
@@ -253,7 +254,12 @@ void CrossPointWebServer::begin() {
   }
 
   LOG_DBG("WEB", "Creating web server on port %d...", port);
-  server.reset(new WebServer(port));
+  server.reset(new (std::nothrow) WebServer(port));
+  if (!server) {
+    LOG_ERR("WEB", "OOM new WebServer port=%d free=%u largest=%u", port,
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    return;  // running stays false; caller sees server unavailable
+  }
 
   // Disable WiFi sleep to improve responsiveness and prevent 'unreachable' errors.
   // This is critical for reliable web server operation on ESP32.
