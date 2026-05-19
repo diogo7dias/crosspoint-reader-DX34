@@ -6,6 +6,8 @@
 
 #include <new>
 
+#include <HeapGuard.h>
+
 #ifdef ESP_PLATFORM
 #include <esp_heap_caps.h>
 #endif
@@ -197,18 +199,32 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
     return nullptr;
   }
 
-  // Pre-check heap before resize — on ESP32, vector::resize() calls abort() on OOM
-#ifdef ESP_PLATFORM
+  // Pre-check heap before resize — std::vector::resize() under -fno-exceptions
+  // aborts on bad_alloc. Two checks:
+  //   1. Total free / 2 ceiling, to bound how much of the heap we're willing
+  //      to commit to a single block's word table.
+  //   2. Largest contiguous free block: the three vector::resize() calls below
+  //      each demand one contiguous block. A fragmented heap with enough total
+  //      free but no contiguous room is the realistic failure mode (Crash 1 in
+  //      v2.3.9 testing: total free was healthy but largest had crumbled).
   {
-    // Estimate: each word averages ~12 bytes string + 2 bytes xpos + 1 byte style
-    const size_t estimatedBytes = wc * 20u;
-    if (estimatedBytes > esp_get_free_heap_size() / 2) {
+    // words: 32 B std::string * wc, wordXpos: 2 B * wc, wordStyles: 1 B * wc.
+    // Each is a SEPARATE contiguous allocation, so the largest one wins.
+    const size_t wordsBytes = wc * sizeof(std::string);
+    const size_t estimatedTotalBytes = wc * 20u;
+#ifdef ESP_PLATFORM
+    if (estimatedTotalBytes > esp_get_free_heap_size() / 2) {
       LOG_ERR("TXB", "Deserialization skipped: %u words (~%u bytes) would exceed safe heap limit", wc,
-              (unsigned)estimatedBytes);
+              (unsigned)estimatedTotalBytes);
+      return nullptr;
+    }
+#endif
+    if (!crosspoint::heap::canAllocateContiguous(wordsBytes)) {
+      LOG_ERR("TXB", "Deserialization skipped: %u words (~%u B contiguous) largest=%u", wc,
+              (unsigned)wordsBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
       return nullptr;
     }
   }
-#endif
 
   // Word data
   words.resize(wc);
