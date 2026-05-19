@@ -9,6 +9,7 @@
 
 #include <FsHelpers.h>
 #include <HalStorage.h>
+#include <HeapGuard.h>
 #include <Logging.h>
 
 #include <cstring>
@@ -311,6 +312,19 @@ XtcError XtcParser::readChapters() {
     return XtcError::READ_ERROR;
   }
 
+  // ChapterInfo is ~40 bytes (std::string + 2 uint16_t). A chapter-heavy XTC
+  // (~200 chapters) requests ~8 KB contiguous, which can fail on a stressed
+  // heap. Probe first; return READ_ERROR on refusal so the loader bails to
+  // the failure screen rather than aborting under -fno-exceptions.
+  {
+    const size_t needBytes = chapterCount * sizeof(ChapterInfo);
+    if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
+      LOG_ERR("XTC", "OOM m_chapters reserve: count=%u need=%u largest=%u",
+              (unsigned)chapterCount, (unsigned)needBytes,
+              (unsigned)crosspoint::heap::largestFreeBlockBytes());
+      return XtcError::READ_ERROR;
+    }
+  }
   m_chapters.reserve(chapterCount);
   std::vector<uint8_t> chapterBuf(chapterSize);
   for (size_t i = 0; i < chapterCount; i++) {
