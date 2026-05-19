@@ -1,8 +1,8 @@
 #include "CssParser.h"
 
 #include <Arduino.h>
+#include <HeapGuard.h>
 #include <Logging.h>
-#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <array>
@@ -907,11 +907,9 @@ bool CssParser::loadFromCache() {
   // which already routes to the OOM recovery screen.
   {
     const size_t needBytes = static_cast<size_t>(ruleCount) * sizeof(HashedOffset);
-    const size_t kHeadroomBytes = 4 * 1024;
-    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    if (largest < needBytes + kHeadroomBytes) {
-      LOG_ERR("CSS", "OOM hashedIndex_ reserve: need=%u + headroom=%u, largest=%u",
-              (unsigned)needBytes, (unsigned)kHeadroomBytes, (unsigned)largest);
+    if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
+      LOG_ERR("CSS", "OOM hashedIndex_ reserve: need=%u largest=%u",
+              (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
       cacheFile_.close();
       cacheFileOpen_ = false;
       return false;

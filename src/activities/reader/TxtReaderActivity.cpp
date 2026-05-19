@@ -8,7 +8,7 @@
 #include <Logging.h>
 #include <Serialization.h>
 #include <Utf8.h>
-#include <esp_heap_caps.h>
+#include <HeapGuard.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -1256,11 +1256,9 @@ bool TxtReaderActivity::loadPageIndexCache() {
   pageOffsets.clear();
   {
     const size_t needBytes = static_cast<size_t>(numPages) * sizeof(uint32_t);
-    const size_t kHeadroomBytes = 4 * 1024;
-    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    if (largest < needBytes + kHeadroomBytes) {
+    if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
       LOG_ERR("TRS", "OOM pageOffsets reserve: need=%u largest=%u",
-              (unsigned)needBytes, (unsigned)largest);
+              (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
       f.close();
       return false;
     }
