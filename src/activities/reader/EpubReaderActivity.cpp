@@ -99,6 +99,19 @@ int resolveCurrentTocIndex(const std::shared_ptr<Epub>& epub, const Section* sec
   return epub->getTocIndexForSpineIndex(currentSpineIndex);
 }
 
+// Size of the heap reservation anchor allocated at activity entry. Picked
+// to cover the gap between the typical post-defrag largest-free-block
+// (~25-30 KB on a fragmented device) and kMinLargestBlockForLayout (48 KB).
+// 24 KB matches the upper end of that gap and is small enough that a
+// best-effort tryReacquire after a successful layout has a realistic
+// chance to succeed for chapter-traversal scenarios.
+constexpr size_t kLayoutHeapAnchorBytes = 24 * 1024;
+// Re-acquire only when the post-layout largest contiguous block has at
+// least this much headroom above the anchor size, so re-grabbing it
+// can't push the heap into the floor zone immediately after a successful
+// build.
+constexpr size_t kAnchorReacquireHeadroom = 8 * 1024;
+
 }  // namespace
 
 void EpubReaderActivity::onEnter() {
@@ -117,6 +130,25 @@ void EpubReaderActivity::onEnter() {
   if (didEntryFail()) {
     return;
   }
+
+  // Heap reservation anchor. Take a single contiguous 24 KB block now,
+  // while the heap is still freshly defragmented from the activity entry
+  // (the base class just ran a clean xTaskCreate and the prior activity's
+  // releases have coalesced). The pre-flight gate releases this block
+  // before falling through to releaseMaxResources(), giving the next
+  // section-build malloc 24 KB of guaranteed-contiguous space to claim.
+  // Best-effort: a failure here just disables the optimisation; the
+  // existing pre-flight / silent-restart paths still catch fragmentation.
+  layoutHeapAnchor_.reset(new (std::nothrow) uint8_t[kLayoutHeapAnchorBytes]);
+  if (layoutHeapAnchor_) {
+    LOG_DBG("HEAP", "EPUB onEnter:anchor-acquired %u bytes free=%u largest=%u",
+            (unsigned)kLayoutHeapAnchorBytes, (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  } else {
+    LOG_DIAG("ERS", "EPUB onEnter: layout heap anchor alloc failed (largest=%u) — continuing without",
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  }
+
   if (SETTINGS.readerStyleMode != CrossPointSettings::READER_STYLE_USER) {
     LOG_DBG("HEAP", "EPUB onEnter:before-css free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
@@ -279,6 +311,7 @@ void EpubReaderActivity::onExit() {
   clearPageCache();
   section.reset();
   epub.reset();
+  layoutHeapAnchor_.reset();
   invalidateStatusBarCaches();
 }
 
@@ -321,6 +354,27 @@ constexpr size_t kMinLargestBlockForLayout = 48 * 1024;
 constexpr size_t kMinLargestBlockHardFloor = 20 * 1024;
 }  // namespace
 
+void EpubReaderActivity::tryReacquireLayoutHeapAnchor() {
+  if (layoutHeapAnchor_) {
+    return;
+  }
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  if (largest < kLayoutHeapAnchorBytes + kAnchorReacquireHeadroom) {
+    // Not enough margin — re-grabbing the anchor here would push the heap
+    // back below the floor and the very next allocation (status bar build,
+    // page render) would trip. Skip; we'll get another chance on the next
+    // successful section build, or after a silent-restart-to-reader cycle.
+    LOG_DBG("HEAP", "ERS anchor:re-acquire skipped largest=%u below anchor+headroom=%u", (unsigned)largest,
+            (unsigned)(kLayoutHeapAnchorBytes + kAnchorReacquireHeadroom));
+    return;
+  }
+  layoutHeapAnchor_.reset(new (std::nothrow) uint8_t[kLayoutHeapAnchorBytes]);
+  if (layoutHeapAnchor_) {
+    LOG_DBG("HEAP", "ERS anchor:re-acquired largest-was=%u largest-now=%u", (unsigned)largest,
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  }
+}
+
 void EpubReaderActivity::releaseMaxResources() {
   // Drop everything that competes with the EPUB layout heap budget. The
   // page cache and CSS parser are the two biggest wins (~3 KB and ~100 KB
@@ -355,6 +409,22 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
   }
   LOG_DIAG("ERS", "pre-flight gate: largest=%u below %u, running defrag pass", (unsigned)largest,
            (unsigned)kMinLargestBlockForLayout);
+
+  // Step 1: release the heap reservation anchor. Allocated at onEnter, it
+  // returns kLayoutHeapAnchorBytes of guaranteed-contiguous space to the
+  // heap. If that alone clears the gate we can skip the more expensive
+  // releaseMaxResources() (which clears font cache + CSS + page cache and
+  // forces a slower next paint). Anchor is one-shot per chapter; the
+  // post-build re-acquire below is best-effort.
+  if (layoutHeapAnchor_) {
+    layoutHeapAnchor_.reset();
+    const size_t afterAnchor = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    LOG_DIAG("ERS", "pre-flight gate: anchor released, largest=%u (was %u)", (unsigned)afterAnchor, (unsigned)largest);
+    if (afterAnchor >= kMinLargestBlockForLayout) {
+      return true;
+    }
+  }
+
   releaseMaxResources();
   const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
   LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)after, (unsigned)largest);
@@ -1646,6 +1716,10 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   // Clear the auto-restart guard so the user gets a fresh budget for the
   // next fragmentation crisis (e.g. opening a different heavier chapter).
   clearSilentRestartLoopGuard();
+  // Best-effort: re-grab the heap reservation anchor if there's enough
+  // headroom. The next chapter change will then have the same 24 KB
+  // contiguous safety net the first one did.
+  tryReacquireLayoutHeapAnchor();
   return true;
 }
 

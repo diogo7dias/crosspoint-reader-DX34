@@ -13,6 +13,7 @@
 #include <Epub/Section.h>
 
 #include <array>
+#include <memory>
 #include <string>
 
 #include "BookmarkStore.h"
@@ -88,6 +89,20 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::EpubProgressSink progressSink_{"", 0};
   crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int pageLoadFailCount = 0;  // Tracks consecutive page load failures to prevent infinite retry loops
+
+  // Heap reservation anchor. Allocated once at onEnter while the heap is
+  // still fresh, so a contiguous block of `kLayoutHeapAnchorBytes` is
+  // guaranteed to exist somewhere in the heap. The pre-flight gate releases
+  // it before falling through to releaseMaxResources(); after a successful
+  // section build we best-effort tryReacquire, so subsequent chapter
+  // changes still benefit. Released at onExit. See heapHeadroomOkForLayout
+  // and ensureSectionLoaded for the lifecycle.
+  std::unique_ptr<uint8_t[]> layoutHeapAnchor_;
+  // Returns true if the anchor is currently held.
+  bool layoutHeapAnchorHeld() const { return layoutHeapAnchor_ != nullptr; }
+  // Best-effort allocate. Silent no-op when largest contiguous block is too
+  // close to the anchor size to leave headroom for the next section build.
+  void tryReacquireLayoutHeapAnchor();
   // Cross-task handoff: render runs on the display task, but tearing down `section` must happen on
   // the loop task — its destructor closes file handles and frees page-layout storage that the
   // render task may still be iterating. Setting this flag asks the loop to call section.reset()
