@@ -48,6 +48,16 @@ class RecentBooksStore {
 
   void updateBook(const std::string& path, const std::string& title, const std::string& author,
                   const std::string& coverBmpPath);
+
+  // True if the book's backing file is no longer present on the SD card.
+  static bool isMissing(const RecentBook& book);
+
+  // Remove entries whose backing file is no longer on the SD card. Returns
+  // true if at least one entry was removed. Does NOT persist — the caller
+  // decides when to saveToFile() so prune-on-add can piggy-back on the
+  // following addBook write.
+  bool pruneMissing();
+
   // Update only the cached reading percent for a book; no-op if the book is
   // not registered. Used by the reader on exit / progress save so the home
   // screen can show progress without re-opening every recent EPUB.

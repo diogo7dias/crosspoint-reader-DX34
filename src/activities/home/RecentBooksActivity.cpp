@@ -83,6 +83,15 @@ void RecentBooksActivity::loadRecentBooks() {
 void RecentBooksActivity::onEnter() {
   Activity::onEnter();
 
+  // Persistent prune: dropping entries whose backing file is gone keeps the
+  // recents.json from drifting indefinitely on heavy delete workflows. The
+  // per-render Storage.exists() check in loadRecentBooks below still runs as
+  // a belt-and-suspenders against a delete happening between this prune and
+  // the next render tick.
+  if (RECENT_BOOKS.pruneMissing()) {
+    RECENT_BOOKS.saveToFile();
+  }
+
   // Load data
   loadRecentBooks();
 

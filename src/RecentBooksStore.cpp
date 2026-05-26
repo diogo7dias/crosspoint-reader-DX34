@@ -78,8 +78,21 @@ void dedupeRecentBooks(std::vector<RecentBook>& books) {
 
 RecentBooksStore RecentBooksStore::instance;
 
+bool RecentBooksStore::isMissing(const RecentBook& book) { return !Storage.exists(book.path.c_str()); }
+
+bool RecentBooksStore::pruneMissing() {
+  const size_t before = recentBooks.size();
+  recentBooks.erase(std::remove_if(recentBooks.begin(), recentBooks.end(), &isMissing), recentBooks.end());
+  return recentBooks.size() != before;
+}
+
 void RecentBooksStore::addBook(const std::string& path, const std::string& title, const std::string& author,
                                const std::string& coverBmpPath) {
+  // Drop stale entries first so a new add can't push out a valid book by
+  // hitting MAX_RECENT_BOOKS when the slot was actually occupied by a file
+  // the user has long deleted.
+  pruneMissing();
+
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);
   if (normalizedPath.empty()) {
