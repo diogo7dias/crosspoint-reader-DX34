@@ -22,6 +22,12 @@ class ParsedText {
   uint8_t wordSpacingPercent;
   uint8_t firstLineIndentMode;
   bool usePublisherStyles;
+  // Set when addWord's pre-allocation heap probe failed and the push_back
+  // was skipped. The parser checks this after every addWord call so a
+  // fragmentation-driven OOM during the words[] vector growth aborts the
+  // chapter cleanly (parseFailed -> recovery screen) instead of
+  // bad_alloc -> terminate -> abort -> reset.
+  bool oom_ = false;
 
   void applyParagraphIndent(const GfxRenderer& renderer, int fontId);
   void expandHyphenationBreaks(const GfxRenderer& renderer, int fontId, std::vector<uint16_t>& wordWidths,
@@ -52,6 +58,11 @@ class ParsedText {
   ~ParsedText() = default;
 
   void addWord(std::string word, EpdFontFamily::Style fontStyle, bool underline = false, bool attachToPrevious = false);
+  // True if any addWord call skipped its push_back because the heap probe
+  // failed. Parser checks this after each addWord to short-circuit the
+  // chapter into the recovery path instead of crashing on the next vector
+  // growth.
+  bool hadOom() const { return oom_; }
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }

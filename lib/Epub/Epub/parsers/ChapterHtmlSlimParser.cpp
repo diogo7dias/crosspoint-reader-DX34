@@ -120,6 +120,14 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
   // flush the buffer
   partWordBuffer[partWordBufferIndex] = '\0';
   currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues);
+  if (currentTextBlock->hadOom()) {
+    // Heap-probe inside addWord bailed before the next vector growth would
+    // have crashed. Promote to parser-level failure so createSectionFile
+    // returns false and the recovery screen path takes over.
+    LOG_DIAG("EHP", "addWord OOM (flush) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    parseFailed = true;
+  }
   partWordBufferIndex = 0;
   nextWordContinues = false;
 }
@@ -505,6 +513,11 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
 
       if (strcmp(name, "li") == 0) {
         self->currentTextBlock->addWord("\xe2\x80\xa2", EpdFontFamily::REGULAR);
+        if (self->currentTextBlock->hadOom()) {
+          LOG_DIAG("EHP", "addWord OOM (li bullet) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+          self->parseFailed = true;
+        }
       }
     }
   } else if (matches(name, UNDERLINE_TAGS, NUM_UNDERLINE_TAGS)) {

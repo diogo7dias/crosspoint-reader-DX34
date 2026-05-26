@@ -1,6 +1,8 @@
 #include "ParsedText.h"
 
 #include <GfxRenderer.h>
+#include <HeapGuard.h>
+#include <Logging.h>
 
 #include <algorithm>
 #include <cmath>
@@ -96,6 +98,27 @@ float indentMultiplierForMode(const uint8_t indentMode) {
 void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle, const bool underline,
                          const bool attachToPrevious) {
   if (word.empty()) return;
+  if (oom_) return;  // Already failed this block; skip the rest cheaply.
+
+  // Heap-probe the next vector growth. std::vector doubles capacity, so
+  // when size == capacity the next push_back allocates a fresh buffer of
+  // 2*capacity * sizeof(elem) and copies/moves into it. On a fragmented
+  // ESP32-C3 heap this is precisely the alloc that throws bad_alloc and
+  // (under -fno-exceptions) calls terminate -> abort -> RTC_SW_SYS_RST.
+  // Probing for the largest of the three vectors' next-growth needs is
+  // sufficient: std::string is the heaviest element. The probe sets oom_
+  // and bails when the contiguous block isn't available, letting the
+  // parser surface the failure through parseFailed instead of crashing.
+  if (words.size() == words.capacity()) {
+    const size_t nextCap = words.capacity() == 0 ? 1 : words.capacity() * 2;
+    const size_t needBytes = nextCap * sizeof(std::string);
+    if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
+      LOG_ERR("PT", "OOM addWord size=%u cap=%u need=%u largest=%u", (unsigned)words.size(), (unsigned)words.capacity(),
+              (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
+      oom_ = true;
+      return;
+    }
+  }
 
   words.push_back(std::move(word));
   EpdFontFamily::Style combinedStyle = fontStyle;
