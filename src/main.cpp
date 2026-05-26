@@ -250,7 +250,7 @@ void enterNewActivity(Activity* activity) {
   // instead of reboot-looping.
   if (!APP_STATE.openEpubPath.empty() && tryReserveAutoSilentRestart()) {
     LOG_DIAG("MAIN", "Activity entry OOM with book open — silent-restart-to-reader");
-    silentRestartToReader();  // does not return
+    silentRestartToReader("toplevel-activity-entry-oom");  // does not return
   }
 
   auto* oom = new (std::nothrow)

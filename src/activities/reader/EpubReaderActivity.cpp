@@ -372,7 +372,7 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
     // activity was launched) so the user lands on the same book.
     if (tryReserveAutoSilentRestart()) {
       LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
-      silentRestartToReader();  // does not return
+      silentRestartToReader("reader-preflight-frag-recovery");  // does not return
     }
     LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
     return false;

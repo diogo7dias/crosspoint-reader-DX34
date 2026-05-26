@@ -103,7 +103,7 @@ void CrossPointWebServerActivity::onExit() {
   // restart clears the fragmentation cleanly. Guarded so backing out of mode
   // selection without ever joining a network doesn't trigger a reboot cycle.
   if (WiFi.getMode() != WIFI_MODE_NULL) {
-    silentRestart();
+    silentRestart("wifi-exit-CrossPointWebServer");
   }
 }
 

@@ -239,7 +239,7 @@ void KOReaderSyncActivity::onExit() {
   // NO_CREDENTIALS state never activates WiFi — only silent-restart if a
   // session actually touched the radio.
   if (state != NO_CREDENTIALS) {
-    silentRestartToReader();
+    silentRestartToReader("wifi-exit-KOReaderSync");
   }
 }
 

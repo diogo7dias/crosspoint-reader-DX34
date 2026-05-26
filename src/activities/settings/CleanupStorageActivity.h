@@ -6,8 +6,8 @@
 
 // Settings action that scans the SD card for ephemeral cruft and removes
 // the parts that are safe to drop: orphan atomic-write tmp/tmp2/junk-*
-// files, the pre-RFC-#146 /wifi_report.txt, and over-large /diag_report.txt
-// or /crash_report.txt rotation candidates.
+// files, the pre-RFC-#146 /wifi_report.txt, and over-large /diag_report.txt,
+// /crash_report.txt, or /heap_report.txt rotation candidates.
 //
 // Preserves: books, /.crosspoint/* primary stores (settings, state, recent,
 // themes), per-book progress/bookmarks, custom fonts, sleep wallpapers,

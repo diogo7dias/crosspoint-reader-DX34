@@ -77,7 +77,7 @@ void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
   // OOM screen and lose their place.
   if (!APP_STATE.openEpubPath.empty() && tryReserveAutoSilentRestart()) {
     LOG_DIAG("ACT", "Subactivity entry OOM with book open — silent-restart-to-reader");
-    silentRestartToReader();  // does not return
+    silentRestartToReader("subactivity-entry-oom");  // does not return
   }
 
   auto* oom = new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, "Out of memory\nPress any key");

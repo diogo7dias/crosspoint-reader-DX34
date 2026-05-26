@@ -4,6 +4,8 @@
 #include <Logging.h>
 #include <esp_attr.h>
 
+#include "HeapReport.h"
+
 namespace {
 
 // RTC_NOINIT memory survives ESP.restart() but not a hard power loss.
@@ -22,13 +24,16 @@ constexpr uint32_t SILENT_REBOOT_TARGET_HOME = 0;
 constexpr uint32_t SILENT_REBOOT_TARGET_READER = 1;
 constexpr uint32_t AUTO_RESTART_LOOP_MAGIC = 0xC1EA1009;
 
-void armAndRestart(uint32_t target, const char* label) {
+void armAndRestart(uint32_t target, const char* label, const char* reason) {
   silentRebootTarget = target;
   silentRebootMagic = SILENT_REBOOT_MAGIC;
   // LOG_DIAG (not LOG_DBG): silent restarts are rare events tied to WiFi
   // session exits, and seeing them in the RTC ring is genuinely useful for
   // diagnosing future fragmentation regressions even on production builds.
-  LOG_DIAG("MAIN", "Silent restart (target=%s)", label);
+  LOG_DIAG("MAIN", "Silent restart (target=%s reason=%s)", label, reason ? reason : "(none)");
+  // Dump /heap_report.txt before rebooting. Best-effort — failure is logged
+  // by writeHeapReport itself, but never blocks the restart.
+  writeHeapReport(reason);
   // 50 ms is upstream's value — gives the LOG line time to drain to USB CDC
   // and the WiFi disconnect frame above this call time to leave the radio.
   delay(50);
@@ -37,9 +42,9 @@ void armAndRestart(uint32_t target, const char* label) {
 
 }  // namespace
 
-void silentRestart() { armAndRestart(SILENT_REBOOT_TARGET_HOME, "home"); }
+void silentRestart(const char* reason) { armAndRestart(SILENT_REBOOT_TARGET_HOME, "home", reason); }
 
-void silentRestartToReader() { armAndRestart(SILENT_REBOOT_TARGET_READER, "reader"); }
+void silentRestartToReader(const char* reason) { armAndRestart(SILENT_REBOOT_TARGET_READER, "reader", reason); }
 
 int consumeSilentRebootTarget() {
   const bool isSilentReboot = (silentRebootMagic == SILENT_REBOOT_MAGIC);

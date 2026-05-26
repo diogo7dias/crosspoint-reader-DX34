@@ -59,7 +59,7 @@ void CalibreConnectActivity::onExit() {
   // Clear WiFi/LWIP heap fragmentation via reboot. Skip if user backed out
   // of mode selection without joining a network.
   if (WiFi.getMode() != WIFI_MODE_NULL) {
-    silentRestart();
+    silentRestart("wifi-exit-CalibreConnect");
   }
 }
 

@@ -9,8 +9,11 @@
 // of contiguous space that's unrecoverable without a reboot. Ported from
 // upstream crosspoint-reader 7acc31b (PR #1908).
 
-void silentRestart();          // home screen
-void silentRestartToReader();  // currently-open EPUB (APP_STATE.openEpubPath)
+// `reason` is a short stable label written to /heap_report.txt before the
+// reboot. Pass a string literal — it is not copied. Examples:
+// "wifi-exit-FileTransfer", "reader-oom-recovery", "ota-fail-recovery".
+void silentRestart(const char* reason = "unspecified");          // home screen
+void silentRestartToReader(const char* reason = "unspecified");  // currently-open EPUB (APP_STATE.openEpubPath)
 
 // Read+clear semantics for setup(). Returns the requested target if a silent
 // reboot is in progress, otherwise -1. Clears the flag atomically so a panic
