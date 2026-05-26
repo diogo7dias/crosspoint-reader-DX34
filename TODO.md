@@ -97,6 +97,27 @@ cutting the v3.0.0 tag.
   strings make sense, fragmentation % is in 0-100, reset reason matches
   expectation.
 
+**External user reports targeted by v3.0.0 (Instagram DM from @numeronine, 2026-05-26):**
+- "When I try to open certain books, the firmware seems to reset and the
+  book doesn't open. Sometimes opens but crashes on page turn or chapter
+  change." Test book: Herman Melville short fiction, Standard Ebooks
+  (https://standardebooks.org/ebooks/herman-melville/short-fiction).
+  Classic reader-section-cache fragmentation signature; memory-hardening
+  branch's three layers (pre-flight gate + nothrow/null-check sweep +
+  silent-restart-to-reader) directly target it. Ask user for
+  /crash_report.txt to confirm the alloc that tripped, then re-test
+  after v3.0.0 lands. /heap_report.txt (new this session) will give
+  post-mortem state on any silent reboot the user hits going forward.
+- Separately reported by same user: "Browser-based update only goes to
+  2.3.8 even though dialog promises 2.3.10". NOT a v3.0.0 fix — root
+  cause is the pre-v2.3.0 OTA JSON content-length cap (resolved by
+  PR #143 / commit 3cadcee7, first shipped in v2.3.0). The user is
+  stuck because their OTA path is the broken one. Workaround: manual
+  one-time flash from GitHub Releases page (web /update with local
+  .bin, or USB) → OTA works correctly thereafter. Document this in
+  the v3.0.0 release notes under "upgrade notes for users on pre-
+  v2.3.0 firmware".
+
 **Subsequent cleanup (post-flash, post-v3.0.0):**
 - Drop the 7 WiFi heap-fragmentation bandaid commits once silent-restart
   is confirmed working end-to-end on the daily driver. See "Verify
