@@ -10,6 +10,9 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v2.3.10 release notes 2026-05-17.)*
 
+*(Drained into v3.0.0 release notes 2026-05-26.)*
+
+<!-- DRAINED v3.0.0
 ### Pending for next release (memory-hardening branch → v3.0.0)
 
 Branch: `memory-hardening`. Builds clean; host tests green; **NOT YET FLASHED**.
@@ -122,6 +125,7 @@ cutting the v3.0.0 tag.
 - Drop the 7 WiFi heap-fragmentation bandaid commits once silent-restart
   is confirmed working end-to-end on the daily driver. See "Verify
   silent-restart port" under Active below.
+-->
 
 ## Active
 
