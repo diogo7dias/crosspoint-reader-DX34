@@ -88,10 +88,14 @@ bool RecentBooksStore::pruneMissing() {
 
 void RecentBooksStore::addBook(const std::string& path, const std::string& title, const std::string& author,
                                const std::string& coverBmpPath) {
-  // Drop stale entries first so a new add can't push out a valid book by
-  // hitting MAX_RECENT_BOOKS when the slot was actually occupied by a file
-  // the user has long deleted.
-  pruneMissing();
+  // Note: upstream PR #1959 also calls pruneMissing() here so a new add
+  // can't evict a valid book when MAX_RECENT_BOOKS is reached by a slot
+  // that's actually a deleted file. Skipped on DX34 because addBook is
+  // on the book-open hot path and pruneMissing() costs up to N×SDFat
+  // stat calls (1-10 ms each → 100-1000 ms pause for a 100-entry store).
+  // The eviction-on-add edge case is rare (needs 100 deleted-but-tracked
+  // books) and surfaces naturally the next time the user opens the
+  // Recent Books screen, where RecentBooksActivity::onEnter prunes.
 
   const std::string normalizedPath = normalizeRecentPath(path);
   const std::string normalizedKey = makeRecentPathKey(normalizedPath);
