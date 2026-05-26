@@ -10,11 +10,13 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v2.3.10 release notes 2026-05-17.)*
 
-### Pending for next release (memory-hardening branch, 2026-05-19)
+### Pending for next release (memory-hardening branch → v3.0.0)
 
-Branch: `memory-hardening`. Builds clean; host tests green; not yet flashed.
-User to review + flash + smoke-test on device before merging to `main`.
+Branch: `memory-hardening`. Builds clean; host tests green; **NOT YET FLASHED**.
+User to review + flash + smoke-test on device before merging to `main` and
+cutting the v3.0.0 tag.
 
+**Already on branch (pre-2026-05-19):**
 - Sequential newest-first sleep playlist + front-splice for new uploads.
 - Host-side fragmented-heap test harness (`test/test_memory_harness/`) with
   6 scenarios incl. 500-iteration fuzz under random heap pressure.
@@ -45,6 +47,60 @@ User to review + flash + smoke-test on device before merging to `main`.
      + defrag pass + 20 KB hard-floor silent restart).
   2. Per-allocation nothrow + null-check propagation up to recovery.
   3. Reader-heap fragmentation auto silent-restart (commit `86b5a93`).
+
+**Added 2026-05-26 (code-only session, no device available):**
+- `8ff429eb feat(diag): heap report on every silent restart`
+  /heap_report.txt dumps free/largest/min/intl + fragmentation% + reset
+  reason on every silentRestart{,ToReader} call. Reason string flows
+  from each call site ("wifi-exit-CrossPointWebServer", "reader-
+  preflight-frag-recovery", etc.) so the report makes clear which exit
+  path triggered. Exposes captureHeapSnapshot()/appendHeapSnapshot()
+  for future [HEAP] log standardisation. +428 B flash.
+- `1de473d4 feat(recents): prune missing books on add + on browse entry`
+  Backport upstream PR #1959 (93e81da). addBook and
+  RecentBooksActivity::onEnter now drop stale entries whose backing
+  files are gone, so a new add can't push out a still-valid book by
+  hitting MAX_RECENT_BOOKS on a slot held by a long-deleted file.
+- `e595372b feat(util): adopt upstream Memory.h (nothrow + ScopedCleanup)`
+  Backport upstream PR #1832 (8377ac9). Header-only utility; no call-
+  site migration in this commit (memory-hardening already landed the
+  pattern by hand). Canonical home for future cleanup pass and new
+  allocation sites.
+- `a9e8797d feat(reader): heap reservation anchor for layout pre-flight`
+  EpubReaderActivity allocates a 24 KB contiguous block at onEnter
+  while the heap is fresh, releases it in the pre-flight gate before
+  falling through to releaseMaxResources, and best-effort re-acquires
+  after each successful section build. Closes the typical gap between
+  a fragmented device's post-defrag largest-free-block (~25-30 KB) and
+  the gate's 48 KB target. Costs 24 KB of held heap during reading.
+  **Validation needed:** could net positive or negative depending on
+  heap dynamics for a given book; on-device measurement required.
+
+**Upstream backports N/A** (DX34 lacks the SD-card-font feature):
+- `181ed6c` font-variant fallback — target code (`SdCardFont`,
+  `sdCardFonts_`) doesn't exist in DX34.
+- `db3bb850` advance-table + prewarm fallbacks — same.
+- `3efc8630` font CRC32 verify — DX34 has no `FontDownloadActivity`.
+
+**On-device validation required before merging to main + tagging v3.0.0:**
+- Open Wolfe (or heaviest book), read 10+ min, turn pages → expect OOM
+  recovery screen or silent-restart-to-reader (good), not reboot/panic.
+- WiFi: File Transfer, Calibre, KOSync, OPDS, Web Server — enter, do
+  work, exit; silent-restart should kick in cleanly. Check
+  `/heap_report.txt` after each exit: free/largest should look healthy.
+- Sleep: confirm sequential newest-first wallpaper rotation; upload a
+  new wallpaper, next sleep shows it first.
+- Heap anchor regression check: ensure normal reading on a fresh-heap
+  device (CHAREINK 12, mid-size book) doesn't show new fragmentation
+  symptoms vs pre-anchor builds. The 24 KB hold is unconditional.
+- /heap_report.txt format sanity: open in a text editor, confirm reason
+  strings make sense, fragmentation % is in 0-100, reset reason matches
+  expectation.
+
+**Subsequent cleanup (post-flash, post-v3.0.0):**
+- Drop the 7 WiFi heap-fragmentation bandaid commits once silent-restart
+  is confirmed working end-to-end on the daily driver. See "Verify
+  silent-restart port" under Active below.
 
 ## Active
 
