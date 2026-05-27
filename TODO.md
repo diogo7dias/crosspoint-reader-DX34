@@ -12,6 +12,47 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v3.0.0 release notes 2026-05-26.)*
 
+*(Drained into v3.0.1 release notes 2026-05-27.)*
+
+<!-- DRAINED v3.0.1
+### Pending for next release (v3.0.1 hotfix)
+
+User-reported v3.0.0 panic from @numeronine. Decoded against firmware.elf:
+
+```
+abort -> __terminate -> bad_alloc -> operator new -> vector<string>::insert
+  -> ParsedText::layoutAndExtractLines (inlined helper)
+  -> ChapterHtmlSlimParser::startNewTextBlock:192
+```
+
+Heap at section start: free=80812, largest=61428, fragmentation 65%. The
+48 KB pre-flight gate passed, layout fragmented the heap further, and a
+mid-layout `vector<string>::insert` could not grow.
+
+v3.0.0 (commit 88c3c0a4) probed `ParsedText::addWord` but the same class
+has two more `words.insert(...)` loops that were still bare:
+
+- `lib/Epub/Epub/ParsedText.cpp:splitOversizedTokens` (UTF-8 chunk split)
+- `lib/Epub/Epub/ParsedText.cpp:expandHyphenationBreaks` (hyphenation sub-tokens)
+
+Both can throw bad_alloc -> abort under `-fno-exceptions`.
+
+**Fix:** same heap-probe-then-set-oom_-and-return pattern as `addWord`,
+applied to both insert loops, plus early-return on `oom_` at top of
+`layoutAndExtractLines` and after each helper. Both call sites of
+`layoutAndExtractLines` in `ChapterHtmlSlimParser` (lines 730, 1085) now
+check `hadOom()` after the call and set `parseFailed = true`, mirroring
+the existing addWord-OOM handling at lines 123 and 516.
+
+Net: a fragmented-heap layout returns cleanly through the existing
+recovery / silent-restart path instead of panicking. Cost: 45 lines, no
+RAM/Flash delta vs v3.0.0 (RAM 54.2%, Flash 91.9% unchanged).
+
+**On-device validation completed 2026-05-27:** flashed, paged through
+multiple chapters incl. cross-chapter loads, no panic, layout clean.
+-->
+
+
 <!-- DRAINED v3.0.0
 ### Pending for next release (memory-hardening branch → v3.0.0)
 
