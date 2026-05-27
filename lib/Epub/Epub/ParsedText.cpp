@@ -136,6 +136,11 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   if (words.empty()) {
     return;
   }
+  // A prior addWord set oom_; skip layout entirely so the parser surfaces
+  // the failure via parseFailed instead of touching half-allocated state.
+  if (oom_) {
+    return;
+  }
 
   // Apply fixed transforms before any per-line layout work.
   applyParagraphIndent(renderer, fontId);
@@ -158,6 +163,7 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
 
   if (hyphenationEnabled) {
     expandHyphenationBreaks(renderer, fontId, wordWidths, canBreakBefore, wordNeedsHyphenAtBreak);
+    if (oom_) return;
   }
   const int firstLineIndent = blockStyle.textIndentDefined && (blockStyle.alignment == CssTextAlign::Justify ||
                                                                blockStyle.alignment == CssTextAlign::Left)
@@ -165,6 +171,7 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
                                   : 0;
   splitOversizedTokens(renderer, fontId, pageWidth, pageWidth - firstLineIndent, wordWidths, canBreakBefore,
                        wordNeedsHyphenAtBreak);
+  if (oom_) return;
 
   std::vector<size_t> lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, wordWidths,
                                                            wordContinues, canBreakBefore, wordNeedsHyphenAtBreak);
@@ -255,6 +262,22 @@ void ParsedText::splitOversizedTokens(const GfxRenderer& renderer, const int fon
 
     for (size_t p = 1; p < parts.size(); ++p) {
       const size_t insertPos = i + p;
+      // Heap-probe the next vector growth before the insert. vector<string>
+      // grows by doubling capacity, allocating nextCap * sizeof(string) bytes
+      // contiguously. Under -fno-exceptions a bad_alloc here aborts the
+      // firmware. Probe the heaviest vector (words) and bail cleanly so the
+      // parser surfaces the failure via parseFailed.
+      if (words.size() == words.capacity()) {
+        const size_t nextCap = words.capacity() == 0 ? 1 : words.capacity() * 2;
+        const size_t needBytes = nextCap * sizeof(std::string);
+        if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
+          LOG_ERR("PT", "OOM splitOversized size=%u cap=%u need=%u largest=%u", (unsigned)words.size(),
+                  (unsigned)words.capacity(), (unsigned)needBytes,
+                  (unsigned)crosspoint::heap::largestFreeBlockBytes());
+          oom_ = true;
+          return;
+        }
+      }
       words.insert(words.begin() + insertPos, std::move(parts[p]));
       wordStyles.insert(wordStyles.begin() + insertPos, style);
       wordContinues.insert(wordContinues.begin() + insertPos, true);
@@ -334,6 +357,20 @@ void ParsedText::expandHyphenationBreaks(const GfxRenderer& renderer, const int 
     for (size_t p = 1; p < parts.size(); ++p) {
       const size_t insertPos = i + p;
       const uint16_t w = measureWordWidth(renderer, fontId, parts[p], style, blockStyle.letterSpacing);
+      // Heap-probe the next vector growth before the insert. Same rationale
+      // as splitOversizedTokens above: vector<string> reallocation on a
+      // fragmented heap throws bad_alloc -> abort under -fno-exceptions.
+      if (words.size() == words.capacity()) {
+        const size_t nextCap = words.capacity() == 0 ? 1 : words.capacity() * 2;
+        const size_t needBytes = nextCap * sizeof(std::string);
+        if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
+          LOG_ERR("PT", "OOM expandHyphen size=%u cap=%u need=%u largest=%u", (unsigned)words.size(),
+                  (unsigned)words.capacity(), (unsigned)needBytes,
+                  (unsigned)crosspoint::heap::largestFreeBlockBytes());
+          oom_ = true;
+          return;
+        }
+      }
       words.insert(words.begin() + insertPos, parts[p]);
       wordWidths.insert(wordWidths.begin() + insertPos, w);
       wordStyles.insert(wordStyles.begin() + insertPos, style);
