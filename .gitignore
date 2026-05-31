@@ -22,3 +22,4 @@ releases/
 .claude/scheduled_tasks.lock
 CLAUDE.md
 logs/
+test/test_reader_sim/fixtures/
