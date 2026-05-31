@@ -810,6 +810,15 @@ void EpubReaderActivity::loop() {
 
   if (prevTriggered || nextTriggered) {
     loopPageTurn(prevTriggered, nextTriggered);
+  } else if (fastTurnsSinceClear_ >= kDeferredClearMinTurns &&
+             SETTINGS.refreshFrequency != CrossPointSettings::REFRESH_NEVER &&
+             millis() - lastFastTurnMs_ > kDeferredClearIdleMs) {
+    // No page turn this tick and the reader has been idle past the threshold:
+    // slip the ghosting wipe in now (user is reading, not flipping), so it is
+    // never felt as a page-turn hitch. NEVER is exempt — that setting opts out
+    // of automatic refreshes entirely.
+    forceClearThisRender_ = true;
+    requestUpdate();
   }
 }
 
@@ -2475,12 +2484,21 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
 
   const bool pageHasImages = page.hasImages();
 
-  if (pagesUntilFullRefresh <= 1 || pageHasImages) {
+  // Refresh-mode decision (deferred-clear policy). HALF wipe when an image page
+  // needs it, the rapid-flip backstop is hit, or loop() requested an idle wipe
+  // (forceClearThisRender_). Otherwise FAST (~280ms differential) and record
+  // that residue is owed so loop() can slip a wipe into the next reading pause.
+  const bool clearNow = pageHasImages || pagesUntilFullRefresh <= 1 || forceClearThisRender_;
+  forceClearThisRender_ = false;
+  if (clearNow) {
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+    fastTurnsSinceClear_ = 0;
   } else {
     renderer.displayBuffer();
     pagesUntilFullRefresh--;
+    fastTurnsSinceClear_++;
+    lastFastTurnMs_ = millis();
   }
 
   // Differential grayscale overlay for image pages. Text + status bar stay on

@@ -67,6 +67,16 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   int currentSpineIndex = 0;
   int nextPageNumber = 0;
   int pagesUntilFullRefresh = 0;
+  // Deferred ghosting-wipe policy: page turns stay on the fast (~280ms)
+  // differential refresh, which leaves residue. Instead of spending the ~1.7s
+  // HALF wipe mid-flow every `refreshFrequency` pages, loop() slips the wipe
+  // into a reading pause so it is never felt as a page-turn hitch. The existing
+  // pagesUntilFullRefresh backstop still bounds residue during rapid flipping.
+  int fastTurnsSinceClear_ = 0;        // fast turns done since the last wipe
+  unsigned long lastFastTurnMs_ = 0;   // millis() of the last fast page turn
+  bool forceClearThisRender_ = false;  // one-shot: next render must be a HALF wipe
+  static constexpr int kDeferredClearMinTurns = 3;             // arm the idle wipe only after some residue
+  static constexpr unsigned long kDeferredClearIdleMs = 1200;  // idle gap before slipping the wipe in
   int cachedSpineIndex = 0;
   int cachedChapterTotalPageCount = 0;
   // Signals that the next render should reposition within the newly loaded section
