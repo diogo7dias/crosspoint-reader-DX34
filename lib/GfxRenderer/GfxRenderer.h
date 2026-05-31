@@ -109,6 +109,10 @@ class GfxRenderer {
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
 
+  // Turbo page turns: route the setting down to the display driver, which
+  // swaps in a custom fast LUT for BW text refreshes.
+  void setTurboTextLut(const bool enabled) { display.setFastTextCustomLut(enabled); }
+
   // Dark mode: invert framebuffer before sending to display
   void setDarkMode(const bool enabled) { darkModeInvert = enabled; }
   bool getDarkMode() const { return darkModeInvert; }

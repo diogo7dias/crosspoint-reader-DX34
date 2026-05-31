@@ -925,6 +925,18 @@ void loop() {
     }
   }
 
+#ifdef ENABLE_TURBO_REFRESH
+  // Sync the experimental "Turbo Page Turns" setting with the renderer when it
+  // changes. Compiled in only on turbo builds; the setting is otherwise inert.
+  {
+    static bool lastTurbo = !SETTINGS.turboPageTurns;  // Force first-time update
+    if (static_cast<bool>(SETTINGS.turboPageTurns) != lastTurbo) {
+      lastTurbo = SETTINGS.turboPageTurns;
+      renderer.setTurboTextLut(lastTurbo);
+    }
+  }
+#endif
+
   // Sync dark mode inversion flag with renderer when setting changes
   {
     static uint8_t lastDarkMode = !SETTINGS.darkMode;  // Force first-time update

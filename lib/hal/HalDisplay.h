@@ -47,6 +47,9 @@ class HalDisplay {
 
   void displayGrayBuffer(bool turnOffScreen = false, const uint8_t* lut = nullptr, bool factoryMode = false);
 
+  // Turbo text refresh: route the "Turbo Page Turns" setting down to the driver.
+  void setFastTextCustomLut(bool enabled) { einkDisplay.setFastTextCustomLut(enabled); }
+
  private:
   EInkDisplay einkDisplay;
 };
