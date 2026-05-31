@@ -172,7 +172,10 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   SavedPosition savedPositions[MAX_FOOTNOTE_DEPTH] = {};
   int footnoteDepth = 0;
 
-  void renderContents(const Page& page, int orientedMarginTop, int orientedMarginRight, int orientedMarginBottom,
+  // Returns false when render-time glyph allocations failed on a fragmented
+  // heap — the partial (scattered-glyph) frame is NOT displayed and the caller
+  // routes to silent-restart / recovery. Returns true on a complete render.
+  bool renderContents(const Page& page, int orientedMarginTop, int orientedMarginRight, int orientedMarginBottom,
                       int orientedMarginLeft, const StatusBarLayout& statusBarLayout);
   void renderStatusBar(const StatusBarLayout& statusBarLayout, int orientedMarginRight, int orientedMarginBottom,
                        int orientedMarginLeft);

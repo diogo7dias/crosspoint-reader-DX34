@@ -211,6 +211,7 @@ const uint8_t* FontDecompressor::getBitmap(const EpdFontData* fontData, const Ep
       if (!check) {
         LOG_ERR("FDC", "Failed to allocate %u bytes for hot group %u (free heap: %lu)", group.uncompressedSize,
                 groupIndex, (unsigned long)esp_get_free_heap_size());
+        bitmapAllocFailures_++;  // render-OOM signal — see FontDecompressor.h
         stats.getBitmapTimeUs += micros() - tStart;
         return nullptr;
       }
@@ -240,6 +241,7 @@ const uint8_t* FontDecompressor::getBitmap(const EpdFontData* fontData, const Ep
     void* check = malloc(glyph->dataLength);
     if (!check) {
       LOG_ERR("FDC", "Failed to allocate scratch buffer (%u bytes)", glyph->dataLength);
+      bitmapAllocFailures_++;  // render-OOM signal — see FontDecompressor.h
       stats.getBitmapTimeUs += micros() - tStart;
       return nullptr;
     }

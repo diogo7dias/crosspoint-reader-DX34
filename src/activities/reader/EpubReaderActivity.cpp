@@ -5,6 +5,7 @@
 #include <Epub/Page.h>
 #include <Epub/blocks/ImageBlock.h>
 #include <FontCacheManager.h>
+#include <FontDecompressor.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -1893,9 +1894,26 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
     // Collect footnotes from the loaded page (copy, not move, to preserve cached page data)
     currentPageFootnotes = p->footnotes;
     const auto start = millis();
-    renderContents(*p, orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft,
-                   statusBarLayout);
+    const bool renderOk = renderContents(*p, orientedMarginTop, orientedMarginRight, orientedMarginBottom,
+                                          orientedMarginLeft, statusBarLayout);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
+    if (!renderOk) {
+      // Render-time glyph allocations failed on a fragmented heap: the frame
+      // was NOT displayed (it would be scattered-glyph garbage). Mirror the
+      // pre-flight gate's recovery — silent-restart to a fresh heap where the
+      // page can decompress and render, bounded by the auto-restart loop
+      // guard. Once the budget is exhausted, fall through to the user-facing
+      // recovery screen instead of reboot-looping. The pre-flight gate only
+      // guards section *load*; this closes the gap for OOM during the render
+      // pass (gate passed, then the heap fragmented further during layout).
+      if (tryReserveAutoSilentRestart()) {
+        LOG_DIAG("ERS", "render-oom: triggering silent restart to clear fragmentation");
+        silentRestartToReader("reader-render-oom");  // does not return
+      }
+      LOG_DIAG("ERS", "render-oom: auto-restart budget exhausted, showing recovery screen");
+      showLayoutRecoveryScreen(LayoutRecoveryState::AwaitingRetryNoRevert);
+      return;
+    }
   }
   silentIndexNextChapterIfNeeded(viewportWidth, viewportHeight);
   flushProgressIfNeeded(false);  // observes current render position + debounce-flushes
@@ -2368,7 +2386,7 @@ void EpubReaderActivity::saveQuoteToFile(const std::string& quote) {
 
 // ── End Highlight / Quote selection mode ─────────────────────────────────────
 
-void EpubReaderActivity::renderContents(const Page& page, const int orientedMarginTop, const int orientedMarginRight,
+bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarginTop, const int orientedMarginRight,
                                         const int orientedMarginBottom, const int orientedMarginLeft,
                                         const StatusBarLayout& statusBarLayout) {
   renderer.setRenderMode(GfxRenderer::BW);
@@ -2397,6 +2415,13 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Two-pass font prewarm: scan pass collects text, then decompress needed glyphs.
   // The actual render must happen inside the scope so page buffers stay alive.
   auto* fcm = renderer.getFontCacheManager();
+  // Count glyph-bitmap allocation failures that occur during the *actual*
+  // render pass only (the scan/prewarm pass below also touches the
+  // decompressor but its failures are expected and recoverable). A non-zero
+  // count means the heap was too fragmented to decompress some glyph groups,
+  // so the frame is partially rendered and would display as scattered-glyph
+  // garbage — we discard it and let the caller recover.
+  uint32_t glyphOom = 0;
   const uint32_t tFrameStart = millis();
   if (fcm) {
     auto scope = fcm->createPrewarmScope();
@@ -2404,13 +2429,18 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // scan pass
     const uint32_t tScanEnd = millis();
     scope.endScanAndPrewarm();
+    auto* fd = fcm->getDecompressor();
+    if (fd) fd->resetBitmapAllocFailures();
     const uint32_t tRenderStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // actual render
     const uint32_t tRenderEnd = millis();
+    if (fd) glyphOom = fd->bitmapAllocFailures();
     LOG_INF("ERS", "page render timings: scan=%u ms render=%u ms total=%u ms",
             static_cast<unsigned>(tScanEnd - tScanStart), static_cast<unsigned>(tRenderEnd - tRenderStart),
             static_cast<unsigned>(tRenderEnd - tFrameStart));
   } else {
+    // Uncompressed (built-in) font with no decompressor: glyph bitmaps are
+    // direct pointers into flash, so there is no allocation to fail here.
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
   }
   // Render highlight overlay and border if in highlight/quote selection mode
@@ -2432,6 +2462,16 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   }
 
   renderStatusBar(statusBarLayout, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
+
+  // Render-time glyph OOM: the frame is incomplete (scattered-glyph garbage).
+  // Bail BEFORE displayBuffer() so the broken frame never reaches the panel;
+  // the caller routes to silent-restart / recovery. setTextRenderStyle is
+  // restored here because the early return skips the reset at the tail.
+  if (glyphOom > 0) {
+    LOG_ERR("ERS", "render-time glyph OOM (%u alloc failures) — discarding partial frame", (unsigned)glyphOom);
+    renderer.setTextRenderStyle(0);
+    return false;
+  }
 
   const bool pageHasImages = page.hasImages();
 
@@ -2460,6 +2500,7 @@ void EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   }
 
   renderer.setTextRenderStyle(0);
+  return true;
 }
 
 void EpubReaderActivity::renderStatusBar(const StatusBarLayout& statusBarLayout, const int orientedMarginRight,

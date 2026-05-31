@@ -45,8 +45,18 @@ class FontDecompressor {
   void resetStats();
   const Stats& getStats() const { return stats; }
 
+  // Render-time OOM signal. getBitmap() returns nullptr (and the renderer then
+  // silently skips the glyph) when a hot-group or scratch-buffer malloc fails
+  // on a fragmented heap. The reader resets this immediately before a page
+  // render pass and reads it immediately after: a non-zero count means the
+  // frame was only partially rendered (scattered-glyph garbage) and must be
+  // discarded rather than pushed to the display.
+  uint32_t bitmapAllocFailures() const { return bitmapAllocFailures_; }
+  void resetBitmapAllocFailures() { bitmapAllocFailures_ = 0; }
+
  private:
   Stats stats;
+  uint32_t bitmapAllocFailures_ = 0;  // see bitmapAllocFailures()
   InflateReader inflateReader;
 
   // Page buffer slots: each style gets its own flat glyph buffer with sorted lookup.
