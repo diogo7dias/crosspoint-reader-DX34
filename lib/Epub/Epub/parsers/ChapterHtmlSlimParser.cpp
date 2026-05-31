@@ -3,6 +3,7 @@
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
+#include <HeapGuard.h>
 #include <Logging.h>
 #include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
@@ -1040,14 +1041,18 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
 
   // Apply horizontal left inset (margin + padding) as x position offset
   const int16_t xOffset = line->getBlockStyle().leftInset();
-  auto* rawPageLine = new (std::nothrow) PageLine(line, xOffset, currentPageNextY);
-  if (!rawPageLine) {
-    LOG_DIAG("EHP", "OOM new PageLine free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
+  // Heap-probe then make_shared: probing keeps the throwing make_shared safe
+  // under -fno-exceptions (kDefaultHeadroomBytes absorbs the control block +
+  // transient growth) while fusing the PageLine object and its control block
+  // into a single allocation — one fewer heap block per line than the old
+  // `new (nothrow)` + `shared_ptr(raw)` form.
+  if (!crosspoint::heap::canAllocateContiguous(sizeof(PageLine))) {
+    LOG_DIAG("EHP", "OOM PageLine probe free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
     parseFailed = true;
     return;
   }
-  currentPage->elements.push_back(std::shared_ptr<PageLine>(rawPageLine));
+  currentPage->elements.push_back(std::make_shared<PageLine>(line, xOffset, currentPageNextY));
   currentPageNextY += lineHeight;
 }
 

@@ -648,10 +648,19 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     lineWords.back().push_back('-');
   }
 
-  // make_shared throws bad_alloc on OOM, which the firmware build can't
-  // catch (exceptions disabled) and panics. Use the explicit form so the
-  // call returns a null shared_ptr that processLine handles cleanly.
-  auto* rawBlock =
-      new (std::nothrow) TextBlock(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), blockStyle);
-  processLine(std::shared_ptr<TextBlock>(rawBlock));
+  // make_shared throws bad_alloc on OOM, which the firmware build can't catch
+  // (exceptions disabled) and panics. Heap-probe first (same contract as
+  // addWord's reserve guard, with kDefaultHeadroomBytes covering the control
+  // block + transient growth): if the block can't be satisfied, deliver a null
+  // shared_ptr that processLine handles as OOM. When the probe passes,
+  // make_shared fuses the TextBlock object and its control block into a single
+  // allocation — one fewer heap block per line than the old
+  // `new` + `shared_ptr(raw)` form.
+  if (!crosspoint::heap::canAllocateContiguous(sizeof(TextBlock))) {
+    LOG_ERR("PT", "OOM extractLine TextBlock largest=%u", (unsigned)crosspoint::heap::largestFreeBlockBytes());
+    processLine(nullptr);
+    return;
+  }
+  processLine(std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles),
+                                          blockStyle));
 }
