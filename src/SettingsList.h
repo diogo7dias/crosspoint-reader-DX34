@@ -48,6 +48,13 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                     StrId::STR_CAT_DISPLAY));
     s.push_back(SettingInfo::Toggle(StrId::STR_USE_FACTORY_LUT, &CrossPointSettings::useFactoryLUT, "useFactoryLUT",
                                     StrId::STR_CAT_DISPLAY));
+#ifdef ENABLE_TURBO_REFRESH
+    // Experimental: custom fast-refresh LUT for BW text page turns. Gated so it
+    // only surfaces in builds compiled with ENABLE_TURBO_REFRESH; the underlying
+    // setting member always exists for JSON schema stability.
+    s.push_back(SettingInfo::Toggle(StrId::STR_TURBO_PAGE_TURNS, &CrossPointSettings::turboPageTurns, "turboPageTurns",
+                                    StrId::STR_CAT_DISPLAY));
+#endif
     s.push_back(SettingInfo::Enum(StrId::STR_IMAGE_DITHER, &CrossPointSettings::imageDither,
                                   {StrId::STR_IMAGE_DITHER_FAST, StrId::STR_IMAGE_DITHER_QUALITY}, "imageDither",
                                   StrId::STR_CAT_DISPLAY));

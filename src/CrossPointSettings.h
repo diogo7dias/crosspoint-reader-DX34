@@ -289,6 +289,13 @@ class CrossPointSettings {
   // current differential grayscale path. Also gates the dither/brightness retune in
   // BitmapHelpers tuned for the factory LUT's response curve.
   uint8_t useFactoryLUT = 1;
+  // Turbo page turns: when 1, BW text page turns use a custom fast LUT
+  // (CTRL2_MODE_FAST_CUSTOM) instead of the panel's built-in fast waveform,
+  // trading a faster refresh for higher ghosting risk. Off by default; the UI
+  // entry + display wiring are gated behind ENABLE_TURBO_REFRESH (experimental).
+  // Member is unconditional so the JSON settings schema stays stable across
+  // gated and ungated builds.
+  uint8_t turboPageTurns = 0;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
   // EPUB reading orientation settings

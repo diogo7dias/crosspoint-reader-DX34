@@ -396,6 +396,7 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["textRenderMode"] = s.textRenderMode;
   doc["textRenderModeV2"] = true;
   doc["useFactoryLUT"] = s.useFactoryLUT;
+  doc["turboPageTurns"] = s.turboPageTurns;
   doc["shortPwrBtn"] = s.shortPwrBtn;
   doc["orientation"] = s.orientation;
   doc["sideButtonLayout"] = s.sideButtonLayout;
@@ -647,6 +648,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.textAntiAliasing = 0;
   s.useFactoryLUT = (doc["useFactoryLUT"] | 0) ? 1 : 0;
   setBitmapHelpersUseFactoryLUT(s.useFactoryLUT != 0);
+  s.turboPageTurns = (doc["turboPageTurns"] | 0) ? 1 : 0;
   s.shortPwrBtn = clampEnum(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
   s.orientation = clampEnum(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
   s.sideButtonLayout =
