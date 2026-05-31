@@ -154,12 +154,20 @@ void RecentBooksStore::setPercent(const std::string& path, int percent) {
   const int clamped = (percent < 0) ? -1 : (percent > 100 ? 100 : percent);
   if (it->percent == clamped) return;  // No change, skip the disk write.
   it->percent = static_cast<int8_t>(clamped);
-  // Per-page-turn hot path: route through AsyncWriter so the ~120 ms atomic
-  // rotation runs on a background task and doesn't block button polling.
-  // Lifecycle drains in persistAppState() (every activity transition + deep
-  // sleep entry) guarantee queued writes hit SD before power-down. Worst-case
-  // data loss on a hard reset mid-tick is the percent advancing one integer
-  // late; the percent recomputes from progress on next book open anyway.
+  // Defer the SD write. Even routed through AsyncWriter, the ~120 ms atomic
+  // rotation runs on the shared SD/SPI bus and contends with the render task's
+  // per-turn page-load reads — measured ballooning a 56 ms load to 438 ms when
+  // they collide. The cached percent is only read on the home/library screens
+  // (shown after leaving the book), so we keep it live in RAM here and flush to
+  // SD on the reader's force-flush path (exit / sleep / menu) via
+  // flushPercentIfDirty(). Worst case on a hard reset mid-session: the home
+  // percent is one session stale; it recomputes from progress.bin on next open.
+  percentDirty_ = true;
+}
+
+void RecentBooksStore::flushPercentIfDirty() const {
+  if (!percentDirty_) return;
+  percentDirty_ = false;
   saveToFileAsync();
 }
 

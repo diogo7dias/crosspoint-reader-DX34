@@ -61,7 +61,15 @@ class RecentBooksStore {
   // Update only the cached reading percent for a book; no-op if the book is
   // not registered. Used by the reader on exit / progress save so the home
   // screen can show progress without re-opening every recent EPUB.
+  // The new value is held in RAM and marked dirty; the SD write is deferred to
+  // flushPercentIfDirty() so per-page-turn percent ticks don't contend with the
+  // render task's page-load reads on the shared SD bus.
   void setPercent(const std::string& path, int percent);
+
+  // Persist a pending setPercent() change to SD (via saveToFileAsync), if any.
+  // Called from the reader's force-flush path (book exit / sleep / menu open),
+  // which then drains the async writer. No-op when nothing changed.
+  void flushPercentIfDirty() const;
 
   // Lookup cached reading percent. Returns 0-100 if known and the book is
   // tracked in recents, or -1 otherwise. Library list rendering uses this
@@ -105,6 +113,9 @@ class RecentBooksStore {
 
  private:
   bool loadFromBinaryFile();
+  // Set by setPercent(), cleared by flushPercentIfDirty(). Mutable so the
+  // const flush path can clear it.
+  mutable bool percentDirty_ = false;
 };
 
 // Helper macro to access recent books store

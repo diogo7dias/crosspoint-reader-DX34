@@ -1841,9 +1841,13 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       ReaderLayoutSafety::clampViewportDimension(renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom,
                                                  minContentHeight, "ERS", "viewport height"));
 
+  // DIAG (spike investigation): time the chapter-load stage, which runs before
+  // the GFX clearScreen->displayBuffer timer and so is otherwise invisible.
+  const uint32_t tEnsure_diag = millis();
   if (!ensureSectionLoaded(viewportWidth, viewportHeight)) {
     return;
   }
+  const uint32_t ensureMs_diag = millis() - tEnsure_diag;
 
   renderer.clearScreen();
   const StatusBarLayout statusBarLayout =
@@ -1867,10 +1871,19 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
   }
 
   {
+    // DIAG (spike investigation): distinguish a RAM cache hit from an SD page
+    // load and time the load, to see whether the ~0.8-1.3s spikes are SD reads
+    // on a prefetch miss (vs chapter parse, timed above).
+    const uint32_t tLoad_diag = millis();
     auto p = getCachedPage(section->currentPage);
+    const bool cacheHit_diag = static_cast<bool>(p);
     if (!p) {
       p = loadAndCachePage(section->currentPage);
     }
+    const uint32_t loadMs_diag = millis() - tLoad_diag;
+    LOG_DBG("ERS", "stage timings: ensureSection=%ums pageLoad=%ums (cache %s) largestFree=%u", ensureMs_diag,
+            loadMs_diag, cacheHit_diag ? "HIT" : "MISS",
+            static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
     if (!p) {
       pageLoadFailCount++;
       LOG_ERR("ERS", "Failed to load page from SD - clearing section cache (attempt %d)", pageLoadFailCount);
@@ -2004,9 +2017,11 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
 
   if (force) {
     // Force-flush callers (onExit, theme/font change, openReaderMenu, deep
-    // sleep) need persistence guarantee, not just enqueue. Drain the async
-    // task before returning. Drain runs LAST so it catches both the
-    // progress write and the recent.json percent write enqueued above.
+    // sleep) need persistence guarantee. setPercent() above only updated the
+    // in-RAM percent and marked it dirty (deferred to avoid SD contention with
+    // page loads during reading); enqueue that write now, then drain LAST so
+    // the drain catches both the progress write and the recent.json percent.
+    RECENT_BOOKS.flushPercentIfDirty();
     ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
   }
 }
