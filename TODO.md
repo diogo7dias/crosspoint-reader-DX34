@@ -12,14 +12,9 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v3.0.0 release notes 2026-05-26.)*
 
-### Pending for next release (2026-05-31 session — device-validated)
-
-- **fix(reader): recover from render-time glyph OOM instead of a garbage page.** On a fragmented heap, `FontDecompressor::getBitmap` could fail mid-render; the partial (scattered-glyph) frame was shown anyway — the "garbage screen on book open" several users hit. Now glyph-alloc failures are detected, the partial frame is discarded, and the reader silent-restarts to a fresh heap (or shows a clean recovery screen). On-device validated: the previously-broken book opens cleanly, no crashes. (commit 2cf78e62)
-- **perf(reader): ~19% fewer allocations per chapter parse.** Probe-guarded `make_shared` for line blocks (TextBlock + PageLine), fusing object+control-block into one allocation while staying OOM-safe. Less allocator churn + less fragmentation. (commit 46b79876)
-- **test infra: host reader-simulator** (not user-facing). SimHeap allocation-failure injector + decompress/parse/layout slices run the real EPUB pipeline on host under fragmentation injection — the open-a-book crash class is now a CI-gateable assertion. (commits dcb93c9f, 9baecf52, c471ef42)
-- **Note (no code change): page-turn snappiness is e-ink-refresh-bound**, not software (~650ms/page is the panel's built-in fast waveform; software draw is ~150ms). The temperature trick that speeds HALF refresh does NOT affect FAST refresh (measured). Users who want fewer multi-second stalls: Settings → Refresh frequency → 30/Never. Per-page speedup would require a risky custom waveform LUT in the EInkDisplay driver.
-
 *(Drained into v3.0.1 release notes 2026-05-27.)*
+
+*(Drained into v3.0.2 release notes 2026-05-31.)*
 
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
