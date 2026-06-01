@@ -182,6 +182,10 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
   void saveProgress(int spineIndex, int currentPage, int pageCount);
   void flushProgressIfNeeded(bool force);
+  // Synchronously persist the last-good position right before a recovery
+  // reboot (silentRestartToReader reboots without flushing, and page-turn
+  // writes are deferred to lifecycle events).
+  void persistProgressBeforeRestart();
   void invalidateStatusBarCaches();
   void clearPageCache();
   std::shared_ptr<Page> getCachedPage(int pageIndex) const;

@@ -55,9 +55,20 @@ void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
   // Suppress stale button events so the press that opened this subactivity
   // doesn't immediately trigger an action inside it.
   mappedInput.suppressUntilAllReleased();
-  subActivity.reset(activity);
-  subActivity->onEnter();
-  if (!subActivity->didEntryFail()) {
+
+  // A null `activity` means the caller's `new (std::nothrow) X` returned null
+  // because the heap was too fragmented to construct the sub-activity. Treat
+  // it exactly like a sub-activity that failed to enter: don't dereference it,
+  // fall straight through to the recovery path below. (Bare throwing `new`
+  // would have abort()ed under -fno-exceptions before we ever got here — which
+  // is the panic-reboot bug the nothrow conversion fixes.)
+  bool entryFailed = (activity == nullptr);
+  if (!entryFailed) {
+    subActivity.reset(activity);
+    subActivity->onEnter();
+    entryFailed = subActivity->didEntryFail();
+  }
+  if (!entryFailed) {
     return;
   }
   // Subactivity could not bring itself up. Replace it inline with an OOM
@@ -65,8 +76,10 @@ void ActivityWithSubactivity::enterNewActivity(Activity* activity) {
   // (the parent's render task was just deleted above and won't be restored
   // until the subactivity exits).
   LOG_ERR("ACT", "Subactivity entry failed — swapping to OOM screen");
-  subActivity->onExit();
-  subActivity.reset();
+  if (subActivity) {
+    subActivity->onExit();
+    subActivity.reset();
+  }
 
   // If a book is open and we still have auto-restart budget, silent-restart
   // to the reader instead of showing the OOM screen. Same root-cause fix as

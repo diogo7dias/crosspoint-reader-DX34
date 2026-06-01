@@ -5,6 +5,7 @@
 #include <Logging.h>
 
 #include <algorithm>
+#include <new>
 
 #include "MappedInputManager.h"
 #include "ReaderSettingsActivity.h"
@@ -244,7 +245,8 @@ void ReadingThemesActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     if (selectedRowIndex == 0) {
       exitActivity();
-      enterNewActivity(new ReaderSettingsActivity(renderer, mappedInput, bookCachePath, [this](const bool changed) {
+      enterNewActivity(new (std::nothrow) ReaderSettingsActivity(renderer, mappedInput, bookCachePath,
+                                                                 [this](const bool changed) {
         pendingSubactivityExit = true;
         pendingSettingsChanged = changed;
       }));

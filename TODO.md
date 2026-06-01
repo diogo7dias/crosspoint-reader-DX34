@@ -16,6 +16,35 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v3.0.2 release notes 2026-05-31.)*
 
+### Pending for next release (reader-spike-diag, 2026-06-01)
+
+- **Fix: in-reader appearance settings could not be opened on a fragmented heap
+  (e.g. big books like Stoner) — panic reboot straight back into the book.**
+  `openReaderMenu()` built the menu → themes → settings sub-activity tree with
+  no heap-headroom prep while the reader still held the parsed section, page
+  cache, the ~100 KB CSS parser, the font glyph cache and the 24 KB layout
+  anchor. The bare `new` allocations OOM'd and, under `-fno-exceptions`,
+  `abort()`'d → RTC_SW_SYS_RST. The section-layout path had a pre-flight gate
+  (`heapHeadroomOkForLayout`); the menu path had none. Fix: release the anchor +
+  `releaseMaxResources()` before constructing the menu when contiguous heap is
+  below the layout gate, plus `new (std::nothrow)` on the menu/themes/settings
+  activities and a null-check in `ActivityWithSubactivity::enterNewActivity` so
+  a starved heap degrades to the existing graceful OOM-screen / silent-restart
+  path instead of a panic. Second ungated instance of the section-cache
+  fragmentation root cause (see Active #1).
+- **Change: reading progress is now persisted on lifecycle events only — never
+  on a plain page turn or chapter cross.** Real-book model: the page is saved
+  when you close the book (onExit / go home), lock/sleep, open the reader menu,
+  change theme/render mode, or KOReader-sync — not on every button press.
+  `progress.bin` previously did a debounced (~800 ms) write per page turn plus
+  an immediate write on each chapter cross; `recent.json` percent was already
+  deferred (v3.0.2). Trade-off: a hard power loss between lifecycle events loses
+  progress back to the last save (accepted). `silentRestartToReader` reboots
+  without flushing, so the reader's two OOM-recovery reboot sites now
+  `persistProgressBeforeRestart()` first — recovery still lands on the current
+  page. TXT/XTC readers still save per page turn (separate code path); convert
+  for consistency in a follow-up if desired.
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 

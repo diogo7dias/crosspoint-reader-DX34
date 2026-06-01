@@ -443,6 +443,7 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
     // activity was launched) so the user lands on the same book.
     if (tryReserveAutoSilentRestart()) {
       LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
+      persistProgressBeforeRestart();
       silentRestartToReader("reader-preflight-frag-recovery");  // does not return
     }
     LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
@@ -879,7 +880,10 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
       RenderLock lock(*this);
       nextPageNumber = 0;
       currentSpineIndex = nextTriggered ? currentSpineIndex + 1 : currentSpineIndex - 1;
-      saveProgress(currentSpineIndex, nextPageNumber, 1);
+      // No progress write on chapter skip — saves are lifecycle-only now. The
+      // new position lives in currentSpineIndex/nextPageNumber (consumed by the
+      // reload below); the post-load render's observe() refreshes the tracker
+      // and the next force-flush (menu/exit/sleep) persists it.
       clearPageCache();
       section.reset();
     }
@@ -905,7 +909,7 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
         RenderLock lock(*this);
         nextPageNumber = UINT16_MAX;
         currentSpineIndex--;
-        saveProgress(currentSpineIndex, nextPageNumber, 1);
+        // No progress write on a backward chapter cross — lifecycle-only saves.
         clearPageCache();
         section.reset();
       }
@@ -926,7 +930,7 @@ void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
         if (hasNextSection) {
           addSessionPagesRead();
         }
-        saveProgress(currentSpineIndex, nextPageNumber, 1);
+        // No progress write on a forward chapter cross — lifecycle-only saves.
         clearPageCache();
         section.reset();
       }
@@ -951,8 +955,26 @@ void EpubReaderActivity::openReaderMenu() {
   const bool hasQuotes = !quotesPath.empty() && Storage.exists(quotesPath.c_str());
   boldSwapAtMenuOpen = RECENT_BOOKS.getBoldSwap(epub->getPath());
   flushProgressIfNeeded(true);
+  // Free heap headroom before building the menu → themes → settings
+  // sub-activity tree. The reader still holds the parsed section, page cache,
+  // the ~100 KB CSS parser, the font glyph cache and the 24 KB layout anchor;
+  // on a fragmented heap (big books like Stoner) the bare allocations below
+  // would OOM and, under -fno-exceptions, abort() → panic reboot straight back
+  // into the book — exactly the "can't open the look settings" symptom. The
+  // section-layout path guards this with heapHeadroomOkForLayout(); the menu
+  // path had no gate. Only drop the caches when actually low on contiguous
+  // heap, so a healthy device keeps an instant menu-back (no re-render). They
+  // re-warm on menu-back / next render, and progress was just force-flushed
+  // above so dropping them is safe.
+  if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < kMinLargestBlockForLayout) {
+    LOG_DIAG("ERS", "menu open: low contiguous heap, releasing caches + anchor for sub-activity");
+    if (layoutHeapAnchor_) {
+      layoutHeapAnchor_.reset();
+    }
+    releaseMaxResources();
+  }
   exitActivity();
-  enterNewActivity(new EpubReaderMenuActivity(
+  enterNewActivity(new (std::nothrow) EpubReaderMenuActivity(
       this->renderer, this->mappedInput, epub->getTitle(), epub->getPath(), currentPage, totalPages,
       bookProgressPercent, SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount, hasQuotes,
       [this](const uint8_t orientation) { onReaderMenuBack(orientation); },
@@ -1219,7 +1241,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     // GO_HOME menu item removed — Back button handles this
     case EpubReaderMenuActivity::MenuAction::THEMES_MENU: {
       exitActivity();
-      enterNewActivity(new ReadingThemesActivity(renderer, mappedInput, epub ? epub->getCachePath() : std::string(),
+      enterNewActivity(new (std::nothrow) ReadingThemesActivity(renderer, mappedInput,
+                                                 epub ? epub->getCachePath() : std::string(),
                                                  [this](const bool changed) {
                                                    pendingSubactivityExit = true;
                                                    pendingMenuOpen = false;
@@ -1921,6 +1944,7 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       // pass (gate passed, then the heap fragmented further during layout).
       if (tryReserveAutoSilentRestart()) {
         LOG_DIAG("ERS", "render-oom: triggering silent restart to clear fragmentation");
+        persistProgressBeforeRestart();
         silentRestartToReader("reader-render-oom");  // does not return
       }
       LOG_DIAG("ERS", "render-oom: auto-restart budget exhausted, showing recovery screen");
@@ -1999,7 +2023,18 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
   progress_.observe({static_cast<int32_t>(currentSpineIndex), static_cast<int32_t>(section->currentPage),
                      static_cast<int32_t>(section->pageCount)},
                     now);
-  progress_.flush(now, force);
+  // Progress is persisted on lifecycle events only — book close / go home,
+  // sleep-lock, menu open, theme & render-mode change, KOReader sync — never on
+  // a plain page turn or chapter cross. observe() above keeps the tracker's
+  // position current in RAM so the next force-flush writes the latest page; the
+  // actual SD write happens only when a caller forces it. Real-book model: we
+  // save the page when you close the book, not on every turn. (Trade-off: a
+  // hard power loss between lifecycle events loses progress back to the last
+  // save; accepted deliberately. silentRestartToReader paths flush first so
+  // OOM-recovery reboots still land on the current page — see callers.)
+  if (force) {
+    progress_.flush(now, /*force=*/true);
+  }
 
   // Keep the home-screen percent cache fresh. setPercent is a no-op when
   // the value hasn't changed (no SD write), so this is cheap on every
@@ -2024,6 +2059,19 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
     RECENT_BOOKS.flushPercentIfDirty();
     ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
   }
+}
+
+void EpubReaderActivity::persistProgressBeforeRestart() {
+  // silentRestartToReader reboots via ESP.restart() WITHOUT flushing, and
+  // page-turn writes are now deferred to lifecycle events. Persist the last
+  // successfully rendered position synchronously so the post-reboot reader
+  // (which reads progress.bin on the way back in) lands on the current page
+  // instead of the last menu-open / book-open. Writes the tracker's
+  // lastObserved (set by the last good render's observe()); a no-op when
+  // nothing changed since the last save.
+  progress_.flush(millis(), /*force=*/true);
+  RECENT_BOOKS.flushPercentIfDirty();
+  ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
 }
 
 void EpubReaderActivity::addSessionPagesRead(const uint32_t amount) { APP_STATE.sessionPagesRead += amount; }
