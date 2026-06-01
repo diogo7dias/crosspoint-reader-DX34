@@ -44,6 +44,26 @@ Items already merged to `main` that should be called out in the release notes fo
   `persistProgressBeforeRestart()` first — recovery still lands on the current
   page. TXT/XTC readers still save per page turn (separate code path); convert
   for consistency in a follow-up if desired.
+- **Perf: main-loop input tick 10ms -> 5ms during active use.** Halves
+  worst-case button-detection latency. User-reported "much snappier" page
+  turns/navigation came from THIS, not the refresh. On-device serial profiling
+  (2026-06-01) of a steady page-turn burst measured the per-page budget:
+  input-react ~25ms, layout-compute ~75ms, glyph-paint+RAM-write ~140ms,
+  panel fast refresh 636ms (fixed), half refresh 1702ms, full 3699ms. The
+  636ms fast waveform is the SSD1677 built-in 0x1C and is byte-identical to
+  papyrix-reader and CrossInk on the same GDEQ0426T82/X4 panel -- no faster B/W
+  LUT exists to port (custom LUTs there are 4-level grayscale only; a B/W turbo
+  LUT was tried in 9950e786 and ghosted). Page-turn PANEL time is at parity
+  with the "faster" firmwares; the felt win is the input path.
+
+  Remaining safe snappiness lever (not yet done): ~75ms of layout compute runs
+  on every page turn (margins + status-bar geometry in
+  EpubReaderActivity::render before renderContents) even on cached pages. It
+  only changes on settings/orientation change, so it is cacheable -> another
+  ~75ms/page with no ghosting risk. Glyph paint (~140ms) is the other target
+  but needs render-path work. Render-ahead (pre-paint next page during the
+  636ms busy-wait) is RAM-blocked: needs a 2nd ~48KB framebuffer the heap can't
+  spare (same blocker as the shelved image full-page LUT).
 
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)

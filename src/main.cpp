@@ -1038,8 +1038,12 @@ void loop() {
       powerManager.setPowerSaving(true);  // Lower CPU frequency after extended inactivity
       delay(50);
     } else {
-      // Short delay to prevent tight loop while still being responsive
-      delay(10);
+      // Short delay to prevent tight loop while still being responsive. 2ms
+      // (was 10ms, then 5ms) further trims worst-case button-detection latency
+      // during active reading/navigation; cost is a hotter loop while the user
+      // is actively pressing, which the power-saving branch above still reins
+      // in after IDLE_POWER_SAVING_MS of inactivity.
+      delay(2);
     }
   }
 }
