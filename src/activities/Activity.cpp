@@ -3,15 +3,18 @@
 #include <HalPowerManager.h>
 #include <esp_heap_caps.h>
 
+#include "MemoryPolicy.h"
+
 // Declared in main.cpp. Drops the FCM cache synchronously to free
 // heap on the failing task. Safe to invoke from any task context.
 extern "C" void onHeapAllocFailed(size_t requested, uint32_t caps, const char* function_name);
 
 namespace {
-// 8 KB render-task stack + ~4 KB margin for trampoline / FreeRTOS bookkeeping.
-constexpr size_t kRenderTaskMinLargestBlock = 12 * 1024;
-
-bool hasRoomForRenderTask() { return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= kRenderTaskMinLargestBlock; }
+// Render-task spawn gate: xTaskCreate needs a contiguous 8 KB stack + ~4 KB
+// FreeRTOS bookkeeping. The threshold + metric now live in MemoryPolicy
+// (Op::SpawnRenderTask == largest-block >= 12 KB, byte-identical to the prior
+// kRenderTaskMinLargestBlock compare).
+bool hasRoomForRenderTask() { return crosspoint::mem::canAfford(crosspoint::mem::Op::SpawnRenderTask); }
 }  // namespace
 
 void Activity::renderTaskTrampoline(void* param) {

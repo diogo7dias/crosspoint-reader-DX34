@@ -1,6 +1,6 @@
 #pragma once
 
-#include <esp_heap_caps.h>
+#include "MemoryPolicy.h"
 
 /**
  * @file SectionPageCache.h
@@ -128,8 +128,9 @@ class SectionPageCache {
   //
   // If centerPage is out of bounds, cache is cleared.
   //
-  // When the largest contiguous heap block is below kPrefetchHeapFloor at
-  // window-build time, the prev/next slots are skipped and only the
+  // When the largest contiguous heap block is below the prefetch gate
+  // (MemoryPolicy Op::PrefetchNeighborPages) at window-build time, the
+  // prev/next slots are skipped and only the
   // current page is cached. This sacrifices fast page-turns on big books
   // (each turn re-reads from the section cache file, ~200-500 ms) in
   // exchange for ~6-10 KB of contiguous heap headroom -- enough to let
@@ -143,8 +144,10 @@ class SectionPageCache {
       return;
     }
 
-    constexpr size_t kPrefetchHeapFloor = 30 * 1024;
-    const bool prefetchOk = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) >= kPrefetchHeapFloor;
+    // Heap-pressured below Op::PrefetchNeighborPages (largest-block >= 30 KB,
+    // byte-identical to the prior kPrefetchHeapFloor compare): skip the
+    // prev/next slots, cache only the current page.
+    const bool prefetchOk = crosspoint::mem::canAfford(crosspoint::mem::Op::PrefetchNeighborPages);
 
     std::array<Entry, kWindow> next{};
     const int targets[kWindow] = {centerPage - 1, centerPage, centerPage + 1};
