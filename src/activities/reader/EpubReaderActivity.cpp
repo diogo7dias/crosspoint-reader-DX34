@@ -307,8 +307,17 @@ void EpubReaderActivity::onExit() {
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
-  APP_STATE.readerActivityLoadCount = 0;
-  APP_STATE.saveToFile();
+  if (openGiveUpExit_) {
+    // Open was abandoned (heap exhausted): leave readerActivityLoadCount > 0 so
+    // the next boot's forcedHome guard routes to the library instead of
+    // reopening this un-openable book. The count was made durable at boot
+    // (main.cpp), so a power-cycle escapes too. It clears on the next book that
+    // opens successfully (see render()).
+    LOG_DIAG("ERS", "onExit: preserving crash-loop guard after open give-up");
+  } else {
+    APP_STATE.readerActivityLoadCount = 0;
+    APP_STATE.saveToFile();
+  }
   clearPageCache();
   section.reset();
   epub.reset();
@@ -494,6 +503,32 @@ void EpubReaderActivity::showLayoutRecoveryScreen(LayoutRecoveryState newState) 
   y += kSectionGap;
   drawWrapped(y, tr(STR_LAYOUT_RETRY_HINT));
   renderer.displayBuffer();
+}
+
+void EpubReaderActivity::giveUpOpenToHome() {
+  // The silent-restart budget is spent and the heap is still too small to open
+  // this book — restarting cannot help (the book needs the same contiguous
+  // memory every time; this is exhaustion, not transient fragmentation). The
+  // old behaviour stranded the user on a "tap to retry" screen whose retry just
+  // OOMs again. Instead: keep the durable boot crash-loop guard set (onExit
+  // checks openGiveUpExit_ and skips its reset) so the NEXT boot force-routes to
+  // the library, then bail to home now with a short notice.
+  openGiveUpExit_ = true;
+  LOG_DIAG("ERS", "open give-up: heap exhausted, returning to library (guard preserved)");
+  renderer.clearScreen();
+  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  int y = 290;
+  renderer.drawCenteredText(UI_12_FONT_ID, y, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
+  y += lineHeight + 12;
+  renderer.drawCenteredText(UI_12_FONT_ID, y, tr(STR_LOADING_LIBRARY), true, EpdFontFamily::REGULAR);
+  // displayBuffer() blocks on the e-ink refresh (~600 ms), so the notice is
+  // physically visible before we leave the reader — no unsafe delay() needed.
+  renderer.displayBuffer();
+  // Defer the actual navigation: giveUpOpenToHome runs on the render task (via
+  // render()/ensureSectionLoaded), and tearing down this activity here would be
+  // a cross-task use-after-free. pendingGoHome is consumed by loop() on the main
+  // task next tick — the same deferral the rest of this class uses.
+  pendingGoHome = true;
 }
 
 std::shared_ptr<Page> EpubReaderActivity::getCachedPage(const int pageIndex) const {
@@ -1599,7 +1634,9 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     if (!heapHeadroomOkForLayout()) {
       clearPageCache();
       section.reset();
-      showLayoutRecoveryScreen(LayoutRecoveryState::AwaitingRetryNoRevert);
+      // Budget spent + heap still under the hard floor: futile to retry. Bail to
+      // the library instead of a retry-only screen.
+      giveUpOpenToHome();
       return false;
     }
 
@@ -1947,9 +1984,18 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
         persistProgressBeforeRestart();
         silentRestartToReader("reader-render-oom");  // does not return
       }
-      LOG_DIAG("ERS", "render-oom: auto-restart budget exhausted, showing recovery screen");
-      showLayoutRecoveryScreen(LayoutRecoveryState::AwaitingRetryNoRevert);
+      LOG_DIAG("ERS", "render-oom: auto-restart budget exhausted, returning to library");
+      giveUpOpenToHome();
       return;
+    }
+    // Render succeeded — the book is verifiably on screen. Clear the durable
+    // boot crash-loop guard (set in main.cpp before launch) so a later
+    // power-cycle resumes this book normally instead of force-routing home.
+    // Guarded by != 0 so it fires once per open and stays off the page-turn
+    // hot path's SD writes.
+    if (APP_STATE.readerActivityLoadCount != 0) {
+      APP_STATE.readerActivityLoadCount = 0;
+      APP_STATE.saveToFileSync();
     }
   }
   silentIndexNextChapterIfNeeded(viewportWidth, viewportHeight);

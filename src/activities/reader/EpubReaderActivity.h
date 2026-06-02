@@ -120,6 +120,12 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
     AwaitingRetryNoRevert,     // pre-flight gate fired; tap will run defrag and retry without revert
   };
   LayoutRecoveryState layoutRecoveryState_ = LayoutRecoveryState::None;
+  // Set when an open is abandoned after the silent-restart budget is spent
+  // (heap exhausted, not just fragmented). Tells onExit() to PRESERVE the
+  // durable boot crash-loop guard (readerActivityLoadCount) instead of
+  // resetting it, so the next boot force-routes to the library rather than
+  // reopening this same un-openable book. See giveUpOpenToHome().
+  bool openGiveUpExit_ = false;
   // Memoized status-bar title wrap results. Two sub-caches with distinct keys:
   //   - reserve: max TOC-title wrap height for the current spine (input to budget resolution).
   //   - titleLines: wrapped lines for the currently-displayed title (input to the paint step).
@@ -226,6 +232,11 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // two-line message + retry hint and set layoutRecoveryState_ so the
   // next button release re-enters layout.
   void showLayoutRecoveryScreen(LayoutRecoveryState newState);
+  // Terminal recovery for an open that cannot be satisfied: the heap is
+  // exhausted and the silent-restart budget is spent, so retrying is futile.
+  // Paint a brief low-memory notice, preserve the boot crash-loop guard, and
+  // bail to the library instead of stranding the user on a retry-only screen.
+  void giveUpOpenToHome();
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuBack(uint8_t orientation);
