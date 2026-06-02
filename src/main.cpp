@@ -852,7 +852,15 @@ void setup() {
     if (!goHome) {
       APP_STATE.openEpubPath = "";
       if (APP_STATE.readerActivityLoadCount < 255) APP_STATE.readerActivityLoadCount++;
-      APP_STATE.saveToFile();
+      // Crash-loop guard must be DURABLE before we launch the reader: a book
+      // whose open OOMs (reader-render-oom) restarts within setup() before the
+      // first loop() tick, so a debounced saveToFile() would never drain and
+      // the guard increment would be lost — a power-cycle then re-reads count 0
+      // and re-opens the same poisoned book forever. Flush synchronously so the
+      // very next boot sees count > 0 → forcedHome → library. (The render path
+      // clears this latch on the first successful render and preserves it on an
+      // OOM give-up; see EpubReaderActivity.)
+      APP_STATE.saveToFileSync();
     }
   }
 

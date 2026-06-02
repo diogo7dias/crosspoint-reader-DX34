@@ -64,6 +64,13 @@ class CrossPointState {
 
   bool saveToFile() const;
 
+  // Synchronous variant of saveToFile(): writes state.json on the calling
+  // thread immediately instead of marking dirty for a debounced flush. Use at
+  // crash-safety boundaries where the value MUST survive an imminent restart or
+  // power-cycle (e.g. the boot crash-loop guard, which is set microseconds
+  // before a book-open that may OOM-restart before the debounce ever drains).
+  bool saveToFileSync() const;
+
   bool loadFromFile();
 
  private:

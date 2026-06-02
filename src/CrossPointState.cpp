@@ -25,6 +25,14 @@ bool CrossPointState::saveToFile() const {
   return true;
 }
 
+bool CrossPointState::saveToFileSync() const {
+  Storage.mkdir(Paths::kDataDir);
+  // flushNow writes unconditionally on this thread and clears the dirty flag,
+  // so the value is durable on SD before we return — no dependence on the
+  // main-loop tickPersist draining the debounce queue.
+  return crosspoint::persist::appStateStore().flushNow();
+}
+
 bool CrossPointState::loadFromFile() {
   // Route through PersistentStore — IFileIO.safeRead already handles the
   // real → .bak → .tmp fallback chain.
