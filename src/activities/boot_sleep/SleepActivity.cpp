@@ -12,6 +12,8 @@
 
 #include <algorithm>
 
+#include "MemoryPolicy.h"
+
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Paths.h"
@@ -27,21 +29,6 @@
 
 namespace {
 
-// Largest contiguous heap block (bytes) required to safely run the V2
-// playlist reconcile / reshuffle path. Below this we bypass the playlist
-// entirely and stream-pick a single file by directory index — no big
-// std::string buffer rebuild, no vector<SleepBmpEntry> trim listing.
-//
-// Sized to cover the worst path: reconcile() → listSleepBmpsWithMtime
-// (~18 KB vector for ~564 entries) → trimToCap which builds three more
-// transient vectors (favs, nonFav, surviving) of similar size before
-// std::move() collapses them. Peak alive is ~4× the per-vector size +
-// std::string heap nodes, and surviving.reserve() throws bad_alloc when
-// the residual largest contiguous block can't fit the new buffer. 64 KB
-// gives that allocation enough room even when the first three vectors
-// have already fragmented the heap. Observed crash at 47 KB largest —
-// previous 40 KB threshold was below the trim-peak demand.
-constexpr size_t kSleepLargestBlockSafeBytes = 64 * 1024;
 
 // Direct fragment-safe wallpaper pick. Uses ISleepFs streaming primitives
 // (countSleepBmps + nthSleepBmp) — both O(1) heap beyond the returned
@@ -130,10 +117,12 @@ void SleepActivity::onEnter() {
   // If the heap is already pressured when sleep is entered, fall back to a
   // blank sleep screen — render fragments + bitmap parsing on top of a tight
   // heap is the documented crash signature.
-  constexpr uint32_t kMinFreeHeapForRichSleep = 30 * 1024;
-  const uint32_t freeHeap = ESP.getFreeHeap();
-  if (freeHeap < kMinFreeHeapForRichSleep) {
-    LOG_DBG("SLP", "Free heap %u < %u, suppressing wallpaper/cover render", freeHeap, kMinFreeHeapForRichSleep);
+  // Total-free below the rich-sleep gate (MemoryPolicy Op::RenderRichSleepScreen,
+  // total-free >= 30 KB): render fragments + bitmap parse on a tight heap is the
+  // documented crash signature, so fall back to a blank screen. (ESP.getFreeHeap
+  // and heap_caps_get_free_size(MALLOC_CAP_8BIT) are the same region on the C3.)
+  if (!crosspoint::mem::canAfford(crosspoint::mem::Op::RenderRichSleepScreen)) {
+    LOG_DBG("SLP", "Heap below rich-sleep gate, suppressing wallpaper/cover render");
     return renderBlankSleepScreen();
   }
 
@@ -200,17 +189,15 @@ void SleepActivity::renderCustomSleepScreen() const {
     }
   }
 
-  // Heap-fragmentation gate: V2 reconcile/reshuffle rebuild a ~15 KB
-  // contiguous std::string with a transient doubling peak that has been
-  // observed to throw bad_alloc when largest free block is around 32 KB
-  // (post-WebServer fragmented heap). Skip playlist work entirely below
-  // the safe threshold and pick a wallpaper directly from /sleep via
-  // streaming primitives — the user still sees an image, no crash.
-  const size_t largestFreeBlock = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
-  const bool useDirectPick = largestFreeBlock < kSleepLargestBlockSafeBytes;
+  // Below the sleep-playlist gate (MemoryPolicy Op::ScanSleepPlaylist,
+  // largest-block >= 64 KB): the V2 reconcile/reshuffle trim peak has been
+  // observed to throw bad_alloc on a fragmented heap, so skip playlist work
+  // entirely and pick a wallpaper directly from /sleep via streaming
+  // primitives — the user still sees an image, no crash. (DEFAULT vs 8BIT
+  // probe is the same heap region on the C3.)
+  const bool useDirectPick = !crosspoint::mem::canAfford(crosspoint::mem::Op::ScanSleepPlaylist);
   if (useDirectPick) {
-    LOG_DBG("SLP", "Largest free %u < %u, using direct sleep pick", static_cast<unsigned>(largestFreeBlock),
-            static_cast<unsigned>(kSleepLargestBlockSafeBytes));
+    LOG_DBG("SLP", "Heap below sleep-playlist gate, using direct sleep pick");
   }
 
   // Retry advance on parse/open failure so a handful of corrupt BMPs don't

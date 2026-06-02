@@ -51,6 +51,11 @@ enum class Op : uint8_t {
   RebuildSectionFloor,    // hard floor: below = no point    (largest >= 20 KB)
   PrefetchNeighborPages,  // SectionPageCache prev/next      (largest >= 30 KB)
   RenderRichSleepScreen,  // wallpaper/cover bitmap parse    (TOTAL  >= 30 KB)
+  // Sleep V2 playlist reconcile/trim peak. listSleepBmpsWithMtime builds an
+  // ~18 KB vector, then trimToCap holds ~4× that (favs + nonFav + surviving)
+  // before std::move collapses them; surviving.reserve() threw bad_alloc with
+  // the residual largest block at ~47 KB. 64 KB clears the trim peak. Below it,
+  // callers bypass the playlist and stream-pick a file by directory index.
   ScanSleepPlaylist,      // playlist trim peak              (largest >= 64 KB)
 };
 

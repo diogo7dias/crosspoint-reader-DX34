@@ -11,6 +11,7 @@
 #include "../persist/PersistManager.h"
 #include "../persist/SdFatFileIO.h"
 #include "../util/FavoriteImage.h"
+#include "MemoryPolicy.h"
 #include "SdFatSleepFs.h"
 #include "WallpaperPlaylistV2.h"
 
@@ -88,22 +89,6 @@ namespace {
 // RFC #156 lands, both copies coexist.
 constexpr int kNextSleepFileRetries = 5;
 
-// Heap-fragmentation gate. Mirrors kSleepLargestBlockSafeBytes in
-// SleepActivity; copy lives here so the facade owns the decision when
-// callers migrate. C2 of RFC #156 replaces this with an injected lambda
-// so host tests can simulate fragmentation; today the host build always
-// reports unlimited heap (preserves existing test invariants).
-constexpr size_t kNextSleepFileHeapGateBytes = 64 * 1024;
-
-size_t largestFreeBlockBytes() {
-  // Route through the playlist's injected probe so production + host tests
-  // see the same value. ensureConfigured() (called by nextSleepFile before
-  // this is invoked) wires the production lambda; tests inject their own
-  // via Configure(). nullptr → assume unlimited (matches pre-C2 host).
-  const auto& fn = v2::WallpaperPlaylistV2::instance().deps().largestFreeBlockFn;
-  return fn ? fn() : SIZE_MAX;
-}
-
 // Streaming fragment-safe pick — direct mirror of SleepActivity's
 // pickSleepFileDirect helper. Touches O(1) heap beyond the returned
 // basename. Empty if /sleep is empty or fs not wired.
@@ -149,7 +134,11 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
     // where a failed paused render falls into the rotation loop.
   }
 
-  const bool useDirectPick = largestFreeBlockBytes() < kNextSleepFileHeapGateBytes;
+  // Below the sleep-playlist gate (MemoryPolicy Op::ScanSleepPlaylist,
+  // largest-block >= 64 KB): bypass the playlist trim peak and stream-pick a
+  // file directly. (The former facade copy of this 64 KB constant, duplicated
+  // with SleepActivity, is gone — one threshold lives in the gate table now.)
+  const bool useDirectPick = !crosspoint::mem::canAfford(crosspoint::mem::Op::ScanSleepPlaylist);
 
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
     std::string basename;
