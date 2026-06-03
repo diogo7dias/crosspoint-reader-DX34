@@ -1294,6 +1294,7 @@ void MyLibraryActivity::loopBrowse() {
     }
 
     if (isLoadMoreRow(selectorIndex)) {
+      StatusPopup::showBlocking(renderer, tr(STR_LOADING));  // SD scan of the next batch can take seconds
       loadMoreFiles();
       requestUpdate();
       return;

@@ -2663,6 +2663,11 @@ void EpubReaderActivity::navigateToHref(const char* href, const bool savePositio
     return;
   }
 
+  // section.reset() below forces a chapter relayout on the next render — show
+  // the same "Loading…" feedback every other reader navigation (chapter skip,
+  // percent jump, TOC jump) shows, so footnote follow/return is never silent.
+  TransitionFeedback::show(renderer, tr(STR_LOADING));
+
   {
     RenderLock lock(*this);
     pendingAnchor = std::move(anchor);
