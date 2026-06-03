@@ -286,14 +286,6 @@ void SleepActivity::renderCustomSleepScreen() const {
 
 bool SleepActivity::randomizeSleepImagePlaylist() { return crosspoint::sleep::wallpaper::reshuffle(); }
 
-size_t SleepActivity::cachedSleepFavoriteCount() {
-  // V2 tracks cap-blocked / favorites-overflow internally via the
-  // onFavoritesCapBlocked deps slot, not as a queryable count. Callers
-  // that surface a UI hint should consume the eventual Notice signal
-  // (RFC #145 follow-up) instead of polling.
-  return 0;
-}
-
 void SleepActivity::trimSleepFolderToLimit(GfxRenderer* popupRenderer) {
   (void)popupRenderer;  // No caller passes a non-null renderer today.
   // Only mark dirty. Calling reconcile() inline here (e.g. from

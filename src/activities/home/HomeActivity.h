@@ -40,6 +40,7 @@ class HomeActivity final : public ActivityWithSubactivity {
   int getRecentSlotCount() const;
   int getMenuItemCount() const;
   void refreshSleepFavoriteWarning();
+  void maybeShowWallpaperPauseToast();
   void loadRecentBooks(int maxBooks);
 
  public:

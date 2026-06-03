@@ -27,6 +27,7 @@
 #include "util/DrawUtils.h"
 #include "util/FavoriteImage.h"
 #include "util/StringUtils.h"
+#include "util/TransitionFeedback.h"
 
 namespace {
 constexpr const char* seeMoreLabel = "See all...";
@@ -77,10 +78,26 @@ int HomeActivity::getMenuItemCount() const {
 int HomeActivity::getRecentSlotCount() const { return std::max(1, static_cast<int>(recentBooks.size())); }
 
 void HomeActivity::refreshSleepFavoriteWarning() {
-  // Use the count cached by trimSleepFolderToLimit() (called in onGoHome)
-  // instead of re-scanning the /sleep directory.
-  protectedSleepFavoriteCount = SleepActivity::cachedSleepFavoriteCount();
-  sleepFavoritesFull = protectedSleepFavoriteCount >= CrossPointState::SLEEP_FAVORITES_MAX;
+  // RFC #145: the sleep reconcile (at sleep entry) records whether favorites
+  // alone saturate the /sleep cap into a persistent flag. Read that here
+  // instead of rescanning /sleep — the boolean is authoritative and clears
+  // automatically on the next reconcile once favorites drop below the cap.
+  sleepFavoritesFull = APP_STATE.sleepFavoritesCapReached;
+  protectedSleepFavoriteCount = sleepFavoritesFull ? CrossPointState::SLEEP_FAVORITES_MAX : 0;
+}
+
+void HomeActivity::maybeShowWallpaperPauseToast() {
+  // RFC #145: a sleep reconcile may have demoted overflow wallpapers to
+  // /sleep pause/ while the device slept. Surface that once on the next home
+  // entry, then clear the persisted count so the toast does not re-fire.
+  const uint16_t moved = APP_STATE.pendingSleepWallpapersMovedToPause;
+  if (moved == 0) return;
+  APP_STATE.pendingSleepWallpapersMovedToPause = 0;
+  APP_STATE.saveToFile();
+
+  std::string msg = std::to_string(moved);
+  msg += (moved == 1) ? " wallpaper moved to /sleep pause/" : " wallpapers moved to /sleep pause/";
+  TransitionFeedback::show(renderer, msg.c_str());
 }
 
 void HomeActivity::loadRecentBooks(int maxBooks) {
@@ -197,6 +214,11 @@ void HomeActivity::onEnter() {
   // render task takes the renderingMutex and starts painting; the display
   // hardware refresh that follows yields the CPU back to main on its own.
   requestUpdateAndWait();
+
+  // After the home frame is on screen, surface any wallpaper-overflow toast
+  // recorded during the last sleep cycle. Drawn as a popup over the rendered
+  // home; cleared on the next user-driven repaint.
+  maybeShowWallpaperPauseToast();
 }
 
 void HomeActivity::onExit() { Activity::onExit(); }
