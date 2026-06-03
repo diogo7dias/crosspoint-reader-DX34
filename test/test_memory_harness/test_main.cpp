@@ -84,8 +84,6 @@ WallpaperPlaylistV2::Deps makeDeps(FakeSleepFs* fs, InMemoryFileIO* io,
   deps.randomFn = [](long n) { return n > 0 ? 0L : 0L; };
   deps.isFavorite = [](const std::string&) { return false; };
   deps.onPathRenamed = [](const std::string&, const std::string&) {};
-  deps.onTrimMoved = [](uint16_t) {};
-  deps.onFavoritesCapBlocked = []() {};
   deps.largestFreeBlockFn = []() { return FakeHeap::largestFreeBlock(); };
   return deps;
 }
