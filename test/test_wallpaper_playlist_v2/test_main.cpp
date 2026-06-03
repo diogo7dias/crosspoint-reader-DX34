@@ -208,6 +208,26 @@ void test_trim_pushes_oldest_mtime_non_favorites() {
   TEST_ASSERT_EQUAL_STRING("/sleep pause/old_0.bmp", fx.fs.renames[0].second.c_str());
 }
 
+// Bug A (RFC #156): a fragmented heap must make trimToCap bail rather than
+// allocate its 3 transient partition vectors and risk a bad_alloc abort. With
+// a tiny largestFreeBlock, an over-cap reconcile renames nothing this cycle.
+void test_trim_bails_on_fragmented_heap() {
+  Fixture fx;
+  for (int i = 0; i < 502; ++i) fx.fs.seed(std::string("f_") + std::to_string(i) + ".bmp", 100 + i);
+  fx.isFavoriteFn = [](const std::string&) { return false; };
+  fx.largestFreeBlockFn = []() -> size_t { return 1024; };  // simulate severe fragmentation
+
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+
+  const auto notice = wp.takeNotice();
+  TEST_ASSERT_EQUAL(0u, notice.movedToPause);
+  TEST_ASSERT_EQUAL(0u, fx.fs.renames.size());  // trim bailed, nothing demoted
+}
+
 void test_favorites_full_blocks_new_uploads() {
   Fixture fx;
   for (int i = 0; i < 500; ++i) fx.fs.seed(std::string("fav_") + std::to_string(i) + ".bmp", 100);
@@ -383,6 +403,7 @@ int main(int, char**) {
   RUN_TEST(test_advance_persists_cursor_across_simulated_reboot);
   RUN_TEST(test_new_files_spliced_at_front_newest_mtime_first);
   RUN_TEST(test_trim_pushes_oldest_mtime_non_favorites);
+  RUN_TEST(test_trim_bails_on_fragmented_heap);
   RUN_TEST(test_favorites_full_blocks_new_uploads);
   RUN_TEST(test_notice_under_cap_is_clean_and_drains_once);
   RUN_TEST(test_reshuffle_clears_buffer_when_sleep_empty);

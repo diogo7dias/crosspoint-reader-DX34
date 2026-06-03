@@ -198,6 +198,18 @@ uint16_t WallpaperPlaylistV2::trimToCap(std::vector<SleepBmpEntry>& entries, boo
   favoritesCapBlocked = false;
   if (entries.size() <= kSleepFolderCap) return 0;
 
+  // Bug A (RFC #156): trim partitions `entries` into up to three transient
+  // vectors (nonFav + favs + surviving), whose backbones peak at ~3x the entry
+  // vector. Production reconcile already runs under the sleep-playlist heap
+  // gate, but probe here too so the module is self-safe if a future caller
+  // invokes it ungated — a bad_alloc would abort the -fno-exceptions build.
+  // Bail (no trim this cycle) when the heap is too tight; the next reconcile
+  // retries once it recovers, and the over-cap files simply wait in /sleep.
+  const size_t transientPeak = entries.size() * sizeof(SleepBmpEntry) * 3;
+  if (!heapHasContiguous(transientPeak)) {
+    return 0;
+  }
+
   std::vector<SleepBmpEntry> nonFav;
   nonFav.reserve(entries.size());
   std::vector<SleepBmpEntry> favs;
