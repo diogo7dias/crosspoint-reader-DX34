@@ -157,7 +157,7 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
   }
   currentTextBlock.reset(new (std::nothrow) crosspoint::layout::LayoutEngine(
       renderer, fontId, extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle, wordSpacingPercent,
-      firstLineIndentMode, usePublisherStyles, &layoutArena_));
+      firstLineIndentMode, usePublisherStyles, &layoutArena_, degradePlan_));
   if (!currentTextBlock) {
     LOG_DIAG("EHP", "OOM new LayoutEngine free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
@@ -247,7 +247,10 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         }
       }
 
-      if (!src.empty()) {
+      // RFC #164: degradePlan_.images is the SkipImages lever (Full keeps it
+      // true — unchanged). Under heap pressure the section is laid out without
+      // image blocks rather than OOM-restarting.
+      if (!src.empty() && self->degradePlan_.images) {
         LOG_DBG("EHP", "Found image: src=%s", src.c_str());
 
         {

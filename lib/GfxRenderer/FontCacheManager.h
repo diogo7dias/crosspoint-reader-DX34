@@ -31,7 +31,9 @@ class FontCacheManager {
    public:
     explicit PrewarmScope(FontCacheManager& manager);
     ~PrewarmScope();
-    void endScanAndPrewarm();
+    // requestedStyleMask intersects the scanned-style set (RFC #164 step 5);
+    // the default 0x0F is the dormant Full behaviour (warm every used style).
+    void endScanAndPrewarm(uint8_t requestedStyleMask = 0x0F);
     PrewarmScope(PrewarmScope&& other) noexcept;
     PrewarmScope& operator=(PrewarmScope&&) = delete;
     PrewarmScope(const PrewarmScope&) = delete;

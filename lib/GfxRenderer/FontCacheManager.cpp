@@ -63,7 +63,7 @@ FontCacheManager::PrewarmScope::PrewarmScope(FontCacheManager& manager) : manage
   manager_->scanFontId_ = -1;
 }
 
-void FontCacheManager::PrewarmScope::endScanAndPrewarm() {
+void FontCacheManager::PrewarmScope::endScanAndPrewarm(uint8_t requestedStyleMask) {
   manager_->scanMode_ = ScanMode::None;
   if (manager_->scanText_.empty()) return;
 
@@ -73,6 +73,13 @@ void FontCacheManager::PrewarmScope::endScanAndPrewarm() {
     if (manager_->scanStyleCounts_[i] > 0) styleMask |= (1 << i);
   }
   if (styleMask == 0) styleMask = 1;  // default to regular
+
+  // RFC #164 step 5: intersect with the caller's requested mask (a degraded
+  // render level warms fewer styles to save heap). The default 0x0F leaves the
+  // scanned set untouched — the dormant Full behaviour. Never warm a style the
+  // page never used, and always keep at least regular.
+  styleMask &= (requestedStyleMask & 0x0F);
+  if (styleMask == 0) styleMask = 1;
 
   manager_->prewarmCache(manager_->scanFontId_, manager_->scanText_.c_str(), styleMask);
 

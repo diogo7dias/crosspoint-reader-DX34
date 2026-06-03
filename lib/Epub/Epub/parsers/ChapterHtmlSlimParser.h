@@ -38,6 +38,9 @@ struct ChapterParseConfig {
   bool usePublisherStyles = true;
   std::string contentBase;
   std::string imageBasePath;
+  // RFC #164: the layout/render degradation plan for this section. Default Full
+  // (everything on) — the activity dials it down from the heap gate in step 7.
+  crosspoint::layout::DegradePlan degradePlan;
 };
 
 class ChapterHtmlSlimParser {
@@ -84,6 +87,7 @@ class ChapterHtmlSlimParser {
   uint8_t wordSpacingPercent;
   uint8_t firstLineIndentMode;
   bool usePublisherStyles;
+  crosspoint::layout::DegradePlan degradePlan_;  // RFC #164: section degradation plan (Full until step 7)
   const CssParser* cssParser;
   std::string contentBase;
   std::string imageBasePath;
@@ -135,6 +139,7 @@ class ChapterHtmlSlimParser {
         wordSpacingPercent(config.wordSpacingPercent),
         firstLineIndentMode(config.firstLineIndentMode),
         usePublisherStyles(config.usePublisherStyles),
+        degradePlan_(config.degradePlan),
         completePageFn(completePageFn),
         anchorPageFn(anchorPageFn),
         progressFn(progressFn),
