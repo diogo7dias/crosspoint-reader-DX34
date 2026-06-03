@@ -16,6 +16,7 @@
 #include <Page.h>
 #include <Print.h>
 #include <ZipFile.h>
+#include <page/PageBuilder.h>
 #include <parsers/ChapterHtmlSlimParser.h>
 #include <parsers/FootnotePlacer.h>
 #include <parsers/StyleResolver.h>
@@ -677,8 +678,73 @@ void test_arena_byte_overflow_migrates() {
   assertLineParity(noArena, withArena);
 }
 
+// — PageBuilder: page-assembly extracted from the parser (crash-hardening:
+//   explicit PageStatus replaces the sticky parseFailed bool) —
+namespace {
+std::shared_ptr<TextBlock> makePageLine() {
+  std::vector<std::string> w{"x"};
+  std::vector<int16_t> xp{0};
+  std::vector<EpdFontFamily::Style> st{EpdFontFamily::REGULAR};
+  return std::make_shared<TextBlock>(w, xp, st, BlockStyle());
+}
+crosspoint::page::PageConfig pbCfg() {
+  crosspoint::page::PageConfig c;
+  c.viewportWidth = 600;
+  c.viewportHeight = 800;
+  c.baseLineHeight = 40;  // default BlockStyle resolveLineHeight(40) == 40 -> 20 lines/page
+  c.minDensePageLines = 6;
+  c.densePageThresholdPercent = 80;
+  return c;
+}
+}  // namespace
+
+// 45 lines at 40px into an 800px viewport => 20+20 emitted during feed, 5 on finish.
+void test_pagebuilder_page_boundaries() {
+  using namespace crosspoint::page;
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  FootnotePlacer fp;
+  int emitted = 0;
+  PageBuilder pb(
+      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  for (int i = 0; i < 45; ++i) {
+    TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));
+  }
+  TEST_ASSERT_EQUAL_UINT(2, pb.completedPageCount());  // two full pages emitted during the feed
+  pb.finish();                                         // trailing 5-line page
+  TEST_ASSERT_EQUAL_UINT(3, pb.completedPageCount());
+  TEST_ASSERT_EQUAL_INT(3, emitted);
+}
+
+// The crash-hardening invariant: a heap-probe failure mid-page returns Oom
+// explicitly (was a silently-polled sticky flag) and emits nothing.
+void test_pagebuilder_oom_probe_is_explicit() {
+  using namespace crosspoint::page;
+  FootnotePlacer fp;
+  int emitted = 0;
+  PageBuilder pb(
+      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  crosspoint::heap::setLargestFreeBlockOverride(8);  // too small for the PageLine probe
+  const PageStatus s = pb.addLine(makePageLine());
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  TEST_ASSERT_TRUE(s == PageStatus::Oom);
+  TEST_ASSERT_EQUAL_INT(0, emitted);
+}
+
+// A null line (upstream LayoutEngine OOM) returns Oom, not a silent skip.
+void test_pagebuilder_null_line_is_oom() {
+  using namespace crosspoint::page;
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  FootnotePlacer fp;
+  PageBuilder pb(
+      pbCfg(), fp, [](std::unique_ptr<Page>) {}, [](const std::string&, uint16_t) {});
+  TEST_ASSERT_TRUE(pb.addLine(nullptr) == PageStatus::Oom);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
+  RUN_TEST(test_pagebuilder_page_boundaries);
+  RUN_TEST(test_pagebuilder_oom_probe_is_explicit);
+  RUN_TEST(test_pagebuilder_null_line_is_oom);
   RUN_TEST(test_dp_scratch_arena_parity_and_bounded);
   RUN_TEST(test_dp_scratch_arena_overflow_falls_back);
   RUN_TEST(test_layout_parity_plain_wrap);
