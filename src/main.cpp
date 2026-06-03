@@ -364,14 +364,10 @@ static void trimSleepFolderIfDirty() { crosspoint::sleep::wallpaper::reconcileIf
 // loop has not yet started draining pending transitions).
 static void openReaderInline(const std::string& initialEpubPath) {
   const std::string bookPath = initialEpubPath;  // Copy before exitActivity() invalidates the reference
-  // Explicit reset ensures the "Opening book..." toast starts a fresh
-  // stack with a fresh sShownAtMs timestamp — otherwise leftover state
-  // from a prior StatusPopup or unclosed toast would leave sActive==true,
-  // causing show() to skip its first-in-stack timer reset and
-  // maybeShowStillWorkingToast() to fire the "Long chapter..." popup
-  // instantly against a stale timestamp.
-  TransitionFeedback::resetStacking();
-  TransitionFeedback::show(renderer, tr(STR_OPENING_BOOK));
+  // The "Opening book..." toast (with its resetStacking) is now drawn by
+  // ReaderActivity::openBookPath — the single funnel for every open path,
+  // including the in-reader recent-switcher that bypasses this function. Drawing
+  // it here too would just FAST_REFRESH the same popup twice.
   exitActivity();
   enterNewActivity(new ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
 }

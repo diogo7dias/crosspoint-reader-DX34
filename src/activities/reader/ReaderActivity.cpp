@@ -173,10 +173,15 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   // not stale settings from whatever book was open previously.
   SETTINGS.loadFromFile();
 
-  // The "Opening book..." toast was already drawn by openReaderInline() in
-  // main.cpp before this activity was entered — don't redraw it here or it
-  // stacks twice. The still-working threshold timer starts automatically
-  // from the first toast's draw time, so no explicit start call is needed.
+  // Draw the "Opening book..." toast here — this is the single funnel every
+  // open path passes through: boot-resume and library opens (which arrive via
+  // main.cpp openReaderInline -> ReaderActivity::onEnter) AND in-reader opens
+  // (the recent-switcher's onOpenBook, which calls this directly and previously
+  // showed nothing). resetStacking() first so the still-working threshold timer
+  // starts from a fresh timestamp; openReaderInline no longer draws it, so this
+  // never double-stacks.
+  TransitionFeedback::resetStacking();
+  TransitionFeedback::show(renderer, tr(STR_OPENING_BOOK));
   currentBookPath = bookPath;
 
   if (isXtcFile(bookPath)) {
