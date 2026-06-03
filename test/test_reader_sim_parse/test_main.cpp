@@ -366,7 +366,7 @@ void test_footnote_on_new_block_resets_count_keeps_pending() {
 // counts. `arena` (nullable) backs the DP scratch when present.
 static std::vector<size_t> layoutLineWordCounts(int nWords, crosspoint::layout::LayoutArena* arena) {
   ParsedText pt(/*extraSpacing=*/false, /*hyphenation=*/false, BlockStyle(), /*wordSpacing=*/1,
-                /*firstLineIndentMode=*/0, /*usePublisherStyles=*/true);
+                /*firstLineIndentMode=*/0, /*usePublisherStyles=*/true, arena);
   for (int i = 0; i < nWords; ++i) pt.addWord("word", EpdFontFamily::REGULAR, false, false);
   std::vector<size_t> counts;
   pt.layoutAndExtractLines(
@@ -374,7 +374,7 @@ static std::vector<size_t> layoutLineWordCounts(int nWords, crosspoint::layout::
       [&counts](std::shared_ptr<TextBlock> tb) {
         if (tb) counts.push_back(tb->wordCount());
       },
-      /*includeLastLine=*/true, arena);
+      /*includeLastLine=*/true);
   return counts;
 }
 
@@ -444,7 +444,7 @@ struct CapturedLine {
 std::vector<CapturedLine> captureParagraph(const std::vector<WordSpec>& words, bool hyphenation, const BlockStyle& bs,
                                            uint8_t wordSpacing, uint8_t indentMode, bool usePublisher, uint16_t vw,
                                            crosspoint::layout::LayoutArena* arena) {
-  ParsedText pt(/*extraSpacing=*/false, hyphenation, bs, wordSpacing, indentMode, usePublisher);
+  ParsedText pt(/*extraSpacing=*/false, hyphenation, bs, wordSpacing, indentMode, usePublisher, arena);
   for (const auto& w : words) pt.addWord(w.text, w.style, /*underline=*/false, w.attach);
   std::vector<CapturedLine> out;
   pt.layoutAndExtractLines(
@@ -456,7 +456,7 @@ std::vector<CapturedLine> captureParagraph(const std::vector<WordSpec>& words, b
         }
         out.push_back(CapturedLine{tb->getWords(), tb->getWordXpos(), tb->getWordStyles(), false});
       },
-      /*includeLastLine=*/true, arena);
+      /*includeLastLine=*/true);
   return out;
 }
 
@@ -558,6 +558,125 @@ void test_layout_parity_mixed_styles() {
   expectArenaParity(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600);
 }
 
+// — bounded-peak / overflow / drain (RFC #164 step 4) —
+
+// Simulate the parser's >750-word drain: accumulate words, flush all-but-last
+// line whenever the buffer passes `drainThreshold`, then a final flush. Mirrors
+// ChapterHtmlSlimParser's flush loop so consumeArenaPrefix's multi-flush
+// lifecycle is exercised.
+namespace {
+std::vector<CapturedLine> captureWithDrain(const std::vector<WordSpec>& words, int drainThreshold, const BlockStyle& bs,
+                                           uint16_t vw, crosspoint::layout::LayoutArena* arena) {
+  ParsedText pt(/*extraSpacing=*/false, /*hyphenation=*/false, bs, /*wordSpacing=*/1, /*indentMode=*/0,
+                /*usePublisher=*/true, arena);
+  std::vector<CapturedLine> out;
+  auto emit = [&out](std::shared_ptr<TextBlock> tb) {
+    if (!tb) {
+      out.push_back(CapturedLine{{}, {}, {}, true});
+      return;
+    }
+    out.push_back(CapturedLine{tb->getWords(), tb->getWordXpos(), tb->getWordStyles(), false});
+  };
+  for (const auto& w : words) {
+    pt.addWord(w.text, w.style, /*underline=*/false, w.attach);
+    if (static_cast<int>(pt.size()) > drainThreshold) {
+      pt.layoutAndExtractLines(g_renderer, 0, vw, emit, /*includeLastLine=*/false);
+    }
+  }
+  pt.layoutAndExtractLines(g_renderer, 0, vw, emit, /*includeLastLine=*/true);
+  return out;
+}
+}  // namespace
+
+// The arena drain lifecycle (consumeArenaPrefix across many flushes) produces
+// the exact same lines as the std::vector path's erase-prefix lifecycle.
+void test_arena_drain_lifecycle_parity() {
+  const std::vector<WordSpec> w = repeatWords("paragraph", 300);
+  const std::vector<CapturedLine> noArena = captureWithDrain(w, 50, styleWith(CssTextAlign::Justify), 600, nullptr);
+  crosspoint::layout::LayoutArena arena = crosspoint::layout::LayoutArena::create(16 * 1024);
+  TEST_ASSERT_TRUE(arena.ok());
+  const std::vector<CapturedLine> withArena = captureWithDrain(w, 50, styleWith(CssTextAlign::Justify), 600, &arena);
+  assertLineParity(noArena, withArena);
+}
+
+// With the drain bounding the live buffer, the arena peak for a long paragraph
+// stays ~equal to a short one and within capacity — the invariant the legacy
+// vector path provably could not assert (its peak scaled with paragraph length).
+void test_arena_bounded_peak() {
+  crosspoint::layout::LayoutArena small = crosspoint::layout::LayoutArena::create(16 * 1024);
+  captureWithDrain(repeatWords("paragraph", 200), 50, styleWith(CssTextAlign::Justify), 600, &small);
+  const size_t peakShort = small.highWater();
+
+  crosspoint::layout::LayoutArena large = crosspoint::layout::LayoutArena::create(16 * 1024);
+  captureWithDrain(repeatWords("paragraph", 1500), 50, styleWith(CssTextAlign::Justify), 600, &large);
+  const size_t peakLong = large.highWater();
+
+  // The word buffer was arena-resident (the reserved handle array dominates the
+  // peak), and the 7.5x-longer paragraph did not grow the peak materially.
+  TEST_ASSERT_GREATER_THAN_UINT(0, peakShort);
+  TEST_ASSERT_LESS_OR_EQUAL_UINT(small.capacity(), peakShort);
+  TEST_ASSERT_LESS_OR_EQUAL_UINT(large.capacity(), peakLong);
+  // Within one DP-scratch slack of each other — bounded, not length-scaled.
+  const size_t slack = 2 * 1024;
+  TEST_ASSERT_TRUE(peakLong <= peakShort + slack && peakShort <= peakLong + slack);
+}
+
+// The arena is reused across blocks: the parser swaps engines via
+// reset(new ...) — constructing the next block's ParsedText BEFORE destroying
+// the current one. The rewind checkpoint must be captured lazily (first
+// addWord), not at construction, or each block's region leaks and the peak
+// creeps until the arena exhausts and silently migrates. Drive 30 blocks
+// through one arena in that exact order and assert the peak stays flat.
+void test_arena_reused_across_blocks_bounded() {
+  crosspoint::layout::LayoutArena arena = crosspoint::layout::LayoutArena::create(16 * 1024);
+  TEST_ASSERT_TRUE(arena.ok());
+  std::unique_ptr<ParsedText> cur;
+  size_t peakAfterFirst = 0;
+  for (int b = 0; b < 30; ++b) {
+    cur.reset(new ParsedText(/*extraSpacing=*/false, /*hyphenation=*/false, BlockStyle(), /*wordSpacing=*/1,
+                             /*indentMode=*/0, /*usePublisher=*/true, &arena));  // construct-before-destroy
+    for (int i = 0; i < 40; ++i) cur->addWord("word", EpdFontFamily::REGULAR, false, false);
+    cur->layoutAndExtractLines(
+        g_renderer, 0, 600, [](std::shared_ptr<TextBlock>) {}, /*includeLastLine=*/true);
+    if (b == 0) peakAfterFirst = arena.highWater();
+  }
+  cur.reset();
+  TEST_ASSERT_GREATER_THAN_UINT(0, peakAfterFirst);
+  TEST_ASSERT_LESS_OR_EQUAL_UINT(arena.capacity(), arena.highWater());
+  // Flat across 30 blocks — region reclaimed each time, not creeping.
+  TEST_ASSERT_LESS_OR_EQUAL_UINT(peakAfterFirst + 1024, arena.highWater());
+}
+
+// An arena too small to host the handle array migrates to the vector path on
+// the first addWord and lays out byte-identically.
+void test_arena_too_small_migrates() {
+  const std::vector<WordSpec> w = repeatWords("word", 80);
+  const std::vector<CapturedLine> noArena = captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600,
+                                                             nullptr);
+  crosspoint::layout::LayoutArena tiny = crosspoint::layout::LayoutArena::create(2 * 1024);  // < handle array
+  TEST_ASSERT_TRUE(tiny.ok());
+  const std::vector<CapturedLine> withTiny =
+      captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600, &tiny);
+  assertLineParity(noArena, withTiny);
+}
+
+// Overflowing the arena's byte region mid-accumulation (handle array fits, but
+// the interned bytes do not) migrates the words accumulated so far into the
+// vectors and finishes on the vector path — still byte-identical.
+void test_arena_byte_overflow_migrates() {
+  // Long words so the packed byte region fills before the 1024-handle cap.
+  const std::vector<WordSpec> w = repeatWords("supercalifragilistic", 200);
+  const std::vector<CapturedLine> noArena = captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600,
+                                                             nullptr);
+  // 13 KB: handle array (~12 KB) fits, leaving ~1 KB for bytes -> interning
+  // overflows after a few dozen words -> migrate.
+  crosspoint::layout::LayoutArena arena = crosspoint::layout::LayoutArena::create(13 * 1024);
+  TEST_ASSERT_TRUE(arena.ok());
+  const std::vector<CapturedLine> withArena =
+      captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600, &arena);
+  assertLineParity(noArena, withArena);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_dp_scratch_arena_parity_and_bounded);
@@ -572,6 +691,11 @@ int main(int, char**) {
   RUN_TEST(test_layout_parity_oversized_token);
   RUN_TEST(test_layout_parity_continuations);
   RUN_TEST(test_layout_parity_mixed_styles);
+  RUN_TEST(test_arena_drain_lifecycle_parity);
+  RUN_TEST(test_arena_bounded_peak);
+  RUN_TEST(test_arena_reused_across_blocks_bounded);
+  RUN_TEST(test_arena_too_small_migrates);
+  RUN_TEST(test_arena_byte_overflow_migrates);
   RUN_TEST(test_parse_chapter_healthy);
   RUN_TEST(test_parse_chapter_under_fragmentation);
   RUN_TEST(test_style_plain_is_regular);

@@ -101,6 +101,32 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   if (word.empty()) return;
   if (oom_) return;  // Already failed this block; skip the rest cheaply.
 
+  EpdFontFamily::Style combinedStyle = fontStyle;
+  if (underline) {
+    combinedStyle = static_cast<EpdFontFamily::Style>(combinedStyle | EpdFontFamily::UNDERLINE);
+  }
+
+  // RFC #164 step 4: when the section arena is hosting the word buffer, intern
+  // the bytes + record an 8-byte handle instead of growing a vector<string>.
+  // Any failure to reserve the handle array or pack the bytes migrates the
+  // words accumulated so far into the std::vectors and falls through to the
+  // original path — so the buffer is bounded on the happy path and exact on the
+  // fallback.
+  if (useArenaWords_) {
+    if (!ensureArenaWords() || arenaCount_ >= arenaCap_) {
+      migrateArenaWordsToVectors();
+    }
+  }
+  if (useArenaWords_) {
+    const crosspoint::layout::LayoutArena::Str s = arena_->intern(word.data(), word.size());
+    if (s.valid()) {
+      arenaWords_[arenaCount_++] = ArenaWord{s, combinedStyle, attachToPrevious};
+      return;
+    }
+    // String region full — migrate and append below on the vector path.
+    migrateArenaWordsToVectors();
+  }
+
   // Heap-probe the next vector growth. std::vector doubles capacity, so
   // when size == capacity the next push_back allocates a fresh buffer of
   // 2*capacity * sizeof(elem) and copies/moves into it. On a fragmented
@@ -122,10 +148,6 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   }
 
   words.push_back(std::move(word));
-  EpdFontFamily::Style combinedStyle = fontStyle;
-  if (underline) {
-    combinedStyle = static_cast<EpdFontFamily::Style>(combinedStyle | EpdFontFamily::UNDERLINE);
-  }
   wordStyles.push_back(combinedStyle);
   wordContinues.push_back(attachToPrevious);
 }
@@ -133,14 +155,30 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
 // Consumes data to minimize memory usage
 void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
                                        const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
-                                       const bool includeLastLine, crosspoint::layout::LayoutArena* arena) {
-  if (words.empty()) {
+                                       const bool includeLastLine) {
+  if (isEmpty()) {
     return;
   }
   // A prior addWord set oom_; skip layout entirely so the parser surfaces
   // the failure via parseFailed instead of touching half-allocated state.
   if (oom_) {
     return;
+  }
+
+  // RFC #164 step 4: try the arena fast path (words laid out directly from the
+  // interned handle buffer, no vector<string>). It declines — returning false —
+  // when expansion is needed (hyphenation / oversized token, which the bump
+  // arena cannot insert into) or anything overflows; we then migrate the
+  // interned words into the std::vectors and run the original path below,
+  // byte-for-byte as before.
+  if (useArenaWords_) {
+    if (layoutArenaWords(renderer, fontId, viewportWidth, processLine, includeLastLine)) {
+      return;
+    }
+    migrateArenaWordsToVectors();
+    if (words.empty()) {
+      return;
+    }
   }
 
   // Apply fixed transforms before any per-line layout work.
@@ -174,8 +212,9 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
                        wordNeedsHyphenAtBreak);
   if (oom_) return;
 
-  std::vector<size_t> lineBreakIndices = computeLineBreaks(
-      renderer, fontId, pageWidth, spaceWidth, wordWidths, wordContinues, canBreakBefore, wordNeedsHyphenAtBreak, arena);
+  std::vector<size_t> lineBreakIndices =
+      computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, words.size(), wordWidths, wordContinues, canBreakBefore,
+                        wordNeedsHyphenAtBreak, arena_);
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {
@@ -388,12 +427,13 @@ void ParsedText::expandHyphenationBreaks(const GfxRenderer& renderer, const int 
 }
 
 std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, const int fontId, const int pageWidth,
-                                                  const int spaceWidth, std::vector<uint16_t>& wordWidths,
-                                                  std::vector<bool>& continuesVec,
+                                                  const int spaceWidth, const size_t totalWordCount,
+                                                  std::vector<uint16_t>& wordWidths,
+                                                  const std::vector<bool>& continuesVec,
                                                   const std::vector<bool>& canBreakBefore,
                                                   const std::vector<bool>& wordNeedsHyphenAtBreak,
                                                   crosspoint::layout::LayoutArena* arena) {
-  if (words.empty()) {
+  if (totalWordCount == 0) {
     return {};
   }
 
@@ -404,8 +444,6 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
                                                                blockStyle.alignment == CssTextAlign::Left)
                                   ? blockStyle.textIndent
                                   : 0;
-
-  const size_t totalWordCount = words.size();
 
   // Pre-compute width of a visible '-' for hyphenation line-end accounting.
   const int hyphenWidth = renderer.getTextWidthSpaced(fontId, "-", blockStyle.letterSpacing, EpdFontFamily::REGULAR);
@@ -544,7 +582,7 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 }
 
 void ParsedText::applyParagraphIndent(const GfxRenderer& renderer, const int fontId) {
-  if (words.empty()) {
+  if (isEmpty()) {  // arena path keeps words in arenaWords_, not the vector
     return;
   }
 
@@ -590,7 +628,9 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
                              const std::vector<uint16_t>& wordWidths, const std::vector<bool>& continuesVec,
                              const std::vector<size_t>& lineBreakIndices,
                              const std::vector<bool>& wordNeedsHyphenAtBreak,
-                             const std::function<void(std::shared_ptr<TextBlock>)>& processLine) {
+                             const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
+                             const std::function<std::string(size_t)>& getWord,
+                             const std::function<EpdFontFamily::Style(size_t)>& getStyle) {
   const size_t lineBreak = lineBreakIndices[breakIndex];
   const size_t lastBreakAt = breakIndex > 0 ? lineBreakIndices[breakIndex - 1] : 0;
   const size_t lineWordCount = lineBreak - lastBreakAt;
@@ -667,10 +707,22 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     }
   }
 
-  // Build line data by moving from the original vectors using index range
-  std::vector<std::string> lineWords(std::make_move_iterator(words.begin() + lastBreakAt),
-                                     std::make_move_iterator(words.begin() + lineBreak));
-  std::vector<EpdFontFamily::Style> lineWordStyles(wordStyles.begin() + lastBreakAt, wordStyles.begin() + lineBreak);
+  // Build line data. The arena path supplies getWord/getStyle accessors over
+  // the interned handle buffer; otherwise move out of the original vectors.
+  std::vector<std::string> lineWords;
+  std::vector<EpdFontFamily::Style> lineWordStyles;
+  if (getWord) {
+    lineWords.reserve(lineWordCount);
+    lineWordStyles.reserve(lineWordCount);
+    for (size_t k = 0; k < lineWordCount; ++k) {
+      lineWords.push_back(getWord(lastBreakAt + k));
+      lineWordStyles.push_back(getStyle(lastBreakAt + k));
+    }
+  } else {
+    lineWords.assign(std::make_move_iterator(words.begin() + lastBreakAt),
+                     std::make_move_iterator(words.begin() + lineBreak));
+    lineWordStyles.assign(wordStyles.begin() + lastBreakAt, wordStyles.begin() + lineBreak);
+  }
 
   for (auto& word : lineWords) {
     if (containsSoftHyphen(word)) {
@@ -699,4 +751,179 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
   }
   processLine(std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles),
                                           blockStyle));
+}
+
+// — RFC #164 step 4: arena-backed accumulation buffer —
+
+bool ParsedText::ensureArenaWords() {
+  if (arenaWords_ != nullptr) return true;
+  if (arena_ == nullptr || !arena_->ok()) return false;
+  // Capture the rewind checkpoint at the first allocation (see the ctor note):
+  // by now the previous block's ParsedText is destroyed, so the cursor is at the
+  // correct reclaimed position.
+  if (!arenaRegionActive_) {
+    wordsMark_ = arena_->mark();
+    arenaRegionActive_ = true;
+  }
+  // Cap comfortably above the parser's 750-word drain threshold so a block that
+  // drains on schedule never trips it; an overflow past this migrates to the
+  // std::vectors. 1024 handles reserved once per block from the section arena
+  // (LIFO-returned at block end / on consume).
+  constexpr size_t kArenaWordCap = 1024;
+  ArenaWord* p = arena_->alloc<ArenaWord>(kArenaWordCap);
+  if (p == nullptr) {
+    arena_->rewind(wordsMark_);  // nothing else allocated since the mark — no-op, but keep it tidy
+    arenaRegionActive_ = false;
+    return false;
+  }
+  arenaWords_ = p;
+  arenaCap_ = kArenaWordCap;
+  arenaCount_ = 0;
+  return true;
+}
+
+void ParsedText::migrateArenaWordsToVectors() {
+  if (!useArenaWords_) return;
+  words.reserve(words.size() + arenaCount_);
+  wordStyles.reserve(wordStyles.size() + arenaCount_);
+  wordContinues.reserve(wordContinues.size() + arenaCount_);
+  for (size_t i = 0; i < arenaCount_; ++i) {
+    const ArenaWord& w = arenaWords_[i];
+    words.emplace_back(arena_->str(w.text), static_cast<size_t>(w.text.len));
+    wordStyles.push_back(w.style);
+    wordContinues.push_back(w.continues);
+  }
+  if (arenaRegionActive_) {
+    arena_->rewind(wordsMark_);  // hand the whole word region back; we're on vectors now
+    arenaRegionActive_ = false;
+  }
+  arenaWords_ = nullptr;
+  arenaCount_ = 0;
+  arenaCap_ = 0;
+  useArenaWords_ = false;
+}
+
+void ParsedText::consumeArenaPrefix(const size_t consumed) {
+  if (consumed == 0) return;
+  if (consumed >= arenaCount_) {
+    arena_->rewind(wordsMark_);  // whole block consumed — reclaim everything
+    arenaWords_ = nullptr;
+    arenaCount_ = 0;
+    arenaCap_ = 0;
+    return;
+  }
+  // The bump arena is LIFO; the consumed prefix sits at the far end of the
+  // string region and cannot be popped individually. Copy the (small,
+  // ~one-line) survivors out, rewind the whole word region, and re-lay them so
+  // the prefix's interned bytes are reclaimed. Mirrors the vector path's
+  // words.erase(begin, begin + consumed).
+  struct Tmp {
+    std::string bytes;
+    EpdFontFamily::Style style;
+    bool continues;
+  };
+  std::vector<Tmp> survivors;
+  survivors.reserve(arenaCount_ - consumed);
+  for (size_t i = consumed; i < arenaCount_; ++i) {
+    const ArenaWord& w = arenaWords_[i];
+    survivors.push_back(Tmp{std::string(arena_->str(w.text), static_cast<size_t>(w.text.len)), w.style, w.continues});
+  }
+  arena_->rewind(wordsMark_);
+  arenaWords_ = nullptr;
+  arenaCount_ = 0;
+  arenaCap_ = 0;
+  if (!ensureArenaWords()) {
+    // The just-freed region failed to re-host the handle array (not expected) —
+    // fall back to vectors with the survivors.
+    for (auto& s : survivors) {
+      words.push_back(std::move(s.bytes));
+      wordStyles.push_back(s.style);
+      wordContinues.push_back(s.continues);
+    }
+    useArenaWords_ = false;
+    return;
+  }
+  for (size_t i = 0; i < survivors.size(); ++i) {
+    const crosspoint::layout::LayoutArena::Str h = arena_->intern(survivors[i].bytes.data(), survivors[i].bytes.size());
+    if (h.valid() && arenaCount_ < arenaCap_) {
+      arenaWords_[arenaCount_++] = ArenaWord{h, survivors[i].style, survivors[i].continues};
+      continue;
+    }
+    // Defensive (survivors are a subset of what just fit, so unreachable in
+    // practice): spill the rest to the vectors.
+    migrateArenaWordsToVectors();
+    for (size_t j = i; j < survivors.size(); ++j) {
+      words.push_back(std::move(survivors[j].bytes));
+      wordStyles.push_back(survivors[j].style);
+      wordContinues.push_back(survivors[j].continues);
+    }
+    return;
+  }
+}
+
+bool ParsedText::layoutArenaWords(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
+                                  const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
+                                  const bool includeLastLine) {
+  // Hyphenation expands words mid-buffer (inserts) — unsupported in the bump
+  // arena. Decline before any mutation so the caller migrates and runs the
+  // vector path, which applies the paragraph indent exactly once.
+  if (hyphenationEnabled) return false;
+  if (arenaCount_ == 0) return false;
+
+  applyParagraphIndent(renderer, fontId);
+
+  const int pageWidth = viewportWidth;
+  const int baseSpaceWidth = renderer.getSpaceWidth(fontId);
+  const int userSpaceWidth =
+      std::max(1, baseSpaceWidth + wordSpacingSettingToPixelDelta(wordSpacingPercent, baseSpaceWidth));
+  const int spaceWidth = std::max(0, userSpaceWidth + blockStyle.wordSpacing);
+
+  const size_t n = arenaCount_;
+  auto wordAt = [this](size_t i) {
+    const ArenaWord& w = arenaWords_[i];
+    return std::string(arena_->str(w.text), static_cast<size_t>(w.text.len));
+  };
+  auto styleAt = [this](size_t i) { return arenaWords_[i].style; };
+
+  std::vector<uint16_t> wordWidths;
+  wordWidths.reserve(n);
+  for (size_t i = 0; i < n; ++i) {
+    wordWidths.push_back(measureWordWidth(renderer, fontId, wordAt(i), styleAt(i), blockStyle.letterSpacing));
+  }
+
+  const int firstLineIndent = blockStyle.textIndentDefined && (blockStyle.alignment == CssTextAlign::Justify ||
+                                                               blockStyle.alignment == CssTextAlign::Left)
+                                  ? blockStyle.textIndent
+                                  : 0;
+  // A token wider than its line would trigger splitOversizedTokens' mid-buffer
+  // inserts — decline (same trigger as the vector path: width over the line max
+  // and more than one byte to split).
+  for (size_t i = 0; i < n; ++i) {
+    const int tokenMaxWidth = i == 0 ? pageWidth - firstLineIndent : pageWidth;
+    if (tokenMaxWidth > 0 && wordWidths[i] > tokenMaxWidth && arenaWords_[i].text.len > 1) {
+      return false;
+    }
+  }
+
+  std::vector<bool> continuesVec(n);
+  std::vector<bool> canBreakBefore(n);
+  for (size_t i = 0; i < n; ++i) {
+    continuesVec[i] = arenaWords_[i].continues;
+    canBreakBefore[i] = !arenaWords_[i].continues;
+  }
+  const std::vector<bool> wordNeedsHyphenAtBreak(n, false);
+
+  std::vector<size_t> lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, n, wordWidths,
+                                                           continuesVec, canBreakBefore, wordNeedsHyphenAtBreak, arena_);
+  const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
+
+  for (size_t i = 0; i < lineCount; ++i) {
+    extractLine(i, pageWidth, spaceWidth, wordWidths, continuesVec, lineBreakIndices, wordNeedsHyphenAtBreak,
+                processLine, wordAt, styleAt);
+  }
+
+  if (lineCount > 0) {
+    consumeArenaPrefix(lineBreakIndices[lineCount - 1]);
+  }
+  return true;
 }

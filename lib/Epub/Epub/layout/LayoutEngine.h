@@ -56,7 +56,7 @@ class LayoutEngine {
         arena_(arena),
         plan_(plan),
         pt_(extraParagraphSpacing, hyphenationEnabled, blockStyle, wordSpacingPercent, firstLineIndentMode,
-            usePublisherStyles) {}
+            usePublisherStyles, arena) {}
 
   // Append a word. Returns false on EmitOom (the heap-probe inside the legacy
   // addWord bailed before a vector growth would have crashed) — the caller
@@ -73,7 +73,7 @@ class LayoutEngine {
   // so the paragraph can keep accumulating — the 750-word drain relies on this.
   LayoutStatus flush(uint16_t viewportWidth, const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
                      bool includeLastLine = true) noexcept {
-    pt_.layoutAndExtractLines(renderer_, fontId_, viewportWidth, processLine, includeLastLine, arena_);
+    pt_.layoutAndExtractLines(renderer_, fontId_, viewportWidth, processLine, includeLastLine);
     return pt_.hadOom() ? LayoutStatus::EmitOom : LayoutStatus::Ok;
   }
 
