@@ -86,8 +86,8 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
 
   // flush the buffer
   partWordBuffer[partWordBufferIndex] = '\0';
-  currentTextBlock->addWord(partWordBuffer, fontStyle, false, nextWordContinues);
-  if (currentTextBlock->hadOom()) {
+  if (!currentTextBlock->addWord(partWordBuffer, static_cast<size_t>(partWordBufferIndex), fontStyle, false,
+                                 nextWordContinues)) {
     // Heap-probe inside addWord bailed before the next vector growth would
     // have crashed. Promote to parser-level failure so createSectionFile
     // returns false and the recovery screen path takes over.
@@ -149,16 +149,17 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
       // Merge with existing block style to accumulate CSS styling from parent block elements.
       // This handles cases like <div style="margin-bottom:2em"><h1>text</h1></div> where the
       // div's margin should be preserved, even though it has no direct text content.
-      currentTextBlock->setBlockStyle(currentTextBlock->getBlockStyle().getCombinedBlockStyle(blockStyle));
+      currentTextBlock->setBlockStyle(currentTextBlock->blockStyle().getCombinedBlockStyle(blockStyle));
       return;
     }
 
     makePages();
   }
-  currentTextBlock.reset(new (std::nothrow) ParsedText(extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle,
-                                                       wordSpacingPercent, firstLineIndentMode, usePublisherStyles));
+  currentTextBlock.reset(new (std::nothrow) crosspoint::layout::LayoutEngine(
+      renderer, fontId, extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle, wordSpacingPercent,
+      firstLineIndentMode, usePublisherStyles));
   if (!currentTextBlock) {
-    LOG_DIAG("EHP", "OOM new ParsedText free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+    LOG_DIAG("EHP", "OOM new LayoutEngine free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
     parseFailed = true;
     return;
@@ -467,14 +468,14 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         // flush word preceding <br/> to currentTextBlock before calling startNewTextBlock
         self->flushPartWordBuffer();
       }
-      self->startNewTextBlock(self->currentTextBlock->getBlockStyle());
+      self->startNewTextBlock(self->currentTextBlock->blockStyle());
     } else {
       self->styleResolver_.setCssBase(cssStyle);
       self->startNewTextBlock(userAlignmentBlockStyle);
 
       if (strcmp(name, "li") == 0) {
-        self->currentTextBlock->addWord("\xe2\x80\xa2", EpdFontFamily::REGULAR);
-        if (self->currentTextBlock->hadOom()) {
+        // U+2022 bullet, 3 UTF-8 bytes.
+        if (!self->currentTextBlock->addWord("\xe2\x80\xa2", 3, EpdFontFamily::REGULAR)) {
           LOG_DIAG("EHP", "addWord OOM (li bullet) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
                    (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
           self->parseFailed = true;
@@ -666,16 +667,15 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
   // There should be enough here to build out 1-2 full pages and doing this will free up a lot of
   // memory.
   // Spotted when reading Intermezzo, there are some really long text blocks in there.
-  if (self->currentTextBlock->size() > 750) {
+  if (self->currentTextBlock->wordCount() > 750) {
     LOG_DBG("EHP", "Text block too long, splitting into multiple pages");
-    const int horizontalInset = self->currentTextBlock->getBlockStyle().totalHorizontalInset();
+    const int horizontalInset = self->currentTextBlock->blockStyle().totalHorizontalInset();
     const uint16_t effectiveWidth = (horizontalInset < self->viewportWidth)
                                         ? static_cast<uint16_t>(self->viewportWidth - horizontalInset)
                                         : self->viewportWidth;
-    self->currentTextBlock->layoutAndExtractLines(
-        self->renderer, self->fontId, effectiveWidth,
-        [self](const std::shared_ptr<TextBlock>& textBlock) { self->addLineToPage(textBlock); }, false);
-    if (self->currentTextBlock->hadOom()) {
+    const crosspoint::layout::LayoutStatus status = self->currentTextBlock->flush(
+        effectiveWidth, [self](const std::shared_ptr<TextBlock>& textBlock) { self->addLineToPage(textBlock); }, false);
+    if (status != crosspoint::layout::LayoutStatus::Ok) {
       self->parseFailed = true;
       return;
     }
@@ -737,7 +737,7 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
       strncpy(entry.href, self->currentFootnote.href, sizeof(entry.href) - 1);
       entry.href[sizeof(entry.href) - 1] = '\0';
       int wordIndex = self->footnotePlacer_.extractedWordCount() +
-                      (self->currentTextBlock ? static_cast<int>(self->currentTextBlock->size()) : 0);
+                      (self->currentTextBlock ? static_cast<int>(self->currentTextBlock->wordCount()) : 0);
       self->footnotePlacer_.registerFootnote(wordIndex, entry);
     }
     self->insideFootnoteLink = false;
@@ -913,7 +913,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 
 void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
   if (parseFailed) return;
-  // ParsedText signals an OOM during TextBlock construction by passing
+  // The layout engine signals an OOM during TextBlock construction by passing
   // a null shared_ptr through the processLine callback. Treat that the
   // same as our own internal allocation failures.
   if (!line) {
@@ -996,7 +996,7 @@ void ChapterHtmlSlimParser::makePages() {
   const int baseLineHeight = renderer.getLineHeight(fontId) * lineCompression;
 
   // Apply top spacing before the paragraph (stored in pixels)
-  const BlockStyle& blockStyle = currentTextBlock->getBlockStyle();
+  const BlockStyle& blockStyle = currentTextBlock->blockStyle();
   const int blockLineHeight = blockStyle.resolveLineHeight(baseLineHeight);
   if (blockStyle.marginTop > 0) {
     currentPageNextY += blockStyle.marginTop;
@@ -1010,10 +1010,9 @@ void ChapterHtmlSlimParser::makePages() {
   const uint16_t effectiveWidth =
       (horizontalInset < viewportWidth) ? static_cast<uint16_t>(viewportWidth - horizontalInset) : viewportWidth;
 
-  currentTextBlock->layoutAndExtractLines(
-      renderer, fontId, effectiveWidth,
-      [this](const std::shared_ptr<TextBlock>& textBlock) { addLineToPage(textBlock); });
-  if (currentTextBlock->hadOom()) {
+  const crosspoint::layout::LayoutStatus status = currentTextBlock->flush(
+      effectiveWidth, [this](const std::shared_ptr<TextBlock>& textBlock) { addLineToPage(textBlock); });
+  if (status != crosspoint::layout::LayoutStatus::Ok) {
     parseFailed = true;
     return;
   }

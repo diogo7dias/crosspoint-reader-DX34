@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "../FootnoteEntry.h"
-#include "../ParsedText.h"
+#include "../layout/LayoutEngine.h"
 #include "FootnotePlacer.h"
 #include "../blocks/ImageBlock.h"
 #include "../blocks/TextBlock.h"
@@ -54,7 +54,7 @@ class ChapterHtmlSlimParser {
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
   int partWordBufferIndex = 0;
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
-  std::unique_ptr<ParsedText> currentTextBlock = nullptr;
+  std::unique_ptr<crosspoint::layout::LayoutEngine> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
   // Sticky OOM flag. Set when a `new (nothrow) Page()` returns null
