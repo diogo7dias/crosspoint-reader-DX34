@@ -5,10 +5,6 @@
 
 #include "MemoryPolicy.h"
 
-// Declared in main.cpp. Drops the FCM cache synchronously to free
-// heap on the failing task. Safe to invoke from any task context.
-extern "C" void onHeapAllocFailed(size_t requested, uint32_t caps, const char* function_name);
-
 namespace {
 // Render-task spawn gate: xTaskCreate needs a contiguous 8 KB stack + ~4 KB
 // FreeRTOS bookkeeping. The threshold + metric now live in MemoryPolicy
@@ -46,12 +42,13 @@ void Activity::onEnter() {
 
   // Pre-flight the heap: xTaskCreate needs a contiguous 8 KB block for the
   // stack. On a fragmented heap the largest free block can drop below that
-  // even when total free heap looks healthy. If we're tight, drop the FCM
-  // (PR #99 path) and re-check before committing to xTaskCreate.
+  // even when total free heap looks healthy. If we're tight, shed the
+  // registered SafeAnywhere evictors (the font cache — PR #99 path) and
+  // re-check before committing to xTaskCreate.
   if (!hasRoomForRenderTask()) {
     LOG_ERR("ACT", "Pre-flight low for '%s' (largest=%u) — flushing caches", name.c_str(),
             static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
-    onHeapAllocFailed(8192, MALLOC_CAP_8BIT, "Activity::onEnter pre-flight");
+    crosspoint::mem::shedUnderPressure();
     if (!hasRoomForRenderTask()) {
       LOG_ERR("ACT", "Still low after flush for '%s' (largest=%u) — flagging entry failure", name.c_str(),
               static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
