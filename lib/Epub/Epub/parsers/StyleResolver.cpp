@@ -52,26 +52,31 @@ bool StyleResolver::wouldChangeAt(int closingDepth) const {
 }
 
 EpdFontFamily::Style StyleResolver::effectiveStyle(int depth) const {
-  // 1) block CSS base, 2) inline stack in push order (last-writer-wins per axis).
+  // Resolve as a CSS-style cascade, outermost to innermost:
+  //   1) block CSS base,
+  //   2) ancestor depth flags (<b>/<em>/<u>/header) turn the axis ON,
+  //   3) inline stack in push order (last/deepest writer wins per axis).
+  // Applying the depth flags BEFORE the stack lets a deeper explicit inline
+  // setting (e.g. font-weight:normal) override an ancestor's bold — fixing the
+  // former OR-merge quirk where inline-normal could not un-bold (RFC #170 step 4).
   bool effBold = cssBaseBold_;
   bool effItalic = cssBaseItalic_;
   bool effUnderline = cssBaseUnderline_;
+
+  if (boldUntilDepth_ < depth) effBold = true;
+  if (italicUntilDepth_ < depth) effItalic = true;
+  if (underlineUntilDepth_ < depth) effUnderline = true;
+
   for (const auto& e : stack_) {
     if (e.style.hasBold) effBold = e.style.bold;
     if (e.style.hasItalic) effItalic = e.style.italic;
     if (e.style.hasUnderline) effUnderline = e.style.underline;
   }
 
-  // 3) OR with the depth flags (preserves the historic flushPartWordBuffer
-  // merge, including the font-weight:normal-cannot-un-bold quirk).
-  const bool isBold = boldUntilDepth_ < depth || effBold;
-  const bool isItalic = italicUntilDepth_ < depth || effItalic;
-  const bool isUnderline = underlineUntilDepth_ < depth || effUnderline;
-
   auto style = EpdFontFamily::REGULAR;
-  if (isBold) style = static_cast<EpdFontFamily::Style>(style | EpdFontFamily::BOLD);
-  if (isItalic) style = static_cast<EpdFontFamily::Style>(style | EpdFontFamily::ITALIC);
-  if (isUnderline) style = static_cast<EpdFontFamily::Style>(style | EpdFontFamily::UNDERLINE);
+  if (effBold) style = static_cast<EpdFontFamily::Style>(style | EpdFontFamily::BOLD);
+  if (effItalic) style = static_cast<EpdFontFamily::Style>(style | EpdFontFamily::ITALIC);
+  if (effUnderline) style = static_cast<EpdFontFamily::Style>(style | EpdFontFamily::UNDERLINE);
   return style;
 }
 

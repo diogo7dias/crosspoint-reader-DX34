@@ -213,15 +213,15 @@ void test_style_underline_via_anchor() {
   TEST_ASSERT_TRUE(s & EpdFontFamily::UNDERLINE);
 }
 
-// FROZEN QUIRK (RFC #170): an inline font-weight:normal (stack bold=false) at a
-// deeper depth CANNOT turn off bold while a shallower depth flag is active,
-// because the merge is `(boldUntilDepth < depth) OR effectiveBold`. Pinned so
-// the extraction reproduces it; the fix is a separate guarded follow-up.
-void test_style_frozen_normal_cannot_unbold_under_depth_flag() {
+// RFC #170 step 4: an inline font-weight:normal (stack bold=false) at a deeper
+// depth DOES turn off bold set by a shallower ancestor depth flag (<b>/header).
+// The depth flag is the outermost contribution; a deeper explicit inline
+// setting overrides it (CSS cascade). This fixes the former OR-merge quirk.
+void test_style_inline_normal_unbolds_under_depth_flag() {
   StyleResolver r;
-  r.setBoldFrom(0);  // <b> at depth 0 sets boldUntilDepth = 0
+  r.setBoldFrom(0);  // ancestor <b>/header at depth 0 sets boldUntilDepth = 0
   r.pushInline(2, {.hasBold = true, .bold = false});  // inner span font-weight:normal
-  TEST_ASSERT_TRUE(r.effectiveStyle(3) & EpdFontFamily::BOLD);  // STILL bold (OR wins)
+  TEST_ASSERT_FALSE(r.effectiveStyle(3) & EpdFontFamily::BOLD);  // explicit normal wins
 }
 
 // Inline stack last-writer-wins when NO depth flag is active: a deeper
@@ -369,7 +369,7 @@ int main(int, char**) {
   RUN_TEST(test_style_em_then_bold_nested);
   RUN_TEST(test_style_css_base_italic);
   RUN_TEST(test_style_underline_via_anchor);
-  RUN_TEST(test_style_frozen_normal_cannot_unbold_under_depth_flag);
+  RUN_TEST(test_style_inline_normal_unbolds_under_depth_flag);
   RUN_TEST(test_style_inline_normal_overrides_css_base_bold);
   RUN_TEST(test_style_inline_stack_cap);
   RUN_TEST(test_style_would_change_at);
