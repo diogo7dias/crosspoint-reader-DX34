@@ -429,12 +429,23 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   // happened before the parser was constructed, holding both peaks
   // simultaneously and crowding out other allocations.
   CssParser* cssParser = (readerStyleMode != 0) ? epub->getCssParser() : nullptr;
+  ChapterParseConfig parseConfig{fontId,
+                                 lineCompression,
+                                 extraParagraphSpacingLevel,
+                                 paragraphAlignment,
+                                 viewportWidth,
+                                 viewportHeight,
+                                 hyphenationEnabled,
+                                 wordSpacingPercent,
+                                 firstLineIndentMode,
+                                 readerStyleMode != 0,
+                                 contentBase,
+                                 imageBasePath};
   ChapterHtmlSlimParser visitor(
-      epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment,
-      viewportWidth, viewportHeight, hyphenationEnabled, wordSpacingPercent, firstLineIndentMode, readerStyleMode != 0,
+      epub, tmpHtmlPath, renderer, parseConfig,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },
       [&anchors](const std::string& anchor, const uint16_t pageIndex) { anchors.emplace_back(anchor, pageIndex); },
-      contentBase, imageBasePath, progressFn, cssParser);
+      progressFn, cssParser);
 
   if (cssParser) {
     if (!cssParser->loadFromCache()) {

@@ -22,6 +22,24 @@ class Epub;
 
 #define MAX_WORD_SIZE 200
 
+// Layout knobs for a chapter parse, bundled to collapse the former 18-parameter
+// constructor (RFC #170). Collaborators (epub/filepath/renderer/callbacks/
+// cssParser) remain explicit ctor params; these are the per-render settings.
+struct ChapterParseConfig {
+  int fontId = 0;
+  float lineCompression = 1.0f;
+  uint8_t extraParagraphSpacingLevel = 0;
+  uint8_t paragraphAlignment = 0;
+  uint16_t viewportWidth = 0;
+  uint16_t viewportHeight = 0;
+  bool hyphenationEnabled = false;
+  uint8_t wordSpacingPercent = 1;
+  uint8_t firstLineIndentMode = 0;
+  bool usePublisherStyles = true;
+  std::string contentBase;
+  std::string imageBasePath;
+};
+
 class ChapterHtmlSlimParser {
   std::shared_ptr<Epub> epub;
   const std::string& filepath;
@@ -89,36 +107,31 @@ class ChapterHtmlSlimParser {
 
  public:
   explicit ChapterHtmlSlimParser(std::shared_ptr<Epub> epub, const std::string& filepath, GfxRenderer& renderer,
-                                 const int fontId, const float lineCompression,
-                                 const uint8_t extraParagraphSpacingLevel, const uint8_t paragraphAlignment,
-                                 const uint16_t viewportWidth, const uint16_t viewportHeight,
-                                 const bool hyphenationEnabled, const uint8_t wordSpacingPercent,
-                                 const uint8_t firstLineIndentMode, const bool usePublisherStyles,
+                                 const ChapterParseConfig& config,
                                  const std::function<void(std::unique_ptr<Page>)>& completePageFn,
                                  const std::function<void(const std::string&, uint16_t)>& anchorPageFn,
-                                 const std::string& contentBase, const std::string& imageBasePath,
                                  const std::function<void(int)>& progressFn = nullptr,
                                  const CssParser* cssParser = nullptr)
 
       : epub(epub),
         filepath(filepath),
         renderer(renderer),
-        fontId(fontId),
-        lineCompression(lineCompression),
-        extraParagraphSpacingLevel(extraParagraphSpacingLevel),
-        paragraphAlignment(paragraphAlignment),
-        viewportWidth(viewportWidth),
-        viewportHeight(viewportHeight),
-        hyphenationEnabled(hyphenationEnabled),
-        wordSpacingPercent(wordSpacingPercent),
-        firstLineIndentMode(firstLineIndentMode),
-        usePublisherStyles(usePublisherStyles),
+        fontId(config.fontId),
+        lineCompression(config.lineCompression),
+        extraParagraphSpacingLevel(config.extraParagraphSpacingLevel),
+        paragraphAlignment(config.paragraphAlignment),
+        viewportWidth(config.viewportWidth),
+        viewportHeight(config.viewportHeight),
+        hyphenationEnabled(config.hyphenationEnabled),
+        wordSpacingPercent(config.wordSpacingPercent),
+        firstLineIndentMode(config.firstLineIndentMode),
+        usePublisherStyles(config.usePublisherStyles),
         completePageFn(completePageFn),
         anchorPageFn(anchorPageFn),
         progressFn(progressFn),
         cssParser(cssParser),
-        contentBase(contentBase),
-        imageBasePath(imageBasePath) {}
+        contentBase(config.contentBase),
+        imageBasePath(config.imageBasePath) {}
 
   ~ChapterHtmlSlimParser() = default;
   bool parseAndBuildPages();

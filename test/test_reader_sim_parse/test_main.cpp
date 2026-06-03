@@ -68,13 +68,16 @@ uint32_t parseChapter() {
   auto epub = std::make_shared<Epub>(std::string(SIM_EPUB_PATH), std::string("/tmp"));
   std::string filepath = kTmpHtml;  // ctor stores this by reference — keep alive.
   uint32_t pages = 0;
-  ChapterHtmlSlimParser parser(epub, filepath, g_renderer, /*fontId=*/0, /*lineCompression=*/1.0f,
-                               /*extraParagraphSpacingLevel=*/0, /*paragraphAlignment=*/0,
-                               /*viewportWidth=*/600, /*viewportHeight=*/800, /*hyphenationEnabled=*/false,
-                               /*wordSpacingPercent=*/1, /*firstLineIndentMode=*/0, /*usePublisherStyles=*/true,
-                               [&pages](std::unique_ptr<Page>) { ++pages; },
-                               [](const std::string&, uint16_t) {}, /*contentBase=*/"", /*imageBasePath=*/"",
-                               /*progressFn=*/nullptr, /*cssParser=*/nullptr);
+  ChapterParseConfig cfg;
+  cfg.fontId = 0;
+  cfg.lineCompression = 1.0f;
+  cfg.viewportWidth = 600;
+  cfg.viewportHeight = 800;
+  cfg.hyphenationEnabled = false;
+  cfg.wordSpacingPercent = 1;
+  cfg.usePublisherStyles = true;
+  ChapterHtmlSlimParser parser(epub, filepath, g_renderer, cfg, [&pages](std::unique_ptr<Page>) { ++pages; },
+                               [](const std::string&, uint16_t) {}, /*progressFn=*/nullptr, /*cssParser=*/nullptr);
   parser.parseAndBuildPages();
   return pages;
 }
