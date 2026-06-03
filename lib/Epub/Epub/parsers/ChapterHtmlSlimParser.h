@@ -13,6 +13,7 @@
 #include "../blocks/TextBlock.h"
 #include "../css/CssParser.h"
 #include "../css/CssStyle.h"
+#include "StyleResolver.h"
 
 class Page;
 class GfxRenderer;
@@ -29,9 +30,6 @@ class ChapterHtmlSlimParser {
   std::function<void(int)> progressFn;  // Progress callback
   int depth = 0;
   int skipUntilDepth = INT_MAX;
-  int boldUntilDepth = INT_MAX;
-  int italicUntilDepth = INT_MAX;
-  int underlineUntilDepth = INT_MAX;
   // buffer for building up words from characters, will auto break if longer than this
   // leave one char at end for null pointer
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
@@ -65,19 +63,9 @@ class ChapterHtmlSlimParser {
   uint16_t completedPageCount = 0;
   std::vector<std::string> pendingAnchors;
 
-  // Style tracking (replaces depth-based approach)
-  static constexpr size_t MAX_INLINE_STYLE_DEPTH = 64;
-  struct StyleStackEntry {
-    int depth = 0;
-    bool hasBold = false, bold = false;
-    bool hasItalic = false, italic = false;
-    bool hasUnderline = false, underline = false;
-  };
-  std::vector<StyleStackEntry> inlineStyleStack;
-  CssStyle currentCssStyle;
-  bool effectiveBold = false;
-  bool effectiveItalic = false;
-  bool effectiveUnderline = false;
+  // Style tracking: the three former systems (depth flags + inline stack +
+  // block CSS base) now live behind one host-testable resolver (RFC #170).
+  StyleResolver styleResolver_;
 
   // Footnote link tracking
   bool insideFootnoteLink = false;
@@ -87,7 +75,6 @@ class ChapterHtmlSlimParser {
   std::vector<std::pair<int, FootnoteEntry>> pendingFootnotes;  // <wordIndex, entry>
   int wordsExtractedInBlock = 0;
 
-  void updateEffectiveInlineStyle();
   void startNewTextBlock(const BlockStyle& blockStyle);
   void flushPartWordBuffer();
   void completeCurrentPage();
