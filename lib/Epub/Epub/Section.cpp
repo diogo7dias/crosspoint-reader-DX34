@@ -330,7 +330,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
                                 const uint16_t viewportHeight, const bool hyphenationEnabled,
                                 const uint8_t wordSpacingPercent, const uint8_t firstLineIndentMode,
                                 const uint8_t readerStyleMode, const uint8_t textRenderMode, const bool readerBoldSwap,
-                                const std::function<void(int)>& progressFn) {
+                                const std::function<void(int)>& progressFn,
+                                crosspoint::layout::LayoutArena* layoutArena) {
   {
     const unsigned freeHeap = ESP.getFreeHeap();
     const unsigned largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
@@ -441,6 +442,10 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
                                  readerStyleMode != 0,
                                  contentBase,
                                  imageBasePath};
+  // RFC #164 step 6: hand the parser the reader activity's section-lifetime
+  // arena (the repurposed 24 KB anchor) when provided, so the bounded word
+  // buffer is available even on a fragmented heap.
+  parseConfig.externalArena = layoutArena;
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, parseConfig,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },

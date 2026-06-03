@@ -115,6 +115,15 @@ class LayoutArena {
 
   Mark mark() const { return Mark{bump_, static_cast<uint32_t>(textTop_)}; }
 
+  // Return the whole block to empty so a section-lifetime arena (held across
+  // sections by the reader activity, RFC #164 step 6) can be reused for the next
+  // section. highWater() is retained (it tracks the worst case over the arena's
+  // whole life). Safe only when nothing is currently allocated.
+  void reset() {
+    bump_ = 0;
+    textTop_ = size_;
+  }
+
   // Restore both cursors. highWater() is a peak and is intentionally NOT
   // lowered — it records the worst case across the arena's whole life.
   void rewind(Mark m) {

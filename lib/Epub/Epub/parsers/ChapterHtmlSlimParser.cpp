@@ -157,7 +157,7 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
   }
   currentTextBlock.reset(new (std::nothrow) crosspoint::layout::LayoutEngine(
       renderer, fontId, extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle, wordSpacingPercent,
-      firstLineIndentMode, usePublisherStyles, &layoutArena_, degradePlan_));
+      firstLineIndentMode, usePublisherStyles, sectionArena_, degradePlan_));
   if (!currentTextBlock) {
     LOG_DIAG("EHP", "OOM new LayoutEngine free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
@@ -765,15 +765,26 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
 }
 
 bool ChapterHtmlSlimParser::parseAndBuildPages() {
-  // RFC #164 step 3: reserve the bounded layout scratch once for the whole
-  // section, BUT only when the heap has comfortable headroom (>= 3x the arena),
-  // so grabbing this contiguous block can never tip a borderline section into a
-  // words[] OOM it would otherwise have survived. On a tight heap the arena
-  // stays empty (ok()==false) and computeLineBreaks falls back to std::vector —
-  // byte-identical to today. Allocated before the first startNewTextBlock below
-  // so every paragraph's engine sees the same stable &layoutArena_.
-  if (crosspoint::heap::largestFreeBlockBytes() >= kLayoutScratchArenaBytes * 3) {
-    layoutArena_ = crosspoint::layout::LayoutArena::create(kLayoutScratchArenaBytes);
+  // RFC #164 steps 3+6: pick the layout arena for this section. If the reader
+  // activity handed us its section-lifetime arena (the repurposed 24 KB anchor),
+  // use that — it was reserved at onEnter while the heap was fresh, so it is
+  // available even now that the heap is fragmented (the whole point). Reset it
+  // first so this section starts from an empty block (the prior section's LIFO
+  // rewinds should already leave it empty; this is belt-and-suspenders). Else
+  // fall back to the legacy self-create: a per-section block, but only when the
+  // heap has comfortable headroom (>= 3x), so grabbing it can never tip a
+  // borderline section into a words[] OOM it would otherwise have survived. On a
+  // tight heap with no external arena, sectionArena_ stays empty (ok()==false)
+  // and layout falls back to std::vector — byte-identical to today. Set before
+  // the first startNewTextBlock so every paragraph's engine sees a stable arena.
+  if (externalArena_ != nullptr && externalArena_->ok()) {
+    externalArena_->reset();
+    sectionArena_ = externalArena_;
+  } else {
+    if (crosspoint::heap::largestFreeBlockBytes() >= kLayoutScratchArenaBytes * 3) {
+      layoutArena_ = crosspoint::layout::LayoutArena::create(kLayoutScratchArenaBytes);
+    }
+    sectionArena_ = &layoutArena_;
   }
 
   if (hyphenationEnabled) {

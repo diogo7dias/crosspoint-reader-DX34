@@ -10,6 +10,11 @@
 
 class Page;
 class GfxRenderer;
+namespace crosspoint {
+namespace layout {
+class LayoutArena;
+}
+}  // namespace crosspoint
 
 class Section {
   std::shared_ptr<Epub> epub;
@@ -64,7 +69,8 @@ class Section {
                          uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
                          bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
                          uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap,
-                         const std::function<void(int)>& progressFn = nullptr);
+                         const std::function<void(int)>& progressFn = nullptr,
+                         crosspoint::layout::LayoutArena* layoutArena = nullptr);
   std::unique_ptr<Page> loadPageFromSectionFile();
   std::unique_ptr<Page> loadPageFromSectionFile(int pageIndex);
   int getPageForAnchor(const std::string& anchor) const;

@@ -11,6 +11,7 @@
 #include <Epub.h>
 #include <Epub/FootnoteEntry.h>
 #include <Epub/Section.h>
+#include <Epub/layout/LayoutArena.h>
 
 #include <array>
 #include <memory>
@@ -95,18 +96,19 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int pageLoadFailCount = 0;  // Tracks consecutive page load failures to prevent infinite retry loops
 
-  // Heap reservation anchor. Allocated once at onEnter while the heap is
-  // still fresh, so a contiguous block of `kLayoutHeapAnchorBytes` is
-  // guaranteed to exist somewhere in the heap. The pre-flight gate releases
-  // it before falling through to releaseMaxResources(); after a successful
-  // section build we best-effort tryReacquire, so subsequent chapter
-  // changes still benefit. Released at onExit. See heapHeadroomOkForLayout
-  // and ensureSectionLoaded for the lifecycle.
-  std::unique_ptr<uint8_t[]> layoutHeapAnchor_;
-  // Returns true if the anchor is currently held.
-  bool layoutHeapAnchorHeld() const { return layoutHeapAnchor_ != nullptr; }
-  // Best-effort allocate. Silent no-op when largest contiguous block is too
-  // close to the anchor size to leave headroom for the next section build.
+  // Layout arena, doubling as the heap reservation anchor (RFC #164 step 6).
+  // Allocated once at onEnter while the heap is still fresh, so its contiguous
+  // `kLayoutHeapAnchorBytes` block is guaranteed to exist. The parser lays the
+  // section's bounded word buffer + DP scratch into it (passed down through
+  // Section::createSectionFile), so it is no longer dead reserve — but it keeps
+  // the anchor role too: the pre-flight gate's ReleaseAnchor rung frees it to
+  // hand the retry contiguous space (the layout then runs on the std::vector
+  // fallback in that freed space). After a successful build we best-effort
+  // tryReacquire. Released at onExit. See heapHeadroomOkForLayout and
+  // ensureSectionLoaded for the lifecycle.
+  crosspoint::layout::LayoutArena layoutHeapAnchor_;
+  // Best-effort re-create. Silent no-op when the largest contiguous block is too
+  // close to the arena size to leave headroom for the next section build.
   void tryReacquireLayoutHeapAnchor();
   // Cross-task handoff: render runs on the display task, but tearing down `section` must happen on
   // the loop task — its destructor closes file handles and frees page-layout storage that the

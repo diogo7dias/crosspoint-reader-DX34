@@ -41,6 +41,12 @@ struct ChapterParseConfig {
   // RFC #164: the layout/render degradation plan for this section. Default Full
   // (everything on) — the activity dials it down from the heap gate in step 7.
   crosspoint::layout::DegradePlan degradePlan;
+  // RFC #164 step 6: a section-lifetime arena the reader activity owns (the
+  // repurposed 24 KB layout anchor), reused across sections. When set + ok, the
+  // parser lays out into it instead of self-creating a per-section arena, so the
+  // bounded word buffer is available even on a fragmented heap. nullptr keeps
+  // the legacy self-create path (host tests, non-reader callers).
+  crosspoint::layout::LayoutArena* externalArena = nullptr;
 };
 
 class ChapterHtmlSlimParser {
@@ -59,13 +65,17 @@ class ChapterHtmlSlimParser {
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
   // Bounded layout scratch (RFC #164 step 3), reserved once per section in
   // parseAndBuildPages and shared by every paragraph's LayoutEngine. Sized to
-  // hold the dp[]/ans[] line-break DP arrays (8 bytes/word) for a dense
-  // paragraph; only allocated when the heap has comfortable headroom, else it
-  // stays empty and layout falls back to std::vector (today's path). Step 6
-  // will repurpose the dead 24 KB layoutHeapAnchor_ for this so it costs no net
-  // heap and survives mid-section fragmentation.
+  // hold the word buffer + dp[]/ans[] line-break scratch for a dense paragraph.
+  // The OWNED arena below is the legacy self-create path (only allocated when
+  // the heap has comfortable headroom, else empty -> std::vector fallback). When
+  // the reader activity passes a section-lifetime arena (externalArena_, the
+  // repurposed 24 KB anchor, RFC #164 step 6) the parser uses that instead, so
+  // the bounded buffer is available even on a fragmented heap. sectionArena_
+  // points at whichever is active for the current parse.
   static constexpr size_t kLayoutScratchArenaBytes = 16 * 1024;
-  crosspoint::layout::LayoutArena layoutArena_;
+  crosspoint::layout::LayoutArena layoutArena_;                 // owned self-create fallback
+  crosspoint::layout::LayoutArena* externalArena_ = nullptr;    // activity-owned arena (nullable), from config
+  crosspoint::layout::LayoutArena* sectionArena_ = nullptr;     // active arena for this parse (set in parseAndBuildPages)
   std::unique_ptr<crosspoint::layout::LayoutEngine> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;
@@ -140,6 +150,7 @@ class ChapterHtmlSlimParser {
         firstLineIndentMode(config.firstLineIndentMode),
         usePublisherStyles(config.usePublisherStyles),
         degradePlan_(config.degradePlan),
+        externalArena_(config.externalArena),
         completePageFn(completePageFn),
         anchorPageFn(anchorPageFn),
         progressFn(progressFn),

@@ -141,8 +141,8 @@ void EpubReaderActivity::onEnter() {
   // section-build malloc 24 KB of guaranteed-contiguous space to claim.
   // Best-effort: a failure here just disables the optimisation; the
   // existing pre-flight / silent-restart paths still catch fragmentation.
-  layoutHeapAnchor_.reset(new (std::nothrow) uint8_t[kLayoutHeapAnchorBytes]);
-  if (layoutHeapAnchor_) {
+  layoutHeapAnchor_ = crosspoint::layout::LayoutArena::create(kLayoutHeapAnchorBytes);
+  if (layoutHeapAnchor_.ok()) {
     LOG_DBG("HEAP", "EPUB onEnter:anchor-acquired %u bytes free=%u largest=%u",
             (unsigned)kLayoutHeapAnchorBytes, (unsigned)ESP.getFreeHeap(),
             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
@@ -322,7 +322,7 @@ void EpubReaderActivity::onExit() {
   clearPageCache();
   section.reset();
   epub.reset();
-  layoutHeapAnchor_.reset();
+  layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
   invalidateStatusBarCaches();
 }
 
@@ -337,7 +337,7 @@ void EpubReaderActivity::clearPageCache() { cache_.detach(); }
 // mem::thresholdFor / mem::kLayoutHardFloorBytes.
 
 void EpubReaderActivity::tryReacquireLayoutHeapAnchor() {
-  if (layoutHeapAnchor_) {
+  if (layoutHeapAnchor_.ok()) {
     return;
   }
   const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
@@ -350,8 +350,8 @@ void EpubReaderActivity::tryReacquireLayoutHeapAnchor() {
             (unsigned)(kLayoutHeapAnchorBytes + kAnchorReacquireHeadroom));
     return;
   }
-  layoutHeapAnchor_.reset(new (std::nothrow) uint8_t[kLayoutHeapAnchorBytes]);
-  if (layoutHeapAnchor_) {
+  layoutHeapAnchor_ = crosspoint::layout::LayoutArena::create(kLayoutHeapAnchorBytes);
+  if (layoutHeapAnchor_.ok()) {
     LOG_DBG("HEAP", "ERS anchor:re-acquired largest-was=%u largest-now=%u", (unsigned)largest,
             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
   }
@@ -408,7 +408,7 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
   // and forces a slower next paint). It is one-shot per chapter; the
   // post-build re-acquire is best-effort.
   mem::RecoveryContext ctx;
-  ctx.anchorHeld = static_cast<bool>(layoutHeapAnchor_);
+  ctx.anchorHeld = layoutHeapAnchor_.ok();
   ctx.maxAlreadyDropped = false;
   ctx.bookOpen = true;  // an open EPUB is what silentRestartToReader resumes
   ctx.restartBudget = remainingAutoSilentRestarts();
@@ -417,7 +417,10 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
   for (;;) {
     switch (mem::nextRecoveryStep(ctx)) {
       case mem::Recovery::ReleaseAnchor:
-        layoutHeapAnchor_.reset();
+        // Free the arena block (24 KB contiguous) for the retry. The retry's
+        // layout finds no arena and runs the std::vector fallback (RFC #164
+        // step 4) in the freed space — the original anchor-release semantics.
+        layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
         ctx.anchorHeld = false;
         ctx.largestAfterStep = crosspoint::heap::largestFreeBlockBytes();
         LOG_DIAG("ERS", "pre-flight gate: anchor released, largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
@@ -1010,8 +1013,8 @@ void EpubReaderActivity::openReaderMenu() {
   // above so dropping them is safe.
   if (!crosspoint::mem::canAfford(crosspoint::mem::Op::BuildSectionLayout)) {
     LOG_DIAG("ERS", "menu open: low contiguous heap, releasing caches + anchor for sub-activity");
-    if (layoutHeapAnchor_) {
-      layoutHeapAnchor_.reset();
+    if (layoutHeapAnchor_.ok()) {
+      layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
     }
     releaseMaxResources();
   }
@@ -1673,7 +1676,7 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
                                         SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                         viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                         SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                        boldSwapEnabled, layoutProgressTick);
+                                        boldSwapEnabled, layoutProgressTick, &layoutHeapAnchor_);
     };
 
     bool sectionOk = runLayout();
@@ -2041,7 +2044,7 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
                                      SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                      viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
                                      SETTINGS.firstLineIndentMode, SETTINGS.readerStyleMode, sectionTextRenderMode,
-                                     boldSwapEnabled)) {
+                                     boldSwapEnabled, nullptr, &layoutHeapAnchor_)) {
     LOG_ERR("ERS", "Failed silent indexing for chapter: %d", nextSpineIndex);
   }
 }
