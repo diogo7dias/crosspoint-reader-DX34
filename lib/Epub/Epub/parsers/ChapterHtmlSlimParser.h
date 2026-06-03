@@ -9,6 +9,7 @@
 
 #include "../FootnoteEntry.h"
 #include "../ParsedText.h"
+#include "FootnotePlacer.h"
 #include "../blocks/ImageBlock.h"
 #include "../blocks/TextBlock.h"
 #include "../css/CssParser.h"
@@ -67,13 +68,13 @@ class ChapterHtmlSlimParser {
   // block CSS base) now live behind one host-testable resolver (RFC #170).
   StyleResolver styleResolver_;
 
-  // Footnote link tracking
+  // Footnote link tracking. The word-index -> page assignment (pending queue +
+  // cumulative word counter) now lives in a host-testable FootnotePlacer (RFC #170).
   bool insideFootnoteLink = false;
   int footnoteLinkDepth = -1;
   FootnoteEntry currentFootnote = {};
   int currentFootnoteLinkTextLen = 0;
-  std::vector<std::pair<int, FootnoteEntry>> pendingFootnotes;  // <wordIndex, entry>
-  int wordsExtractedInBlock = 0;
+  FootnotePlacer footnotePlacer_;
 
   void startNewTextBlock(const BlockStyle& blockStyle);
   void flushPartWordBuffer();

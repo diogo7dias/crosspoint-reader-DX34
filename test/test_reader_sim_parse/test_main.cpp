@@ -17,6 +17,7 @@
 #include <Print.h>
 #include <ZipFile.h>
 #include <parsers/ChapterHtmlSlimParser.h>
+#include <parsers/FootnotePlacer.h>
 #include <parsers/StyleResolver.h>
 
 #include <chrono>
@@ -259,6 +260,103 @@ void test_style_clear_depth_flags_matches_depth_only() {
   TEST_ASSERT_FALSE(r.effectiveStyle(4) & EpdFontFamily::BOLD);
 }
 
+// ---------------------------------------------------------------------------
+// FootnotePlacer characterization tests (RFC #170). Pin the word-index ->
+// page assignment behaviour: register an anchor at a word index, advance per
+// laid-out line, emit when the index is reached, fallback-drain at block end.
+// ---------------------------------------------------------------------------
+namespace {
+FootnoteEntry fnEntry(const char* number, const char* href) {
+  FootnoteEntry e;
+  strncpy(e.number, number, sizeof(e.number) - 1);
+  strncpy(e.href, href, sizeof(e.href) - 1);
+  return e;
+}
+struct EmitLog {
+  std::vector<std::string> numbers;
+  FootnotePlacer::EmitFn fn() {
+    return [this](const char* n, const char*) { numbers.emplace_back(n); };
+  }
+};
+}  // namespace
+
+void test_footnote_empty_initially() {
+  FootnotePlacer p;
+  TEST_ASSERT_TRUE(p.empty());
+  TEST_ASSERT_EQUAL_INT(0, p.extractedWordCount());
+}
+
+// A footnote whose anchor word lands after a page break binds to the page that
+// crosses its index, not an earlier one.
+void test_footnote_placed_on_page_crossing_its_index() {
+  FootnotePlacer p;
+  p.registerFootnote(12, fnEntry("1", "ch.html#fn1"));
+  EmitLog page0, page1;
+  p.placeForLine(5, page0.fn());  // cumulative 5  -> nothing
+  p.placeForLine(4, page0.fn());  // cumulative 9  -> nothing
+  // page break here (caller moves to page1)
+  p.placeForLine(4, page1.fn());  // cumulative 13 -> 12<=13 drains
+  TEST_ASSERT_EQUAL_UINT(0, page0.numbers.size());
+  TEST_ASSERT_EQUAL_UINT(1, page1.numbers.size());
+  TEST_ASSERT_EQUAL_STRING("1", page1.numbers[0].c_str());
+  TEST_ASSERT_TRUE(p.empty());
+}
+
+// Index exactly equal to the cumulative count drains on that line (<=).
+void test_footnote_index_equal_to_count_drains() {
+  FootnotePlacer p;
+  p.registerFootnote(5, fnEntry("x", "h"));
+  EmitLog log;
+  p.placeForLine(5, log.fn());  // cumulative 5, 5<=5 -> drains
+  TEST_ASSERT_EQUAL_UINT(1, log.numbers.size());
+}
+
+// Multiple footnotes at the same index drain together, in registration order.
+void test_footnote_multiple_drain_in_order() {
+  FootnotePlacer p;
+  p.registerFootnote(3, fnEntry("A", "a"));
+  p.registerFootnote(3, fnEntry("B", "b"));
+  EmitLog log;
+  p.placeForLine(3, log.fn());
+  TEST_ASSERT_EQUAL_UINT(2, log.numbers.size());
+  TEST_ASSERT_EQUAL_STRING("A", log.numbers[0].c_str());
+  TEST_ASSERT_EQUAL_STRING("B", log.numbers[1].c_str());
+}
+
+// extractedWordCount tracks the cumulative laid-out words.
+void test_footnote_extracted_count_advances() {
+  FootnotePlacer p;
+  EmitLog log;
+  p.placeForLine(10, log.fn());
+  p.placeForLine(7, log.fn());
+  TEST_ASSERT_EQUAL_INT(17, p.extractedWordCount());
+}
+
+// drainRemaining flushes stragglers a line drain never reached.
+void test_footnote_drain_remaining_fallback() {
+  FootnotePlacer p;
+  p.registerFootnote(1000, fnEntry("z", "h"));  // never reached by lines
+  EmitLog log;
+  p.placeForLine(3, log.fn());
+  TEST_ASSERT_EQUAL_UINT(0, log.numbers.size());
+  p.drainRemaining(log.fn());
+  TEST_ASSERT_EQUAL_UINT(1, log.numbers.size());
+  TEST_ASSERT_TRUE(p.empty());
+}
+
+// onNewBlock resets the cumulative counter but leaves pending footnotes.
+void test_footnote_on_new_block_resets_count_keeps_pending() {
+  FootnotePlacer p;
+  EmitLog log;
+  p.placeForLine(10, log.fn());
+  p.registerFootnote(2, fnEntry("1", "h"));
+  p.onNewBlock();
+  TEST_ASSERT_EQUAL_INT(0, p.extractedWordCount());
+  TEST_ASSERT_FALSE(p.empty());                 // pending preserved
+  p.placeForLine(2, log.fn());                  // cumulative 2 -> 2<=2 drains
+  TEST_ASSERT_EQUAL_UINT(1, log.numbers.size());
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_parse_chapter_healthy);
@@ -273,5 +371,12 @@ int main(int, char**) {
   RUN_TEST(test_style_inline_stack_cap);
   RUN_TEST(test_style_would_change_at);
   RUN_TEST(test_style_clear_depth_flags_matches_depth_only);
+  RUN_TEST(test_footnote_empty_initially);
+  RUN_TEST(test_footnote_placed_on_page_crossing_its_index);
+  RUN_TEST(test_footnote_index_equal_to_count_drains);
+  RUN_TEST(test_footnote_multiple_drain_in_order);
+  RUN_TEST(test_footnote_extracted_count_advances);
+  RUN_TEST(test_footnote_drain_remaining_fallback);
+  RUN_TEST(test_footnote_on_new_block_resets_count_keeps_pending);
   return UNITY_END();
 }
