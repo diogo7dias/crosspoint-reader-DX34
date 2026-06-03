@@ -174,6 +174,11 @@ cutting the v3.0.0 tag.
 
 ## Active
 
+- [ ] **WiFi exit heap leak: QRShare + KOReaderAuth never silent-restart (salvaged from closed RFC #169).** Both activities bring the radio up but skip the silent-restart-on-exit that every other WiFi activity does, so ~50 KB of LWIP scatter is held until the next reboot. Verified in code:
+    - `QRShareActivity.cpp`: `WiFi.mode(WIFI_STA)` at :63, `onExit` does `WIFI_OFF` at :104 but no `silentRestart`.
+    - `KOReaderAuthActivity.cpp`: `WiFi.mode(WIFI_STA)` at :57, `onExit` `WIFI_OFF` at :92, no `silentRestart`.
+  - Fix: add a silent-restart on exit when the radio actually came up, matching `CrossPointWebServerActivity`/`CalibreConnectActivity` (→ home) — KOReaderAuth is reached from settings so home is fine; QRShare likewise. Small just-code change; the RFC #169 lifecycle-unification extraction was closed as YAGNI, only these two fixes are worth doing. Build → flash → confirm `/heap_report.txt` shows the reclaim after exiting each.
+
 - [ ] **Flash + on-device test branch `fix/reader-open-oom-escape` (reader-open-OOM escape), then merge to main.** Reported by `__melomaniac__` on v4.0.0: device bootloops opening a specific big book — flicker, nothing, repeat. `heap_report.txt`: reason `reader-render-oom`, free 19 KB / largest 9 KB / 53% frag of 142 KB total → heap **exhaustion**, not just fragmentation. Three compounding bugs found + fixed (2 commits on branch):
     - Boot crash-loop guard `readerActivityLoadCount` was incremented then persisted via **debounced** `saveToFile()`; the open-OOM silent-restart fires inside `setup()` before the debounce drains, so the increment never reached disk and every power-cycle reopened the poisoned book. → `CrossPointState::saveToFileSync()` + sync flush at the boot increment (`main.cpp`). **Durable now.**
     - Budget-exhausted (`kMaxConsecutiveAutoRestarts = 2`) stranded the user on a retry-only recovery screen whose retry just re-OOMs. → `giveUpOpenToHome()` routes to the library with a brief "Low memory" notice at both terminal give-up sites (pre-flight gate + render-pass glyph OOM); navigation deferred via `pendingGoHome` (render-task → loop, avoids use-after-free).
