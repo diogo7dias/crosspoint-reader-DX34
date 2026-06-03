@@ -54,6 +54,7 @@
 #include "fonts/CustomBinFontIds.h"
 #include "fonts/CustomBinFontManager.h"
 #include "SilentRestart.h"
+#include "boot/BootSequenceOrchestrator.h"
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -808,48 +809,31 @@ void setup() {
 
   std::string readerPath;
   bool goHome;
+  {
+    // RFC #166: the boot-destination decision — including the brick-class
+    // crash-loop guard (readerActivityLoadCount) — now lives in the pure,
+    // host-tested crosspoint::boot::decideBoot. Gather the impure inputs here,
+    // let the core decide, then apply the durable guard side effect it asks
+    // for. The decision itself is a byte-identical transcription of the old
+    // inline logic; the random fn receives the FILTERED epub count from inside
+    // the core, so we never re-derive the .epub filter at the call site.
+    crosspoint::boot::BootInputs in;
+    in.isSilentReboot = isSilentReboot;
+    in.silentRebootTarget = silentRebootTarget;
+    in.openEpubPath = APP_STATE.openEpubPath;
+    in.readerActivityLoadCount = APP_STATE.readerActivityLoadCount;
+    in.backHeld = mappedInputManager.isPressed(MappedInputManager::Button::Back);
+    in.randomBookOnBoot = SETTINGS.randomBookOnBoot;
+    for (const auto& b : RECENT_BOOKS.getBooks()) in.recentBookPaths.push_back(b.path);
 
-  if (isSilentReboot) {
-    // Silent reboot bypasses the random-book / recents / crash-loop logic.
-    // Target was decided by the exiting activity (KOSync → reader, everything
-    // else → home). Stale openEpubPath + lastSleepFromReader from a prior
-    // session must not trigger the sleep-wake "resume reader" fallback.
-    if (silentRebootTarget == 1 && !APP_STATE.openEpubPath.empty()) {
-      readerPath = APP_STATE.openEpubPath;
-      goHome = false;
-    } else {
-      readerPath.clear();
-      goHome = true;
-    }
-  } else {
-    // Safety: skip straight to reader if Back held or crash-loop detected.
-    const bool forcedHome =
-        mappedInputManager.isPressed(MappedInputManager::Button::Back) || APP_STATE.readerActivityLoadCount > 0;
+    const crosspoint::boot::BootDecision decision =
+        crosspoint::boot::decideBoot(in, [](uint32_t count) -> uint32_t {
+          return static_cast<uint32_t>(random(static_cast<long>(count)));
+        });
+    readerPath = decision.readerPath;
+    goHome = decision.goHome;
 
-    // Build list of .epub books from recents for boot-into-book logic.
-    std::vector<const RecentBook*> recentEpubs;
-    if (!forcedHome) {
-      for (const auto& b : RECENT_BOOKS.getBooks()) {
-        if (b.path.size() > 5 && b.path.rfind(".epub") == b.path.size() - 5) {
-          recentEpubs.push_back(&b);
-        }
-      }
-    }
-
-    // Determine boot destination.
-    // Always open a book when possible: random pick or most-recent epub.
-    // Fall back to home only if forced or no epubs in recents.
-    if (!forcedHome && !recentEpubs.empty()) {
-      if (SETTINGS.randomBookOnBoot && recentEpubs.size() > 1) {
-        readerPath = recentEpubs[random(static_cast<long>(recentEpubs.size()))]->path;
-      } else {
-        readerPath = recentEpubs.front()->path;
-      }
-    }
-
-    goHome = readerPath.empty();
-
-    if (!goHome) {
+    if (decision.bumpGuard) {
       APP_STATE.openEpubPath = "";
       if (APP_STATE.readerActivityLoadCount < 255) APP_STATE.readerActivityLoadCount++;
       // Crash-loop guard must be DURABLE before we launch the reader: a book
