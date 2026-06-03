@@ -23,6 +23,7 @@
 #include <HalSystem.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <MemoryPolicy.h>
 #include <SPI.h>
 #include <builtinFonts/all.h>
 #include <esp_heap_caps.h>
@@ -496,13 +497,22 @@ static void wireActivityRouter() {
 // arbitrary task context. FCM is a single-instance subsystem reachable
 // through `renderer`, both globals at file scope, both fully
 // constructed by the time the heap allocator is in use.
+
+// The one SafeAnywhere shed evictor (RFC #163): alloc-free, lock-free,
+// log-free, callable from the failed-alloc callback. Registered once at boot
+// (setupDisplayAndFonts) into crosspoint::mem's registry, which both the
+// reactive callback below and the dynamic mem::roomToGrow probe drain.
+extern "C" void shedFontCacheEvictor() {
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    fcm->clearCache();
+  }
+}
+
 extern "C" void onHeapAllocFailed(size_t requested, uint32_t caps, const char* function_name) {
   // No std::string / no LOG_DIAG here — Logging may itself allocate.
   ets_printf("[DIAG] [HEAP] alloc-fail size=%u caps=%lu fn=%s\n", static_cast<unsigned>(requested),
              static_cast<unsigned long>(caps), function_name ? function_name : "?");
-  if (auto* fcm = renderer.getFontCacheManager()) {
-    fcm->clearCache();
-  }
+  crosspoint::mem::shedUnderPressure();
 }
 
 void setupDisplayAndFonts() {
@@ -549,6 +559,12 @@ void setupDisplayAndFonts() {
   static FontCacheManager fontCacheManager(renderer.getFontMap());
   fontCacheManager.setFontDecompressor(&fontDecompressor);
   renderer.setFontCacheManager(&fontCacheManager);
+
+  // Register the font-cache as the SafeAnywhere shed evictor now that FCM is
+  // reachable via renderer, so the failed-alloc callback and mem::roomToGrow
+  // both drop it under pressure (RFC #163). Idempotent across re-entry only if
+  // setup runs once, which it does.
+  crosspoint::mem::registerShedEvictor(&shedFontCacheEvictor);
 
   // Register the heap allocator failure hook now that FCM is reachable
   // via renderer. Idempotent: a re-call replaces the previous handler.
