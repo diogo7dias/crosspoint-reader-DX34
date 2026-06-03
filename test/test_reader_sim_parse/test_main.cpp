@@ -413,10 +413,165 @@ void test_dp_scratch_arena_overflow_falls_back() {
   TEST_ASSERT_EQUAL_UINT(0, tiny.highWater());  // never satisfied a dp/ans alloc
 }
 
+// — RFC #164 step 4: golden line-level parity oracle —
+//
+// The step-3 tests above compare only per-line WORD COUNTS. Step 4 moves the
+// word working set (words[]/wordStyles[]/wordContinues[] + the transient
+// width/break arrays) into the arena, so it can drift the actual emitted bytes
+// and x-positions, not just the break points. These helpers capture the FULL
+// emitted line (word strings post soft-hyphen-strip + visible hyphen, x
+// positions, styles) so the arena path can be asserted byte-identical to the
+// std::vector fallback across the mutating layout cases (justification,
+// hyphenation sub-token expansion, oversized-token UTF-8 split, indent,
+// continuation runs) — not just plain wrapping.
+namespace {
+
+struct WordSpec {
+  std::string text;
+  EpdFontFamily::Style style = EpdFontFamily::REGULAR;
+  bool attach = false;  // continuation: no space before, attaches to previous
+};
+
+struct CapturedLine {
+  std::vector<std::string> words;
+  std::vector<int16_t> xpos;
+  std::vector<EpdFontFamily::Style> styles;
+  bool oom = false;  // processLine(nullptr) marker
+};
+
+// Lay out one paragraph and capture every emitted line in full. `arena`
+// (nullable) is passed to layoutAndExtractLines exactly as the parser does.
+std::vector<CapturedLine> captureParagraph(const std::vector<WordSpec>& words, bool hyphenation, const BlockStyle& bs,
+                                           uint8_t wordSpacing, uint8_t indentMode, bool usePublisher, uint16_t vw,
+                                           crosspoint::layout::LayoutArena* arena) {
+  ParsedText pt(/*extraSpacing=*/false, hyphenation, bs, wordSpacing, indentMode, usePublisher);
+  for (const auto& w : words) pt.addWord(w.text, w.style, /*underline=*/false, w.attach);
+  std::vector<CapturedLine> out;
+  pt.layoutAndExtractLines(
+      g_renderer, 0, vw,
+      [&out](std::shared_ptr<TextBlock> tb) {
+        if (!tb) {
+          out.push_back(CapturedLine{{}, {}, {}, true});
+          return;
+        }
+        out.push_back(CapturedLine{tb->getWords(), tb->getWordXpos(), tb->getWordStyles(), false});
+      },
+      /*includeLastLine=*/true, arena);
+  return out;
+}
+
+void assertLineParity(const std::vector<CapturedLine>& a, const std::vector<CapturedLine>& b) {
+  TEST_ASSERT_EQUAL_UINT(a.size(), b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    TEST_ASSERT_EQUAL(a[i].oom, b[i].oom);
+    TEST_ASSERT_EQUAL_UINT(a[i].words.size(), b[i].words.size());
+    TEST_ASSERT_EQUAL_UINT(a[i].xpos.size(), b[i].xpos.size());
+    TEST_ASSERT_EQUAL_UINT(a[i].styles.size(), b[i].styles.size());
+    for (size_t j = 0; j < a[i].words.size(); ++j) {
+      TEST_ASSERT_EQUAL_STRING(a[i].words[j].c_str(), b[i].words[j].c_str());
+      TEST_ASSERT_EQUAL_INT16(a[i].xpos[j], b[i].xpos[j]);
+      TEST_ASSERT_EQUAL_UINT8(a[i].styles[j], b[i].styles[j]);
+    }
+  }
+}
+
+std::vector<WordSpec> repeatWords(const char* w, int n, EpdFontFamily::Style style = EpdFontFamily::REGULAR) {
+  std::vector<WordSpec> out;
+  out.reserve(n);
+  for (int i = 0; i < n; ++i) out.push_back(WordSpec{w, style, false});
+  return out;
+}
+
+// Run the same paragraph with no arena and with a fat arena; assert the full
+// emitted output is byte-identical. The arena is sized to comfortably back the
+// DP scratch for the case so the arena branch is actually taken.
+void expectArenaParity(const std::vector<WordSpec>& words, bool hyphenation, const BlockStyle& bs, uint8_t wordSpacing,
+                       uint8_t indentMode, bool usePublisher, uint16_t vw, size_t arenaBytes = 16 * 1024) {
+  const std::vector<CapturedLine> noArena =
+      captureParagraph(words, hyphenation, bs, wordSpacing, indentMode, usePublisher, vw, nullptr);
+  crosspoint::layout::LayoutArena arena = crosspoint::layout::LayoutArena::create(arenaBytes);
+  TEST_ASSERT_TRUE(arena.ok());
+  const std::vector<CapturedLine> withArena =
+      captureParagraph(words, hyphenation, bs, wordSpacing, indentMode, usePublisher, vw, &arena);
+  assertLineParity(noArena, withArena);
+}
+
+BlockStyle styleWith(CssTextAlign align) {
+  BlockStyle bs;
+  bs.alignment = align;
+  return bs;
+}
+
+}  // namespace
+
+void test_layout_parity_plain_wrap() {
+  expectArenaParity(repeatWords("lorem", 60), false, styleWith(CssTextAlign::Left), 1, 0, true, 600);
+}
+void test_layout_parity_justify() {
+  expectArenaParity(repeatWords("ipsum", 60), false, styleWith(CssTextAlign::Justify), 1, 0, true, 600);
+}
+void test_layout_parity_center() {
+  expectArenaParity(repeatWords("dolor", 40), false, styleWith(CssTextAlign::Center), 1, 0, true, 600);
+}
+void test_layout_parity_right() {
+  expectArenaParity(repeatWords("amet", 40), false, styleWith(CssTextAlign::Right), 1, 0, true, 600);
+}
+void test_layout_parity_indent() {
+  // firstLineIndentMode=3 forces a 1em first-line indent (applyParagraphIndent).
+  expectArenaParity(repeatWords("consectetur", 50), false, styleWith(CssTextAlign::Justify), 1, 3, true, 600);
+}
+void test_layout_parity_word_spacing_wide() {
+  // wordSpacingPercent=3 (Very Wide) exercises the space-width delta path.
+  expectArenaParity(repeatWords("elit", 50), false, styleWith(CssTextAlign::Justify), 3, 0, true, 600);
+}
+void test_layout_parity_hyphenation() {
+  // Long words (>8 bytes) drive expandHyphenationBreaks (stub breaks every 4
+  // bytes, inserting a visible hyphen at the break) — the lockstep mid-vector
+  // insert path step 4 restructures.
+  expectArenaParity(repeatWords("internationalization", 30), true, styleWith(CssTextAlign::Justify), 1, 0, true, 600);
+}
+void test_layout_parity_oversized_token() {
+  // A single token far wider than the viewport drives splitOversizedTokens'
+  // UTF-8 chunk split + inserts.
+  std::vector<WordSpec> w;
+  w.push_back(WordSpec{std::string(200, 'M'), EpdFontFamily::REGULAR, false});
+  w.push_back(WordSpec{"tail", EpdFontFamily::REGULAR, false});
+  expectArenaParity(w, false, styleWith(CssTextAlign::Left), 1, 0, true, 600);
+}
+void test_layout_parity_continuations() {
+  // Continuation words (attach=true) lay out with no gap — exercises the
+  // wordContinues path through canBreakBefore + extractLine x-positioning.
+  std::vector<WordSpec> w;
+  for (int i = 0; i < 30; ++i) {
+    w.push_back(WordSpec{"word", EpdFontFamily::REGULAR, false});
+    w.push_back(WordSpec{".", EpdFontFamily::REGULAR, true});  // attached punctuation
+  }
+  expectArenaParity(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600);
+}
+void test_layout_parity_mixed_styles() {
+  std::vector<WordSpec> w;
+  for (int i = 0; i < 40; ++i) {
+    w.push_back(WordSpec{"reg", EpdFontFamily::REGULAR, false});
+    w.push_back(WordSpec{"bold", EpdFontFamily::BOLD, false});
+    w.push_back(WordSpec{"ital", EpdFontFamily::ITALIC, false});
+  }
+  expectArenaParity(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_dp_scratch_arena_parity_and_bounded);
   RUN_TEST(test_dp_scratch_arena_overflow_falls_back);
+  RUN_TEST(test_layout_parity_plain_wrap);
+  RUN_TEST(test_layout_parity_justify);
+  RUN_TEST(test_layout_parity_center);
+  RUN_TEST(test_layout_parity_right);
+  RUN_TEST(test_layout_parity_indent);
+  RUN_TEST(test_layout_parity_word_spacing_wide);
+  RUN_TEST(test_layout_parity_hyphenation);
+  RUN_TEST(test_layout_parity_oversized_token);
+  RUN_TEST(test_layout_parity_continuations);
+  RUN_TEST(test_layout_parity_mixed_styles);
   RUN_TEST(test_parse_chapter_healthy);
   RUN_TEST(test_parse_chapter_under_fragmentation);
   RUN_TEST(test_style_plain_is_regular);
