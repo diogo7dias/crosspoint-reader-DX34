@@ -20,6 +20,7 @@
 #include "EpubProgressSink.h"
 #include "EpubReaderMenuActivity.h"
 #include "HighlightController.h"
+#include "ReaderInputDispatcher.h"
 #include "ReaderProgressTracker.h"
 #include "ReaderStatusBar.h"
 #include "SectionPageCache.h"
@@ -78,14 +79,18 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool pendingSubactivityExit = false;  // Defer subactivity exit to avoid use-after-free
   bool pendingGoHome = false;           // Defer go home to avoid race condition with display task
   bool pendingGoLibrary = false;        // Defer go library after destructive actions
-  bool pendingMenuOpen = false;
   bool pendingThemeReload = false;  // Defer settings reload after ReadingThemesActivity exits
   // Snapshot of the per-book Bold Swap preference at the moment the reader
   // menu was opened. Compared on menu exit; if the user toggled the in-menu
   // Bold Swap item, the current page is re-laid out to apply the change.
   bool boldSwapAtMenuOpen = false;
-  unsigned long lastConfirmReleaseMs = 0;
-  bool confirmLongPressHandled = false;
+  // Input decode FSM (tap/double-tap/long-press/page-turn). The pending-tap,
+  // double-tap-window and long-press latches that used to be loose members
+  // (pendingMenuOpen / lastConfirmReleaseMs / confirmLongPressHandled) now live
+  // inside the dispatcher. Epub opts into all gestures.
+  crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
+      crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
+                                            /*footnoteBack=*/true, /*chapterSkip=*/true}};
   crosspoint::reader::EpubProgressSink progressSink_{"", 0};
   crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int pageLoadFailCount = 0;  // Tracks consecutive page load failures to prevent infinite retry loops
@@ -245,7 +250,11 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   void reloadCurrentSectionForDisplaySettings();
   void loopSubActivity();
   void loopHighlightMode();
-  void loopPageTurn(bool prevTriggered, bool nextTriggered);
+  // Build the per-frame input snapshot from MappedInputManager for the dispatcher.
+  crosspoint::reader::ReaderInput snapshotInput();
+  // Execute one decoded reader action (the impure half of the old loopPageTurn
+  // + the menu/highlight/back actions): RenderLock, section work, navigation.
+  void applyEffect(const crosspoint::reader::ReaderInputDispatcher::Result& effect);
   void openReaderMenu();
   void toggleTextRenderMode();
   void addSessionPagesRead(uint32_t amount = 1);

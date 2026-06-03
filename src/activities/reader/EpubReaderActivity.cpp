@@ -47,9 +47,8 @@
 
 namespace {
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
-constexpr unsigned long skipChapterMs = 700;
-constexpr unsigned long goHomeMs = 1000;
-constexpr unsigned long confirmDoubleTapMs = 350;
+// (skipChapterMs / goHomeMs / confirmDoubleTapMs moved into
+// ReaderInputDispatcher as k* thresholds.)
 constexpr unsigned long progressSaveDebounceMs = 800;
 int clampPercent(int percent) {
   if (percent < 0) {
@@ -299,7 +298,7 @@ void EpubReaderActivity::onEnter() {
 
 void EpubReaderActivity::onExit() {
   flushProgressIfNeeded(true);
-  pendingMenuOpen = false;
+  inputDispatcher_.clearPendingTap();
   highlights_.exit();
   EpdFontFamily::setReaderBoldSwapEnabled(false);
   ActivityWithSubactivity::onExit();
@@ -786,67 +785,25 @@ void EpubReaderActivity::loop() {
     return;
   }
 
-  if (pendingMenuOpen && !mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      millis() - lastConfirmReleaseMs > confirmDoubleTapMs) {
-    pendingMenuOpen = false;
-    openReaderMenu();
-    return;
-  }
+  // Normal-mode reader input is decoded by the pure ReaderInputDispatcher; the
+  // activity only executes the returned action (applyEffect). Recovery and
+  // highlight are handled by the pre-gates above and return early, so the mode
+  // passed here is always Normal.
+  crosspoint::reader::ReaderInputSettings inputSettings;
+  inputSettings.longPressChapterSkip = SETTINGS.longPressChapterSkip;
+  inputSettings.powerIsPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN;
 
-  if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
-    confirmLongPressHandled = false;
-  }
+  crosspoint::reader::ReaderState inputState;
+  inputState.mode = crosspoint::reader::ReaderState::Mode::Normal;
+  inputState.inFootnote = footnoteDepth > 0;
+  inputState.atEndOfBook = currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount();
+  inputState.hasSection = static_cast<bool>(section);
 
-  // Single tap opens menu; double tap toggles text render mode (Dark/Crisp).
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    const unsigned long now = millis();
-    if (pendingMenuOpen && now - lastConfirmReleaseMs <= confirmDoubleTapMs) {
-      pendingMenuOpen = false;
-      toggleTextRenderMode();
-      return;
-    }
-    pendingMenuOpen = true;
-    lastConfirmReleaseMs = now;
-    return;
-  }
-
-  // Long press CONFIRM (1s+) enters text highlight/quote selection mode.
-  if (!confirmLongPressHandled && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= goHomeMs) {
-    confirmLongPressHandled = true;
+  const auto effect = inputDispatcher_.dispatch(snapshotInput(), inputSettings, inputState);
+  if (effect.suppressUntilAllReleased) {
     mappedInput.suppressUntilAllReleased();
-    enterHighlightMode();
-    return;
   }
-
-  // BACK: go home immediately on press for snappier response.
-  // If viewing a footnote, restore saved position instead.
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    if (footnoteDepth > 0) {
-      restoreSavedPosition();
-      return;
-    }
-    onGoHome();
-    return;
-  }
-
-  // Determine page turn triggers
-  const bool usePressForPageTurn = !SETTINGS.longPressChapterSkip;
-  const bool prevTriggered = usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasPressed(MappedInputManager::Button::Left))
-                                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasReleased(MappedInputManager::Button::Left));
-  const bool powerPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
-                             mappedInput.wasReleased(MappedInputManager::Button::Power);
-  const bool nextTriggered = usePressForPageTurn
-                                 ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasPressed(MappedInputManager::Button::Right))
-                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasReleased(MappedInputManager::Button::Right));
-
-  if (prevTriggered || nextTriggered) {
-    loopPageTurn(prevTriggered, nextTriggered);
-  }
+  applyEffect(effect);
 }
 
 void EpubReaderActivity::loopSubActivity() {
@@ -888,89 +845,130 @@ void EpubReaderActivity::loopHighlightMode() {
   handleHighlightInput();
 }
 
-void EpubReaderActivity::loopPageTurn(bool prevTriggered, bool nextTriggered) {
-  // At end of the book, forward button goes home and back button returns to last page
-  if (currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount()) {
-    if (nextTriggered) {
+crosspoint::reader::ReaderInput EpubReaderActivity::snapshotInput() {
+  using MB = MappedInputManager::Button;
+  // Mirror order MUST match ReaderButton (Back, Confirm, Left, Right, Up, Down,
+  // Power, PageBack, PageForward). MappedInputManager::Button declares them in
+  // exactly that order; this static_assert is the drift tripwire.
+  static constexpr MB kMap[crosspoint::reader::kReaderButtonCount] = {
+      MB::Back, MB::Confirm, MB::Left,  MB::Right,      MB::Up,
+      MB::Down, MB::Power,   MB::PageBack, MB::PageForward};
+  static_assert(static_cast<int>(crosspoint::reader::ReaderButton::Back) == 0 &&
+                    static_cast<int>(crosspoint::reader::ReaderButton::PageForward) == 8,
+                "ReaderButton order must mirror MappedInputManager::Button");
+
+  crosspoint::reader::ReaderInput in;
+  for (int i = 0; i < crosspoint::reader::kReaderButtonCount; ++i) {
+    in.pressed[i] = mappedInput.wasPressed(kMap[i]);
+    in.released[i] = mappedInput.wasReleased(kMap[i]);
+    in.down[i] = mappedInput.isPressed(kMap[i]);
+  }
+  in.anyPressed = mappedInput.wasAnyPressed();
+  in.anyReleased = mappedInput.wasAnyReleased();
+  in.heldTimeMs = mappedInput.getHeldTime();
+  in.nowMs = millis();
+  return in;
+}
+
+void EpubReaderActivity::applyEffect(const crosspoint::reader::ReaderInputDispatcher::Result& effect) {
+  using A = crosspoint::reader::ReaderAction;
+  switch (effect.action) {
+    case A::None:
+      return;
+    case A::OpenMenu:
+      openReaderMenu();
+      return;
+    case A::ToggleTextRenderMode:
+      toggleTextRenderMode();
+      return;
+    case A::LongPressConfirm:
+      enterHighlightMode();
+      return;
+    case A::GoHome:
       onGoHome();
-    } else {
+      return;
+    case A::RestoreFootnote:
+      restoreSavedPosition();
+      return;
+    case A::ExitRecoveryToHome:
+      layoutRecoveryState_ = LayoutRecoveryState::None;
+      onGoHome();
+      return;
+    case A::ExitRecoveryRetry:
+      layoutRecoveryState_ = LayoutRecoveryState::None;
+      requestUpdate();
+      return;
+    case A::RequestUpdate:
+      requestUpdate();
+      return;
+    case A::EndOfBookGoHome:
+      onGoHome();
+      return;
+    case A::EndOfBookStay:
       currentSpineIndex = epub->getSpineItemsCount() - 1;
       nextPageNumber = UINT16_MAX;
       requestUpdate();
-    }
-    return;
-  }
-
-  const bool skipChapter = SETTINGS.longPressChapterSkip && mappedInput.getHeldTime() > skipChapterMs;
-
-  // Don't skip chapter after screenshot
-  if (mappedInput.wasReleased(MappedInputManager::Button::Power) &&
-      mappedInput.wasReleased(MappedInputManager::Button::Down)) {
-    return;
-  }
-
-  if (skipChapter) {
-    TransitionFeedback::show(renderer, tr(STR_LOADING));
-    {
-      RenderLock lock(*this);
-      nextPageNumber = 0;
-      currentSpineIndex = nextTriggered ? currentSpineIndex + 1 : currentSpineIndex - 1;
-      // No progress write on chapter skip — saves are lifecycle-only now. The
-      // new position lives in currentSpineIndex/nextPageNumber (consumed by the
-      // reload below); the post-load render's observe() refreshes the tracker
-      // and the next force-flush (menu/exit/sleep) persists it.
-      clearPageCache();
-      section.reset();
-    }
-    requestUpdate();
-    return;
-  }
-
-  // No current section — user interaction triggers a rebuild attempt.
-  if (!section) {
-    if (mappedInput.wasAnyPressed()) {
-      requestUpdate();
-    }
-    return;
-  }
-
-  if (prevTriggered) {
-    if (section->currentPage > 0) {
-      section->currentPage--;
-      flushProgressIfNeeded(false);
-    } else if (currentSpineIndex > 0) {
-      TransitionFeedback::show(renderer, tr(STR_LOADING));
-      {
-        RenderLock lock(*this);
-        nextPageNumber = UINT16_MAX;
-        currentSpineIndex--;
-        // No progress write on a backward chapter cross — lifecycle-only saves.
-        clearPageCache();
-        section.reset();
-      }
-    }
-    requestUpdate();
-  } else {
-    if (section->currentPage < section->pageCount - 1) {
-      section->currentPage++;
-      addSessionPagesRead();
-      flushProgressIfNeeded(false);
-    } else {
+      return;
+    case A::SkipChapterPrev:
+    case A::SkipChapterNext: {
       TransitionFeedback::show(renderer, tr(STR_LOADING));
       {
         RenderLock lock(*this);
         nextPageNumber = 0;
-        const bool hasNextSection = epub && currentSpineIndex + 1 < epub->getSpineItemsCount();
-        currentSpineIndex++;
-        if (hasNextSection) {
-          addSessionPagesRead();
-        }
-        // No progress write on a forward chapter cross — lifecycle-only saves.
+        currentSpineIndex =
+            (effect.action == A::SkipChapterNext) ? currentSpineIndex + 1 : currentSpineIndex - 1;
+        // No progress write on chapter skip — saves are lifecycle-only now. The
+        // new position lives in currentSpineIndex/nextPageNumber (consumed by the
+        // reload below); the post-load render's observe() refreshes the tracker
+        // and the next force-flush (menu/exit/sleep) persists it.
         clearPageCache();
         section.reset();
       }
+      requestUpdate();
+      return;
     }
-    requestUpdate();
+    case A::PagePrev: {
+      // hasSection is guaranteed by the dispatcher for Page* actions.
+      if (section->currentPage > 0) {
+        section->currentPage--;
+        flushProgressIfNeeded(false);
+      } else if (currentSpineIndex > 0) {
+        TransitionFeedback::show(renderer, tr(STR_LOADING));
+        {
+          RenderLock lock(*this);
+          nextPageNumber = UINT16_MAX;
+          currentSpineIndex--;
+          // No progress write on a backward chapter cross — lifecycle-only saves.
+          clearPageCache();
+          section.reset();
+        }
+      }
+      requestUpdate();
+      return;
+    }
+    case A::PageNext: {
+      if (section->currentPage < section->pageCount - 1) {
+        section->currentPage++;
+        addSessionPagesRead();
+        flushProgressIfNeeded(false);
+      } else {
+        TransitionFeedback::show(renderer, tr(STR_LOADING));
+        {
+          RenderLock lock(*this);
+          nextPageNumber = 0;
+          const bool hasNextSection = epub && currentSpineIndex + 1 < epub->getSpineItemsCount();
+          currentSpineIndex++;
+          if (hasNextSection) {
+            addSessionPagesRead();
+          }
+          // No progress write on a forward chapter cross — lifecycle-only saves.
+          clearPageCache();
+          section.reset();
+        }
+      }
+      requestUpdate();
+      return;
+    }
   }
 }
 
@@ -1280,7 +1278,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                                                  epub ? epub->getCachePath() : std::string(),
                                                  [this](const bool changed) {
                                                    pendingSubactivityExit = true;
-                                                   pendingMenuOpen = false;
+                                                   inputDispatcher_.clearPendingTap();
                                                    pendingThemeReload = changed;
                                                  }));
       break;
@@ -1302,7 +1300,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         StatusPopup::showConfirmation(renderer, makeFavorite ? tr(STR_FAVORITED) : tr(STR_UNFAVORITED));
       }
       exitActivity();
-      pendingMenuOpen = false;
+      inputDispatcher_.clearPendingTap();
       // Input suppression handled by exitActivity()
       requestUpdate();
       break;
@@ -1313,7 +1311,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       StatusPopup::showConfirmation(
           renderer, APP_STATE.wallpaperRotationPaused ? tr(STR_ROTATION_PAUSED) : tr(STR_ROTATION_UNPAUSED));
       exitActivity();
-      pendingMenuOpen = false;
+      inputDispatcher_.clearPendingTap();
       requestUpdate();
       break;
     }
@@ -1323,7 +1321,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       if (lastPath.rfind("/sleep pause/", 0) == 0) {
         StatusPopup::showConfirmation(renderer, tr(STR_ALREADY_IN_SLEEP_PAUSE));
         exitActivity();
-        pendingMenuOpen = false;
+        inputDispatcher_.clearPendingTap();
         // Input suppression handled by exitActivity()
         requestUpdate();
         break;
@@ -1362,7 +1360,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       }
       StatusPopup::showConfirmation(renderer, ok ? tr(STR_MOVED_TO_SLEEP_PAUSE) : tr(STR_MOVE_FAILED));
       exitActivity();
-      pendingMenuOpen = false;
+      inputDispatcher_.clearPendingTap();
       // Input suppression handled by exitActivity()
       requestUpdate();
       break;
@@ -1378,7 +1376,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       }
       StatusPopup::showConfirmation(renderer, removed ? tr(STR_WALLPAPER_DELETED) : tr(STR_DELETE_FAILED));
       exitActivity();
-      pendingMenuOpen = false;
+      inputDispatcher_.clearPendingTap();
       // Input suppression handled by exitActivity()
       requestUpdate();
       break;

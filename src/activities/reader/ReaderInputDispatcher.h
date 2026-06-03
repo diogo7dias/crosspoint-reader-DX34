@@ -173,7 +173,9 @@ class ReaderInputDispatcher {
     if (!st.hasSection) {
       return in.anyPressed ? Result{ReaderAction::RequestUpdate, false} : Result{};
     }
-    return {next ? ReaderAction::PageNext : ReaderAction::PagePrev, false};
+    // Normal page turn. prev takes precedence when both fire in one frame,
+    // matching loopPageTurn's `if (prevTriggered) {...} else {...}`.
+    return {prev ? ReaderAction::PagePrev : ReaderAction::PageNext, false};
   }
 
   // Clear cross-frame latches (activity enter / mode exit).
@@ -182,6 +184,11 @@ class ReaderInputDispatcher {
     lastConfirmReleaseMs_ = 0;
     confirmLongPressHandled_ = false;
   }
+
+  // Surgically clear just the deferred single-tap, exactly like the old
+  // `pendingMenuOpen = false`. Used by the menu/subactivity-exit sites so a
+  // return from a menu doesn't re-fire the pending tap as a fresh menu-open.
+  void clearPendingTap() { pendingMenuOpen_ = false; }
 
   // Inspectors (mirror HighlightController::state() for tests).
   bool pendingMenuOpen() const { return pendingMenuOpen_; }

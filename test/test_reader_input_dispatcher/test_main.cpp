@@ -167,6 +167,15 @@ void test_press_edge_mode_turns_on_press_not_release() {
   TEST_ASSERT_EQUAL_INT((int)ReaderAction::None, act(d.dispatch(rel, pressSettings(), normalReading())));
 }
 
+void test_both_page_buttons_prev_wins() {
+  // Faithful to loopPageTurn: prevTriggered takes precedence over next.
+  ReaderInputDispatcher d(epubCfg());
+  ReaderInput f = frame(0);
+  release(f, ReaderButton::PageForward);
+  release(f, ReaderButton::PageBack);
+  TEST_ASSERT_EQUAL_INT((int)ReaderAction::PagePrev, act(d.dispatch(f, relSettings(), normalReading())));
+}
+
 void test_power_page_turn_when_enabled() {
   ReaderInputDispatcher d(epubCfg());
   ReaderInputSettings s{true, true};  // powerIsPageTurn
@@ -274,6 +283,7 @@ int main(int, char**) {
   RUN_TEST(test_page_next_on_release_in_release_mode);
   RUN_TEST(test_page_prev_on_release_in_release_mode);
   RUN_TEST(test_press_edge_mode_turns_on_press_not_release);
+  RUN_TEST(test_both_page_buttons_prev_wins);
   RUN_TEST(test_power_page_turn_when_enabled);
   RUN_TEST(test_power_down_chord_suppresses_turn);
   RUN_TEST(test_chapter_skip_on_long_hold);
