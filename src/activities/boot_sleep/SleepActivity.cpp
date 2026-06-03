@@ -30,18 +30,6 @@
 namespace {
 
 
-// Direct fragment-safe wallpaper pick. Uses ISleepFs streaming primitives
-// (countSleepBmps + nthSleepBmp) — both O(1) heap beyond the returned
-// filename. Returns empty string if /sleep is empty or fs not wired.
-std::string pickSleepFileDirect() {
-  auto* fs = crosspoint::sleep::wallpaper::fs();
-  if (!fs) return {};
-  const size_t count = fs->countSleepBmps(crosspoint::sleep::wallpaper::kSleepFolderCap);
-  if (count == 0) return {};
-  const size_t idx = static_cast<size_t>(random(static_cast<long>(count)));
-  return fs->nthSleepBmp(idx);
-}
-
 // Sleep rendering runs inside SleepActivity::onEnter, called AFTER
 // enterDeepSleep's persistAppState flushAll and milliseconds before the CPU
 // enters deep sleep. saveToFile() is debounced — the next main-loop tick
@@ -55,21 +43,6 @@ void flushStateSync() {
 void clearLastSleepWallpaperPath() {
   if (!APP_STATE.lastSleepWallpaperPath.empty()) {
     APP_STATE.lastSleepWallpaperPath.clear();
-    flushStateSync();
-  }
-}
-
-void rememberLastRenderedSleepBitmap(const std::string& path, const std::string& sequenceFilename = {}) {
-  bool changed = false;
-  if (APP_STATE.lastSleepWallpaperPath != path) {
-    APP_STATE.lastSleepWallpaperPath = path;
-    changed = true;
-  }
-  if (!sequenceFilename.empty() && APP_STATE.lastShownSleepFilename != sequenceFilename) {
-    APP_STATE.lastShownSleepFilename = sequenceFilename;
-    changed = true;
-  }
-  if (changed) {
     flushStateSync();
   }
 }
@@ -160,128 +133,34 @@ void SleepActivity::onEnter() {
 }
 
 void SleepActivity::renderCustomSleepScreen() const {
-  // When rotation is paused, re-show the same wallpaper without advancing.
-  if (APP_STATE.wallpaperRotationPaused && !APP_STATE.lastSleepWallpaperPath.empty() &&
-      Storage.exists(APP_STATE.lastSleepWallpaperPath.c_str())) {
-    if (StringUtils::checkFileExtension(APP_STATE.lastSleepWallpaperPath, ".pxc")) {
-      LOG_DBG("SLP", "Paused, re-showing PXC: %s", APP_STATE.lastSleepWallpaperPath.c_str());
-      const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
-      if (renderPxcSleepScreen(APP_STATE.lastSleepWallpaperPath, displayName.c_str())) {
-        return;
-      }
-      LOG_ERR("SLP", "Paused PXC render failed: %s", APP_STATE.lastSleepWallpaperPath.c_str());
-    } else {
-      FsFile file;
-      if (Storage.openFileForRead("SLP", APP_STATE.lastSleepWallpaperPath, file)) {
-        LOG_DBG("SLP", "Paused, re-showing: %s", APP_STATE.lastSleepWallpaperPath.c_str());
-        Bitmap bitmap(file, true);
-        const auto parseErr = bitmap.parseHeaders();
-        if (parseErr == BmpReaderError::Ok) {
-          const std::string displayName = FavoriteImage::displayNameForPath(APP_STATE.lastSleepWallpaperPath);
-          renderBitmapSleepScreen(bitmap, displayName.c_str());
-          file.close();
-          return;
-        }
-        LOG_ERR("SLP", "Paused wallpaper parse failed: %s (err=%d)", APP_STATE.lastSleepWallpaperPath.c_str(),
-                static_cast<int>(parseErr));
-        file.close();
-      }
-    }
-  }
+  using crosspoint::sleep::wallpaper::SleepPick;
 
-  // Below the sleep-playlist gate (MemoryPolicy Op::ScanSleepPlaylist,
-  // largest-block >= 64 KB): the V2 reconcile/reshuffle trim peak has been
-  // observed to throw bad_alloc on a fragmented heap, so skip playlist work
-  // entirely and pick a wallpaper directly from /sleep via streaming
-  // primitives — the user still sees an image, no crash. (DEFAULT vs 8BIT
-  // probe is the same heap region on the C3.)
-  const bool useDirectPick = !crosspoint::mem::canAfford(crosspoint::mem::Op::ScanSleepPlaylist);
-  if (useDirectPick) {
-    LOG_DBG("SLP", "Heap below sleep-playlist gate, using direct sleep pick");
-  }
-
-  // Retry advance on parse/open failure so a handful of corrupt BMPs don't
-  // waste a sleep render. Each retry calls advance() again, which skips the
-  // bad file forward (Large: lex-next; Small: rotates head to tail).
-  constexpr int kMaxParseRetries = 5;
-  std::string selectedImage;
-  bool rendered = false;
-  for (int attempt = 0; attempt < kMaxParseRetries && !rendered; ++attempt) {
-    if (useDirectPick) {
-      selectedImage = pickSleepFileDirect();
-    } else {
-      // V2 reconcile/writeBuffer probe the heap internally before reserving
-      // and bail (leaving buffer_ empty) if the contiguous block is too small.
-      // After such a bail advance() returns "" and we fall through to direct
-      // pick on the next retry iteration.
-      selectedImage = crosspoint::sleep::wallpaper::advance();
-      if (selectedImage.empty()) {
-        selectedImage = pickSleepFileDirect();
-      }
-    }
-    if (selectedImage.empty()) break;
-    const auto filename = "/sleep/" + selectedImage;
-    if (StringUtils::checkFileExtension(selectedImage, ".pxc")) {
-      LOG_DBG("SLP", "Loading PXC: %s", filename.c_str());
-      const std::string displayName = FavoriteImage::displayNameForPath(filename);
-      if (renderPxcSleepScreen(filename, displayName.c_str())) {
-        rememberLastRenderedSleepBitmap(filename, selectedImage);
-        rendered = true;
-        return;
-      }
-      LOG_ERR("SLP", "PXC render failed: %s (attempt %d/%d)", filename.c_str(), attempt + 1, kMaxParseRetries);
-      continue;
+  // Rendering is this activity's only job now. The facade
+  // (wallpaper::nextSleepFile) owns wallpaper SELECTION: the paused-rotation
+  // branch, the heap-fragmentation gate, playlist-advance-vs-direct-pick, the
+  // parse/open retry loop, the root-level /sleep.{pxc,bmp} fallbacks, and the
+  // lastRendered bookkeeping. We hand it a probe that renders one candidate
+  // and reports success/failure (RFC #156). ~120 lines of strategy gone.
+  auto probe = [this](const SleepPick& pick) -> bool {
+    if (StringUtils::checkFileExtension(pick.fullPath, ".pxc")) {
+      return renderPxcSleepScreen(pick.fullPath, pick.displayName.c_str());
     }
     FsFile file;
-    if (Storage.openFileForRead("SLP", filename, file)) {
-      LOG_DBG("SLP", "Loading: %s", filename.c_str());
-      Bitmap bitmap(file, true);
-      const auto parseErr = bitmap.parseHeaders();
-      if (parseErr == BmpReaderError::Ok) {
-        const std::string displayName = FavoriteImage::displayNameForPath(filename);
-        rememberLastRenderedSleepBitmap(filename, selectedImage);
-        renderBitmapSleepScreen(bitmap, displayName.c_str());
-        file.close();
-        rendered = true;
-        return;
-      }
-      LOG_ERR("SLP", "Invalid BMP: %s (err=%d, attempt %d/%d)", filename.c_str(), static_cast<int>(parseErr),
-              attempt + 1, kMaxParseRetries);
+    if (!Storage.openFileForRead("SLP", pick.fullPath, file)) return false;
+    Bitmap bitmap(file, true);
+    if (bitmap.parseHeaders() != BmpReaderError::Ok) {
       file.close();
-    } else {
-      LOG_ERR("SLP", "Failed to open sleep image: %s (attempt %d/%d)", filename.c_str(), attempt + 1, kMaxParseRetries);
+      return false;
     }
-  }
+    renderBitmapSleepScreen(bitmap, pick.displayName.c_str());
+    file.close();
+    return true;
+  };
 
-  // Root-level fallback wallpapers. PXC takes precedence over BMP — same image,
-  // PXC renders without on-device dithering and with the factory waveform.
-  if (Storage.exists("/sleep.pxc")) {
-    LOG_DBG("SLP", "Loading: /sleep.pxc");
-    if (renderPxcSleepScreen("/sleep.pxc")) {
-      rememberLastRenderedSleepBitmap("/sleep.pxc");
-      return;
-    }
-    LOG_ERR("SLP", "Root /sleep.pxc render failed");
+  const auto pick = crosspoint::sleep::wallpaper::nextSleepFile(probe);
+  if (!pick.hasImage()) {
+    renderDefaultSleepScreen();
   }
-  FsFile file;
-  for (const char* fallbackPath : {"/sleep_F.bmp", "/sleep.bmp"}) {
-    if (Storage.openFileForRead("SLP", fallbackPath, file)) {
-      Bitmap bitmap(file, true);
-      const auto parseErr = bitmap.parseHeaders();
-      if (parseErr == BmpReaderError::Ok) {
-        const std::string displayName = FavoriteImage::displayNameForPath(fallbackPath);
-        LOG_DBG("SLP", "Loading: %s", fallbackPath);
-        rememberLastRenderedSleepBitmap(fallbackPath);
-        renderBitmapSleepScreen(bitmap, displayName.c_str());
-        file.close();
-        return;
-      }
-      LOG_ERR("SLP", "Fallback BMP parse failed: %s (err=%d)", fallbackPath, static_cast<int>(parseErr));
-      file.close();
-    }
-  }
-
-  renderDefaultSleepScreen();
 }
 
 bool SleepActivity::randomizeSleepImagePlaylist() { return crosspoint::sleep::wallpaper::reshuffle(); }

@@ -169,11 +169,13 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
     if (useDirectPick) {
       basename = pickDirectBasename();
     } else {
-      // Buffer-backed playlist advance. Internal heap probes (see
-      // WallpaperPlaylistV2::reconcile / writeBuffer) bail to empty if
-      // the contiguous block is too small — we then fall through to the
-      // streaming direct pick on the same iteration.
-      basename = v2::WallpaperPlaylistV2::instance().advance();
+      // Buffer-backed playlist advance via the facade entry point, so the
+      // RFC #145 reconcile notice is drained + persisted here too (a direct
+      // v2 advance would skip applyReconcileNotice). Internal heap probes
+      // (WallpaperPlaylistV2::reconcile / writeBuffer) bail to empty if the
+      // contiguous block is too small — we then fall through to the streaming
+      // direct pick on the same iteration.
+      basename = advance();
       if (basename.empty()) {
         basename = pickDirectBasename();
       }
@@ -188,6 +190,22 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
     }
     // Probe rejected this candidate. Loop around — advance() will pick
     // a different file on its next call; direct-pick will re-roll.
+  }
+
+  // Root-level fallback ladder: /sleep is empty or every candidate failed to
+  // render. PXC takes precedence over BMP (same image, factory waveform, no
+  // on-device dithering). Mirrors the tail of the old
+  // SleepActivity::renderCustomSleepScreen, hidden inside the facade.
+  for (const char* fallbackPath : {"/sleep.pxc", "/sleep_F.bmp", "/sleep.bmp"}) {
+    if (!Storage.exists(fallbackPath)) continue;
+    SleepPick fb;
+    fb.fullPath = fallbackPath;
+    fb.displayName = FavoriteImage::displayNameForPath(fallbackPath);
+    fb.isFallback = true;
+    if (probe(fb)) {
+      v2::WallpaperPlaylistV2::instance().rememberRendered(fb.fullPath, "");
+      return fb;
+    }
   }
 
   return SleepPick{};

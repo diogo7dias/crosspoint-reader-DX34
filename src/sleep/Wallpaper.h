@@ -39,10 +39,11 @@ std::string advance();
 // picked wallpaper without consulting APP_STATE or recomputing the
 // favorite display name.
 struct SleepPick {
-  std::string fullPath;     // "/sleep/foo.bmp" or empty if no image available
-  std::string basename;     // basename portion, or empty for paused branch
+  std::string fullPath;     // "/sleep/foo.bmp", "/sleep.pxc", or empty if none
+  std::string basename;     // basename portion; empty for paused / root-fallback
   std::string displayName;  // FavoriteImage::displayNameForPath(fullPath)
   bool isPaused = false;    // facade routed via paused-rotation branch
+  bool isFallback = false;  // facade routed via /sleep.{pxc,bmp} root fallback
 
   bool hasImage() const { return !fullPath.empty(); }
 };
