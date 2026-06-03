@@ -67,7 +67,21 @@ struct Gate {
 inline Gate gateFor(Op op) {
   switch (op) {
     case Op::SpawnRenderTask:       return {false, 12 * 1024};
+    // 48 KB clears the section-load working peak (CSS index + expat read
+    // buffer + page LUT + ParsedText word/style vectors) with margin and is
+    // what the pre-flight defrag pass targets. PR #95/#100 tried higher
+    // rebuild floors (36 KB / 28 KB) but devices with persistent boot-state
+    // fragmentation (PR #96 hardware capture) sit at largest ~25 KB
+    // indefinitely, turning a would-pass layout into a permanent
+    // recovery-screen dead-end; the gate stays at the section-peak value and
+    // the rebuild *floor* below absorbs the fragmented-device case.
     case Op::BuildSectionLayout:    return {false, 48 * 1024};
+    // Hard floor for attempting a section rebuild: below this even a
+    // post-defrag malloc is essentially guaranteed to fail. Reverted to PR
+    // #96's 20 KB after #95/#100's higher floors bounced every modest book on
+    // this device — the retry-once + auto-revert path plus the OOM recovery
+    // screen handle a real mid-layout failure cleanly, so the floor optimizes
+    // for "try and let the failure path catch it" over "block proactively".
     case Op::RebuildSectionFloor:   return {false, 20 * 1024};
     case Op::PrefetchNeighborPages: return {false, 30 * 1024};
     case Op::RenderRichSleepScreen: return {true,  30 * 1024};
@@ -83,6 +97,12 @@ inline bool canAfford(Op op) {
   const size_t have = g.totalMetric ? totalFreeBytes() : crosspoint::heap::largestFreeBlockBytes();
   return have >= g.threshold;
 }
+
+// The byte threshold behind a named gate. For diagnostics/logging only — a
+// caller should ask canAfford(op) for the decision, never re-derive it from
+// this value. Keeps the "one source of truth" guarantee while letting the
+// reader's pre-flight log echo the figure it gated on.
+inline size_t thresholdFor(Op op) { return detail::gateFor(op).threshold; }
 
 // ── Recovery ladder (pure decision) ─────────────────────────────────────────
 // The reader's pre-flight escalation, lifted out of EpubReaderActivity as a

@@ -32,3 +32,11 @@ int consumeSilentRebootTarget();
 constexpr uint8_t kMaxConsecutiveAutoRestarts = 2;
 bool tryReserveAutoSilentRestart();
 void clearSilentRestartLoopGuard();
+
+// Read-only peek at how many auto-restarts remain in this cold-boot session,
+// without reserving one. The recovery-ladder decision (crosspoint::mem::
+// nextRecoveryStep) is a pure function of remaining budget, so it needs the
+// count up front; the caller still calls tryReserveAutoSilentRestart() to
+// actually claim a slot when the ladder lands on SilentRestart. Does not
+// mutate the guard (no magic init), unlike tryReserveAutoSilentRestart().
+uint8_t remainingAutoSilentRestarts();

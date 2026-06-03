@@ -27,6 +27,7 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
+#include "MemoryPolicy.h"
 #include "QuotesViewerActivity.h"
 #include "ReaderCommon.h"
 #include "SilentRestart.h"
@@ -101,7 +102,8 @@ int resolveCurrentTocIndex(const std::shared_ptr<Epub>& epub, const Section* sec
 
 // Size of the heap reservation anchor allocated at activity entry. Picked
 // to cover the gap between the typical post-defrag largest-free-block
-// (~25-30 KB on a fragmented device) and kMinLargestBlockForLayout (48 KB).
+// (~25-30 KB on a fragmented device) and the BuildSectionLayout gate (48 KB,
+// crosspoint::mem::Op::BuildSectionLayout in MemoryPolicy.h).
 // 24 KB matches the upper end of that gap and is small enough that a
 // best-effort tryReacquire after a successful layout has a realistic
 // chance to succeed for chapter-traversal scenarios.
@@ -328,40 +330,11 @@ void EpubReaderActivity::invalidateStatusBarCaches() { statusBarCache_.clear(); 
 
 void EpubReaderActivity::clearPageCache() { cache_.detach(); }
 
-namespace {
-// Pre-flight largest-block thresholds. Tuned conservatively so we trigger
-// the defrag pass on any opening where a fragmented heap is plausibly going
-// to break layout, and abort outright only when there's no realistic path to
-// success. The 32 KB DEFLATE dictionary, the 11 KB inflator struct, and the
-// 4 KB ZIP read buffer all live in BSS now (lib/ZipFile/ZipFile.cpp), so the
-// remaining contiguous demands during layout come from CSS rule storage,
-// expat's growing read buffer, the page LUT, and per-paragraph word tables.
-// Empirically those rarely exceed 12 KB each; 48 KB headroom comfortably
-// covers them with safety margin and is what we target via the defrag pass.
-// The hard floor (20 KB) is below which even after a defrag pass the next
-// big malloc is essentially guaranteed to fail. Hardware capture (PR #96)
-// showed devices with persistent boot-state fragmentation can sit at
-// largest~25 KB indefinitely; 36 KB was too aggressive and turned a
-// would-pass layout into a permanent recovery-screen dead-end. The
-// retry-once + auto-revert path in ensureSectionLoaded handles a real
-// mid-layout malloc failure cleanly, so a 20 KB floor optimizes for "try
-// and let the failure path catch it" over "block proactively".
-constexpr size_t kMinLargestBlockForLayout = 48 * 1024;
-// Hard floor for attempting a section *rebuild*. Devices with persistent
-// boot-state fragmentation sit at largest~25 KB indefinitely (PR #96
-// hardware capture). PR #95 set this to 36 KB and PR #100 raised it to
-// 28 KB to give Wolfe-class books (216-spine, dense prose) a recovery
-// screen instead of a bad_alloc->terminate() reset; both values bounced
-// every modest book on this device because the post-defrag largest never
-// climbed above the gate. Reverted to PR #96's 20 KB: the retry-once +
-// auto-revert path in ensureSectionLoaded plus the OOM screen escape
-// hatch added in PR #100 handle a real mid-layout malloc failure cleanly,
-// so the floor optimizes for "try and let the failure path catch it"
-// over "block proactively". Wolfe still cannot complete its layout under
-// any current floor; that needs the streaming-layout work tracked as
-// follow-up to PR #100, not a higher gate.
-constexpr size_t kMinLargestBlockHardFloor = 20 * 1024;
-}  // namespace
+// Pre-flight largest-block thresholds (Op::BuildSectionLayout 48 KB gate,
+// Op::RebuildSectionFloor 20 KB hard floor) and their hardware-capture
+// history now live in lib/MemoryPolicy/MemoryPolicy.h — the single owner of
+// heap-pressure thresholds. This activity reaches them via mem::canAfford /
+// mem::thresholdFor / mem::kLayoutHardFloorBytes.
 
 void EpubReaderActivity::tryReacquireLayoutHeapAnchor() {
   if (layoutHeapAnchor_) {
@@ -412,52 +385,88 @@ void EpubReaderActivity::releaseMaxResources() {
 }
 
 bool EpubReaderActivity::heapHeadroomOkForLayout() {
-  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  if (largest >= kMinLargestBlockForLayout) {
+  namespace mem = crosspoint::mem;
+  if (mem::canAfford(mem::Op::BuildSectionLayout)) {
     return true;
   }
+  const size_t largest = crosspoint::heap::largestFreeBlockBytes();
   LOG_DIAG("ERS", "pre-flight gate: largest=%u below %u, running defrag pass", (unsigned)largest,
-           (unsigned)kMinLargestBlockForLayout);
+           (unsigned)mem::thresholdFor(mem::Op::BuildSectionLayout));
 
-  // Step 1: release the heap reservation anchor. Allocated at onEnter, it
-  // returns kLayoutHeapAnchorBytes of guaranteed-contiguous space to the
-  // heap. If that alone clears the gate we can skip the more expensive
-  // releaseMaxResources() (which clears font cache + CSS + page cache and
-  // forces a slower next paint). Anchor is one-shot per chapter; the
-  // post-build re-acquire below is best-effort.
-  if (layoutHeapAnchor_) {
-    layoutHeapAnchor_.reset();
-    const size_t afterAnchor = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    LOG_DIAG("ERS", "pre-flight gate: anchor released, largest=%u (was %u)", (unsigned)afterAnchor, (unsigned)largest);
-    if (afterAnchor >= kMinLargestBlockForLayout) {
-      return true;
+  // The escalation order (release the layout anchor → releaseMaxResources →
+  // silent-restart / give-up) is now decided by the pure, host-testable
+  // crosspoint::mem::nextRecoveryStep (RFC #163). This activity still RUNS each
+  // rung's impure action — they need its render lock, `this`, and the live
+  // anchor — but the ordering, the 48 KB re-check after the anchor drop, the
+  // 20 KB hard-floor interplay, and the restart-budget branch are all the
+  // policy core's job, so the melomaniac-class fragmentation ladder is finally
+  // reproducible on the host (test/test_memory_policy).
+  //
+  // Anchor (allocated at onEnter, kLayoutHeapAnchorBytes of guaranteed-
+  // contiguous space): dropping it first can clear the gate without the more
+  // expensive releaseMaxResources() (which also evicts CSS + font + page cache
+  // and forces a slower next paint). It is one-shot per chapter; the
+  // post-build re-acquire is best-effort.
+  mem::RecoveryContext ctx;
+  ctx.anchorHeld = static_cast<bool>(layoutHeapAnchor_);
+  ctx.maxAlreadyDropped = false;
+  ctx.bookOpen = true;  // an open EPUB is what silentRestartToReader resumes
+  ctx.restartBudget = remainingAutoSilentRestarts();
+  ctx.largestAfterStep = largest;
+
+  for (;;) {
+    switch (mem::nextRecoveryStep(ctx)) {
+      case mem::Recovery::ReleaseAnchor:
+        layoutHeapAnchor_.reset();
+        ctx.anchorHeld = false;
+        ctx.largestAfterStep = crosspoint::heap::largestFreeBlockBytes();
+        LOG_DIAG("ERS", "pre-flight gate: anchor released, largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
+                 (unsigned)largest);
+        if (mem::canAfford(mem::Op::BuildSectionLayout)) {
+          return true;
+        }
+        break;
+
+      case mem::Recovery::ReleaseMaxResources:
+        releaseMaxResources();
+        ctx.maxAlreadyDropped = true;
+        ctx.largestAfterStep = crosspoint::heap::largestFreeBlockBytes();
+        LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
+                 (unsigned)largest);
+        break;
+
+      case mem::Recovery::SilentRestart:
+        // Last-resort recovery: heap fragmentation is non-moving on ESP32-C3
+        // and releaseMaxResources() already evicted every droppable cache, so
+        // a reboot is the only reliable way to reclaim the contiguous space
+        // the next layout peak needs. silentRestartToReader routes back to
+        // APP_STATE.openEpubPath so the user lands on the same book. The
+        // budget peek above let the policy core pick this rung; claim the slot
+        // now (a failed reserve — exhausted between peek and here — falls
+        // through to the recovery screen, exactly as before).
+        LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)ctx.largestAfterStep,
+                 (unsigned)mem::kLayoutHardFloorBytes);
+        if (tryReserveAutoSilentRestart()) {
+          LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
+          persistProgressBeforeRestart();
+          silentRestartToReader("reader-preflight-frag-recovery");  // does not return
+        }
+        LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
+        return false;
+
+      case mem::Recovery::GiveUp:
+        LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)ctx.largestAfterStep,
+                 (unsigned)mem::kLayoutHardFloorBytes);
+        LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
+        return false;
+
+      case mem::Recovery::Proceed:
+        // Above the hard floor (20 KB) but below the 48 KB gate: attempt the
+        // layout optimistically and let the retry-once + auto-revert path in
+        // ensureSectionLoaded catch a real mid-layout malloc failure.
+        return true;
     }
   }
-
-  releaseMaxResources();
-  const size_t after = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)after, (unsigned)largest);
-  if (after < kMinLargestBlockHardFloor) {
-    LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)after,
-             (unsigned)kMinLargestBlockHardFloor);
-    // Try a silent restart to reader as the last-resort recovery. Heap
-    // fragmentation is non-moving on ESP32-C3 and releaseMaxResources()
-    // has already evicted the caches we can drop, so a reboot is the
-    // only reliable way to reclaim the contiguous space the next layout
-    // peak will need. The loop guard bounds this to kMaxConsecutiveAutoRestarts
-    // so a chronically OOM-prone book falls through to the user-facing
-    // recovery screen instead of reboot-looping. silentRestartToReader
-    // routes back to APP_STATE.openEpubPath (set by ReaderCommon when this
-    // activity was launched) so the user lands on the same book.
-    if (tryReserveAutoSilentRestart()) {
-      LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
-      persistProgressBeforeRestart();
-      silentRestartToReader("reader-preflight-frag-recovery");  // does not return
-    }
-    LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
-    return false;
-  }
-  return true;
 }
 
 void EpubReaderActivity::showLayoutRecoveryScreen(LayoutRecoveryState newState) {
@@ -999,7 +1008,7 @@ void EpubReaderActivity::openReaderMenu() {
   // heap, so a healthy device keeps an instant menu-back (no re-render). They
   // re-warm on menu-back / next render, and progress was just force-flushed
   // above so dropping them is safe.
-  if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < kMinLargestBlockForLayout) {
+  if (!crosspoint::mem::canAfford(crosspoint::mem::Op::BuildSectionLayout)) {
     LOG_DIAG("ERS", "menu open: low contiguous heap, releasing caches + anchor for sub-activity");
     if (layoutHeapAnchor_) {
       layoutHeapAnchor_.reset();

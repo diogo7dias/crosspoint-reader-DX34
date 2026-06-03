@@ -91,3 +91,16 @@ void clearSilentRestartLoopGuard() {
   autoRestartLoopMagic = AUTO_RESTART_LOOP_MAGIC;
   autoRestartLoopCount = 0;
 }
+
+uint8_t remainingAutoSilentRestarts() {
+  // Magic not yet set this cold-boot session = full budget untouched. Mirror
+  // tryReserveAutoSilentRestart's first-use semantics WITHOUT writing the
+  // magic, so this stays a pure read (the actual reserve does the init).
+  if (autoRestartLoopMagic != AUTO_RESTART_LOOP_MAGIC) {
+    return kMaxConsecutiveAutoRestarts;
+  }
+  if (autoRestartLoopCount >= kMaxConsecutiveAutoRestarts) {
+    return 0;
+  }
+  return static_cast<uint8_t>(kMaxConsecutiveAutoRestarts - autoRestartLoopCount);
+}
