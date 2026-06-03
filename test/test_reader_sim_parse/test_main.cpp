@@ -360,8 +360,63 @@ void test_footnote_on_new_block_resets_count_keeps_pending() {
   TEST_ASSERT_EQUAL_UINT(1, log.numbers.size());
 }
 
+// — RFC #164 step 3: dp[]/ans[] line-break scratch backed by the LayoutArena —
+
+// Lay out `nWords` identical words in one paragraph; return the per-line word
+// counts. `arena` (nullable) backs the DP scratch when present.
+static std::vector<size_t> layoutLineWordCounts(int nWords, crosspoint::layout::LayoutArena* arena) {
+  ParsedText pt(/*extraSpacing=*/false, /*hyphenation=*/false, BlockStyle(), /*wordSpacing=*/1,
+                /*firstLineIndentMode=*/0, /*usePublisherStyles=*/true);
+  for (int i = 0; i < nWords; ++i) pt.addWord("word", EpdFontFamily::REGULAR, false, false);
+  std::vector<size_t> counts;
+  pt.layoutAndExtractLines(
+      g_renderer, 0, 600,
+      [&counts](std::shared_ptr<TextBlock> tb) {
+        if (tb) counts.push_back(tb->wordCount());
+      },
+      /*includeLastLine=*/true, arena);
+  return counts;
+}
+
+// The arena-backed DP produces byte-identical line breaking vs the vector
+// fallback, the arena is actually used, and its peak stays within capacity.
+void test_dp_scratch_arena_parity_and_bounded() {
+  constexpr int kWords = 400;
+  const std::vector<size_t> noArena = layoutLineWordCounts(kWords, nullptr);
+  TEST_ASSERT_GREATER_THAN_UINT(1, noArena.size());  // wraps to many lines
+
+  crosspoint::layout::LayoutArena arena = crosspoint::layout::LayoutArena::create(16 * 1024);
+  TEST_ASSERT_TRUE(arena.ok());
+  const std::vector<size_t> withArena = layoutLineWordCounts(kWords, &arena);
+
+  TEST_ASSERT_EQUAL_UINT(noArena.size(), withArena.size());
+  for (size_t i = 0; i < noArena.size(); ++i) {
+    TEST_ASSERT_EQUAL_UINT(noArena[i], withArena[i]);
+  }
+  // dp[] + ans[] = (sizeof(int)+sizeof(size_t)) per word were drawn from the
+  // arena, and rewind() returned them (highWater retains the peak).
+  TEST_ASSERT_GREATER_OR_EQUAL_UINT(kWords * (sizeof(int) + sizeof(size_t)), arena.highWater());
+  TEST_ASSERT_LESS_OR_EQUAL_UINT(arena.capacity(), arena.highWater());
+}
+
+// An arena too small for the DP scratch falls back to std::vector cleanly with
+// identical output and never partially fills the arena.
+void test_dp_scratch_arena_overflow_falls_back() {
+  const std::vector<size_t> noArena = layoutLineWordCounts(400, nullptr);
+  crosspoint::layout::LayoutArena tiny = crosspoint::layout::LayoutArena::create(64);
+  TEST_ASSERT_TRUE(tiny.ok());
+  const std::vector<size_t> tinyArena = layoutLineWordCounts(400, &tiny);
+  TEST_ASSERT_EQUAL_UINT(noArena.size(), tinyArena.size());
+  for (size_t i = 0; i < noArena.size(); ++i) {
+    TEST_ASSERT_EQUAL_UINT(noArena[i], tinyArena[i]);
+  }
+  TEST_ASSERT_EQUAL_UINT(0, tiny.highWater());  // never satisfied a dp/ans alloc
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
+  RUN_TEST(test_dp_scratch_arena_parity_and_bounded);
+  RUN_TEST(test_dp_scratch_arena_overflow_falls_back);
   RUN_TEST(test_parse_chapter_healthy);
   RUN_TEST(test_parse_chapter_under_fragmentation);
   RUN_TEST(test_style_plain_is_regular);

@@ -11,6 +11,11 @@
 #include "blocks/TextBlock.h"
 
 class GfxRenderer;
+namespace crosspoint {
+namespace layout {
+class LayoutArena;
+}
+}  // namespace crosspoint
 
 class ParsedText {
   std::vector<std::string> words;
@@ -38,7 +43,8 @@ class ParsedText {
   std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth, int spaceWidth,
                                         std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
                                         const std::vector<bool>& canBreakBefore,
-                                        const std::vector<bool>& wordNeedsHyphenAtBreak);
+                                        const std::vector<bool>& wordNeedsHyphenAtBreak,
+                                        crosspoint::layout::LayoutArena* arena);
   void extractLine(size_t breakIndex, int pageWidth, int spaceWidth, const std::vector<uint16_t>& wordWidths,
                    const std::vector<bool>& continuesVec, const std::vector<size_t>& lineBreakIndices,
                    const std::vector<bool>& wordNeedsHyphenAtBreak,
@@ -67,7 +73,11 @@ class ParsedText {
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }
   bool isEmpty() const { return words.empty(); }
+  // `arena`, when non-null and large enough, backs the line-break DP scratch
+  // (dp[]/ans[]) instead of std::vector — bounding that transient peak. A null
+  // or too-small arena falls back to std::vector with byte-identical output
+  // (RFC #164 step 3).
   void layoutAndExtractLines(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
                              const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
-                             bool includeLastLine = true);
+                             bool includeLastLine = true, crosspoint::layout::LayoutArena* arena = nullptr);
 };

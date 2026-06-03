@@ -54,6 +54,15 @@ class ChapterHtmlSlimParser {
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
   int partWordBufferIndex = 0;
   bool nextWordContinues = false;  // true when next flushed word attaches to previous (inline element boundary)
+  // Bounded layout scratch (RFC #164 step 3), reserved once per section in
+  // parseAndBuildPages and shared by every paragraph's LayoutEngine. Sized to
+  // hold the dp[]/ans[] line-break DP arrays (8 bytes/word) for a dense
+  // paragraph; only allocated when the heap has comfortable headroom, else it
+  // stays empty and layout falls back to std::vector (today's path). Step 6
+  // will repurpose the dead 24 KB layoutHeapAnchor_ for this so it costs no net
+  // heap and survives mid-section fragmentation.
+  static constexpr size_t kLayoutScratchArenaBytes = 16 * 1024;
+  crosspoint::layout::LayoutArena layoutArena_;
   std::unique_ptr<crosspoint::layout::LayoutEngine> currentTextBlock = nullptr;
   std::unique_ptr<Page> currentPage = nullptr;
   int16_t currentPageNextY = 0;

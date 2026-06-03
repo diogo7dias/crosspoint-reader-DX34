@@ -27,6 +27,7 @@
 #include "../blocks/BlockStyle.h"
 #include "../blocks/TextBlock.h"
 #include "DegradeLevel.h"
+#include "LayoutArena.h"
 
 class GfxRenderer;
 
@@ -49,9 +50,10 @@ class LayoutEngine {
   // and a DegradePlan (pinned to Full by the parser until step 7).
   LayoutEngine(GfxRenderer& renderer, int fontId, bool extraParagraphSpacing, bool hyphenationEnabled,
                const BlockStyle& blockStyle, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
-               bool usePublisherStyles, DegradePlan plan = DegradePlan{})
+               bool usePublisherStyles, LayoutArena* arena = nullptr, DegradePlan plan = DegradePlan{})
       : renderer_(renderer),
         fontId_(fontId),
+        arena_(arena),
         plan_(plan),
         pt_(extraParagraphSpacing, hyphenationEnabled, blockStyle, wordSpacingPercent, firstLineIndentMode,
             usePublisherStyles) {}
@@ -71,7 +73,7 @@ class LayoutEngine {
   // so the paragraph can keep accumulating — the 750-word drain relies on this.
   LayoutStatus flush(uint16_t viewportWidth, const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
                      bool includeLastLine = true) noexcept {
-    pt_.layoutAndExtractLines(renderer_, fontId_, viewportWidth, processLine, includeLastLine);
+    pt_.layoutAndExtractLines(renderer_, fontId_, viewportWidth, processLine, includeLastLine, arena_);
     return pt_.hadOom() ? LayoutStatus::EmitOom : LayoutStatus::Ok;
   }
 
@@ -86,8 +88,9 @@ class LayoutEngine {
  private:
   GfxRenderer& renderer_;
   int fontId_;
-  DegradePlan plan_;  // dormant until step 7 (pinned Full)
-  ParsedText pt_;     // the wrapped legacy layout, gutted in steps 3-4
+  LayoutArena* arena_;  // section-lifetime scratch, owned by the parser (nullable)
+  DegradePlan plan_;    // dormant until step 7 (pinned Full)
+  ParsedText pt_;       // the wrapped legacy layout, gutted in steps 3-4
 };
 
 }  // namespace layout

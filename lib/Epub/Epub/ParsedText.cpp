@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "hyphenation/Hyphenator.h"
+#include "layout/LayoutArena.h"
 
 constexpr int MAX_COST = std::numeric_limits<int>::max();
 
@@ -132,7 +133,7 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
 // Consumes data to minimize memory usage
 void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
                                        const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
-                                       const bool includeLastLine) {
+                                       const bool includeLastLine, crosspoint::layout::LayoutArena* arena) {
   if (words.empty()) {
     return;
   }
@@ -173,8 +174,8 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
                        wordNeedsHyphenAtBreak);
   if (oom_) return;
 
-  std::vector<size_t> lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, wordWidths,
-                                                           wordContinues, canBreakBefore, wordNeedsHyphenAtBreak);
+  std::vector<size_t> lineBreakIndices = computeLineBreaks(
+      renderer, fontId, pageWidth, spaceWidth, wordWidths, wordContinues, canBreakBefore, wordNeedsHyphenAtBreak, arena);
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {
@@ -390,7 +391,8 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
                                                   const int spaceWidth, std::vector<uint16_t>& wordWidths,
                                                   std::vector<bool>& continuesVec,
                                                   const std::vector<bool>& canBreakBefore,
-                                                  const std::vector<bool>& wordNeedsHyphenAtBreak) {
+                                                  const std::vector<bool>& wordNeedsHyphenAtBreak,
+                                                  crosspoint::layout::LayoutArena* arena) {
   if (words.empty()) {
     return {};
   }
@@ -408,11 +410,39 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
   // Pre-compute width of a visible '-' for hyphenation line-end accounting.
   const int hyphenWidth = renderer.getTextWidthSpaced(fontId, "-", blockStyle.letterSpacing, EpdFontFamily::REGULAR);
 
-  // DP table to store the minimum badness (cost) of lines starting at index i
-  std::vector<int> dp(totalWordCount);
-  // 'ans[i]' stores the index 'j' of the *last word* in the optimal line
-  // starting at 'i'
-  std::vector<size_t> ans(totalWordCount);
+  // DP scratch (RFC #164 step 3): dp[] holds the minimum badness (cost) of
+  // lines starting at index i; ans[i] holds the index j of the *last word* in
+  // the optimal line starting at i. These two arrays are the single largest
+  // transient in layout (8 bytes/word combined). Back them with the bounded
+  // arena when it is present and large enough; otherwise fall back to
+  // std::vector with byte-identical results. Every element is written before it
+  // is read (dp[i] is set to MAX_COST at the top of each i-iteration and ans[i]
+  // alongside; the base case seeds index totalWordCount-1), so the arena's
+  // uninitialised memory is safe.
+  std::vector<int> dpVec;
+  std::vector<size_t> ansVec;
+  int* dp = nullptr;
+  size_t* ans = nullptr;
+  crosspoint::layout::LayoutArena::Mark arenaMark;
+  bool usingArena = false;
+  if (arena != nullptr && arena->ok()) {
+    arenaMark = arena->mark();
+    int* dpA = arena->alloc<int>(totalWordCount);
+    size_t* ansA = arena->alloc<size_t>(totalWordCount);
+    if (dpA != nullptr && ansA != nullptr) {
+      dp = dpA;
+      ans = ansA;
+      usingArena = true;
+    } else {
+      arena->rewind(arenaMark);  // partial alloc — give it all back, use vectors
+    }
+  }
+  if (!usingArena) {
+    dpVec.assign(totalWordCount, 0);
+    ansVec.assign(totalWordCount, 0);
+    dp = dpVec.data();
+    ans = ansVec.data();
+  }
 
   // Base Case
   dp[totalWordCount - 1] = 0;
@@ -502,6 +532,12 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 
     lineBreakIndices.push_back(nextBreakIndex);
     currentWordIndex = nextBreakIndex;
+  }
+
+  // dp[]/ans[] are no longer needed — hand the arena bytes back so the next
+  // paragraph reuses them (mark/rewind LIFO). highWater() retains the peak.
+  if (usingArena) {
+    arena->rewind(arenaMark);
   }
 
   return lineBreakIndices;
