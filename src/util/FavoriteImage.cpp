@@ -59,16 +59,10 @@ void updateSleepReferencesOnPathChange(const std::string& oldPath, const std::st
   const std::string newBase = getBasename(newPath);
 
   if (oldInSleep && newInSleep) {
-    for (std::string& entry : APP_STATE.sleepImagePlaylist) {
-      if (entry == oldBase) {
-        entry = newBase;
-      }
-    }
     if (APP_STATE.lastShownSleepFilename == oldBase) {
       APP_STATE.lastShownSleepFilename = newBase;
     }
   } else if (oldInSleep && !newInSleep) {
-    removeValue(APP_STATE.sleepImagePlaylist, oldBase);
     if (APP_STATE.lastShownSleepFilename == oldBase) {
       APP_STATE.lastShownSleepFilename.clear();
     }
@@ -86,7 +80,6 @@ void removeSleepReferencesForPath(const std::string& path) {
 
   if (isInSleepFolder(path)) {
     const std::string base = getBasename(path);
-    removeValue(APP_STATE.sleepImagePlaylist, base);
     if (APP_STATE.lastShownSleepFilename == base) {
       APP_STATE.lastShownSleepFilename.clear();
     }

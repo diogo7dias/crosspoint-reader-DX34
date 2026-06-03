@@ -3,12 +3,12 @@
  * @brief Runtime state persisted across reboots (current book, sleep playlist, etc.).
  *
  * Unlike CrossPointSettings (user preferences), CrossPointState tracks
- * session data: which book is open, current page, sleep image playlist,
- * recent books list, and reading statistics. Saved to /.crosspoint/state.json.
+ * session data: which book is open, current page, recent books list, and
+ * reading statistics. Saved to /.crosspoint/state.json.
  *
- * Sleep playlist management has two paths:
- *   - Small collections (<=SLEEP_PLAYLIST_MAX_PERSIST): full shuffle in RAM.
- *   - Large collections (>200): sequential advance with lastShownSleepFilename.
+ * Sleep wallpaper rotation state lives in a separate order file
+ * (/.crosspoint/sleep_order.txt) owned by the V2 playlist; only the
+ * last-shown filename/path and the RFC #145 notice flags persist here.
  */
 #pragma once
 #include <cstdint>
@@ -18,18 +18,6 @@
 
 class CrossPointState {
  public:
-  // Collections larger than this threshold are handled without a full in-memory
-  // playlist; only the last-shown filename is persisted in that case.
-  // Why 30: each persisted entry is one std::string heap allocation
-  // (~30-50 bytes) plus an ArduinoJson JsonVariant during deserialize.
-  // At 500 the boot-time deserialize of state.json scattered ~270 small
-  // blocks across the heap, splitting the largest contiguous block from
-  // ~63 KB to ~17 KB — small enough that every book open hit the
-  // pre-flight gate. Capping at 30 keeps shuffle UX for small wallpaper
-  // collections; bigger collections fall through to the sequential
-  // lastShownSleepFilename path which never holds the playlist in RAM.
-  static constexpr size_t SLEEP_PLAYLIST_MAX_PERSIST = 30;
-
   // User-facing cap on protected ([F]-suffixed) sleep wallpapers.
   // Counted from disk in countProtectedSleepFavorites(), so this does
   // not pressure the heap the way the in-memory playlist does. Kept at
@@ -39,8 +27,6 @@ class CrossPointState {
   static constexpr size_t SLEEP_FAVORITES_MAX = 500;
 
   std::string openEpubPath;
-  uint8_t lastSleepImage = UINT8_MAX;  // UINT8_MAX = unset sentinel
-  std::vector<std::string> sleepImagePlaylist;
   std::string lastShownSleepFilename;
   std::string lastSleepWallpaperPath;
   std::vector<std::string> favoriteBmpPaths;

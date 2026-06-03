@@ -169,14 +169,14 @@ void test_mutate_and_flushnow() {
 void test_cross_point_state_round_trip() {
   CrossPointState original;
   original.openEpubPath = "/books/alice.epub";
-  original.lastSleepImage = 7;
   original.lastShownSleepFilename = "wall_042.bmp";
   original.readerActivityLoadCount = 3;
   original.sessionPagesRead = 128;
   original.lastSleepFromReader = true;
   original.wallpaperRotationPaused = true;
   original.lastSleepWasQuotes = false;
-  original.sleepImagePlaylist = {"a.bmp", "b.bmp", "c.bmp"};
+  original.sleepFavoritesCapReached = true;
+  original.pendingSleepWallpapersMovedToPause = 4;
   original.favoriteBmpPaths = {"/sleep/fav1.bmp"};
 
   const std::string json = crosspoint::persist::serializeCrossPointState(original);
@@ -186,30 +186,15 @@ void test_cross_point_state_round_trip() {
   TEST_ASSERT_TRUE(crosspoint::persist::deserializeCrossPointState(json, loaded));
 
   TEST_ASSERT_EQUAL_STRING(original.openEpubPath.c_str(), loaded.openEpubPath.c_str());
-  TEST_ASSERT_EQUAL_UINT8(original.lastSleepImage, loaded.lastSleepImage);
   TEST_ASSERT_EQUAL_STRING(original.lastShownSleepFilename.c_str(), loaded.lastShownSleepFilename.c_str());
   TEST_ASSERT_EQUAL_UINT8(original.readerActivityLoadCount, loaded.readerActivityLoadCount);
   TEST_ASSERT_EQUAL_UINT32(original.sessionPagesRead, loaded.sessionPagesRead);
   TEST_ASSERT_TRUE(loaded.lastSleepFromReader);
   TEST_ASSERT_TRUE(loaded.wallpaperRotationPaused);
   TEST_ASSERT_FALSE(loaded.lastSleepWasQuotes);
-  TEST_ASSERT_EQUAL_size_t(3, loaded.sleepImagePlaylist.size());
-  TEST_ASSERT_EQUAL_STRING("b.bmp", loaded.sleepImagePlaylist[1].c_str());
+  TEST_ASSERT_TRUE(loaded.sleepFavoritesCapReached);
+  TEST_ASSERT_EQUAL_UINT16(4, loaded.pendingSleepWallpapersMovedToPause);
   TEST_ASSERT_EQUAL_size_t(1, loaded.favoriteBmpPaths.size());
-}
-
-// ---- Large playlist is omitted on write (matches V1 behavior) ----
-void test_large_playlist_omitted() {
-  CrossPointState s;
-  for (size_t i = 0; i < CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST + 5; ++i) {
-    s.sleepImagePlaylist.push_back("w_" + std::to_string(i));
-  }
-  s.lastShownSleepFilename = "current.bmp";
-  const std::string json = crosspoint::persist::serializeCrossPointState(s);
-
-  // Playlist key should be absent in the serialized JSON.
-  TEST_ASSERT_EQUAL_INT(std::string::npos, (int)json.find("\"sleepImagePlaylist\""));
-  TEST_ASSERT_TRUE(json.find("\"lastShownSleepFilename\":\"current.bmp\"") != std::string::npos);
 }
 
 // ---- Streamed write path produces identical output to string path ----
@@ -218,7 +203,6 @@ void test_streamed_flush_matches_string() {
   s.openEpubPath = "/books/alice.epub";
   s.lastShownSleepFilename = "wall_042.bmp";
   s.sessionPagesRead = 77;
-  s.sleepImagePlaylist = {"x.bmp", "y.bmp", "z.bmp"};
 
   InMemoryFileIO io;
   PersistentStore<CrossPointState> store("APP_STATE", "/.crosspoint/state.json", io,
@@ -242,28 +226,6 @@ void test_streamed_flush_matches_string() {
   TEST_ASSERT_EQUAL_STRING("/books/alice.epub", loader.get().openEpubPath.c_str());
   TEST_ASSERT_EQUAL_STRING("wall_042.bmp", loader.get().lastShownSleepFilename.c_str());
   TEST_ASSERT_EQUAL_UINT32(77, loader.get().sessionPagesRead);
-  TEST_ASSERT_EQUAL_size_t(3, loader.get().sleepImagePlaylist.size());
-}
-
-// ---- Streamed write handles a large payload without building std::string peak ----
-void test_streamed_flush_large_playlist_omits() {
-  CrossPointState s;
-  for (size_t i = 0; i < CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST + 5; ++i) {
-    s.sleepImagePlaylist.push_back("/sleep/photo-YYYYMMDD-HHMMSS_F_" + std::to_string(i) + ".bmp");
-  }
-  s.lastShownSleepFilename = "current.bmp";
-
-  InMemoryFileIO io;
-  PersistentStore<CrossPointState> store("APP_STATE", "/.crosspoint/state.json", io,
-                                         &crosspoint::persist::serializeCrossPointState,
-                                         &crosspoint::persist::deserializeCrossPointState);
-  store.setStreamSerializer(&crosspoint::persist::streamSerializeCrossPointState);
-  store.unsafeMut() = s;
-  TEST_ASSERT_TRUE(store.flushNow());
-
-  const std::string got = io.safeRead("/.crosspoint/state.json");
-  TEST_ASSERT_EQUAL_INT(std::string::npos, (int)got.find("\"sleepImagePlaylist\""));
-  TEST_ASSERT_TRUE(got.find("\"lastShownSleepFilename\":\"current.bmp\"") != std::string::npos);
 }
 
 // ---- PersistManager flushAll ticks only dirty stores ----
@@ -302,9 +264,7 @@ int main(int, char**) {
   RUN_TEST(test_atomic_recovery_from_bak);
   RUN_TEST(test_mutate_and_flushnow);
   RUN_TEST(test_cross_point_state_round_trip);
-  RUN_TEST(test_large_playlist_omitted);
   RUN_TEST(test_streamed_flush_matches_string);
-  RUN_TEST(test_streamed_flush_large_playlist_omits);
   RUN_TEST(test_persist_manager_flush_all);
   return UNITY_END();
 }

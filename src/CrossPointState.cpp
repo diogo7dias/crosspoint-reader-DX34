@@ -76,27 +76,24 @@ bool CrossPointState::loadFromBinaryFile() {
   }
 
   serialization::readString(inputFile, openEpubPath);
+  // Legacy fields lastSleepImage (v>=2) and the in-RAM playlist vector (v>=5)
+  // were removed when the V2 order-file replaced them (RFC #145). Still consume
+  // their bytes during this one-time .bin->JSON migration so the fields written
+  // after them stay aligned; the values themselves are discarded.
   if (version >= 2) {
-    serialization::readPod(inputFile, lastSleepImage);
-  } else {
-    lastSleepImage = UINT8_MAX;
+    uint8_t legacyLastSleepImage = 0;
+    serialization::readPod(inputFile, legacyLastSleepImage);
   }
-
   if (version >= 5) {
     uint16_t playlistCount = 0;
     serialization::readPod(inputFile, playlistCount);
-    if (playlistCount > SLEEP_PLAYLIST_MAX_PERSIST) {
-      playlistCount = SLEEP_PLAYLIST_MAX_PERSIST;
-    }
-    sleepImagePlaylist.clear();
-    sleepImagePlaylist.reserve(playlistCount);
+    // The original loader capped the stored count at 30; replicate that exactly
+    // so a legacy .bin written under the cap stays byte-aligned.
+    if (playlistCount > 30) playlistCount = 30;
     for (uint16_t i = 0; i < playlistCount; i++) {
-      std::string filename;
-      serialization::readString(inputFile, filename);
-      sleepImagePlaylist.push_back(std::move(filename));
+      std::string discarded;
+      serialization::readString(inputFile, discarded);
     }
-  } else {
-    sleepImagePlaylist.clear();
   }
 
   if (version >= 3) {
