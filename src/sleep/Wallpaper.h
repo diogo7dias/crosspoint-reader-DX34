@@ -106,8 +106,6 @@ struct Config {
   std::function<long(long)> randomFn;
   std::function<bool(const std::string&)> isFavorite;
   std::function<void(const std::string& /*from*/, const std::string& /*to*/)> onPathRenamed;
-  std::function<void(uint16_t /*movedCount*/)> onTrimMoved;
-  std::function<void()> onFavoritesCapBlocked;
   // Optional host-test seam: returns the largest contiguous free heap block
   // in bytes. Production lazy init wires heap_caps_get_largest_free_block
   // (MALLOC_CAP_DEFAULT) automatically; tests inject a stub to simulate

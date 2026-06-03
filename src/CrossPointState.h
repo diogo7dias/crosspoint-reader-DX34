@@ -55,6 +55,14 @@ class CrossPointState {
   bool lastSleepFromReader = false;
   bool wallpaperRotationPaused = false;
   bool lastSleepWasQuotes = false;
+  // RFC #145 wallpaper-rotation notices, set during sleep reconcile and
+  // surfaced on the next home entry. sleepFavoritesCapReached is sticky state
+  // (favorites alone fill the 500 cap, blocking new uploads); it drives the
+  // home "favorites full" warning and clears once favorites drop below the cap.
+  // pendingSleepWallpapersMovedToPause is a transient event count consumed once
+  // by a home toast ("N wallpapers moved to /sleep pause/").
+  bool sleepFavoritesCapReached = false;
+  uint16_t pendingSleepWallpapersMovedToPause = 0;
   ~CrossPointState() = default;
 
   // Singleton — returns the data owned by persist::AppStateStore

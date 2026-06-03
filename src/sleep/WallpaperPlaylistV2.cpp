@@ -77,6 +77,13 @@ void WallpaperPlaylistV2::resetForTest() {
   cursor_ = 0;
   dirty_ = true;
   loaded_ = false;
+  pendingNotice_ = Notice{};
+}
+
+WallpaperPlaylistV2::Notice WallpaperPlaylistV2::takeNotice() {
+  Notice n = pendingNotice_;
+  pendingNotice_ = Notice{};
+  return n;
 }
 
 bool WallpaperPlaylistV2::ensureLoaded() {
@@ -273,6 +280,11 @@ void WallpaperPlaylistV2::reconcile() {
   if (!ensureLoaded()) return;
   if (!dirty_) return;
 
+  // A reconcile is committed: the cap state recorded below is fresh, so the
+  // facade may safely clear a previously-persisted favorites-cap warning if we
+  // no longer trip the cap this pass.
+  pendingNotice_.reconciled = true;
+
   // Streaming walk: only retain NEW files (those not already in buffer_).
   // Heap cost is proportional to the delta (typically 0-3 entries on a normal
   // session), not the full /sleep listing. This is the critical fix for the
@@ -296,8 +308,10 @@ void WallpaperPlaylistV2::reconcile() {
   if (diskCount > kSleepFolderCap) {
     std::vector<SleepBmpEntry> all = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap + 64);
     moved = trimToCap(all, capBlocked);
-    if (capBlocked && deps_.onFavoritesCapBlocked) deps_.onFavoritesCapBlocked();
-    if (moved > 0 && deps_.onTrimMoved) deps_.onTrimMoved(moved);
+    // Record outcome as data; the facade drains it via takeNotice() after
+    // advance() and persists it for the next-wake home warning / toast.
+    pendingNotice_.favoritesCapBlocked = capBlocked;
+    pendingNotice_.movedToPause = moved;
     // Re-derive newFiles after trim — some new arrivals may have been pushed
     // to /sleep pause if the cap was favorites-saturated.
     newFiles.clear();

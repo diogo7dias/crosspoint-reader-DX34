@@ -22,6 +22,8 @@ void populateDoc(const CrossPointState& s, JsonDocument& doc) {
   doc["lastSleepFromReader"] = s.lastSleepFromReader;
   doc["wallpaperRotationPaused"] = s.wallpaperRotationPaused;
   doc["lastSleepWasQuotes"] = s.lastSleepWasQuotes;
+  doc["sleepFavoritesCapReached"] = s.sleepFavoritesCapReached;
+  doc["pendingSleepWallpapersMovedToPause"] = s.pendingSleepWallpapersMovedToPause;
   // Large playlists omitted on write to avoid heap/IO cost; MyLibrary/sleep
   // code uses lastShownSleepFilename for those. Matches JsonSettingsIO.
   if (s.sleepImagePlaylist.size() <= CrossPointState::SLEEP_PLAYLIST_MAX_PERSIST) {
@@ -67,6 +69,8 @@ bool deserializeCrossPointState(const std::string& json, CrossPointState& s) {
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
   s.wallpaperRotationPaused = doc["wallpaperRotationPaused"] | false;
   s.lastSleepWasQuotes = doc["lastSleepWasQuotes"] | false;
+  s.sleepFavoritesCapReached = doc["sleepFavoritesCapReached"] | false;
+  s.pendingSleepWallpapersMovedToPause = doc["pendingSleepWallpapersMovedToPause"] | (uint16_t)0;
 
   s.sleepImagePlaylist.clear();
   if (doc["sleepImagePlaylist"].is<JsonArray>()) {

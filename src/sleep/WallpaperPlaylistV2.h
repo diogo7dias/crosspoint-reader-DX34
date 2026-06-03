@@ -61,14 +61,24 @@ class WallpaperPlaylistV2 {
     std::function<long(long)> randomFn;
     std::function<bool(const std::string&)> isFavorite;
     std::function<void(const std::string& /*from*/, const std::string& /*to*/)> onPathRenamed;
-    std::function<void(uint16_t /*movedCount*/)> onTrimMoved;
-    std::function<void()> onFavoritesCapBlocked;
     // Returns the largest contiguous free heap block in bytes. Production
     // wires heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT). Host
     // tests inject a stub to simulate fragmentation. If unset, the playlist
     // assumes unlimited heap (treats every reserve as safe) — matches the
     // pre-RFC #156 host behaviour where the heap probe was ifdef'd out.
     std::function<size_t()> largestFreeBlockFn;
+  };
+
+  // Outcome of the most recent reconcile, surfaced as data (RFC #145).
+  // Replaces the former onTrimMoved / onFavoritesCapBlocked callback slots,
+  // which were wired to noops in production and so could never reach the UI.
+  // The facade drains this after advance() and maps it onto persistent
+  // APP_STATE flags for the next-wake home warning / toast.
+  struct Notice {
+    uint16_t movedToPause = 0;         // non-favorites demoted to /sleep pause this reconcile
+    bool favoritesCapBlocked = false;  // favorites alone saturate the 500 cap, new uploads blocked
+    bool reconciled = false;           // a reconcile actually ran, so favoritesCapBlocked is fresh
+    bool any() const { return movedToPause > 0 || favoritesCapBlocked; }
   };
 
   static WallpaperPlaylistV2& instance();
@@ -88,6 +98,10 @@ class WallpaperPlaylistV2 {
   bool reshuffle();
   void rememberRendered(const std::string& fullPath, const std::string& filename = "");
   void clearRenderedPath();
+
+  // Read and clear the pending reconcile notice (RFC #145). Returns a zeroed
+  // Notice when no reconcile has run since the last drain.
+  Notice takeNotice();
 
   const std::string& bufferForTest() const { return buffer_; }
   size_t cursorForTest() const { return cursor_; }
@@ -126,6 +140,7 @@ class WallpaperPlaylistV2 {
   size_t cursor_ = 0;
   bool dirty_ = true;
   bool loaded_ = false;
+  Notice pendingNotice_;
 };
 
 }  // namespace v2

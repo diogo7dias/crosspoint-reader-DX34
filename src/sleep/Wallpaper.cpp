@@ -62,8 +62,6 @@ void ensureConfigured() {
   d.onPathRenamed = [](const std::string& from, const std::string& to) {
     FavoriteImage::replacePathReferences(from, to);
   };
-  d.onTrimMoved = [](uint16_t /*moved*/) {};
-  d.onFavoritesCapBlocked = []() {};
   // Heap probe (RFC #156 C2): inject the device's contiguous-block query
   // through the playlist so the same code path runs under host tests with
   // a scripted heap. UNIT_TEST_HOST builds don't link esp_heap_caps; the
@@ -75,11 +73,37 @@ void ensureConfigured() {
   v2::WallpaperPlaylistV2::instance().setDeps(d);
 }
 
+// Drain the reconcile notice (RFC #145) and fold it into persistent
+// APP_STATE so the next-wake home screen can warn / toast. The favorites-cap
+// flag is sticky state (refreshed only when a reconcile actually ran, so it
+// clears once favorites drop below the cap); the moved-to-pause count is a
+// transient event the home screen consumes once. Persists only when something
+// changed — overflow is a rare event, so the extra synchronous flush before
+// deep sleep stays off the common path.
+void applyReconcileNotice() {
+  const auto n = v2::WallpaperPlaylistV2::instance().takeNotice();
+  bool changed = false;
+  if (n.reconciled && APP_STATE.sleepFavoritesCapReached != n.favoritesCapBlocked) {
+    APP_STATE.sleepFavoritesCapReached = n.favoritesCapBlocked;
+    changed = true;
+  }
+  if (n.movedToPause > 0 && APP_STATE.pendingSleepWallpapersMovedToPause < 9999) {
+    APP_STATE.pendingSleepWallpapersMovedToPause += n.movedToPause;
+    changed = true;
+  }
+  if (changed) {
+    APP_STATE.saveToFile();
+    crosspoint::persist::PersistManager().flushAll();
+  }
+}
+
 }  // namespace
 
 std::string advance() {
   ensureConfigured();
-  return v2::WallpaperPlaylistV2::instance().advance();
+  const std::string pick = v2::WallpaperPlaylistV2::instance().advance();
+  applyReconcileNotice();
+  return pick;
 }
 
 namespace {
@@ -207,8 +231,6 @@ void Configure(const Config& c) {
   d.randomFn = c.randomFn;
   d.isFavorite = c.isFavorite;
   d.onPathRenamed = c.onPathRenamed;
-  d.onTrimMoved = c.onTrimMoved;
-  d.onFavoritesCapBlocked = c.onFavoritesCapBlocked;
   d.largestFreeBlockFn = c.largestFreeBlockFn;
 
   v2::WallpaperPlaylistV2::instance().setDeps(d);

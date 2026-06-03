@@ -86,8 +86,6 @@ struct Fixture {
   std::string lastShownFilename;
   std::string lastRenderedPath;
   std::vector<std::string> savedAppStateLog;
-  std::vector<uint16_t> trimMovedLog;
-  int favoritesCapBlockedLog = 0;
   std::function<bool(const std::string&)> isFavoriteFn;
   long fakeRandomSeed = 0;
   // RFC #156 C2: scripted heap probe. Default unlimited. Tests set this to
@@ -115,8 +113,6 @@ struct Fixture {
       return false;
     };
     d.onPathRenamed = [](const std::string&, const std::string&) {};
-    d.onTrimMoved = [this](uint16_t n) { trimMovedLog.push_back(n); };
-    d.onFavoritesCapBlocked = [this]() { ++favoritesCapBlockedLog; };
     d.largestFreeBlockFn = largestFreeBlockFn;  // empty std::function → unlimited
     wp.setDeps(d);
   }
@@ -202,8 +198,10 @@ void test_trim_pushes_oldest_mtime_non_favorites() {
   wp.markFolderDirty();
   wp.reconcile();
 
-  TEST_ASSERT_EQUAL(1u, fx.trimMovedLog.size());
-  TEST_ASSERT_EQUAL(2u, fx.trimMovedLog[0]);
+  const auto notice = wp.takeNotice();
+  TEST_ASSERT_TRUE(notice.reconciled);
+  TEST_ASSERT_FALSE(notice.favoritesCapBlocked);
+  TEST_ASSERT_EQUAL(2u, notice.movedToPause);
   TEST_ASSERT_EQUAL(2u, fx.fs.renames.size());
   TEST_ASSERT_EQUAL_STRING("/sleep/old_0.bmp", fx.fs.renames[0].first.c_str());
   TEST_ASSERT_EQUAL_STRING("/sleep/old_1.bmp", fx.fs.renames[1].first.c_str());
@@ -222,12 +220,39 @@ void test_favorites_full_blocks_new_uploads() {
   wp.markFolderDirty();
   wp.reconcile();
 
-  TEST_ASSERT_EQUAL(1, fx.favoritesCapBlockedLog);
+  const auto notice = wp.takeNotice();
+  TEST_ASSERT_TRUE(notice.reconciled);
+  TEST_ASSERT_TRUE(notice.favoritesCapBlocked);
   bool newDropMoved = false;
   for (const auto& r : fx.fs.renames) {
     if (r.first == "/sleep/new_drop.bmp") newDropMoved = true;
   }
   TEST_ASSERT_TRUE(newDropMoved);
+}
+
+// RFC #145: a reconcile under the cap reports reconciled=true with no notice
+// flags, so a previously-persisted favorites-cap warning clears. takeNotice()
+// is single-shot — a second drain returns a zeroed Notice.
+void test_notice_under_cap_is_clean_and_drains_once() {
+  Fixture fx;
+  for (int i = 0; i < 4; ++i) fx.fs.seed(std::string("f") + std::to_string(i) + ".bmp", 100 + i);
+  fx.isFavoriteFn = [](const std::string&) { return false; };
+
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+
+  const auto first = wp.takeNotice();
+  TEST_ASSERT_TRUE(first.reconciled);
+  TEST_ASSERT_FALSE(first.favoritesCapBlocked);
+  TEST_ASSERT_EQUAL(0u, first.movedToPause);
+
+  const auto second = wp.takeNotice();
+  TEST_ASSERT_FALSE(second.reconciled);
+  TEST_ASSERT_FALSE(second.favoritesCapBlocked);
+  TEST_ASSERT_EQUAL(0u, second.movedToPause);
 }
 
 void test_reshuffle_clears_buffer_when_sleep_empty() {
@@ -359,6 +384,7 @@ int main(int, char**) {
   RUN_TEST(test_new_files_spliced_at_front_newest_mtime_first);
   RUN_TEST(test_trim_pushes_oldest_mtime_non_favorites);
   RUN_TEST(test_favorites_full_blocks_new_uploads);
+  RUN_TEST(test_notice_under_cap_is_clean_and_drains_once);
   RUN_TEST(test_reshuffle_clears_buffer_when_sleep_empty);
   RUN_TEST(test_advance_skips_files_deleted_since_reconcile);
   RUN_TEST(test_reshuffle_does_not_repeat_just_shown_wallpaper);
