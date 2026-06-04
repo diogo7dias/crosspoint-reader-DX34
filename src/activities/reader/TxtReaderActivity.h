@@ -15,6 +15,7 @@
 
 #include "CrossPointSettings.h"
 #include "ReaderStatusBar.h"
+#include "ReaderInputDispatcher.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -37,10 +38,13 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   const std::function<void()> onGoHome;
   const std::function<void(const std::string&)> onOpenBook;
   bool recentSwitcherOpen = false;
-  bool pendingThemesOpen = false;
   bool pendingSubactivityExit = false;
-  bool confirmLongPressHandled = false;
-  unsigned long lastConfirmReleaseMs = 0;
+  // RFC #165: the tap/double-tap/long-press FSM now lives in the shared
+  // ReaderInputDispatcher (no doubleTap-vs-menu, no chapter-skip, no footnote
+  // for the txt reader). longPressConfirm maps to the orientation toggle.
+  crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
+      crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
+                                            /*footnoteBack=*/false, /*chapterSkip=*/false}};
   bool progressDirty = false;
   unsigned long lastProgressChangeMs = 0;
   int lastObservedPage = -1;
@@ -97,6 +101,11 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   void flushProgressIfNeeded(bool force);
   void loadProgress();
   void toggleTextRenderMode();
+  void toggleOrientation();
+  // RFC #165: snapshot MappedInputManager into the pure dispatcher frame, then
+  // execute the decoded action. The FSM decision is host-tested in the core.
+  crosspoint::reader::ReaderInput snapshotInput();
+  void applyEffect(const crosspoint::reader::ReaderInputDispatcher::Result& effect);
 
  public:
   explicit TxtReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt,

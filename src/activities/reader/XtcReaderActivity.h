@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "ReaderInputDispatcher.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -28,9 +29,12 @@ class XtcReaderActivity final : public ActivityWithSubactivity {
   bool recentSwitcherOpen = false;
   bool pendingSingleBack = false;
   unsigned long lastBackReleaseMs = 0;
-  bool confirmLongPressHandled = false;
-  bool pendingMenuOpen = false;
-  unsigned long lastConfirmReleaseMs = 0;
+  // RFC #165: the Confirm tap/double-tap/long-press FSM now lives in the shared
+  // ReaderInputDispatcher. chapterSkip=true maps the held page-button to a
+  // 10-page jump; longPressConfirm maps to the orientation toggle.
+  crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
+      crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
+                                            /*footnoteBack=*/false, /*chapterSkip=*/true}};
   bool progressDirty = false;
   unsigned long lastProgressChangeMs = 0;
   int32_t lastObservedPage = -1;
@@ -45,6 +49,12 @@ class XtcReaderActivity final : public ActivityWithSubactivity {
   void loadProgress();
   void openChapterMenu();
   void toggleTextRenderMode();
+  void toggleOrientation();
+  void turnPages(int delta);  // +/- page jump with end-of-book + zero clamps (1 = page, 10 = skip)
+  // RFC #165: snapshot MappedInputManager into the pure dispatcher frame, then
+  // execute the decoded action. The FSM decision is host-tested in the core.
+  crosspoint::reader::ReaderInput snapshotInput();
+  void applyEffect(const crosspoint::reader::ReaderInputDispatcher::Result& effect);
 
  public:
   explicit XtcReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Xtc> xtc,

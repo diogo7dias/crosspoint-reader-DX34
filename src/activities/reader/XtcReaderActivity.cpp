@@ -30,9 +30,7 @@
 #include "util/TransitionFeedback.h"
 
 namespace {
-constexpr unsigned long skipPageMs = 700;
-constexpr unsigned long goHomeMs = 1000;
-constexpr unsigned long confirmDoubleTapMs = 350;
+constexpr unsigned long goHomeMs = 1000;  // still referenced by the (dormant) recent-switcher block
 constexpr unsigned long progressSaveDebounceMs = 800;
 constexpr int recentSwitcherRows = 8;
 }  // namespace
@@ -79,7 +77,7 @@ void XtcReaderActivity::onEnter() {
 
 void XtcReaderActivity::onExit() {
   flushProgressIfNeeded(true);
-  pendingMenuOpen = false;
+  inputDispatcher_.reset();  // clear the tap/long-press latches on activity exit
   EpdFontFamily::setReaderBoldSwapEnabled(false);
   ActivityWithSubactivity::onExit();
 
@@ -94,17 +92,6 @@ void XtcReaderActivity::loop() {
   // Pass input responsibility to sub activity if exists
   if (subActivity) {
     subActivity->loop();
-    return;
-  }
-
-  if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
-    confirmLongPressHandled = false;
-  }
-
-  if (pendingMenuOpen && !mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      millis() - lastConfirmReleaseMs > confirmDoubleTapMs) {
-    pendingMenuOpen = false;
-    openChapterMenu();
     return;
   }
 
@@ -140,100 +127,120 @@ void XtcReaderActivity::loop() {
     return;
   }
 
-  // Single tap opens chapter menu; double tap toggles text render mode (Dark/Crisp).
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    const unsigned long now = millis();
-    if (pendingMenuOpen && now - lastConfirmReleaseMs <= confirmDoubleTapMs) {
-      pendingMenuOpen = false;
+  // RFC #165: normal-mode input is decoded by the shared ReaderInputDispatcher;
+  // the activity only executes the returned action. The xtc reader maps OpenMenu
+  // to the chapter menu, LongPressConfirm to the orientation toggle, and
+  // chapter-skip (held page button) to a 10-page jump.
+  crosspoint::reader::ReaderInputSettings inputSettings;
+  inputSettings.longPressChapterSkip = SETTINGS.longPressChapterSkip;
+  inputSettings.powerIsPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN;
+
+  crosspoint::reader::ReaderState inputState;
+  inputState.mode = crosspoint::reader::ReaderState::Mode::Normal;
+  inputState.atEndOfBook = currentPage >= xtc->getPageCount();
+  inputState.hasSection = true;
+
+  const auto effect = inputDispatcher_.dispatch(snapshotInput(), inputSettings, inputState);
+  if (effect.suppressUntilAllReleased) {
+    mappedInput.suppressUntilAllReleased();
+  }
+  applyEffect(effect);
+}
+
+crosspoint::reader::ReaderInput XtcReaderActivity::snapshotInput() {
+  using MB = MappedInputManager::Button;
+  static constexpr MB kMap[crosspoint::reader::kReaderButtonCount] = {
+      MB::Back, MB::Confirm, MB::Left, MB::Right, MB::Up, MB::Down, MB::Power, MB::PageBack, MB::PageForward};
+  static_assert(static_cast<int>(crosspoint::reader::ReaderButton::Back) == 0 &&
+                    static_cast<int>(crosspoint::reader::ReaderButton::PageForward) == 8,
+                "ReaderButton order must mirror MappedInputManager::Button");
+  crosspoint::reader::ReaderInput in;
+  for (int i = 0; i < crosspoint::reader::kReaderButtonCount; ++i) {
+    in.pressed[i] = mappedInput.wasPressed(kMap[i]);
+    in.released[i] = mappedInput.wasReleased(kMap[i]);
+    in.down[i] = mappedInput.isPressed(kMap[i]);
+  }
+  in.anyPressed = mappedInput.wasAnyPressed();
+  in.anyReleased = mappedInput.wasAnyReleased();
+  in.heldTimeMs = mappedInput.getHeldTime();
+  in.nowMs = millis();
+  return in;
+}
+
+void XtcReaderActivity::applyEffect(const crosspoint::reader::ReaderInputDispatcher::Result& effect) {
+  using A = crosspoint::reader::ReaderAction;
+  switch (effect.action) {
+    case A::OpenMenu:
+      openChapterMenu();
+      return;
+    case A::ToggleTextRenderMode:
       toggleTextRenderMode();
       return;
-    }
-    pendingMenuOpen = true;
-    lastConfirmReleaseMs = now;
-    return;
-  }
-
-  // Long press CONFIRM (1s+) toggles orientation: Portrait <-> Landscape CCW.
-  if (!confirmLongPressHandled && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= goHomeMs) {
-    confirmLongPressHandled = true;
-    mappedInput.suppressUntilAllReleased();
-    SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
-                               ? CrossPointSettings::ORIENTATION::PORTRAIT
-                               : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
-    if (!ReadingThemeStore::persistContextual(xtc ? xtc->getCachePath() : std::string())) {
-      LOG_ERR("XRS", "Failed to save settings after orientation change");
-    }
-    renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
-                                ? GfxRenderer::Orientation::LandscapeCounterClockwise
-                                : GfxRenderer::Orientation::Portrait);
-    requestUpdate();
-    return;
-  }
-
-  // BACK: go home immediately on press for snappier response.
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    onGoHome();
-    return;
-  }
-
-  // When long-press chapter skip is disabled, turn pages on press instead of
-  // release.
-  const bool usePressForPageTurn = !SETTINGS.longPressChapterSkip;
-  const bool prevTriggered = usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasPressed(MappedInputManager::Button::Left))
-                                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasReleased(MappedInputManager::Button::Left));
-  const bool powerPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
-                             mappedInput.wasReleased(MappedInputManager::Button::Power);
-  const bool nextTriggered = usePressForPageTurn
-                                 ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasPressed(MappedInputManager::Button::Right))
-                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasReleased(MappedInputManager::Button::Right));
-
-  if (!prevTriggered && !nextTriggered) {
-    return;
-  }
-
-  // At end of the book, forward button goes home and back button returns to last page
-  if (currentPage >= xtc->getPageCount()) {
-    if (nextTriggered) {
+    case A::LongPressConfirm:
+      toggleOrientation();
+      return;
+    case A::GoHome:
+    case A::EndOfBookGoHome:
       onGoHome();
-    } else {
+      return;
+    case A::EndOfBookStay:
       currentPage = xtc->getPageCount() - 1;
       requestUpdate();
-    }
-    return;
+      return;
+    case A::PagePrev:
+      turnPages(-1);
+      return;
+    case A::PageNext:
+      turnPages(1);
+      return;
+    case A::SkipChapterPrev:
+      turnPages(-10);
+      return;
+    case A::SkipChapterNext:
+      turnPages(10);
+      return;
+    default:
+      // The xtc reader never produces footnote / recovery / RequestUpdate.
+      return;
   }
+}
 
-  const bool skipPages = SETTINGS.longPressChapterSkip && mappedInput.getHeldTime() > skipPageMs;
-  const int skipAmount = skipPages ? 10 : 1;
-
-  if (prevTriggered) {
-    if (currentPage >= static_cast<uint32_t>(skipAmount)) {
-      currentPage -= skipAmount;
-    } else {
-      currentPage = 0;
-    }
-    progressDirty = true;
-    lastProgressChangeMs = millis();
-    flushProgressIfNeeded(false);
-    requestUpdate();
-  } else if (nextTriggered) {
+// Apply a +/- page jump, clamping forward to the end-of-book sentinel
+// (getPageCount(), which renders the "End of book" frame) and backward to 0.
+// Mirrors the prev/next branches the dispatcher replaced (1 = single page,
+// 10 = chapter-skip jump).
+void XtcReaderActivity::turnPages(const int delta) {
+  if (delta < 0) {
+    const uint32_t mag = static_cast<uint32_t>(-delta);
+    currentPage = (currentPage >= mag) ? currentPage - mag : 0;
+  } else {
     const uint32_t previousPage = currentPage;
-    currentPage += skipAmount;
+    currentPage += static_cast<uint32_t>(delta);
     if (currentPage >= xtc->getPageCount()) {
       currentPage = xtc->getPageCount();  // Allow showing "End of book"
     }
     if (currentPage > previousPage) {
       APP_STATE.sessionPagesRead += currentPage - previousPage;
     }
-    progressDirty = true;
-    lastProgressChangeMs = millis();
-    flushProgressIfNeeded(false);
-    requestUpdate();
   }
+  progressDirty = true;
+  lastProgressChangeMs = millis();
+  flushProgressIfNeeded(false);
+  requestUpdate();
+}
+
+void XtcReaderActivity::toggleOrientation() {
+  // Long press CONFIRM (1s+) toggles orientation: Portrait <-> Landscape CCW.
+  SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
+                             ? CrossPointSettings::ORIENTATION::PORTRAIT
+                             : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
+  if (!ReadingThemeStore::persistContextual(xtc ? xtc->getCachePath() : std::string())) {
+    LOG_ERR("XRS", "Failed to save settings after orientation change");
+  }
+  renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
+                              ? GfxRenderer::Orientation::LandscapeCounterClockwise
+                              : GfxRenderer::Orientation::Portrait);
+  requestUpdate();
 }
 
 void XtcReaderActivity::openChapterMenu() {
