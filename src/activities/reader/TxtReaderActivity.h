@@ -14,8 +14,10 @@
 #include <vector>
 
 #include "CrossPointSettings.h"
+#include "PagedProgressSink.h"
 #include "ReaderStatusBar.h"
 #include "ReaderInputDispatcher.h"
+#include "ReaderProgressTracker.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -45,10 +47,12 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
       crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
                                             /*footnoteBack=*/false, /*chapterSkip=*/false}};
-  bool progressDirty = false;
-  unsigned long lastProgressChangeMs = 0;
-  int lastObservedPage = -1;
-  int lastSavedPage = -1;
+  // RFC #171 step 0: progress persistence now goes through the shared, host-
+  // tested ReaderProgressTracker (debounce/dirty) + a 4-byte PagedProgressSink,
+  // replacing the hand-rolled progressDirty/lastProgressChangeMs/lastObserved/
+  // lastSaved fields. Single-document => ReaderPosition{0, currentPage, 1}.
+  crosspoint::reader::PagedProgressSink progressSink_{"", "TRS"};
+  crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int recentSwitcherSelection = 0;
   std::vector<RecentBook> recentSwitcherBooks;
 
@@ -97,7 +101,6 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   void buildPageIndex();
   bool loadPageIndexCache();
   void savePageIndexCache() const;
-  void saveProgress() const;
   void flushProgressIfNeeded(bool force);
   void loadProgress();
   void toggleTextRenderMode();

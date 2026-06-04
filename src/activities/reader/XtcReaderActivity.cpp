@@ -31,7 +31,7 @@
 
 namespace {
 constexpr unsigned long goHomeMs = 1000;  // still referenced by the (dormant) recent-switcher block
-constexpr unsigned long progressSaveDebounceMs = 800;
+// progress debounce now lives in ReaderProgressTracker::kDefaultDebounceMs (800).
 constexpr int recentSwitcherRows = 8;
 }  // namespace
 
@@ -54,6 +54,7 @@ void XtcReaderActivity::onEnter() {
 
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(xtc->getPath()));
   xtc->setupCacheDir();
+  progressSink_.setCachePath(xtc->getCachePath());
 
   // Load saved progress
   loadProgress();
@@ -223,9 +224,7 @@ void XtcReaderActivity::turnPages(const int delta) {
       APP_STATE.sessionPagesRead += currentPage - previousPage;
     }
   }
-  progressDirty = true;
-  lastProgressChangeMs = millis();
-  flushProgressIfNeeded(false);
+  flushProgressIfNeeded(false);  // observe(new page) + debounced flush
   requestUpdate();
 }
 
@@ -257,9 +256,7 @@ void XtcReaderActivity::openChapterMenu() {
       },
       [this](const uint32_t newPage) {
         currentPage = newPage;
-        progressDirty = true;
-        lastProgressChangeMs = millis();
-        flushProgressIfNeeded(true);
+        flushProgressIfNeeded(true);  // observe(new page) + force flush
         exitActivity();
         requestUpdate();
       }));
@@ -304,13 +301,7 @@ void XtcReaderActivity::render(Activity::RenderLock&&) {
   // long-load timer here to prevent stale "BIG BOOK" toasts on later page
   // turns once cumulative elapsed crosses a threshold.
   TransitionFeedback::markOpenComplete();
-  if (lastObservedPage != static_cast<int32_t>(currentPage)) {
-    lastObservedPage = static_cast<int32_t>(currentPage);
-    if (lastSavedPage != static_cast<int32_t>(currentPage)) {
-      progressDirty = true;
-      lastProgressChangeMs = millis();
-    }
-  }
+  // observe(current page) + debounced flush — folded into flushProgressIfNeeded.
   flushProgressIfNeeded(false);
 }
 
@@ -551,81 +542,26 @@ void XtcReaderActivity::renderPage() {
   LOG_DBG("XTR", "Rendered page %lu/%lu (%u-bit)", currentPage + 1, xtc->getPageCount(), bitDepth);
 }
 
-void XtcReaderActivity::saveProgress() const {
-  const std::string progPath = xtc->getCachePath() + "/progress.bin";
-  const std::string tmpPath = xtc->getCachePath() + "/progress_tmp.bin";
-  const std::string bakPath = xtc->getCachePath() + "/progress.bin.bak";
-
-  if (Storage.exists(tmpPath.c_str())) {
-    Storage.remove(tmpPath.c_str());
-  }
-
-  FsFile f;
-  if (Storage.openFileForWrite("XTR", tmpPath.c_str(), f)) {
-    uint8_t data[4];
-    data[0] = currentPage & 0xFF;
-    data[1] = (currentPage >> 8) & 0xFF;
-    data[2] = (currentPage >> 16) & 0xFF;
-    data[3] = (currentPage >> 24) & 0xFF;
-    f.write(data, 4);
-    f.close();
-
-    // Rotate current progress.bin to progress.bin.bak before replacing.
-    if (Storage.exists(progPath.c_str())) {
-      if (Storage.exists(bakPath.c_str())) {
-        Storage.remove(bakPath.c_str());
-      }
-      Storage.rename(progPath.c_str(), bakPath.c_str());
-    }
-    Storage.rename(tmpPath.c_str(), progPath.c_str());
-  }
-}
-
 void XtcReaderActivity::flushProgressIfNeeded(const bool force) {
-  if (!xtc || !progressDirty) {
+  if (!xtc) {
     return;
   }
-
-  const auto now = millis();
-  if (!force && now - lastProgressChangeMs < progressSaveDebounceMs) {
-    return;
-  }
-
-  saveProgress();
-  lastSavedPage = static_cast<int32_t>(currentPage);
-  progressDirty = false;
+  // observe(current page) then debounced flush — the tracker owns the dirty
+  // flag + 800ms debounce that used to be hand-rolled here.
+  const uint32_t now = millis();
+  progress_.observe({0, static_cast<int32_t>(currentPage), 1}, now);
+  progress_.flush(now, force);
 }
 
 void XtcReaderActivity::loadProgress() {
-  FsFile f;
-  const std::string progPath = xtc->getCachePath() + "/progress.bin";
-  const std::string bakPath = xtc->getCachePath() + "/progress.bin.bak";
-  bool opened = Storage.openFileForRead("XTR", progPath, f);
-  if (!opened && Storage.exists(bakPath.c_str())) {
-    LOG_INF("XTR", "progress.bin missing, recovering from progress.bin.bak");
-    opened = Storage.openFileForRead("XTR", bakPath, f);
+  const int page = crosspoint::reader::PagedProgressSink::load(xtc->getCachePath(), "XTR");
+  if (page < 0) {
+    return;  // no recoverable progress file; keep currentPage as-is
   }
-  if (!opened) {
-    const std::string flatName = backup::flatNameForCacheFile(xtc->getCachePath(), "progress.bin");
-    if (backup::restoreFromMirror(flatName, progPath)) {
-      LOG_INF("XTR", "progress.bin recovered from mirror %s", flatName.c_str());
-      opened = Storage.openFileForRead("XTR", progPath, f);
-    }
+  currentPage = static_cast<uint32_t>(page);
+  if (currentPage >= xtc->getPageCount()) {
+    currentPage = (xtc->getPageCount() > 0) ? (xtc->getPageCount() - 1) : 0;
   }
-  if (opened) {
-    uint8_t data[4];
-    if (f.read(data, 4) == 4) {
-      currentPage = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
-      LOG_DBG("XTR", "Loaded progress: page %lu", currentPage);
-      lastSavedPage = static_cast<int32_t>(currentPage);
-      lastObservedPage = static_cast<int32_t>(currentPage);
-      progressDirty = false;
-
-      // Validate page number
-      if (currentPage >= xtc->getPageCount()) {
-        currentPage = (xtc->getPageCount() > 0) ? (xtc->getPageCount() - 1) : 0;
-      }
-    }
-    f.close();
-  }
+  progress_.seed({0, static_cast<int32_t>(currentPage), 1});
+  LOG_DBG("XTR", "Loaded progress: page %lu", currentPage);
 }

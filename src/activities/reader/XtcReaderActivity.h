@@ -12,7 +12,9 @@
 #include <cstdint>
 #include <vector>
 
+#include "PagedProgressSink.h"
 #include "ReaderInputDispatcher.h"
+#include "ReaderProgressTracker.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -35,16 +37,17 @@ class XtcReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
       crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
                                             /*footnoteBack=*/false, /*chapterSkip=*/true}};
-  bool progressDirty = false;
-  unsigned long lastProgressChangeMs = 0;
-  int32_t lastObservedPage = -1;
-  int32_t lastSavedPage = -1;
+  // RFC #171 step 0: progress persistence via the shared host-tested
+  // ReaderProgressTracker + 4-byte PagedProgressSink (was hand-rolled
+  // progressDirty/lastProgressChangeMs/lastObserved/lastSaved). Single-doc =>
+  // ReaderPosition{0, (int32_t)currentPage, 1}.
+  crosspoint::reader::PagedProgressSink progressSink_{"", "XTR"};
+  crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
   int recentSwitcherSelection = 0;
   std::vector<RecentBook> recentSwitcherBooks;
 
   void renderPage();
   void renderRecentSwitcher();
-  void saveProgress() const;
   void flushProgressIfNeeded(bool force);
   void loadProgress();
   void openChapterMenu();

@@ -33,7 +33,7 @@
 
 namespace {
 constexpr unsigned long goHomeMs = 1000;  // still referenced by the (dormant) recent-switcher block
-constexpr unsigned long progressSaveDebounceMs = 800;
+// progress debounce now lives in ReaderProgressTracker::kDefaultDebounceMs (800).
 constexpr int progressBarMarginTop = 1;
 constexpr int recentSwitcherRows = 8;
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
@@ -99,6 +99,8 @@ void TxtReaderActivity::onEnter() {
       APP_STATE.saveToFile();
     }
   }
+
+  progressSink_.setCachePath(txt->getCachePath());
 
   cachedTitleUsableWidth = -1;
   cachedTitleNoTitleTruncation = false;
@@ -305,9 +307,7 @@ void TxtReaderActivity::reloadCurrentLayoutForDisplaySettings() {
   flushProgressIfNeeded(true);
   pendingRelayoutPage = currentPage;
   pendingRelayoutPageCount = std::max(totalPages, 1);
-  lastSavedPage = currentPage;
-  lastObservedPage = currentPage;
-  progressDirty = false;
+  progress_.seed({0, currentPage, 1});
   cachedTitleUsableWidth = -1;
   cachedTitleNoTitleTruncation = false;
   cachedTitleMaxLines = -1;
@@ -420,8 +420,6 @@ void TxtReaderActivity::applyEffect(const crosspoint::reader::ReaderInputDispatc
     case A::PagePrev:
       if (currentPage > 0) {
         currentPage--;
-        progressDirty = true;
-        lastProgressChangeMs = millis();
         flushProgressIfNeeded(false);
         requestUpdate();
       }
@@ -430,8 +428,6 @@ void TxtReaderActivity::applyEffect(const crosspoint::reader::ReaderInputDispatc
       if (currentPage < totalPages - 1) {
         currentPage++;
         APP_STATE.sessionPagesRead++;
-        progressDirty = true;
-        lastProgressChangeMs = millis();
         flushProgressIfNeeded(false);
         requestUpdate();
       } else {
@@ -609,11 +605,10 @@ void TxtReaderActivity::initializeReader() {
       currentPage = std::min(pendingRelayoutPage, totalPages - 1);
     }
     currentPage = std::max(0, std::min(currentPage, totalPages - 1));
-    lastSavedPage = currentPage;
-    lastObservedPage = currentPage;
     pendingRelayoutPage = -1;
     pendingRelayoutPageCount = 0;
-    saveProgress();
+    progressSink_.write({0, currentPage, 1});  // persist the re-anchored page now
+    progress_.seed({0, currentPage, 1});
   }
 
   initialized = true;
@@ -869,14 +864,7 @@ void TxtReaderActivity::render(Activity::RenderLock&&) {
   renderer.clearScreen();
   renderPage();
 
-  if (lastObservedPage != currentPage) {
-    lastObservedPage = currentPage;
-    if (lastSavedPage != currentPage) {
-      progressDirty = true;
-      lastProgressChangeMs = millis();
-    }
-  }
-
+  // observe(current page) + debounced flush — folded into flushProgressIfNeeded.
   flushProgressIfNeeded(false);
 }
 
@@ -1068,92 +1056,31 @@ void TxtReaderActivity::renderStatusBar(const StatusBarLayout& statusBarLayout, 
                                    orientedMarginLeft, false);
 }
 
-void TxtReaderActivity::saveProgress() const {
-  const std::string progPath = txt->getCachePath() + "/progress.bin";
-  const std::string tmpPath = txt->getCachePath() + "/progress_tmp.bin";
-  const std::string bakPath = txt->getCachePath() + "/progress.bin.bak";
-
-  if (Storage.exists(tmpPath.c_str())) {
-    Storage.remove(tmpPath.c_str());
-  }
-
-  FsFile f;
-  if (Storage.openFileForWrite("TRS", tmpPath.c_str(), f)) {
-    uint8_t data[4];
-    const uint32_t page = currentPage < 0 ? 0u : static_cast<uint32_t>(currentPage);
-    data[0] = page & 0xFF;
-    data[1] = (page >> 8) & 0xFF;
-    data[2] = (page >> 16) & 0xFF;
-    data[3] = (page >> 24) & 0xFF;
-    f.write(data, 4);
-    f.close();
-
-    // Rotate current progress.bin to progress.bin.bak before replacing.
-    if (Storage.exists(progPath.c_str())) {
-      if (Storage.exists(bakPath.c_str())) {
-        Storage.remove(bakPath.c_str());
-      }
-      Storage.rename(progPath.c_str(), bakPath.c_str());
-    }
-    Storage.rename(tmpPath.c_str(), progPath.c_str());
-  }
-}
-
 void TxtReaderActivity::flushProgressIfNeeded(const bool force) {
-  if (!txt || !progressDirty) {
+  if (!txt) {
     return;
   }
-
-  const auto now = millis();
-  if (!force && now - lastProgressChangeMs < progressSaveDebounceMs) {
-    return;
-  }
-
-  saveProgress();
-  lastSavedPage = currentPage;
-  progressDirty = false;
+  // observe(current page) then debounced flush — the tracker owns the dirty
+  // flag + 800ms debounce that used to be hand-rolled here.
+  const uint32_t now = millis();
+  progress_.observe({0, currentPage, 1}, now);
+  progress_.flush(now, force);
 }
 
 void TxtReaderActivity::loadProgress() {
-  FsFile f;
-  const std::string progPath = txt->getCachePath() + "/progress.bin";
-  const std::string bakPath = txt->getCachePath() + "/progress.bin.bak";
-  bool opened = Storage.openFileForRead("TRS", progPath, f);
-  if (!opened && Storage.exists(bakPath.c_str())) {
-    LOG_INF("TRS", "progress.bin missing, recovering from progress.bin.bak");
-    opened = Storage.openFileForRead("TRS", bakPath, f);
+  const int page = crosspoint::reader::PagedProgressSink::load(txt->getCachePath(), "TRS");
+  if (page < 0) {
+    return;  // no recoverable progress file; keep currentPage as-is
   }
-  if (!opened) {
-    const std::string flatName = backup::flatNameForCacheFile(txt->getCachePath(), "progress.bin");
-    if (backup::restoreFromMirror(flatName, progPath)) {
-      LOG_INF("TRS", "progress.bin recovered from mirror %s", flatName.c_str());
-      opened = Storage.openFileForRead("TRS", progPath, f);
-    }
+  currentPage = page;
+  if (currentPage >= totalPages) {
+    currentPage = totalPages - 1;
   }
-  if (opened) {
-    uint8_t data[4];
-    const int bytesRead = f.read(data, sizeof(data));
-    if (bytesRead >= 2) {
-      if (bytesRead >= 4) {
-        currentPage = static_cast<int>(static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
-                                       (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24));
-      } else {
-        // Backward compatibility with older 2-byte progress files.
-        currentPage = data[0] + (data[1] << 8);
-      }
-      if (currentPage >= totalPages) {
-        currentPage = totalPages - 1;
-      }
-      if (currentPage < 0) {
-        currentPage = 0;
-      }
-      LOG_DBG("TRS", "Loaded progress: page %d/%d", currentPage, totalPages);
-      lastSavedPage = currentPage;
-      lastObservedPage = currentPage;
-      progressDirty = false;
-    }
-    f.close();
+  if (currentPage < 0) {
+    currentPage = 0;
   }
+  progress_.seed({0, currentPage, 1});
+  LOG_DBG("TRS", "Loaded progress: page %d/%d", currentPage, totalPages);
 }
 
 bool TxtReaderActivity::loadPageIndexCache() {
