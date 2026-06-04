@@ -176,4 +176,7 @@ class CrossPointWebServer {
   void handleFirmwareUpload();
   void handleFirmwareUploadDone();
   void handleUpdatePage() const;
+  // RFC #160: post-reboot verify target — reports the running version + OTA
+  // image state so the browser /update page can confirm the new firmware booted.
+  void handleFirmwareStatus() const;
 };

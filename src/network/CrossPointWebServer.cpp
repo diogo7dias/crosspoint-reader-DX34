@@ -267,6 +267,7 @@ void CrossPointWebServer::begin() {
   server->on("/files", HTTP_GET, [this] { handleFileList(); });
 
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
+  server->on("/api/firmware/status", HTTP_GET, [this] { handleFirmwareStatus(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
   server->on("/download", HTTP_GET, [this] { handleDownload(); });
   server->on("/preview", HTTP_GET, [this] { handlePreview(); });
@@ -755,6 +756,42 @@ void CrossPointWebServer::handleStatus() const {
   doc["rssi"] = apMode ? 0 : WiFi.RSSI();
   doc["freeHeap"] = ESP.getFreeHeap();
   doc["uptime"] = millis() / 1000;
+
+  String json;
+  serializeJson(doc, json);
+  server->send(200, "application/json", json);
+}
+
+// RFC #160: the browser /update page polls this after the device reboots to
+// confirm the new firmware actually booted (version match) and that the OTA
+// image is in a healthy state (not invalid / mid-rollback). Kept separate from
+// /api/status so the verify step has a stable, firmware-specific contract.
+void CrossPointWebServer::handleFirmwareStatus() const {
+  JsonDocument doc;
+  doc["version"] = CROSSPOINT_VERSION;
+
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (running) {
+    doc["partition"] = running->label;
+    esp_ota_img_states_t imgState;
+    if (esp_ota_get_state_partition(running, &imgState) == ESP_OK) {
+      const char* name = "unknown";
+      switch (imgState) {
+        case ESP_OTA_IMG_NEW:            name = "new"; break;
+        case ESP_OTA_IMG_PENDING_VERIFY: name = "pending_verify"; break;
+        case ESP_OTA_IMG_VALID:          name = "valid"; break;
+        case ESP_OTA_IMG_INVALID:        name = "invalid"; break;
+        case ESP_OTA_IMG_ABORTED:        name = "aborted"; break;
+        case ESP_OTA_IMG_UNDEFINED:      name = "undefined"; break;
+      }
+      doc["ota_state"] = name;
+      // VALID = explicitly confirmed; UNDEFINED = app rollback not enabled, so a
+      // booted image is implicitly healthy. Either means "the new build is live".
+      doc["healthy"] = (imgState == ESP_OTA_IMG_VALID || imgState == ESP_OTA_IMG_UNDEFINED);
+    } else {
+      doc["healthy"] = true;  // state unavailable (rollback off) -> booted = healthy
+    }
+  }
 
   String json;
   serializeJson(doc, json);
@@ -2324,6 +2361,8 @@ const REPO = 'diogo7dias/crosspoint-reader-DX34';
 // Access-Control-Allow-Origin: *, so the browser can fetch the binary
 // directly (GitHub release CDN does NOT send CORS headers).
 const FIRMWARE_URL = `https://raw.githubusercontent.com/${REPO}/firmware/firmware.bin`;
+const NO_PROGRESS_TIMEOUT_MS = 60000;  // cancel a stalled download after 60 s
+const DOWNLOAD_RETRIES = 2;            // retry a failed/stalled download this many times
 
 const cur = document.getElementById('cur').textContent.trim();
 const latestEl = document.getElementById('latest');
@@ -2337,32 +2376,131 @@ const prog = document.getElementById('prog');
 let latestTag = null;
 let latestAssetUrl = null;
 let latestSize = 0;
+let deviceMode = null;  // 'AP' | 'STA' | null — from /api/status
 
 function setStatus(s) { statusEl.textContent = s; }
+function fmtMB(b) { return (b / 1024 / 1024).toFixed(2) + ' MB'; }
+function fmtRate(bps) {
+  return bps >= 1024 * 1024 ? (bps / 1024 / 1024).toFixed(2) + ' MB/s' : (bps / 1024).toFixed(0) + ' KB/s';
+}
+function fmtEta(s) {
+  if (!isFinite(s) || s < 0) return '';
+  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+}
+// Live "X.XX / Y.YY MB · Z KB/s · ETA Ns" line for either phase.
+function progressLine(label, done, total, startedAt) {
+  const elapsed = (Date.now() - startedAt) / 1000;
+  const rate = elapsed > 0 ? done / elapsed : 0;
+  const parts = [`${label}: ${fmtMB(done)}${total ? ' / ' + fmtMB(total) : ''}`];
+  if (rate > 0) parts.push(fmtRate(rate));
+  if (total && rate > 0) parts.push('ETA ' + fmtEta((total - done) / rate));
+  return parts.join(' · ');
+}
 
 async function uploadBlob(blob) {
   prog.style.display = 'block';
-  prog.value = 0;
-  setStatus(`Uploading ${(blob.size/1024/1024).toFixed(2)} MB to device...`);
+  prog.value = 50;  // download (if any) filled the first half; upload fills the rest
+  const startedAt = Date.now();
   await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/firmware/install');
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) prog.value = (e.loaded / e.total) * 100;
+      if (!e.lengthComputable) return;
+      prog.value = 50 + (e.loaded / e.total) * 50;
+      setStatus(progressLine('Flashing device', e.loaded, e.total, startedAt));
     };
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
       ? resolve()
       : reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
-    xhr.onerror = () => reject(new Error('upload failed'));
+    xhr.onerror = () => reject(new Error('upload failed (device unreachable?)'));
     const fd = new FormData();
     fd.append('firmware', blob, 'firmware.bin');
     xhr.send(fd);
   });
   prog.value = 100;
-  setStatus('Install complete. Device is rebooting. WiFi will reconnect on the new firmware.');
+  setStatus('Install complete. Device is rebooting — verifying...');
+  verifyAfterReboot();
+}
+
+// Download firmware.bin with a no-progress watchdog. Returns a single Blob.
+// We collect chunks then build ONE Blob and drop the chunk array, so peak
+// memory is ~one copy of the binary (no lingering parallel buffers). True
+// request-streaming to the device isn't used because mobile Safari does not
+// support ReadableStream request bodies.
+async function downloadFirmware() {
+  const controller = new AbortController();
+  let lastTick = Date.now();
+  const watchdog = setInterval(() => {
+    if (Date.now() - lastTick > NO_PROGRESS_TIMEOUT_MS) controller.abort();
+  }, 2000);
+  try {
+    const resp = await fetch(FIRMWARE_URL, { cache: 'no-cache', signal: controller.signal });
+    if (!resp.ok) throw new Error(`download ${resp.status}`);
+    const total = parseInt(resp.headers.get('content-length') || '0', 10) || latestSize;
+    const reader = resp.body.getReader();
+    let chunks = [];
+    let received = 0;
+    const startedAt = Date.now();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      lastTick = Date.now();
+      chunks.push(value);
+      received += value.length;
+      if (total) prog.value = (received / total) * 50;  // first half of bar = download
+      setStatus(progressLine('Downloading', received, total, startedAt));
+    }
+    const blob = new Blob(chunks);
+    chunks = null;  // release the parallel buffers before the upload copy
+    return blob;
+  } finally {
+    clearInterval(watchdog);
+  }
+}
+
+// Poll /api/firmware/status after the reboot until the device returns and
+// reports the expected version (and a healthy OTA image), or we give up.
+async function verifyAfterReboot() {
+  const deadline = Date.now() + 90000;  // ESP boot + WiFi reconnect can take a while
+  const want = latestTag;  // e.g. "v4.0.0"; device version string contains the tag
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 4000));
+    try {
+      const r = await fetch('/api/firmware/status', { cache: 'no-cache' });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const ok = !want || (d.version && d.version.includes(want));
+      if (ok && d.healthy !== false) {
+        setStatus(`✓ Verified: device is now running ${d.version}.`);
+        return;
+      }
+      if (d.version && want && !d.version.includes(want)) {
+        setStatus(`Device rebooted but reports ${d.version} (expected ${want}). Reinstall may be needed.`);
+        return;
+      }
+    } catch (e) { /* device still rebooting — keep polling */ }
+  }
+  setStatus('Install done; could not auto-verify (device may still be reconnecting). Reload this page to check.');
 }
 
 (async () => {
+  // Learn whether the device is on AP mode (no internet route to GitHub) so we
+  // can steer the user to the manual fallback instead of a doomed auto-download.
+  try {
+    const sr = await fetch('/api/status', { cache: 'no-cache' });
+    if (sr.ok) deviceMode = (await sr.json()).mode;
+  } catch (e) { /* ignore — status is best-effort */ }
+
+  if (deviceMode === 'AP') {
+    latestEl.textContent = 'n/a (AP mode)';
+    setStatus('Device is in access-point mode and cannot reach GitHub. Use the manual fallback below: download firmware.bin on an internet-connected device, then pick it here.');
+    document.querySelector('.manual').style.opacity = '1';
+    installBtn.disabled = true;
+    installManualBtn.focus && installManualBtn.focus();
+    return;
+  }
+
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
     if (!r.ok) throw new Error(`GitHub API ${r.status}`);
@@ -2374,47 +2512,37 @@ async function uploadBlob(blob) {
       latestAssetUrl = asset.browser_download_url;
       latestSize = asset.size;
       dlLink.href = latestAssetUrl;
-      dlLink.textContent = `Download firmware.bin (${(latestSize/1024/1024).toFixed(2)} MB)`;
+      dlLink.textContent = `Download firmware.bin (${fmtMB(latestSize)})`;
     }
-    if (cur === latestTag) {
+    if (cur.includes(latestTag)) {
       setStatus(`Already on latest (${latestTag}). You can reinstall if you want.`);
     } else {
-      setStatus(`Update available: ${cur} → ${latestTag}` + (latestSize ? ` (${(latestSize/1024/1024).toFixed(2)} MB)` : ''));
+      setStatus(`Update available: ${cur} → ${latestTag}` + (latestSize ? ` (${fmtMB(latestSize)})` : ''));
     }
     installBtn.disabled = false;
   } catch (e) {
     latestEl.textContent = 'error';
-    setStatus('Could not reach GitHub: ' + e.message);
+    setStatus('Could not reach GitHub: ' + e.message + ' — use the manual fallback below.');
   }
 })();
 
 installBtn.addEventListener('click', async () => {
   installBtn.disabled = true;
-  try {
-    setStatus('Downloading firmware...');
-    prog.style.display = 'block';
-    prog.value = 0;
-    // raw.githubusercontent.com gives CORS, so fetch streams the body.
-    const resp = await fetch(FIRMWARE_URL, { cache: 'no-cache' });
-    if (!resp.ok) throw new Error(`download ${resp.status}`);
-    const total = parseInt(resp.headers.get('content-length') || '0', 10);
-    const reader = resp.body.getReader();
-    const chunks = [];
-    let received = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      if (total) prog.value = (received / total) * 50;  // first half of bar = download
-      setStatus(`Downloading firmware: ${(received/1024/1024).toFixed(2)} MB`);
+  prog.style.display = 'block';
+  prog.value = 0;
+  let lastErr = null;
+  for (let attempt = 0; attempt <= DOWNLOAD_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) setStatus(`Download retry ${attempt}/${DOWNLOAD_RETRIES}...`);
+      const blob = await downloadFirmware();
+      await uploadBlob(blob);
+      return;  // success path continues into verifyAfterReboot()
+    } catch (e) {
+      lastErr = (e && e.name === 'AbortError') ? new Error('download stalled (no data for 60s)') : e;
     }
-    const blob = new Blob(chunks);
-    await uploadBlob(blob);
-  } catch (e) {
-    setStatus('Failed: ' + e.message + ' — try the manual fallback below.');
-    installBtn.disabled = false;
   }
+  setStatus('Failed: ' + lastErr.message + ' — try the manual fallback below.');
+  installBtn.disabled = false;
 });
 
 fileInput.addEventListener('change', () => {
