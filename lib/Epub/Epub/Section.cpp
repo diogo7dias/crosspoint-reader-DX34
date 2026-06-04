@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <deque>
 
+#include <MemoryPolicy.h>
+
 #include "Page.h"
 #include "parsers/ChapterHtmlSlimParser.h"
 
@@ -23,11 +25,17 @@ namespace {
 // invalidates the bad caches on first open after flash; users lose at most
 // ~80 s per previously-built chapter to re-layout, and book reading
 // position (progress.bin) is unaffected.
-constexpr uint8_t SECTION_FILE_VERSION = 22;
+//
+// v23 (2026-06-04, RFC #164 step 7): header gains a degradeLevel byte and
+// degraded layouts (NoHyphen/SkipImages, produced only under heap pressure)
+// are never trusted on load — they re-layout on every open so the section
+// snaps back to Full once the heap recovers. Bumping invalidates v22 caches so
+// the new byte is present from the first open after flash.
+constexpr uint8_t SECTION_FILE_VERSION = 23;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint8_t) +
-                                 sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) + sizeof(uint16_t) +
-                                 sizeof(uint32_t);
+                                 sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) +
+                                 sizeof(uint8_t) /* degradeLevel */ + sizeof(uint16_t) + sizeof(uint32_t);
 
 int getAnchorPage(const std::deque<std::pair<std::string, uint16_t>>& anchors, const std::string& anchor) {
   if (anchor.empty()) {
@@ -117,7 +125,8 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
                                      const uint16_t viewportWidth, const uint16_t viewportHeight,
                                      const bool hyphenationEnabled, const uint8_t wordSpacingPercent,
                                      const uint8_t firstLineIndentMode, const uint8_t readerStyleMode,
-                                     const uint8_t textRenderMode, const bool readerBoldSwap) {
+                                     const uint8_t textRenderMode, const bool readerBoldSwap,
+                                     const uint8_t degradeLevel) {
   if (!file) {
     LOG_DBG("SCT", "File not open for writing header");
     return;
@@ -127,7 +136,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
                                    sizeof(viewportWidth) + sizeof(viewportHeight) + sizeof(pageCount) +
                                    sizeof(hyphenationEnabled) + sizeof(wordSpacingPercent) +
                                    sizeof(firstLineIndentMode) + sizeof(readerStyleMode) + sizeof(textRenderMode) +
-                                   sizeof(readerBoldSwap) + sizeof(uint32_t),
+                                   sizeof(readerBoldSwap) + sizeof(degradeLevel) + sizeof(uint32_t),
                 "Header size mismatch");
   serialization::writePod(file, SECTION_FILE_VERSION);
   serialization::writePod(file, fontId);
@@ -142,6 +151,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
   serialization::writePod(file, readerStyleMode);
   serialization::writePod(file, textRenderMode);
   serialization::writePod(file, readerBoldSwap);
+  serialization::writePod(file, degradeLevel);  // RFC #164 step 7: which DegradeLevel produced this layout
   serialization::writePod(file, pageCount);  // Placeholder for page count (will be initially 0 when written)
   serialization::writePod(file, static_cast<uint32_t>(0));  // Placeholder for LUT offset
 }
@@ -177,6 +187,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
     uint8_t fileReaderStyleMode;
     uint8_t fileTextRenderMode;
     bool fileReaderBoldSwap;
+    uint8_t fileDegradeLevel;
     serialization::readPod(file, fileFontId);
     serialization::readPod(file, fileLineCompression);
     serialization::readPod(file, fileExtraParagraphSpacingLevel);
@@ -189,6 +200,19 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
     serialization::readPod(file, fileReaderStyleMode);
     serialization::readPod(file, fileTextRenderMode);
     serialization::readPod(file, fileReaderBoldSwap);
+    serialization::readPod(file, fileDegradeLevel);
+
+    // RFC #164 step 7: a degraded cache (laid out under heap pressure with
+    // hyphenation and/or images shed) is never trusted — reject it so the
+    // section re-lays-out, snapping back to Full once the heap has recovered.
+    // On a healthy device every cache is Full and this is a no-op. The book's
+    // reading position (progress.bin) is unaffected by the re-layout.
+    if (fileDegradeLevel != static_cast<uint8_t>(crosspoint::layout::DegradeLevel::Full)) {
+      file.close();
+      LOG_DIAG("SCT", "reject degraded cache spine=%d level=%u -> re-layout", spineIndex, (unsigned)fileDegradeLevel);
+      clearCache();
+      return false;
+    }
 
     if (fontId != fileFontId || lineCompression != fileLineCompression ||
         extraParagraphSpacingLevel != fileExtraParagraphSpacingLevel || paragraphAlignment != fileParagraphAlignment ||
@@ -406,9 +430,24 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return false;
   }
+  // RFC #164 step 7: pick a layout degradation level from the heap as it stands
+  // right before layout. On a healthy device this is Full (>=48 KB largest) and
+  // the pipeline behaves byte-identically to before; only a heap that has been
+  // squeezed down to the recovery-ladder band degrades (drop hyphenation, then
+  // images) instead of OOM->restart. The chosen level is stamped in the header
+  // so a degraded cache re-lays-out once the heap recovers (loadSectionFile
+  // rejects any non-Full cache). DegradePlan::from resolves the level into the
+  // images/hyphenate levers the parser honours.
+  const crosspoint::layout::DegradeLevel layoutLevel = crosspoint::layout::layoutLevelFor(
+      crosspoint::heap::largestFreeBlockBytes(), crosspoint::mem::kLayoutNoHyphenBelowBytes,
+      crosspoint::mem::kLayoutSkipImagesBelowBytes);
+  if (layoutLevel != crosspoint::layout::DegradeLevel::Full) {
+    LOG_DIAG("SCT", "layout degraded spine=%d level=%u largest=%u", spineIndex, (unsigned)layoutLevel,
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+  }
   writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacingLevel, paragraphAlignment, viewportWidth,
                          viewportHeight, hyphenationEnabled, wordSpacingPercent, firstLineIndentMode, readerStyleMode,
-                         textRenderMode, readerBoldSwap);
+                         textRenderMode, readerBoldSwap, static_cast<uint8_t>(layoutLevel));
   // Deques instead of vectors so growth doesn't require a contiguous realloc
   // when the chapter has many anchors / pages. See member-deque rationale
   // in Section.h. Crash 1 in the 2026-05-17 v2.3.9 test session was a
@@ -446,6 +485,11 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   // arena (the repurposed 24 KB anchor) when provided, so the bounded word
   // buffer is available even on a fragmented heap.
   parseConfig.externalArena = layoutArena;
+  // RFC #164 step 7: resolve the level into the per-section degradation plan the
+  // parser reads (images branch + hyphenation). prewarmStyleMask is unused at
+  // layout time (it gates render-side glyph warmth); kStyleAll is a no-op here.
+  parseConfig.degradePlan =
+      crosspoint::layout::DegradePlan::from(layoutLevel, crosspoint::layout::kStyleAll);
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, parseConfig,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },

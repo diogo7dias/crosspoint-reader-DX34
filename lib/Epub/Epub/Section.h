@@ -38,7 +38,8 @@ class Section {
   void writeSectionFileHeader(int fontId, float lineCompression, uint8_t extraParagraphSpacingLevel,
                               uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
                               bool hyphenationEnabled, uint8_t wordSpacingPercent, uint8_t firstLineIndentMode,
-                              uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap);
+                              uint8_t readerStyleMode, uint8_t textRenderMode, bool readerBoldSwap,
+                              uint8_t degradeLevel);
   uint32_t onPageComplete(std::unique_ptr<Page> page);
 
  public:

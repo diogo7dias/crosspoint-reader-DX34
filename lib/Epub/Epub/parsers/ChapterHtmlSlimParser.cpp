@@ -155,9 +155,12 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
 
     makePages();
   }
+  // RFC #164 step 7: the degradation plan's hyphenate lever gates the parser's
+  // own hyphenation setting — under heap pressure (NoHyphen+) we skip the
+  // hyphenation/oversized-split passes whose mid-vector inserts churn the heap.
   currentTextBlock.reset(new (std::nothrow) crosspoint::layout::LayoutEngine(
-      renderer, fontId, extraParagraphSpacingLevel != 0, hyphenationEnabled, blockStyle, wordSpacingPercent,
-      firstLineIndentMode, usePublisherStyles, sectionArena_, degradePlan_));
+      renderer, fontId, extraParagraphSpacingLevel != 0, hyphenationEnabled && degradePlan_.hyphenate, blockStyle,
+      wordSpacingPercent, firstLineIndentMode, usePublisherStyles, sectionArena_, degradePlan_));
   if (!currentTextBlock) {
     LOG_DIAG("EHP", "OOM new LayoutEngine free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());

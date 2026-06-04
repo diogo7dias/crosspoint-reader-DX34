@@ -138,6 +138,21 @@ inline Recovery nextRecoveryStep(const RecoveryContext& c) {
   return Recovery::Proceed;
 }
 
+// ── Layout/render degradation thresholds (RFC #164 step 7, Tier A) ──────────
+// Largest-free-block bytes below which the layout/render pipeline sheds work
+// instead of OOM->restart. Owned here alongside the gates so the heap numbers
+// move together; the largest->DegradeLevel mapping itself is the pure
+// crosspoint::layout::layoutLevelFor/renderLevelFor (so MemoryPolicy stays
+// decoupled from the layout vocabulary). Bands:
+//   layout : >=48K Full | 28K..48K NoHyphen (drop hyphenation) | <28K SkipImages
+//   render : >=40K Full | <40K TrimPrewarm (warm regular glyphs only)
+// 48K mirrors the BuildSectionLayout gate: anything proceeding *below* the
+// comfortable layout gate (only reachable via the recovery ladder) degrades.
+// Initial values — retune on device.
+inline constexpr size_t kLayoutNoHyphenBelowBytes = 48 * 1024;
+inline constexpr size_t kLayoutSkipImagesBelowBytes = 28 * 1024;
+inline constexpr size_t kRenderTrimPrewarmBelowBytes = 40 * 1024;
+
 // ── Shed-evictor registry + dynamic probe-before-grow ───────────────────────
 // SafeAnywhere evictors only: alloc-free, lock-free, callable from the ESP-IDF
 // failed-alloc callback (today: FontCacheManager::clearCache). Plain function
