@@ -49,7 +49,8 @@ enum class Op : uint8_t {
   SpawnRenderTask,        // xTaskCreate 8 KB stack          (largest >= 12 KB)
   BuildSectionLayout,     // CSS index + expat + LUT + words (largest >= 48 KB)
   RebuildSectionFloor,    // hard floor: below = no point    (largest >= 20 KB)
-  PrefetchNeighborPages,  // SectionPageCache prev/next      (largest >= 30 KB)
+  PrefetchNeighborPages,  // SectionPageCache prev+next      (largest >= 30 KB)
+  PrefetchNextPage,       // SectionPageCache forward only   (largest >= 18 KB)
   RenderRichSleepScreen,  // wallpaper/cover bitmap parse    (TOTAL  >= 30 KB)
   // Sleep V2 playlist reconcile/trim peak. listSleepBmpsWithMtime builds an
   // ~18 KB vector, then trimToCap holds ~4× that (favs + nonFav + surviving)
@@ -84,6 +85,12 @@ inline Gate gateFor(Op op) {
     // for "try and let the failure path catch it" over "block proactively".
     case Op::RebuildSectionFloor:   return {false, 20 * 1024};
     case Op::PrefetchNeighborPages: return {false, 30 * 1024};
+    // Forward-only single-page prefetch (RFC reading-speed Stage 1a): one
+    // deserialized Page's working set is ~half the prev+next pair, so a lower
+    // floor keeps the *next* page warm under moderate fragmentation (the common
+    // forward-reading case) where the 30 KB neighbour gate would close and force
+    // a synchronous on-turn SD load (the intermittent ~1 s stalls).
+    case Op::PrefetchNextPage:      return {false, 18 * 1024};
     case Op::RenderRichSleepScreen: return {true,  30 * 1024};
     case Op::ScanSleepPlaylist:     return {false, 64 * 1024};
   }
