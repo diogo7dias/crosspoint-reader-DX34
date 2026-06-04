@@ -11,7 +11,7 @@ std::string ReaderSession::enter(const ReaderPosition& loaded) {
   // Refresh decision must precede the first draw (ghost-pixel compromise — see
   // ReaderCommon::shouldFullRefreshOnEnter). Stateful: called exactly once.
   display_.requestRefresh(env_.shouldFullRefreshOnEnter(path));
-  display_.applyOrientationFromSettings();
+  if (applyOrientationOnEnter_) display_.applyOrientationFromSettings();
   display_.setBoldSwap(env_.boldSwap(path));
 
   if (hooks_.afterOrientation) hooks_.afterOrientation();

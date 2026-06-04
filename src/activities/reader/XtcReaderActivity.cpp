@@ -42,34 +42,19 @@ void XtcReaderActivity::onEnter() {
     return;
   }
 
-  // Refresh on book enter — see EpubReaderActivity::onEnter for full
-  // rationale. Full refresh only when path/layout/pixel-affecting settings
-  // changed since last enter; otherwise half refresh (same-book resume,
-  // return from subactivity without font change).
-  if (ReaderCommon::shouldFullRefreshOnEnter(xtc->getPath())) {
-    renderer.requestFullRefresh();
-  } else {
-    renderer.requestHalfRefresh();
-  }
-
-  EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(xtc->getPath()));
   xtc->setupCacheDir();
   progressSink_.setCachePath(xtc->getCachePath());
 
-  // Load saved progress
+  // Load saved progress (sets currentPage + seeds the tracker) before the
+  // enter() skeleton so the seed reflects the restored page.
   loadProgress();
 
-  // Save current XTC as last opened book and add to recent books
-  ReaderCommon::registerRecentBook(xtc->getPath(), xtc->getTitle(), xtc->getAuthor(), xtc->getThumbBmpPath());
-  // Generate cover thumbnail for home screen cover layouts
-  xtc->generateThumbBmp(400);
-
-  // Move book to /recents/ folder on first open from another location
-  {
-    std::string newPath = RECENT_BOOKS.moveBookToRecents(xtc->getPath());
-    if (!newPath.empty()) {
-      xtc->setPath(newPath);
-    }
+  // RFC #171: shared onEnter skeleton — refresh decision, bold-swap, recent-book
+  // registration, cover-thumb generation (afterRegister hook), move-to-/recents/.
+  // Orientation is intentionally NOT applied (pre-rendered reader).
+  const std::string movedPath = session_.enter({0, static_cast<int32_t>(currentPage), 1});
+  if (!movedPath.empty()) {
+    xtc->setPath(movedPath);
   }
 
   // Trigger first update
@@ -77,9 +62,8 @@ void XtcReaderActivity::onEnter() {
 }
 
 void XtcReaderActivity::onExit() {
-  flushProgressIfNeeded(true);
+  session_.exit(millis());   // force-flush progress + disable bold-swap
   inputDispatcher_.reset();  // clear the tap/long-press latches on activity exit
-  EpdFontFamily::setReaderBoldSwapEnabled(false);
   ActivityWithSubactivity::onExit();
 
   APP_STATE.readerActivityLoadCount = 0;
@@ -546,11 +530,8 @@ void XtcReaderActivity::flushProgressIfNeeded(const bool force) {
   if (!xtc) {
     return;
   }
-  // observe(current page) then debounced flush — the tracker owns the dirty
-  // flag + 800ms debounce that used to be hand-rolled here.
-  const uint32_t now = millis();
-  progress_.observe({0, static_cast<int32_t>(currentPage), 1}, now);
-  progress_.flush(now, force);
+  // observe(current page) + debounced flush via the shared session/tracker.
+  session_.tick(millis(), force);
 }
 
 void XtcReaderActivity::loadProgress() {
@@ -562,6 +543,6 @@ void XtcReaderActivity::loadProgress() {
   if (currentPage >= xtc->getPageCount()) {
     currentPage = (xtc->getPageCount() > 0) ? (xtc->getPageCount() - 1) : 0;
   }
-  progress_.seed({0, static_cast<int32_t>(currentPage), 1});
+  session_.progress().seed({0, static_cast<int32_t>(currentPage), 1});
   LOG_DBG("XTR", "Loaded progress: page %lu", currentPage);
 }

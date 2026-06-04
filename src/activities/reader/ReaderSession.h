@@ -68,9 +68,16 @@ class ReaderSession {
     IReaderDisplayPort& display;
   };
 
+  // applyOrientationOnEnter: Epub/Txt re-apply SETTINGS.orientation to the
+  // renderer on enter; the pre-rendered XTC reader does not (false) — its bitmaps
+  // are fixed and it never applied orientation on open.
   ReaderSession(Ports ports, ReaderHooks hooks,
-                uint32_t debounceMs = ReaderProgressTracker::kDefaultDebounceMs)
-      : env_(ports.env), display_(ports.display), hooks_(std::move(hooks)), progress_(ports.sink, debounceMs) {}
+                uint32_t debounceMs = ReaderProgressTracker::kDefaultDebounceMs, bool applyOrientationOnEnter = true)
+      : env_(ports.env),
+        display_(ports.display),
+        hooks_(std::move(hooks)),
+        progress_(ports.sink, debounceMs),
+        applyOrientationOnEnter_(applyOrientationOnEnter) {}
 
   // onEnter skeleton: beforeRefresh → refresh decision → orientation → bold-swap
   // → afterOrientation → register recent → afterRegister → moveBookToRecents.
@@ -98,6 +105,7 @@ class ReaderSession {
   IReaderDisplayPort&   display_;
   ReaderHooks           hooks_;
   ReaderProgressTracker progress_;
+  bool                  applyOrientationOnEnter_;
 };
 
 }  // namespace reader

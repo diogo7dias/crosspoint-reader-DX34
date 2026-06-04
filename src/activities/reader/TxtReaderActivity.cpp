@@ -67,40 +67,21 @@ void TxtReaderActivity::onEnter() {
     return;
   }
 
-  // Refresh on book enter — see EpubReaderActivity::onEnter for full
-  // rationale. Full refresh only when path/layout/pixel-affecting settings
-  // changed since last enter; otherwise half refresh (same-book resume,
-  // return from subactivity without font change).
-  if (ReaderCommon::shouldFullRefreshOnEnter(txt->getPath())) {
-    renderer.requestFullRefresh();
-  } else {
-    renderer.requestHalfRefresh();
-  }
-
-  // Configure screen orientation based on settings
-  ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
-  EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(txt->getPath()));
-
   txt->setupCacheDir();
-
-  // Save current txt as last opened file and add to recent books
-  auto filePath = txt->getPath();
-  auto fileName = filePath.substr(filePath.rfind('/') + 1);
-  ReaderCommon::registerRecentBook(filePath, fileName, "", "");
-
-  // Move book to /recents/ folder on first open from another location
-  {
-    std::string newPath = RECENT_BOOKS.moveBookToRecents(txt->getPath());
-    if (!newPath.empty()) {
-      txt->setPath(newPath);
-      filePath = newPath;
-      fileName = filePath.substr(filePath.rfind('/') + 1);
-      APP_STATE.openEpubPath = filePath;
-      APP_STATE.saveToFile();
-    }
-  }
-
   progressSink_.setCachePath(txt->getCachePath());
+
+  // RFC #171: the shared onEnter skeleton — refresh decision, orientation,
+  // bold-swap, recent-book registration, and move-to-/recents/. The real
+  // progress seed happens later in buildPageIndex() once totalPages is known
+  // (TXT loads its page index lazily on first render), so the enter()-time seed
+  // of the current page is transient.
+  const std::string movedPath = session_.enter({0, currentPage, 1});
+  if (!movedPath.empty()) {
+    txt->setPath(movedPath);
+    progressSink_.setCachePath(txt->getCachePath());
+    APP_STATE.openEpubPath = txt->getPath();
+    APP_STATE.saveToFile();
+  }
 
   cachedTitleUsableWidth = -1;
   cachedTitleNoTitleTruncation = false;
@@ -112,8 +93,7 @@ void TxtReaderActivity::onEnter() {
 }
 
 void TxtReaderActivity::onExit() {
-  flushProgressIfNeeded(true);
-  EpdFontFamily::setReaderBoldSwapEnabled(false);
+  session_.exit(millis());  // force-flush progress + disable bold-swap
   ActivityWithSubactivity::onExit();
 
   // Reset orientation back to portrait for the rest of the UI
@@ -307,7 +287,7 @@ void TxtReaderActivity::reloadCurrentLayoutForDisplaySettings() {
   flushProgressIfNeeded(true);
   pendingRelayoutPage = currentPage;
   pendingRelayoutPageCount = std::max(totalPages, 1);
-  progress_.seed({0, currentPage, 1});
+  session_.progress().seed({0, currentPage, 1});
   cachedTitleUsableWidth = -1;
   cachedTitleNoTitleTruncation = false;
   cachedTitleMaxLines = -1;
@@ -608,7 +588,7 @@ void TxtReaderActivity::initializeReader() {
     pendingRelayoutPage = -1;
     pendingRelayoutPageCount = 0;
     progressSink_.write({0, currentPage, 1});  // persist the re-anchored page now
-    progress_.seed({0, currentPage, 1});
+    session_.progress().seed({0, currentPage, 1});
   }
 
   initialized = true;
@@ -1060,11 +1040,8 @@ void TxtReaderActivity::flushProgressIfNeeded(const bool force) {
   if (!txt) {
     return;
   }
-  // observe(current page) then debounced flush — the tracker owns the dirty
-  // flag + 800ms debounce that used to be hand-rolled here.
-  const uint32_t now = millis();
-  progress_.observe({0, currentPage, 1}, now);
-  progress_.flush(now, force);
+  // observe(current page) + debounced flush via the shared session/tracker.
+  session_.tick(millis(), force);
 }
 
 void TxtReaderActivity::loadProgress() {
@@ -1079,7 +1056,7 @@ void TxtReaderActivity::loadProgress() {
   if (currentPage < 0) {
     currentPage = 0;
   }
-  progress_.seed({0, currentPage, 1});
+  session_.progress().seed({0, currentPage, 1});
   LOG_DBG("TRS", "Loaded progress: page %d/%d", currentPage, totalPages);
 }
 

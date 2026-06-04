@@ -159,6 +159,19 @@ void test_exit_force_flushes_and_clears_boldswap() {
   TEST_ASSERT_FALSE(h.display.boldCalls.back());  // bold-swap disabled on exit
 }
 
+void test_enter_skips_orientation_when_opted_out() {
+  // XTC path: applyOrientationOnEnter=false — pre-rendered, never orients on open.
+  FakeSink sink;
+  FakeEnv env;
+  FakeDisplay display;
+  ReaderSession s({sink, env, display},
+                  ReaderHooks{[] { return std::string("/b.xtc"); }, [] { return ReaderPosition{0, 0, 1}; }},
+                  crosspoint::reader::ReaderProgressTracker::kDefaultDebounceMs, /*applyOrientationOnEnter=*/false);
+  s.enter({0, 0, 1});
+  TEST_ASSERT_EQUAL(0, display.orientationApplies);  // not applied
+  TEST_ASSERT_EQUAL(1, display.refreshes.size());    // refresh still happens
+}
+
 void test_resetto_flushes_then_reseeds() {
   Harness h;
   h.session.enter({0, 0, 1});
@@ -182,6 +195,7 @@ int main(int, char**) {
   RUN_TEST(test_tick_force_writes_immediately);
   RUN_TEST(test_tick_idempotent_when_unchanged);
   RUN_TEST(test_exit_force_flushes_and_clears_boldswap);
+  RUN_TEST(test_enter_skips_orientation_when_opted_out);
   RUN_TEST(test_resetto_flushes_then_reseeds);
   return UNITY_END();
 }

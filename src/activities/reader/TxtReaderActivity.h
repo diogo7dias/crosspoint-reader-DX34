@@ -17,7 +17,8 @@
 #include "PagedProgressSink.h"
 #include "ReaderStatusBar.h"
 #include "ReaderInputDispatcher.h"
-#include "ReaderProgressTracker.h"
+#include "ReaderSession.h"
+#include "ReaderSessionPorts.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -47,12 +48,22 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
       crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
                                             /*footnoteBack=*/false, /*chapterSkip=*/false}};
-  // RFC #171 step 0: progress persistence now goes through the shared, host-
-  // tested ReaderProgressTracker (debounce/dirty) + a 4-byte PagedProgressSink,
-  // replacing the hand-rolled progressDirty/lastProgressChangeMs/lastObserved/
-  // lastSaved fields. Single-document => ReaderPosition{0, currentPage, 1}.
+  // RFC #171: progress persistence + the onEnter skeleton run through the shared
+  // host-tested ReaderSession (composes ReaderProgressTracker). Single-document
+  // => ReaderPosition{0, currentPage, 1}; recent-book title is the filename.
   crosspoint::reader::PagedProgressSink progressSink_{"", "TRS"};
-  crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
+  crosspoint::reader::ProdDisplayPort displayPort_{renderer};
+  crosspoint::reader::ProdEnvPort envPort_;
+  crosspoint::reader::ReaderSession session_{
+      {progressSink_, envPort_, displayPort_},
+      crosspoint::reader::ReaderHooks{
+          [this] { return txt ? txt->getPath() : std::string(); },
+          [this] { return crosspoint::reader::ReaderPosition{0, currentPage, 1}; },
+          nullptr, nullptr, nullptr,
+          [this](std::string& title, std::string&, std::string&) {
+            const std::string p = txt ? txt->getPath() : std::string();
+            title = p.substr(p.rfind('/') + 1);
+          }}};
   int recentSwitcherSelection = 0;
   std::vector<RecentBook> recentSwitcherBooks;
 

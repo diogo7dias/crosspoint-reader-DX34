@@ -14,7 +14,8 @@
 
 #include "PagedProgressSink.h"
 #include "ReaderInputDispatcher.h"
-#include "ReaderProgressTracker.h"
+#include "ReaderSession.h"
+#include "ReaderSessionPorts.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -37,12 +38,30 @@ class XtcReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::ReaderInputDispatcher inputDispatcher_{
       crosspoint::reader::ReaderInputConfig{/*doubleTapToggle=*/true, /*longPressConfirm=*/true,
                                             /*footnoteBack=*/false, /*chapterSkip=*/true}};
-  // RFC #171 step 0: progress persistence via the shared host-tested
-  // ReaderProgressTracker + 4-byte PagedProgressSink (was hand-rolled
-  // progressDirty/lastProgressChangeMs/lastObserved/lastSaved). Single-doc =>
-  // ReaderPosition{0, (int32_t)currentPage, 1}.
+  // RFC #171: progress + the onEnter skeleton via the shared host-tested
+  // ReaderSession. Single-doc => ReaderPosition{0, (int32_t)currentPage, 1}.
+  // applyOrientationOnEnter=false: XTC is pre-rendered and never oriented on open.
   crosspoint::reader::PagedProgressSink progressSink_{"", "XTR"};
-  crosspoint::reader::ReaderProgressTracker progress_{progressSink_};
+  crosspoint::reader::ProdDisplayPort displayPort_{renderer};
+  crosspoint::reader::ProdEnvPort envPort_;
+  crosspoint::reader::ReaderSession session_{
+      {progressSink_, envPort_, displayPort_},
+      crosspoint::reader::ReaderHooks{
+          [this] { return xtc ? xtc->getPath() : std::string(); },
+          [this] { return crosspoint::reader::ReaderPosition{0, static_cast<int32_t>(currentPage), 1}; },
+          nullptr, nullptr,
+          [this] {
+            if (xtc) xtc->generateThumbBmp(400);  // afterRegister: cover thumbnail for home
+          },
+          [this](std::string& title, std::string& author, std::string& thumb) {
+            if (xtc) {
+              title = xtc->getTitle();
+              author = xtc->getAuthor();
+              thumb = xtc->getThumbBmpPath();
+            }
+          }},
+      crosspoint::reader::ReaderProgressTracker::kDefaultDebounceMs,
+      /*applyOrientationOnEnter=*/false};
   int recentSwitcherSelection = 0;
   std::vector<RecentBook> recentSwitcherBooks;
 
