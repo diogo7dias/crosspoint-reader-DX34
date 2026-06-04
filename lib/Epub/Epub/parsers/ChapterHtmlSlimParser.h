@@ -9,6 +9,7 @@
 
 #include "../FootnoteEntry.h"
 #include "../layout/LayoutEngine.h"
+#include "../page/PageBuilder.h"
 #include "FootnotePlacer.h"
 #include "../blocks/ImageBlock.h"
 #include "../blocks/TextBlock.h"
@@ -77,8 +78,14 @@ class ChapterHtmlSlimParser {
   crosspoint::layout::LayoutArena* externalArena_ = nullptr;    // activity-owned arena (nullable), from config
   crosspoint::layout::LayoutArena* sectionArena_ = nullptr;     // active arena for this parse (set in parseAndBuildPages)
   std::unique_ptr<crosspoint::layout::LayoutEngine> currentTextBlock = nullptr;
-  std::unique_ptr<Page> currentPage = nullptr;
-  int16_t currentPageNextY = 0;
+  // RFC #171-followup: page assembly (in-flight page, vertical cursor,
+  // completed-page count, pending anchors, complete-when-full + dense-fit) lives
+  // in PageBuilder, which returns explicit [[nodiscard]] PageStatus instead of the
+  // sticky parseFailed bool. Constructed in parseAndBuildPages once geometry is
+  // known. The parser still owns expat parsing, style resolution, layout feed,
+  // footnote tracking, and image *extraction* — it feeds PageBuilder laid-out
+  // lines + already-built ImageBlocks.
+  std::unique_ptr<crosspoint::page::PageBuilder> pageBuilder_ = nullptr;
   // Sticky OOM flag. Set when a `new (nothrow) Page()` returns null
   // inside one of the parse callbacks, where we can't propagate a
   // return value through expat. The parse loop polls this between
@@ -102,8 +109,6 @@ class ChapterHtmlSlimParser {
   std::string contentBase;
   std::string imageBasePath;
   int imageCounter = 0;
-  uint16_t completedPageCount = 0;
-  std::vector<std::string> pendingAnchors;
 
   // Style tracking: the three former systems (depth flags + inline stack +
   // block CSS base) now live behind one host-testable resolver (RFC #170).
@@ -119,8 +124,6 @@ class ChapterHtmlSlimParser {
 
   void startNewTextBlock(const BlockStyle& blockStyle);
   void flushPartWordBuffer();
-  void completeCurrentPage();
-  void bindPendingAnchorsToCurrentPage();
   void makePages();
   // XML callbacks
   static void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char** atts);
@@ -160,5 +163,4 @@ class ChapterHtmlSlimParser {
 
   ~ChapterHtmlSlimParser() = default;
   bool parseAndBuildPages();
-  void addLineToPage(std::shared_ptr<TextBlock> line);
 };
