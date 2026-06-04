@@ -75,6 +75,41 @@ void test_prewarm_mask_intersects_used_styles() {
   TEST_ASSERT_EQUAL_UINT8(0, t.prewarmStyleMask);
 }
 
+// ── Heap-pressure -> level mapping (RFC #164 step 7, Tier A) ─────────────────
+
+void test_layout_level_bands() {
+  // noHyphenBelow=48K, skipImagesBelow=28K (the Section.cpp wiring values).
+  const size_t noHy = 48 * 1024, skip = 28 * 1024;
+  // Comfortable heap -> Full (keep hyphenation + images).
+  TEST_ASSERT_EQUAL(DegradeLevel::Full, L::layoutLevelFor(64 * 1024, noHy, skip));
+  TEST_ASSERT_EQUAL(DegradeLevel::Full, L::layoutLevelFor(48 * 1024, noHy, skip));  // boundary is inclusive Full
+  // Squeezed -> drop hyphenation first (the cheaper lever).
+  TEST_ASSERT_EQUAL(DegradeLevel::NoHyphen, L::layoutLevelFor(48 * 1024 - 1, noHy, skip));
+  TEST_ASSERT_EQUAL(DegradeLevel::NoHyphen, L::layoutLevelFor(28 * 1024, noHy, skip));
+  // Severe -> also skip images (the largest single decode buffer).
+  TEST_ASSERT_EQUAL(DegradeLevel::SkipImages, L::layoutLevelFor(28 * 1024 - 1, noHy, skip));
+  TEST_ASSERT_EQUAL(DegradeLevel::SkipImages, L::layoutLevelFor(0, noHy, skip));
+}
+
+void test_render_level_bands() {
+  const size_t trim = 40 * 1024;
+  TEST_ASSERT_EQUAL(DegradeLevel::Full, L::renderLevelFor(40 * 1024, trim));
+  TEST_ASSERT_EQUAL(DegradeLevel::Full, L::renderLevelFor(64 * 1024, trim));
+  TEST_ASSERT_EQUAL(DegradeLevel::TrimPrewarm, L::renderLevelFor(40 * 1024 - 1, trim));
+  TEST_ASSERT_EQUAL(DegradeLevel::TrimPrewarm, L::renderLevelFor(0, trim));
+}
+
+void test_layout_level_is_monotone_in_heap() {
+  // As the largest block shrinks, the level only ever sheds more (never less).
+  const size_t noHy = 48 * 1024, skip = 28 * 1024;
+  uint8_t prev = 0;
+  for (size_t largest = 80 * 1024; largest > 0; largest -= 512) {
+    const uint8_t lvl = static_cast<uint8_t>(L::layoutLevelFor(largest, noHy, skip));
+    TEST_ASSERT_TRUE(lvl >= prev);  // monotone non-decreasing as heap falls
+    prev = lvl;
+  }
+}
+
 // ── LayoutArena ──────────────────────────────────────────────────────────────
 
 void test_arena_create_ok_and_zero() {
@@ -189,6 +224,9 @@ int main(int, char**) {
   RUN_TEST(test_degrade_levels_shed_in_order);
   RUN_TEST(test_degrade_is_monotone);
   RUN_TEST(test_prewarm_mask_intersects_used_styles);
+  RUN_TEST(test_layout_level_bands);
+  RUN_TEST(test_render_level_bands);
+  RUN_TEST(test_layout_level_is_monotone_in_heap);
   RUN_TEST(test_arena_create_ok_and_zero);
   RUN_TEST(test_arena_alloc_aligns_and_overflows);
   RUN_TEST(test_arena_intern_roundtrip_and_overflow);

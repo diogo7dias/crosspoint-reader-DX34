@@ -8,7 +8,9 @@
 #include <Logging.h>
 #include <Serialization.h>
 #include <Utf8.h>
+#include <Epub/layout/DegradeLevel.h>
 #include <HeapGuard.h>
+#include <MemoryPolicy.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -1028,7 +1030,15 @@ void TxtReaderActivity::renderPage() {
   if (fcm) {
     auto scope = fcm->createPrewarmScope();
     renderLines();  // scan pass
-    scope.endScanAndPrewarm();
+    // RFC #164 step 7: trim glyph prewarm to regular-only under heap pressure
+    // (Full -> 0x0F on a healthy heap, so unchanged for the common case).
+    const uint8_t prewarmMask =
+        crosspoint::layout::DegradePlan::from(
+            crosspoint::layout::renderLevelFor(crosspoint::heap::largestFreeBlockBytes(),
+                                               crosspoint::mem::kRenderTrimPrewarmBelowBytes),
+            crosspoint::layout::kStyleAll)
+            .prewarmStyleMask;
+    scope.endScanAndPrewarm(prewarmMask);
     renderLines();  // actual render (BW)
   } else {
     renderLines();

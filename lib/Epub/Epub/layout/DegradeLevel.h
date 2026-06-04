@@ -85,5 +85,34 @@ struct DegradePlan {
   }
 };
 
+// ── Heap-pressure -> level mapping (RFC #164 step 7) ─────────────────────────
+// Pure functions: largest-free-block bytes in, DegradeLevel out. The threshold
+// NUMBERS are owned by MemoryPolicy (RFC #163, the `mem::k*Below*` constants)
+// and passed in here, so this header stays dependency-free (<cstdint> only) and
+// host-testable with synthetic thresholds. Monotone: a smaller largest block
+// yields an equal-or-higher (more shedding) level.
+//
+// Tier A ladder (greedy SimpleBreak deferred — ParsedText has no greedy path
+// yet, so the optimalBreak flag is inert): layout sheds hyphenation then images;
+// render sheds glyph prewarm. The TrimPrewarm/SimpleBreak rungs are reachable
+// only through DegradePlan::from for the render-mask side; layoutLevelFor jumps
+// Full -> NoHyphen -> SkipImages because those are the levers layout honours.
+
+// Layout-time level: governs hyphenation (its mid-vector inserts churn the heap)
+// and image blocks (the largest single decode buffer). Precondition for sane
+// banding: noHyphenBelow >= skipImagesBelow (drop the cheaper lever first).
+constexpr DegradeLevel layoutLevelFor(size_t largestBytes, size_t noHyphenBelow, size_t skipImagesBelow) {
+  if (largestBytes < skipImagesBelow) return DegradeLevel::SkipImages;
+  if (largestBytes < noHyphenBelow) return DegradeLevel::NoHyphen;
+  return DegradeLevel::Full;
+}
+
+// Render-time level: governs glyph prewarm warmth only. Below the threshold,
+// warm regular-only instead of every used style, shrinking the simultaneous
+// glyph-cache peak (the dominant render-OOM crowder per the v4.0.0 incident).
+constexpr DegradeLevel renderLevelFor(size_t largestBytes, size_t trimPrewarmBelow) {
+  return largestBytes < trimPrewarmBelow ? DegradeLevel::TrimPrewarm : DegradeLevel::Full;
+}
+
 }  // namespace layout
 }  // namespace crosspoint

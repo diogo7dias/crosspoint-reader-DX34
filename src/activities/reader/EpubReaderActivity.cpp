@@ -4,6 +4,7 @@
 #include <EpdFontFamily.h>
 #include <Epub/Page.h>
 #include <Epub/blocks/ImageBlock.h>
+#include <Epub/layout/DegradeLevel.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <FsHelpers.h>
@@ -2547,7 +2548,17 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     const uint32_t tScanStart = millis();
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);  // scan pass
     const uint32_t tScanEnd = millis();
-    scope.endScanAndPrewarm();
+    // RFC #164 step 7: dial glyph-prewarm warmth from the heap. With comfortable
+    // headroom (>=40 KB largest) this resolves to Full -> 0x0F, byte-identical to
+    // before; under pressure it warms regular glyphs only, shrinking the
+    // simultaneous glyph-cache peak that crowds the render-OOM path.
+    const uint8_t prewarmMask =
+        crosspoint::layout::DegradePlan::from(
+            crosspoint::layout::renderLevelFor(crosspoint::heap::largestFreeBlockBytes(),
+                                               crosspoint::mem::kRenderTrimPrewarmBelowBytes),
+            crosspoint::layout::kStyleAll)
+            .prewarmStyleMask;
+    scope.endScanAndPrewarm(prewarmMask);
     auto* fd = fcm->getDecompressor();
     if (fd) fd->resetBitmapAllocFailures();
     const uint32_t tRenderStart = millis();
