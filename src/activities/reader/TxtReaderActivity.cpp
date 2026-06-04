@@ -32,8 +32,7 @@
 #include "util/TransitionFeedback.h"
 
 namespace {
-constexpr unsigned long goHomeMs = 1000;
-constexpr unsigned long confirmDoubleTapMs = 350;
+constexpr unsigned long goHomeMs = 1000;  // still referenced by the (dormant) recent-switcher block
 constexpr unsigned long progressSaveDebounceMs = 800;
 constexpr int progressBarMarginTop = 1;
 constexpr int recentSwitcherRows = 8;
@@ -331,17 +330,6 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  if (pendingThemesOpen && !mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      millis() - lastConfirmReleaseMs > confirmDoubleTapMs) {
-    pendingThemesOpen = false;
-    openReadingThemes();
-    return;
-  }
-
-  if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
-    confirmLongPressHandled = false;
-  }
-
   if (recentSwitcherOpen) {
     const bool prevTriggered = mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
                                mappedInput.wasReleased(MappedInputManager::Button::Left);
@@ -374,84 +362,102 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (mappedInput.getHeldTime() >= goHomeMs) {
+  // RFC #165: normal-mode input is decoded by the shared ReaderInputDispatcher;
+  // the activity only executes the returned action. The txt reader has no
+  // chapter/section/footnote/end-of-book concept, so hasSection is always true
+  // (the end is handled by the PageNext clamp -> onGoHome) and atEndOfBook is
+  // false.
+  crosspoint::reader::ReaderInputSettings inputSettings;
+  inputSettings.longPressChapterSkip = SETTINGS.longPressChapterSkip;
+  inputSettings.powerIsPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN;
+
+  crosspoint::reader::ReaderState inputState;
+  inputState.mode = crosspoint::reader::ReaderState::Mode::Normal;
+  inputState.hasSection = true;
+
+  const auto effect = inputDispatcher_.dispatch(snapshotInput(), inputSettings, inputState);
+  if (effect.suppressUntilAllReleased) {
+    mappedInput.suppressUntilAllReleased();
+  }
+  applyEffect(effect);
+}
+
+crosspoint::reader::ReaderInput TxtReaderActivity::snapshotInput() {
+  using MB = MappedInputManager::Button;
+  static constexpr MB kMap[crosspoint::reader::kReaderButtonCount] = {
+      MB::Back, MB::Confirm, MB::Left, MB::Right, MB::Up, MB::Down, MB::Power, MB::PageBack, MB::PageForward};
+  static_assert(static_cast<int>(crosspoint::reader::ReaderButton::Back) == 0 &&
+                    static_cast<int>(crosspoint::reader::ReaderButton::PageForward) == 8,
+                "ReaderButton order must mirror MappedInputManager::Button");
+  crosspoint::reader::ReaderInput in;
+  for (int i = 0; i < crosspoint::reader::kReaderButtonCount; ++i) {
+    in.pressed[i] = mappedInput.wasPressed(kMap[i]);
+    in.released[i] = mappedInput.wasReleased(kMap[i]);
+    in.down[i] = mappedInput.isPressed(kMap[i]);
+  }
+  in.anyPressed = mappedInput.wasAnyPressed();
+  in.anyReleased = mappedInput.wasAnyReleased();
+  in.heldTimeMs = mappedInput.getHeldTime();
+  in.nowMs = millis();
+  return in;
+}
+
+void TxtReaderActivity::applyEffect(const crosspoint::reader::ReaderInputDispatcher::Result& effect) {
+  using A = crosspoint::reader::ReaderAction;
+  switch (effect.action) {
+    case A::OpenMenu:
+      openReadingThemes();
       return;
-    }
-    const unsigned long now = millis();
-    if (pendingThemesOpen && now - lastConfirmReleaseMs <= confirmDoubleTapMs) {
-      pendingThemesOpen = false;
+    case A::ToggleTextRenderMode:
       toggleTextRenderMode();
       return;
-    }
-    pendingThemesOpen = true;
-    lastConfirmReleaseMs = now;
-    return;
-  }
-
-  // Long press CONFIRM (1s+) toggles orientation: Portrait <-> Landscape CCW.
-  if (!confirmLongPressHandled && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= goHomeMs) {
-    confirmLongPressHandled = true;
-    mappedInput.suppressUntilAllReleased();
-    pendingThemesOpen = false;
-    SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
-                               ? CrossPointSettings::ORIENTATION::PORTRAIT
-                               : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
-    if (!ReadingThemeStore::persistContextual(txt ? txt->getCachePath() : std::string())) {
-      LOG_ERR("TRS", "Failed to save settings after orientation change");
-    }
-    renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
-                                ? GfxRenderer::Orientation::LandscapeCounterClockwise
-                                : GfxRenderer::Orientation::Portrait);
-    reloadCurrentLayoutForDisplaySettings();
-    requestUpdate();
-    return;
-  }
-
-  // BACK: go home immediately on press for snappier response.
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    onGoHome();
-    return;
-  }
-
-  // When long-press chapter skip is disabled, turn pages on press instead of
-  // release.
-  const bool usePressForPageTurn = !SETTINGS.longPressChapterSkip;
-  const bool prevTriggered = usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasPressed(MappedInputManager::Button::Left))
-                                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
-                                                    mappedInput.wasReleased(MappedInputManager::Button::Left));
-  const bool powerPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
-                             mappedInput.wasReleased(MappedInputManager::Button::Power);
-  const bool nextTriggered = usePressForPageTurn
-                                 ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasPressed(MappedInputManager::Button::Right))
-                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) || powerPageTurn ||
-                                    mappedInput.wasReleased(MappedInputManager::Button::Right));
-
-  if (!prevTriggered && !nextTriggered) {
-    return;
-  }
-
-  if (prevTriggered && currentPage > 0) {
-    currentPage--;
-    progressDirty = true;
-    lastProgressChangeMs = millis();
-    flushProgressIfNeeded(false);
-    requestUpdate();
-  } else if (nextTriggered) {
-    if (currentPage < totalPages - 1) {
-      currentPage++;
-      APP_STATE.sessionPagesRead++;
-      progressDirty = true;
-      lastProgressChangeMs = millis();
-      flushProgressIfNeeded(false);
-      requestUpdate();
-    } else {
+    case A::LongPressConfirm:
+      toggleOrientation();
+      return;
+    case A::GoHome:
       onGoHome();
-    }
+      return;
+    case A::PagePrev:
+      if (currentPage > 0) {
+        currentPage--;
+        progressDirty = true;
+        lastProgressChangeMs = millis();
+        flushProgressIfNeeded(false);
+        requestUpdate();
+      }
+      return;
+    case A::PageNext:
+      if (currentPage < totalPages - 1) {
+        currentPage++;
+        APP_STATE.sessionPagesRead++;
+        progressDirty = true;
+        lastProgressChangeMs = millis();
+        flushProgressIfNeeded(false);
+        requestUpdate();
+      } else {
+        onGoHome();
+      }
+      return;
+    default:
+      // The txt reader never produces footnote / chapter-skip / end-of-book /
+      // recovery / RequestUpdate actions (config + state preclude them).
+      return;
   }
+}
+
+void TxtReaderActivity::toggleOrientation() {
+  // Long press CONFIRM (1s+) toggles orientation: Portrait <-> Landscape CCW.
+  SETTINGS.orientation = (SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW)
+                             ? CrossPointSettings::ORIENTATION::PORTRAIT
+                             : CrossPointSettings::ORIENTATION::LANDSCAPE_CCW;
+  if (!ReadingThemeStore::persistContextual(txt ? txt->getCachePath() : std::string())) {
+    LOG_ERR("TRS", "Failed to save settings after orientation change");
+  }
+  renderer.setOrientation(SETTINGS.orientation == CrossPointSettings::ORIENTATION::LANDSCAPE_CCW
+                              ? GfxRenderer::Orientation::LandscapeCounterClockwise
+                              : GfxRenderer::Orientation::Portrait);
+  reloadCurrentLayoutForDisplaySettings();
+  requestUpdate();
 }
 
 void TxtReaderActivity::toggleTextRenderMode() {
