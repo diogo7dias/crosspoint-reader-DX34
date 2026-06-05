@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <PNGdec.h>
 
 #include <cstdlib>
@@ -367,7 +368,9 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
 
   // Allocate grayscale line buffer on demand (~3.2 KB) - freed after decode
   const size_t grayBufSize = PNG_MAX_BUFFERED_PIXELS / 2;
-  ctx.grayLineBuffer = static_cast<uint8_t*>(malloc(grayBufSize));
+  // Owned by ctx and read by the PNGdec C decode callbacks, so it stays a raw
+  // buffer (freed below after decode) rather than a scope-local RAII owner.
+  ctx.grayLineBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(grayBufSize));  // alloc-ok
   if (!ctx.grayLineBuffer) {
     LOG_ERR("PNG", "Failed to allocate gray line buffer");
     png->close();
