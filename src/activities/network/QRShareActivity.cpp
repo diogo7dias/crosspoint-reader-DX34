@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 #include <qrcode.h>
@@ -216,12 +217,21 @@ void QRShareActivity::handleDownload() {
   server->sendHeader("Content-Disposition", "attachment; filename=\"" + String(fileName.c_str()) + "\"");
   server->send(200, contentType.c_str(), "");
 
-  char buf[4096];
+  // 4 KB copy buffer on the heap, not the stack — a 4 KB local would consume
+  // about half this task's stack on top of the WiFi/HTTP call depth.
+  constexpr size_t kCopyBufSize = 4096;
+  auto buf = makeUniqueNoThrow<char[]>(kCopyBufSize);
+  if (!buf) {
+    LOG_ERR("QRSHARE", "OOM download buffer — aborting transfer");
+    file.close();
+    server->sendContent("");
+    return;
+  }
   while (file.available()) {
     esp_task_wdt_reset();
-    const int bytesRead = file.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+    const int bytesRead = file.read(reinterpret_cast<uint8_t*>(buf.get()), kCopyBufSize);
     if (bytesRead <= 0) break;
-    server->sendContent(buf, bytesRead);
+    server->sendContent(buf.get(), bytesRead);
     yield();
   }
   file.close();

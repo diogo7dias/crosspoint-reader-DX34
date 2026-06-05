@@ -951,8 +951,12 @@ void loop() {
   }
 
   if (Serial && millis() - lastMemPrint >= 10000) {
-    LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes", ESP.getFreeHeap(), ESP.getHeapSize(),
-            ESP.getMinFreeHeap());
+    // uxTaskGetStackHighWaterMark(nullptr) = minimum free stack (in words) the
+    // loop task has ever had. A small/shrinking value warns of a stack-overflow
+    // reset before it happens; logged alongside heap so both are visible.
+    const unsigned loopStackFreeBytes = uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t);
+    LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes, Loop stack free: %u bytes",
+            ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMinFreeHeap(), loopStackFreeBytes);
     lastMemPrint = millis();
   }
 
