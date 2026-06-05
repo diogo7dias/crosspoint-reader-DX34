@@ -99,47 +99,6 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
   nextWordContinues = false;
 }
 
-void ChapterHtmlSlimParser::completeCurrentPage() {
-  if (!currentPage) {
-    return;
-  }
-
-  const int lineHeight = static_cast<int>(renderer.getLineHeight(fontId) * lineCompression);
-  if (lineHeight > 0 && viewportHeight > 0) {
-    const int maxPossibleLines = viewportHeight / lineHeight;
-    const int minDenseLines = std::max(MIN_DENSE_PAGE_LINES, (maxPossibleLines * DENSE_PAGE_THRESHOLD_PERCENT) / 100);
-    currentPage->applyDensePageVerticalFit(lineHeight, viewportHeight, minDenseLines, lineHeight / 2);
-  }
-
-  completePageFn(std::move(currentPage));
-  completedPageCount++;
-}
-
-void ChapterHtmlSlimParser::bindPendingAnchorsToCurrentPage() {
-  if (pendingAnchors.empty()) {
-    return;
-  }
-  if (parseFailed) return;
-
-  if (!currentPage) {
-    currentPage.reset(new (std::nothrow) Page());
-    if (!currentPage) {
-      LOG_DIAG("EHP", "OOM new Page (bindPendingAnchors) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
-               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-      parseFailed = true;
-      return;
-    }
-    currentPageNextY = 0;
-  }
-
-  for (const auto& anchor : pendingAnchors) {
-    if (!anchor.empty()) {
-      anchorPageFn(anchor, completedPageCount);
-    }
-  }
-  pendingAnchors.clear();
-}
-
 // start a new text block if needed
 void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
   nextWordContinues = false;  // New block = new paragraph, no continuation
@@ -197,9 +156,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
     }
   }
 
-  if (!anchors.empty()) {
-    self->pendingAnchors.insert(self->pendingAnchors.end(), anchors.begin(), anchors.end());
-  }
+  self->pageBuilder_->queueAnchors(anchors);
 
   // Compute CSS style for this element early so display:none can short-circuit
   // before tag-specific branches emit any content or metadata.
@@ -298,41 +255,10 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
 
               LOG_DBG("EHP", "Display size: %dx%d (scale %.2f)", displayWidth, displayHeight, scale);
 
-              // Create page for image - only break if image won't fit remaining space.
-              // The pre-existing `new Page()` calls below were bare and would
-              // throw bad_alloc on a fragmented heap; with exceptions disabled
-              // in the firmware build that aborts. Switch to nothrow and treat
-              // a null result as a parse-aborting OOM (poll the flag from the
-              // outer parse loop to bail with the standard cleanup path).
-              if (self->currentPage && !self->currentPage->elements.empty() &&
-                  (self->currentPageNextY + displayHeight > self->viewportHeight)) {
-                self->completeCurrentPage();
-                self->currentPage.reset(new (std::nothrow) Page());
-                if (!self->currentPage) {
-                  LOG_DIAG("EHP", "OOM new Page (image overflow) free=%u largest=%u min=%u",
-                           (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-                           (unsigned)ESP.getMinFreeHeap());
-                  self->parseFailed = true;
-                  return;
-                }
-                self->currentPageNextY = 0;
-              } else if (!self->currentPage) {
-                self->currentPage.reset(new (std::nothrow) Page());
-                if (!self->currentPage) {
-                  LOG_DIAG("EHP", "OOM new Page (image initial) free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
-                           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
-                  self->parseFailed = true;
-                  return;
-                }
-                self->currentPageNextY = 0;
-              }
-
-              self->bindPendingAnchorsToCurrentPage();
-
-              // Create ImageBlock and add to page. make_shared without nothrow
-              // throws bad_alloc on heap exhaustion → ESP32 panic. Use the
-              // explicit shared_ptr(new (nothrow) ...) form so we can detect
-              // and bail.
+              // Create the ImageBlock here (extraction is the parser's job).
+              // make_shared without nothrow throws bad_alloc on heap exhaustion
+              // → ESP32 panic; use the explicit shared_ptr(new (nothrow) ...)
+              // form so we can detect and bail.
               auto* rawImageBlock = new (std::nothrow) ImageBlock(cachedImagePath, displayWidth, displayHeight);
               if (!rawImageBlock) {
                 LOG_DIAG("EHP", "OOM new ImageBlock free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
@@ -341,17 +267,17 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 return;
               }
               std::shared_ptr<ImageBlock> imageBlock(rawImageBlock);
-              int xPos = (self->viewportWidth - displayWidth) / 2;
-              auto* rawPageImage = new (std::nothrow) PageImage(imageBlock, xPos, self->currentPageNextY);
-              if (!rawPageImage) {
-                LOG_DIAG("EHP", "OOM new PageImage free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+
+              // PageBuilder owns placement: page-break (only if the current page
+              // is non-empty and the image won't fit), anchor binding, centering,
+              // and the PageImage allocation. An explicit Oom replaces the sticky
+              // bool the inline page-break code used to set.
+              if (!crosspoint::page::ok(self->pageBuilder_->addImage(imageBlock, displayWidth, displayHeight))) {
+                LOG_DIAG("EHP", "OOM PageBuilder addImage free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
                          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
                 self->parseFailed = true;
                 return;
               }
-              std::shared_ptr<PageImage> pageImage(rawPageImage);
-              self->currentPage->elements.push_back(pageImage);
-              self->currentPageNextY += displayHeight;
 
               self->depth += 1;
               return;
@@ -680,7 +606,11 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
                                         ? static_cast<uint16_t>(self->viewportWidth - horizontalInset)
                                         : self->viewportWidth;
     const crosspoint::layout::LayoutStatus status = self->currentTextBlock->flush(
-        effectiveWidth, [self](const std::shared_ptr<TextBlock>& textBlock) { self->addLineToPage(textBlock); }, false);
+        effectiveWidth,
+        [self](const std::shared_ptr<TextBlock>& textBlock) {
+          if (!crosspoint::page::ok(self->pageBuilder_->addLine(textBlock))) self->parseFailed = true;
+        },
+        false);
     if (status != crosspoint::layout::LayoutStatus::Ok) {
       self->parseFailed = true;
       return;
@@ -788,6 +718,26 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       layoutArena_ = crosspoint::layout::LayoutArena::create(kLayoutScratchArenaBytes);
     }
     sectionArena_ = &layoutArena_;
+  }
+
+  // Construct the page-assembly module once geometry is known, before the first
+  // startNewTextBlock (whose makePages feeds it). baseLineHeight is the page-level
+  // line height the old completeCurrentPage/makePages recomputed each call —
+  // constant per section, so captured once here.
+  {
+    crosspoint::page::PageConfig pbCfg;
+    pbCfg.viewportWidth = viewportWidth;
+    pbCfg.viewportHeight = viewportHeight;
+    pbCfg.baseLineHeight = static_cast<int>(renderer.getLineHeight(fontId) * lineCompression);
+    pbCfg.minDensePageLines = MIN_DENSE_PAGE_LINES;
+    pbCfg.densePageThresholdPercent = DENSE_PAGE_THRESHOLD_PERCENT;
+    pageBuilder_.reset(new (std::nothrow)
+                           crosspoint::page::PageBuilder(pbCfg, footnotePlacer_, completePageFn, anchorPageFn));
+    if (!pageBuilder_) {
+      LOG_DIAG("EHP", "OOM new PageBuilder free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+      return false;
+    }
   }
 
   if (hyphenationEnabled) {
@@ -921,14 +871,12 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     currentTextBlock.reset();
   }
 
-  if (!pendingAnchors.empty() && currentPage && !currentPage->elements.empty()) {
-    bindPendingAnchorsToCurrentPage();
+  // Bind any still-pending (trailing) anchors to the last non-empty page, then
+  // emit it (PageBuilder skips an empty trailing page, matching the old guards).
+  if (!crosspoint::page::ok(pageBuilder_->bindTrailingAnchors())) {
+    parseFailed = true;
   }
-
-  if (currentPage && !currentPage->elements.empty()) {
-    completeCurrentPage();
-    currentPage.reset();
-  }
+  pageBuilder_->finish();
 
   // Final makePages() call above may have hit OOM after the parse loop
   // already exited cleanly. Surface the failure to the caller.
@@ -939,70 +887,6 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   return true;
 }
 
-void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
-  if (parseFailed) return;
-  // The layout engine signals an OOM during TextBlock construction by passing
-  // a null shared_ptr through the processLine callback. Treat that the
-  // same as our own internal allocation failures.
-  if (!line) {
-    LOG_DIAG("EHP", "OOM upstream null TextBlock free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
-    parseFailed = true;
-    return;
-  }
-  const int baseLineHeight = renderer.getLineHeight(fontId) * lineCompression;
-  const int lineHeight = line->getBlockStyle().resolveLineHeight(baseLineHeight);
-
-  if (!currentPage) {
-    currentPage.reset(new (std::nothrow) Page());
-    if (!currentPage) {
-      LOG_DIAG("EHP", "OOM new Page (addLineToPage entry) free=%u largest=%u min=%u fontId=%d",
-               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-               (unsigned)ESP.getMinFreeHeap(), fontId);
-      parseFailed = true;
-      return;
-    }
-    currentPageNextY = 0;
-  }
-
-  if (currentPageNextY + lineHeight > viewportHeight) {
-    completeCurrentPage();
-    currentPage.reset(new (std::nothrow) Page());
-    if (!currentPage) {
-      LOG_DIAG("EHP", "OOM new Page (addLineToPage overflow) free=%u largest=%u min=%u fontId=%d",
-               (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
-               (unsigned)ESP.getMinFreeHeap(), fontId);
-      parseFailed = true;
-      return;
-    }
-    currentPageNextY = 0;
-  }
-
-  bindPendingAnchorsToCurrentPage();
-
-  // Track cumulative words to assign footnotes to the page containing their anchor
-  footnotePlacer_.placeForLine(line->wordCount(),
-                               [this](const char* number, const char* href) {
-                                 currentPage->addFootnote(number, href);
-                               });
-
-  // Apply horizontal left inset (margin + padding) as x position offset
-  const int16_t xOffset = line->getBlockStyle().leftInset();
-  // Heap-probe then make_shared: probing keeps the throwing make_shared safe
-  // under -fno-exceptions (kDefaultHeadroomBytes absorbs the control block +
-  // transient growth) while fusing the PageLine object and its control block
-  // into a single allocation — one fewer heap block per line than the old
-  // `new (nothrow)` + `shared_ptr(raw)` form.
-  if (!crosspoint::heap::canAllocateContiguous(sizeof(PageLine))) {
-    LOG_DIAG("EHP", "OOM PageLine probe free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
-    parseFailed = true;
-    return;
-  }
-  currentPage->elements.push_back(std::make_shared<PageLine>(line, xOffset, currentPageNextY));
-  currentPageNextY += lineHeight;
-}
-
 void ChapterHtmlSlimParser::makePages() {
   if (parseFailed) return;
   if (!currentTextBlock) {
@@ -1010,58 +894,46 @@ void ChapterHtmlSlimParser::makePages() {
     return;
   }
 
-  if (!currentPage) {
-    currentPage.reset(new (std::nothrow) Page());
-    if (!currentPage) {
-      LOG_DIAG("EHP", "OOM new Page (makePages entry) free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
-               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
-      parseFailed = true;
-      return;
-    }
-    currentPageNextY = 0;
+  // Ensure an open page (cursor reset to 0 only on a FRESH page) BEFORE applying
+  // top spacing — the old makePages created the page then advanced, so the
+  // first paragraph's top margin must not be lost to addLine's own ensurePage.
+  if (!crosspoint::page::ok(pageBuilder_->ensureOpenPage())) {
+    LOG_DIAG("EHP", "OOM new Page (makePages entry) free=%u largest=%u min=%u fontId=%d", (unsigned)ESP.getFreeHeap(),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap(), fontId);
+    parseFailed = true;
+    return;
   }
 
   const int baseLineHeight = renderer.getLineHeight(fontId) * lineCompression;
-
-  // Apply top spacing before the paragraph (stored in pixels)
   const BlockStyle& blockStyle = currentTextBlock->blockStyle();
   const int blockLineHeight = blockStyle.resolveLineHeight(baseLineHeight);
-  if (blockStyle.marginTop > 0) {
-    currentPageNextY += blockStyle.marginTop;
-  }
-  if (blockStyle.paddingTop > 0) {
-    currentPageNextY += blockStyle.paddingTop;
-  }
+
+  // Top spacing before the paragraph (advanceY is a no-op for <= 0, matching the
+  // old `if (> 0) +=`).
+  pageBuilder_->advanceY(blockStyle.marginTop);
+  pageBuilder_->advanceY(blockStyle.paddingTop);
 
   // Calculate effective width accounting for horizontal margins/padding
   const int horizontalInset = blockStyle.totalHorizontalInset();
   const uint16_t effectiveWidth =
       (horizontalInset < viewportWidth) ? static_cast<uint16_t>(viewportWidth - horizontalInset) : viewportWidth;
 
-  const crosspoint::layout::LayoutStatus status = currentTextBlock->flush(
-      effectiveWidth, [this](const std::shared_ptr<TextBlock>& textBlock) { addLineToPage(textBlock); });
+  const crosspoint::layout::LayoutStatus status =
+      currentTextBlock->flush(effectiveWidth, [this](const std::shared_ptr<TextBlock>& textBlock) {
+        if (!crosspoint::page::ok(pageBuilder_->addLine(textBlock))) parseFailed = true;
+      });
   if (status != crosspoint::layout::LayoutStatus::Ok) {
     parseFailed = true;
     return;
   }
 
-  // Fallback: transfer any remaining pending footnotes to current page.
-  // Normally addLineToPage handles this via word-index tracking, but this catches
-  // edge cases where a footnote's word index equals the exact block size.
-  if (!footnotePlacer_.empty() && currentPage) {
-    footnotePlacer_.drainRemaining(
-        [this](const char* number, const char* href) { currentPage->addFootnote(number, href); });
-  }
+  // Fallback: drain any footnotes whose word index fell on the exact block
+  // boundary onto the current page (addLine handles the in-line case).
+  pageBuilder_->drainFootnotes();
 
-  // Apply bottom spacing after the paragraph (stored in pixels)
-  if (blockStyle.marginBottom > 0) {
-    currentPageNextY += blockStyle.marginBottom;
-  }
-  if (blockStyle.paddingBottom > 0) {
-    currentPageNextY += blockStyle.paddingBottom;
-  }
-
-  // Additional spacing between paragraphs based on user-selected level.
+  // Bottom spacing after the paragraph + inter-paragraph gap.
+  pageBuilder_->advanceY(blockStyle.marginBottom);
+  pageBuilder_->advanceY(blockStyle.paddingBottom);
   int extraParagraphGap = 0;
   switch (extraParagraphSpacingLevel) {
     case 1:  // S
@@ -1077,7 +949,5 @@ void ChapterHtmlSlimParser::makePages() {
     default:
       break;
   }
-  if (extraParagraphGap > 0) {
-    currentPageNextY += extraParagraphGap;
-  }
+  pageBuilder_->advanceY(extraParagraphGap);
 }
