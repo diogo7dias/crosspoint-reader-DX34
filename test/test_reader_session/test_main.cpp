@@ -64,18 +64,15 @@ struct Harness {
   ReaderSession session;
 
   Harness()
-      : session({sink, env, display},
-                ReaderHooks{
-                    [this] { return path; },
-                    [this] { return pos; },
-                    [this] { order.push_back("beforeRefresh"); },
-                    [this] { order.push_back("afterOrientation"); },
-                    [this] { order.push_back("afterRegister"); },
-                    [this](std::string& t, std::string& a, std::string& th) {
-                      t = "Title";
-                      a = "Author";
-                      th = "/t.bmp";
-                    }}) {}
+      : session(
+            {sink, env, display},
+            ReaderHooks{[this] { return path; }, [this] { return pos; }, [this] { order.push_back("beforeRefresh"); },
+                        [this] { order.push_back("afterOrientation"); }, [this] { order.push_back("afterRegister"); },
+                        [this](std::string& t, std::string& a, std::string& th) {
+                          t = "Title";
+                          a = "Author";
+                          th = "/t.bmp";
+                        }}) {}
 };
 
 }  // namespace
@@ -95,8 +92,8 @@ void test_enter_full_refresh_registers_and_seeds() {
   TEST_ASSERT_TRUE(h.display.boldCalls.back());  // bold-swap on from env
   TEST_ASSERT_EQUAL(1, h.env.registerCalls);
   TEST_ASSERT_EQUAL_STRING("Title", h.env.lastTitle.c_str());
-  TEST_ASSERT_EQUAL_STRING("", moved.c_str());            // not relocated
-  TEST_ASSERT_EQUAL(0, h.sink.writes.size());             // seed performs no write
+  TEST_ASSERT_EQUAL_STRING("", moved.c_str());                  // not relocated
+  TEST_ASSERT_EQUAL(0, h.sink.writes.size());                   // seed performs no write
   TEST_ASSERT_EQUAL(5, h.session.progress().lastSaved().page);  // seeded
 }
 
@@ -123,11 +120,11 @@ void test_tick_debounces_then_writes() {
   Harness h;
   h.session.enter({0, 0, 1});
   h.pos = {0, 1, 1};
-  h.session.tick(1000, false);          // observe page 1, anchor debounce
+  h.session.tick(1000, false);  // observe page 1, anchor debounce
   TEST_ASSERT_EQUAL(0, h.sink.writes.size());
-  h.session.tick(1500, false);          // < 800ms since change? change was at 1000, now 1500 -> 500ms
+  h.session.tick(1500, false);  // < 800ms since change? change was at 1000, now 1500 -> 500ms
   TEST_ASSERT_EQUAL(0, h.sink.writes.size());
-  h.session.tick(1900, false);          // 900ms elapsed -> write
+  h.session.tick(1900, false);  // 900ms elapsed -> write
   TEST_ASSERT_EQUAL(1, h.sink.writes.size());
   TEST_ASSERT_EQUAL(1, h.sink.writes.back().page);
 }
@@ -136,7 +133,7 @@ void test_tick_force_writes_immediately() {
   Harness h;
   h.session.enter({0, 0, 1});
   h.pos = {0, 7, 1};
-  h.session.tick(100, true);            // force ignores debounce
+  h.session.tick(100, true);  // force ignores debounce
   TEST_ASSERT_EQUAL(1, h.sink.writes.size());
   TEST_ASSERT_EQUAL(7, h.sink.writes.back().page);
 }
@@ -144,8 +141,8 @@ void test_tick_force_writes_immediately() {
 void test_tick_idempotent_when_unchanged() {
   Harness h;
   h.session.enter({0, 3, 1});
-  h.pos = {0, 3, 1};                    // same as seed
-  h.session.tick(5000, true);          // nothing dirty -> no write
+  h.pos = {0, 3, 1};           // same as seed
+  h.session.tick(5000, true);  // nothing dirty -> no write
   TEST_ASSERT_EQUAL(0, h.sink.writes.size());
 }
 
@@ -176,13 +173,13 @@ void test_resetto_flushes_then_reseeds() {
   Harness h;
   h.session.enter({0, 0, 1});
   h.pos = {0, 2, 1};
-  h.session.tick(1000, false);         // dirty at page 2, not yet flushed
-  h.session.resetTo({0, 50, 1}, 1100); // KOReader sync: flush pending then reseed
+  h.session.tick(1000, false);          // dirty at page 2, not yet flushed
+  h.session.resetTo({0, 50, 1}, 1100);  // KOReader sync: flush pending then reseed
   // pending page-2 write flushed, then reseed to 50, dirty cleared.
   TEST_ASSERT_EQUAL(2, h.sink.writes.back().page);
   TEST_ASSERT_EQUAL(50, h.session.progress().lastSaved().page);
   h.pos = {0, 50, 1};
-  h.session.tick(9999, true);          // reseeded position is not dirty -> no extra write
+  h.session.tick(9999, true);  // reseeded position is not dirty -> no extra write
   TEST_ASSERT_EQUAL(1, h.sink.writes.size());
 }
 

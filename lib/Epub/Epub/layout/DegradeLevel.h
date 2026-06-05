@@ -41,9 +41,9 @@ enum class DegradeLevel : uint8_t {
 // Fully-resolved, per-section plan derived once from a level + the styles the
 // page actually uses. Pure data; the engine reads the booleans/mask directly.
 struct DegradePlan {
-  bool images = true;          // render image blocks
-  bool hyphenate = true;       // hyphenate / split oversized tokens at breaks
-  bool optimalBreak = true;    // Knuth-Plass DP line breaking (false = greedy)
+  bool images = true;                    // render image blocks
+  bool hyphenate = true;                 // hyphenate / split oversized tokens at breaks
+  bool optimalBreak = true;              // Knuth-Plass DP line breaking (false = greedy)
   uint8_t prewarmStyleMask = kStyleAll;  // which styles to warm in the glyph cache
 
   // Derive the plan for `level`, intersecting the prewarm mask with the styles

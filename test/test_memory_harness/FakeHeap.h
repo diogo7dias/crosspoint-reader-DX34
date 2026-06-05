@@ -83,8 +83,10 @@ class FakeHeap {
       return false;
     }
     largestFreeBlock_ -= bytes;
-    if (bytes > totalFree_) totalFree_ = 0;
-    else totalFree_ -= bytes;
+    if (bytes > totalFree_)
+      totalFree_ = 0;
+    else
+      totalFree_ -= bytes;
     if (minFreeEver_ == 0 || largestFreeBlock_ < minFreeEver_) minFreeEver_ = largestFreeBlock_;
     return true;
   }

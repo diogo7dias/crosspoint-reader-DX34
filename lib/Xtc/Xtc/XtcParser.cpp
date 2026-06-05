@@ -319,8 +319,7 @@ XtcError XtcParser::readChapters() {
   {
     const size_t needBytes = chapterCount * sizeof(ChapterInfo);
     if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
-      LOG_ERR("XTC", "OOM m_chapters reserve: count=%u need=%u largest=%u",
-              (unsigned)chapterCount, (unsigned)needBytes,
+      LOG_ERR("XTC", "OOM m_chapters reserve: count=%u need=%u largest=%u", (unsigned)chapterCount, (unsigned)needBytes,
               (unsigned)crosspoint::heap::largestFreeBlockBytes());
       return XtcError::READ_ERROR;
     }

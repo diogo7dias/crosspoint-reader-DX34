@@ -107,8 +107,8 @@ void test_repost_self_during_drain_rearms_for_next_pass() {
     }
     return false;
   });
-  TEST_ASSERT_EQUAL_INT(1, firstPassRuns);       // ran once this pass
-  TEST_ASSERT_TRUE(q.pending(TestAction::A));     // re-armed for next pass
+  TEST_ASSERT_EQUAL_INT(1, firstPassRuns);     // ran once this pass
+  TEST_ASSERT_TRUE(q.pending(TestAction::A));  // re-armed for next pass
   int secondPassRuns = 0;
   q.drain([&](TestAction a) {
     if (a == TestAction::A) secondPassRuns++;

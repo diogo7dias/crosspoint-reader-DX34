@@ -1,12 +1,11 @@
 #include "TextBlock.h"
 
 #include <GfxRenderer.h>
+#include <HeapGuard.h>
 #include <Logging.h>
 #include <Serialization.h>
 
 #include <new>
-
-#include <HeapGuard.h>
 
 #ifdef ESP_PLATFORM
 #include <esp_heap_caps.h>
@@ -220,8 +219,8 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
     }
 #endif
     if (!crosspoint::heap::canAllocateContiguous(wordsBytes)) {
-      LOG_ERR("TXB", "Deserialization skipped: %u words (~%u B contiguous) largest=%u", wc,
-              (unsigned)wordsBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
+      LOG_ERR("TXB", "Deserialization skipped: %u words (~%u B contiguous) largest=%u", wc, (unsigned)wordsBytes,
+              (unsigned)crosspoint::heap::largestFreeBlockBytes());
       return nullptr;
     }
   }

@@ -23,11 +23,11 @@ using crosspoint::persist::InMemoryFileIO;
 using crosspoint::sleep::ISleepFs;
 using crosspoint::sleep::SleepBmpEntry;
 using crosspoint::sleep::v2::WallpaperPlaylistV2;
+using crosspoint::test::applyScenario;
 using crosspoint::test::FakeHeap;
 using crosspoint::test::kCrash1Preconditions;
 using crosspoint::test::kCrash2Preconditions;
 using crosspoint::test::kHealthyBoot;
-using crosspoint::test::applyScenario;
 
 namespace {
 
@@ -58,22 +58,21 @@ class FakeSleepFs : public ISleepFs {
     if (best.empty() && !files.empty()) best = files.front();
     return best;
   }
-  std::string nthSleepBmp(size_t n) override {
-    return n < files.size() ? files[n] : std::string();
-  }
+  std::string nthSleepBmp(size_t n) override { return n < files.size() ? files[n] : std::string(); }
   bool exists(const std::string& path) override {
     // Path comes in as "/sleep/<basename>" — match the basename against `files`.
     const auto slash = path.find_last_of('/');
     const std::string base = (slash == std::string::npos) ? path : path.substr(slash + 1);
-    for (const auto& f : files) if (f == base) return true;
+    for (const auto& f : files)
+      if (f == base) return true;
     return false;
   }
   bool mkdir(const std::string&) override { return true; }
   bool rename(const std::string&, const std::string&) override { return true; }
 };
 
-WallpaperPlaylistV2::Deps makeDeps(FakeSleepFs* fs, InMemoryFileIO* io,
-                                   std::string* lastShown, std::string* lastRendered) {
+WallpaperPlaylistV2::Deps makeDeps(FakeSleepFs* fs, InMemoryFileIO* io, std::string* lastShown,
+                                   std::string* lastRendered) {
   WallpaperPlaylistV2::Deps deps;
   deps.fs = fs;
   deps.fileIO = io;

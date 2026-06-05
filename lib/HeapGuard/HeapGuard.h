@@ -53,16 +53,13 @@ inline void setLargestFreeBlockOverride(size_t bytes) { largestFreeBlockOverride
 inline void clearLargestFreeBlockOverride() { largestFreeBlockOverride_() = SIZE_MAX; }
 inline size_t largestFreeBlockBytes() { return largestFreeBlockOverride_(); }
 #else
-inline size_t largestFreeBlockBytes() {
-  return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-}
+inline size_t largestFreeBlockBytes() { return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT); }
 #endif
 
 // Returns true if the heap reports a contiguous free block large enough
 // for `needBytes + headroomBytes`. Headroom defaults to 4 KB to absorb
 // transient growth between the probe and the subsequent allocation.
-inline bool canAllocateContiguous(size_t needBytes,
-                                  size_t headroomBytes = kDefaultHeadroomBytes) {
+inline bool canAllocateContiguous(size_t needBytes, size_t headroomBytes = kDefaultHeadroomBytes) {
   const size_t requested = needBytes + headroomBytes;
   // Overflow check: if requested wrapped, treat as unsatisfiable.
   if (requested < needBytes) return false;

@@ -21,9 +21,9 @@ namespace {
 
 // Collects everything the sink flushes, and can simulate a short write.
 struct FakeFile {
-  std::vector<uint8_t> bytes;     // all data the sink flushed, in order
-  std::vector<size_t> flushSizes; // size of each flush call
-  bool shortWrite = false;        // when true, writer reports 1 byte short
+  std::vector<uint8_t> bytes;      // all data the sink flushed, in order
+  std::vector<size_t> flushSizes;  // size of each flush call
+  bool shortWrite = false;         // when true, writer reports 1 byte short
 
   HttpUploadSink::Writer writer() {
     return [this](const uint8_t* d, size_t n) -> size_t {
@@ -81,8 +81,8 @@ void test_exact_boundary_autoflush() {
 
   auto data = seq(8);
   TEST_ASSERT_TRUE(sink.append(data.data(), data.size(), f.writer()));
-  TEST_ASSERT_EQUAL_UINT32(0, sink.pending());          // auto-flushed
-  TEST_ASSERT_EQUAL_UINT32(1, f.flushSizes.size());     // exactly one flush
+  TEST_ASSERT_EQUAL_UINT32(0, sink.pending());       // auto-flushed
+  TEST_ASSERT_EQUAL_UINT32(1, f.flushSizes.size());  // exactly one flush
   TEST_ASSERT_EQUAL_UINT32(8, f.flushSizes[0]);
   TEST_ASSERT_EQUAL_UINT32(8, f.bytes.size());
 }
@@ -95,8 +95,8 @@ void test_chunk_larger_than_buffer() {
 
   auto data = seq(20);  // 8 + 8 + 4
   TEST_ASSERT_TRUE(sink.append(data.data(), data.size(), f.writer()));
-  TEST_ASSERT_EQUAL_UINT32(4, sink.pending());          // 4-byte tail buffered
-  TEST_ASSERT_EQUAL_UINT32(2, f.flushSizes.size());     // two full flushes
+  TEST_ASSERT_EQUAL_UINT32(4, sink.pending());       // 4-byte tail buffered
+  TEST_ASSERT_EQUAL_UINT32(2, f.flushSizes.size());  // two full flushes
   TEST_ASSERT_EQUAL_UINT32(16, f.bytes.size());
 
   TEST_ASSERT_TRUE(sink.flush(f.writer()));

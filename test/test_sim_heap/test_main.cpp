@@ -104,8 +104,8 @@ void test_armed_budget_exhaustion() {
 // Throwing new -> device abort (the crash). Nothrow new -> nullptr, the path
 // FontDecompressor takes (and the render-OOM guard then discards the frame).
 void test_reproduces_v301_render_oom_incident() {
-  constexpr size_t kUserLargestBlock = 11764;   // heap_report.txt "Largest 8-bit"
-  constexpr size_t kUserTotalHeap = 142824;     // heap_report.txt "Total heap"
+  constexpr size_t kUserLargestBlock = 11764;     // heap_report.txt "Largest 8-bit"
+  constexpr size_t kUserTotalHeap = 142824;       // heap_report.txt "Total heap"
   constexpr size_t kHotGroupRequest = 20 * 1024;  // representative glyph group
 
   // Throwing path = what an unguarded `new`/vector::resize does on-device.
@@ -126,9 +126,9 @@ void test_reproduces_v301_render_oom_incident() {
   const unsigned nn = SimHeap::nothrowNulls();
   SimHeap::disarm();
 
-  TEST_ASSERT_TRUE(threw);          // unguarded alloc WOULD crash the firmware
+  TEST_ASSERT_TRUE(threw);  // unguarded alloc WOULD crash the firmware
   TEST_ASSERT_EQUAL_UINT(1, wa);
-  TEST_ASSERT_NULL(survived);       // guarded alloc fails cleanly instead
+  TEST_ASSERT_NULL(survived);  // guarded alloc fails cleanly instead
   TEST_ASSERT_EQUAL_UINT(1, nn);
 }
 

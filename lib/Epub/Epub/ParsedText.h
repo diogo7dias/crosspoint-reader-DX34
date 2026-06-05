@@ -42,7 +42,7 @@ class ParsedText {
   size_t arenaCount_ = 0;
   size_t arenaCap_ = 0;
   bool useArenaWords_ = false;
-  bool arenaRegionActive_ = false;  // true once wordsMark_ is captured and the word region is held
+  bool arenaRegionActive_ = false;                   // true once wordsMark_ is captured and the word region is held
   crosspoint::layout::LayoutArena::Mark wordsMark_;  // checkpoint to rewind the whole word region
   BlockStyle blockStyle;
   bool extraParagraphSpacing;
@@ -84,7 +84,7 @@ class ParsedText {
   std::vector<uint16_t> calculateWordWidths(const GfxRenderer& renderer, int fontId);
 
   // — arena word-store helpers (RFC #164 step 4) —
-  bool ensureArenaWords();  // lazily reserve arenaWords_ from arena_; false if it won't fit
+  bool ensureArenaWords();            // lazily reserve arenaWords_ from arena_; false if it won't fit
   void migrateArenaWordsToVectors();  // copy arenaWords_ -> the std::vectors, drop the arena path
   // Drop the first `consumed` arena words after a partial flush and recompact
   // the interned bytes (re-intern the survivors), mirroring the std::vector

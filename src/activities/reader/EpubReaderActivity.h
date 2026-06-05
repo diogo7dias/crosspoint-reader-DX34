@@ -80,7 +80,7 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   bool pendingSubactivityExit = false;  // Defer subactivity exit to avoid use-after-free
   bool pendingGoHome = false;           // Defer go home to avoid race condition with display task
   bool pendingGoLibrary = false;        // Defer go library after destructive actions
-  bool pendingThemeReload = false;  // Defer settings reload after ReadingThemesActivity exits
+  bool pendingThemeReload = false;      // Defer settings reload after ReadingThemesActivity exits
   // Snapshot of the per-book Bold Swap preference at the moment the reader
   // menu was opened. Compared on menu exit; if the user toggled the in-menu
   // Bold Swap item, the current page is re-laid out to apply the change.

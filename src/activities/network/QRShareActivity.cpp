@@ -5,10 +5,9 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
-
-#include "SilentRestart.h"
 #include <qrcode.h>
 
+#include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"

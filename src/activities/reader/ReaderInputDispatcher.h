@@ -29,12 +29,12 @@ namespace reader {
 // One frame of input, snapshotted from MappedInputManager by the adapter.
 struct ReaderInput {
   bool pressed[kReaderButtonCount] = {};   // wasPressed(b)
-  bool released[kReaderButtonCount] = {};   // wasReleased(b)
-  bool down[kReaderButtonCount] = {};       // isPressed(b) (level)
-  bool anyPressed = false;                   // wasAnyPressed()
-  bool anyReleased = false;                  // wasAnyReleased()
-  unsigned long heldTimeMs = 0;              // getHeldTime() (GLOBAL, not per-button)
-  unsigned long nowMs = 0;                   // millis()
+  bool released[kReaderButtonCount] = {};  // wasReleased(b)
+  bool down[kReaderButtonCount] = {};      // isPressed(b) (level)
+  bool anyPressed = false;                 // wasAnyPressed()
+  bool anyReleased = false;                // wasAnyReleased()
+  unsigned long heldTimeMs = 0;            // getHeldTime() (GLOBAL, not per-button)
+  unsigned long nowMs = 0;                 // millis()
 
   bool p(ReaderButton b) const { return pressed[static_cast<int>(b)]; }
   bool r(ReaderButton b) const { return released[static_cast<int>(b)]; }
@@ -51,9 +51,9 @@ struct ReaderInputSettings {
 struct ReaderState {
   enum class Mode : uint8_t { Normal, Recovery, Highlight };
   Mode mode = Mode::Normal;
-  bool inFootnote = false;    // footnoteDepth > 0  -> Back restores
-  bool atEndOfBook = false;   // currentSpineIndex > 0 && >= spineItemsCount
-  bool hasSection = false;    // section != nullptr
+  bool inFootnote = false;   // footnoteDepth > 0  -> Back restores
+  bool atEndOfBook = false;  // currentSpineIndex > 0 && >= spineItemsCount
+  bool hasSection = false;   // section != nullptr
 };
 
 // Per-reader gesture opt-in (epub: all on; txt/xtc: leaner). OpenMenu and
@@ -138,8 +138,7 @@ class ReaderInputDispatcher {
     }
 
     // 4. Confirm long-press -> highlight (requests input suppression), once.
-    if (cfg_.longPressConfirm && !confirmLongPressHandled_ && confirmDown &&
-        in.heldTimeMs >= kGoHomeMs) {
+    if (cfg_.longPressConfirm && !confirmLongPressHandled_ && confirmDown && in.heldTimeMs >= kGoHomeMs) {
       confirmLongPressHandled_ = true;
       return {ReaderAction::LongPressConfirm, true};
     }

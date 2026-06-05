@@ -7,8 +7,6 @@
 // parses it into Pages (delivered via callback).
 //
 // Run via: pio test -e test_sim_parse -f test_reader_sim_parse
-#include <unity.h>
-
 #include <Epub.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -20,6 +18,7 @@
 #include <parsers/ChapterHtmlSlimParser.h>
 #include <parsers/FootnotePlacer.h>
 #include <parsers/StyleResolver.h>
+#include <unity.h>
 
 #include <chrono>
 #include <cstdio>
@@ -77,8 +76,9 @@ uint32_t parseChapter() {
   cfg.hyphenationEnabled = false;
   cfg.wordSpacingPercent = 1;
   cfg.usePublisherStyles = true;
-  ChapterHtmlSlimParser parser(epub, filepath, g_renderer, cfg, [&pages](std::unique_ptr<Page>) { ++pages; },
-                               [](const std::string&, uint16_t) {}, /*progressFn=*/nullptr, /*cssParser=*/nullptr);
+  ChapterHtmlSlimParser parser(
+      epub, filepath, g_renderer, cfg, [&pages](std::unique_ptr<Page>) { ++pages; },
+      [](const std::string&, uint16_t) {}, /*progressFn=*/nullptr, /*cssParser=*/nullptr);
   parser.parseAndBuildPages();
   return pages;
 }
@@ -220,7 +220,7 @@ void test_style_underline_via_anchor() {
 // setting overrides it (CSS cascade). This fixes the former OR-merge quirk.
 void test_style_inline_normal_unbolds_under_depth_flag() {
   StyleResolver r;
-  r.setBoldFrom(0);  // ancestor <b>/header at depth 0 sets boldUntilDepth = 0
+  r.setBoldFrom(0);                                   // ancestor <b>/header at depth 0 sets boldUntilDepth = 0
   r.pushInline(2, {.hasBold = true, .bold = false});  // inner span font-weight:normal
   TEST_ASSERT_FALSE(r.effectiveStyle(3) & EpdFontFamily::BOLD);  // explicit normal wins
 }
@@ -229,9 +229,9 @@ void test_style_inline_normal_unbolds_under_depth_flag() {
 // font-weight:normal over a CSS-base bold does turn bold off.
 void test_style_inline_normal_overrides_css_base_bold() {
   StyleResolver r;
-  r.setCssBase(cssBold());                                       // base bold, no depth flag
+  r.setCssBase(cssBold());  // base bold, no depth flag
   TEST_ASSERT_TRUE(r.effectiveStyle(1) & EpdFontFamily::BOLD);
-  r.pushInline(1, {.hasBold = true, .bold = false});            // <span font-weight:normal>
+  r.pushInline(1, {.hasBold = true, .bold = false});             // <span font-weight:normal>
   TEST_ASSERT_FALSE(r.effectiveStyle(2) & EpdFontFamily::BOLD);  // overridden off
 }
 
@@ -356,8 +356,8 @@ void test_footnote_on_new_block_resets_count_keeps_pending() {
   p.registerFootnote(2, fnEntry("1", "h"));
   p.onNewBlock();
   TEST_ASSERT_EQUAL_INT(0, p.extractedWordCount());
-  TEST_ASSERT_FALSE(p.empty());                 // pending preserved
-  p.placeForLine(2, log.fn());                  // cumulative 2 -> 2<=2 drains
+  TEST_ASSERT_FALSE(p.empty());  // pending preserved
+  p.placeForLine(2, log.fn());   // cumulative 2 -> 2<=2 drains
   TEST_ASSERT_EQUAL_UINT(1, log.numbers.size());
 }
 
@@ -637,8 +637,7 @@ void test_arena_reused_across_blocks_bounded() {
     cur.reset(new ParsedText(/*extraSpacing=*/false, /*hyphenation=*/false, BlockStyle(), /*wordSpacing=*/1,
                              /*indentMode=*/0, /*usePublisher=*/true, &arena));  // construct-before-destroy
     for (int i = 0; i < 40; ++i) cur->addWord("word", EpdFontFamily::REGULAR, false, false);
-    cur->layoutAndExtractLines(
-        g_renderer, 0, 600, [](std::shared_ptr<TextBlock>) {}, /*includeLastLine=*/true);
+    cur->layoutAndExtractLines(g_renderer, 0, 600, [](std::shared_ptr<TextBlock>) {}, /*includeLastLine=*/true);
     if (b == 0) peakAfterFirst = arena.highWater();
   }
   cur.reset();
@@ -652,8 +651,8 @@ void test_arena_reused_across_blocks_bounded() {
 // the first addWord and lays out byte-identically.
 void test_arena_too_small_migrates() {
   const std::vector<WordSpec> w = repeatWords("word", 80);
-  const std::vector<CapturedLine> noArena = captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600,
-                                                             nullptr);
+  const std::vector<CapturedLine> noArena =
+      captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600, nullptr);
   crosspoint::layout::LayoutArena tiny = crosspoint::layout::LayoutArena::create(2 * 1024);  // < handle array
   TEST_ASSERT_TRUE(tiny.ok());
   const std::vector<CapturedLine> withTiny =
@@ -667,8 +666,8 @@ void test_arena_too_small_migrates() {
 void test_arena_byte_overflow_migrates() {
   // Long words so the packed byte region fills before the 1024-handle cap.
   const std::vector<WordSpec> w = repeatWords("supercalifragilistic", 200);
-  const std::vector<CapturedLine> noArena = captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600,
-                                                             nullptr);
+  const std::vector<CapturedLine> noArena =
+      captureParagraph(w, false, styleWith(CssTextAlign::Justify), 1, 0, true, 600, nullptr);
   // 13 KB: handle array (~12 KB) fits, leaving ~1 KB for bytes -> interning
   // overflows after a few dozen words -> migrate.
   crosspoint::layout::LayoutArena arena = crosspoint::layout::LayoutArena::create(13 * 1024);
@@ -704,8 +703,7 @@ void test_pagebuilder_page_boundaries() {
   crosspoint::heap::clearLargestFreeBlockOverride();
   FootnotePlacer fp;
   int emitted = 0;
-  PageBuilder pb(
-      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  PageBuilder pb(pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
   for (int i = 0; i < 45; ++i) {
     TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));
   }
@@ -721,8 +719,7 @@ void test_pagebuilder_oom_probe_is_explicit() {
   using namespace crosspoint::page;
   FootnotePlacer fp;
   int emitted = 0;
-  PageBuilder pb(
-      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  PageBuilder pb(pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
   crosspoint::heap::setLargestFreeBlockOverride(8);  // too small for the PageLine probe
   const PageStatus s = pb.addLine(makePageLine());
   crosspoint::heap::clearLargestFreeBlockOverride();
@@ -735,8 +732,7 @@ void test_pagebuilder_null_line_is_oom() {
   using namespace crosspoint::page;
   crosspoint::heap::clearLargestFreeBlockOverride();
   FootnotePlacer fp;
-  PageBuilder pb(
-      pbCfg(), fp, [](std::unique_ptr<Page>) {}, [](const std::string&, uint16_t) {});
+  PageBuilder pb(pbCfg(), fp, [](std::unique_ptr<Page>) {}, [](const std::string&, uint16_t) {});
   TEST_ASSERT_TRUE(pb.addLine(nullptr) == PageStatus::Oom);
 }
 
@@ -751,13 +747,12 @@ void test_pagebuilder_top_spacing_survives_fresh_page() {
   using namespace crosspoint::page;
   crosspoint::heap::clearLargestFreeBlockOverride();
   FootnotePlacer fp;
-  PageBuilder pb(
-      pbCfg(), fp, [](std::unique_ptr<Page>) {}, [](const std::string&, uint16_t) {});
+  PageBuilder pb(pbCfg(), fp, [](std::unique_ptr<Page>) {}, [](const std::string&, uint16_t) {});
   TEST_ASSERT_TRUE(ok(pb.ensureOpenPage()));
-  pb.advanceY(100);                              // paragraph top margin on a fresh page
+  pb.advanceY(100);  // paragraph top margin on a fresh page
   TEST_ASSERT_EQUAL_INT(100, pb.cursorY());
   TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));  // baseLineHeight 40
-  TEST_ASSERT_EQUAL_INT(140, pb.cursorY());      // line landed at y=100, NOT reset to 0
+  TEST_ASSERT_EQUAL_INT(140, pb.cursorY());          // line landed at y=100, NOT reset to 0
 }
 
 // finish() must NOT emit a trailing empty page (e.g. left open by a final
@@ -767,9 +762,8 @@ void test_pagebuilder_finish_skips_empty_page() {
   crosspoint::heap::clearLargestFreeBlockOverride();
   FootnotePlacer fp;
   int emitted = 0;
-  PageBuilder pb(
-      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
-  TEST_ASSERT_TRUE(ok(pb.ensureOpenPage()));     // open an empty page
+  PageBuilder pb(pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  TEST_ASSERT_TRUE(ok(pb.ensureOpenPage()));  // open an empty page
   pb.finish();
   TEST_ASSERT_EQUAL_UINT(0, pb.completedPageCount());
   TEST_ASSERT_EQUAL_INT(0, emitted);
@@ -788,7 +782,7 @@ void test_pagebuilder_trailing_anchors() {
   pb.queueAnchors({"a1"});
   TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));  // a1 binds to page 0 as the line lands
   pb.queueAnchors({"a2"});
-  TEST_ASSERT_TRUE(ok(pb.bindTrailingAnchors()));    // a2 binds to the same non-empty page 0
+  TEST_ASSERT_TRUE(ok(pb.bindTrailingAnchors()));  // a2 binds to the same non-empty page 0
   TEST_ASSERT_EQUAL_UINT(2, binds.size());
   TEST_ASSERT_EQUAL_STRING("a1", binds[0].first.c_str());
   TEST_ASSERT_EQUAL_STRING("a2", binds[1].first.c_str());
@@ -799,7 +793,7 @@ void test_pagebuilder_trailing_anchors() {
       [&binds](const std::string& a, uint16_t p) { binds.emplace_back(a, p); });
   pb2.queueAnchors({"a3"});
   TEST_ASSERT_TRUE(ok(pb2.bindTrailingAnchors()));
-  TEST_ASSERT_EQUAL_UINT(2, binds.size());           // unchanged: a3 not bound
+  TEST_ASSERT_EQUAL_UINT(2, binds.size());  // unchanged: a3 not bound
 }
 
 // addImage page-breaks only when the current page is non-empty and the image
@@ -809,13 +803,12 @@ void test_pagebuilder_image_break() {
   crosspoint::heap::clearLargestFreeBlockOverride();
   FootnotePlacer fp;
   int emitted = 0;
-  PageBuilder pb(
-      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  PageBuilder pb(pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
   auto img = std::make_shared<ImageBlock>("/x.bmp", 600, 100);
   for (int i = 0; i < 19; ++i) TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));  // cursor 760/800
-  TEST_ASSERT_TRUE(ok(pb.addImage(img, 600, 100)));  // 760+100>800 + non-empty -> break
+  TEST_ASSERT_TRUE(ok(pb.addImage(img, 600, 100)));                               // 760+100>800 + non-empty -> break
   TEST_ASSERT_EQUAL_UINT(1, pb.completedPageCount());
-  TEST_ASSERT_EQUAL_INT(100, pb.cursorY());          // image at y=0 on the new page, cursor=100
+  TEST_ASSERT_EQUAL_INT(100, pb.cursorY());  // image at y=0 on the new page, cursor=100
 }
 
 int main(int, char**) {

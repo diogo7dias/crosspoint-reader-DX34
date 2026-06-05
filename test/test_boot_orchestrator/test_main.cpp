@@ -108,7 +108,7 @@ void test_silent_reader_empty_path_goes_home() {
 void test_silent_home_target_goes_home() {
   BootInputs in = normalBoot();
   in.isSilentReboot = true;
-  in.silentRebootTarget = 0;  // home
+  in.silentRebootTarget = 0;          // home
   in.openEpubPath = "/books/a.epub";  // ignored on a home-target silent reboot
   BootDecision d = decideBoot(in, testRng);
   TEST_ASSERT_TRUE(d.goHome);

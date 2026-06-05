@@ -12,10 +12,9 @@
 
 #include <algorithm>
 
-#include "MemoryPolicy.h"
-
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "MemoryPolicy.h"
 #include "Paths.h"
 #include "activities/reader/ReaderLayoutSafety.h"
 #include "components/themes/BaseTheme.h"
@@ -28,7 +27,6 @@
 #include "util/StringUtils.h"
 
 namespace {
-
 
 // Sleep rendering runs inside SleepActivity::onEnter, called AFTER
 // enterDeepSleep's persistAppState flushAll and milliseconds before the CPU

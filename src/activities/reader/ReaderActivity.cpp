@@ -51,8 +51,8 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
 
   auto epub = std::unique_ptr<Epub>(new (std::nothrow) Epub(path, Paths::kDataDir));
   if (!epub) {
-    LOG_ERR("READER", "OOM new Epub free=%u largest=%u",
-            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    LOG_ERR("READER", "OOM new Epub free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return nullptr;
   }
 

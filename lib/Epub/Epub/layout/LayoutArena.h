@@ -96,7 +96,7 @@ class LayoutArena {
   Str intern(const char* bytes, size_t len) noexcept {
     Str h;
     if (block_ == nullptr || len > 0xFFFFu) return h;
-    const size_t need = len + 1;  // + NUL
+    const size_t need = len + 1;                               // + NUL
     if (need > textTop_ || textTop_ - need < bump_) return h;  // collides with alloc region
     textTop_ -= need;
     if (len > 0 && bytes != nullptr) std::memcpy(block_ + textTop_, bytes, len);
