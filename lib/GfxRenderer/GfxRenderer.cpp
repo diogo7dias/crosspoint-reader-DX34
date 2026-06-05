@@ -1,4 +1,5 @@
 #include "GfxRenderer.h"
+#include <Memory.h>
 
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
@@ -645,8 +646,8 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
   // IMPORTANT: Use int, not uint8_t, to avoid overflow for images > 1020 pixels
   // wide
   const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
-  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
+  auto* outputRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(outputRowSize));  // alloc-ok
+  auto* rowBytes = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bitmap.getRowBytes()));  // alloc-ok
 
   if (!outputRow || !rowBytes) {
     LOG_ERR("GFX", "!! Failed to allocate BMP row buffers");
@@ -734,8 +735,8 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
   // For 1-bit BMP, output is still 2-bit packed (for consistency with
   // readNextRow)
   const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
-  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
+  auto* outputRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(outputRowSize));  // alloc-ok
+  auto* rowBytes = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bitmap.getRowBytes()));  // alloc-ok
 
   if (!outputRow || !rowBytes) {
     LOG_ERR("GFX", "!! Failed to allocate 1-bit BMP row buffers");
@@ -803,7 +804,7 @@ void GfxRenderer::fillPolygon(const int* xPoints, const int* yPoints, int numPoi
   if (maxY >= getScreenHeight()) maxY = getScreenHeight() - 1;
 
   // Allocate node buffer for scanline algorithm
-  auto* nodeX = static_cast<int*>(malloc(numPoints * sizeof(int)));
+  auto* nodeX = static_cast<int*>(crosspoint::mem::tryMalloc(numPoints * sizeof(int)));  // alloc-ok
   if (!nodeX) {
     LOG_ERR("GFX", "!! Failed to allocate polygon node buffer");
     return;
@@ -1121,7 +1122,7 @@ bool GfxRenderer::storeBwBuffer() {
     }
 
     const size_t offset = i * BW_BUFFER_CHUNK_SIZE;
-    bwBufferChunks[i] = static_cast<uint8_t*>(malloc(BW_BUFFER_CHUNK_SIZE));
+    bwBufferChunks[i] = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(BW_BUFFER_CHUNK_SIZE));  // alloc-ok
 
     if (!bwBufferChunks[i]) {
       LOG_ERR("GFX", "!! Failed to allocate BW buffer chunk %zu (%zu bytes)", i, BW_BUFFER_CHUNK_SIZE);

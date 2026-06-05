@@ -3,6 +3,7 @@
 #include <Epub/converters/DirectPixelWriter.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <esp_task_wdt.h>
 
 #include <cstdint>
@@ -31,12 +32,13 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::Gray
   }
   const uint32_t dataOffset = file.position();
   const int bytesPerRow = (pxcWidth + 3) / 4;
-  uint8_t* rowBuf = static_cast<uint8_t*>(malloc(bytesPerRow));
+  auto rowBuf = crosspoint::mem::CMallocPtr<uint8_t>(static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bytesPerRow)));
   if (!rowBuf) {
     LOG_ERR("PXC", "Row alloc failed (%d bytes)", bytesPerRow);
     file.close();
     return false;
   }
+  uint8_t* rb = rowBuf.get();  // RAII owns; rb is a non-owning view
 
   const int width = static_cast<int>(pxcWidth);
   const int height = static_cast<int>(pxcHeight);
@@ -45,17 +47,16 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::Gray
     DirectPixelWriter pw;
     pw.init(renderer);
     for (int row = 0; row < height; row++) {
-      if (file.read(rowBuf, bytesPerRow) != bytesPerRow) break;
+      if (file.read(rb, bytesPerRow) != bytesPerRow) break;
       pw.beginRow(row);
       for (int col = 0; col < width; col++) {
-        const uint8_t pv = (rowBuf[col >> 2] >> (6 - (col & 3) * 2)) & 0x03;
+        const uint8_t pv = (rb[col >> 2] >> (6 - (col & 3) * 2)) & 0x03;
         pw.writePixel(col, pv);
       }
       if ((row & 31) == 0) esp_task_wdt_reset();
     }
   });
 
-  free(rowBuf);
   file.close();
   return true;
 }
@@ -80,12 +81,13 @@ bool streamPxcAsBw(GfxRenderer& renderer, const std::string& path) {
     return false;
   }
   const int bytesPerRow = (pxcWidth + 3) / 4;
-  uint8_t* rowBuf = static_cast<uint8_t*>(malloc(bytesPerRow));
+  auto rowBuf = crosspoint::mem::CMallocPtr<uint8_t>(static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bytesPerRow)));
   if (!rowBuf) {
     LOG_ERR("PXC", "Row alloc failed in BW pass (%d bytes)", bytesPerRow);
     file.close();
     return false;
   }
+  uint8_t* rb = rowBuf.get();  // RAII owns; rb is a non-owning view
 
   const int width = static_cast<int>(pxcWidth);
   const int height = static_cast<int>(pxcHeight);
@@ -93,10 +95,10 @@ bool streamPxcAsBw(GfxRenderer& renderer, const std::string& path) {
   DirectPixelWriter pw;
   pw.init(renderer);
   for (int row = 0; row < height; row++) {
-    if (file.read(rowBuf, bytesPerRow) != bytesPerRow) break;
+    if (file.read(rb, bytesPerRow) != bytesPerRow) break;
     pw.beginRow(row);
     for (int col = 0; col < width; col++) {
-      const uint8_t pv = (rowBuf[col >> 2] >> (6 - (col & 3) * 2)) & 0x03;
+      const uint8_t pv = (rb[col >> 2] >> (6 - (col & 3) * 2)) & 0x03;
       // BW threshold matches Bitmap::drawBitmap in BW mode: pv < 3 -> black
       // (writePixel selects the appropriate action via renderMode).
       pw.writePixel(col, pv);
@@ -104,7 +106,6 @@ bool streamPxcAsBw(GfxRenderer& renderer, const std::string& path) {
     if ((row & 31) == 0) esp_task_wdt_reset();
   }
 
-  free(rowBuf);
   file.close();
   return true;
 }

@@ -6,6 +6,7 @@
  */
 
 #include "Xtc.h"
+#include <Memory.h>
 
 #include <HalStorage.h>
 #include <Logging.h>
@@ -156,7 +157,7 @@ bool Xtc::generateCoverBmp() const {
   } else {
     bitmapSize = ((pageInfo.width + 7) / 8) * pageInfo.height;
   }
-  uint8_t* pageBuffer = static_cast<uint8_t*>(malloc(bitmapSize));
+  uint8_t* pageBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bitmapSize));  // alloc-ok
   if (!pageBuffer) {
     LOG_ERR("XTC", "Failed to allocate page buffer (%lu bytes)", bitmapSize);
     return false;
@@ -241,7 +242,7 @@ bool Xtc::generateCoverBmp() const {
     const size_t colBytes = (pageInfo.height + 7) / 8;  // Bytes per column
 
     // Allocate a row buffer for 1-bit output
-    uint8_t* rowBuffer = static_cast<uint8_t*>(malloc(dstRowSize));
+    uint8_t* rowBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(dstRowSize));  // alloc-ok
     if (!rowBuffer) {
       free(pageBuffer);
       coverBmp.close();
@@ -384,7 +385,7 @@ bool Xtc::generateThumbBmp(int height) const {
   } else {
     bitmapSize = ((pageInfo.width + 7) / 8) * pageInfo.height;
   }
-  uint8_t* pageBuffer = static_cast<uint8_t*>(malloc(bitmapSize));
+  uint8_t* pageBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bitmapSize));  // alloc-ok
   if (!pageBuffer) {
     LOG_ERR("XTC", "Failed to allocate page buffer (%lu bytes)", bitmapSize);
     return false;
@@ -451,7 +452,7 @@ bool Xtc::generateThumbBmp(int height) const {
   thumbBmp.write(palette, 8);
 
   // Allocate row buffer for 1-bit output
-  uint8_t* rowBuffer = static_cast<uint8_t*>(malloc(rowSize));
+  uint8_t* rowBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(rowSize));  // alloc-ok
   if (!rowBuffer) {
     free(pageBuffer);
     thumbBmp.close();

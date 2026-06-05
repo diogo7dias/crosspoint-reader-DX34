@@ -2,6 +2,7 @@
 
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <picojpeg.h>
 
 #include <cstdio>
@@ -308,8 +309,8 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
     }
   } cleanup{rowBuffer, mcuRowBuffer, atkinsonDitherer, fsDitherer, atkinson1BitDitherer, rowAccum, rowCount};
 
-  // Allocate row buffer
-  rowBuffer = static_cast<uint8_t*>(malloc(bytesPerRow));
+  // Allocate row buffer (freed by the Cleanup RAII guard above).
+  rowBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bytesPerRow));  // alloc-ok
   if (!rowBuffer) {
     LOG_ERR("JPG", "Failed to allocate row buffer");
     return false;
@@ -326,7 +327,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
     return false;
   }
 
-  mcuRowBuffer = static_cast<uint8_t*>(malloc(mcuRowPixels));
+  mcuRowBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(mcuRowPixels));  // alloc-ok
   if (!mcuRowBuffer) {
     LOG_ERR("JPG", "Failed to allocate MCU row buffer (%d bytes)", mcuRowPixels);
     return false;

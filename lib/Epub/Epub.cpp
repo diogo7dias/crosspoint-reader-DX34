@@ -1,4 +1,5 @@
 #include "Epub.h"
+#include <Memory.h>
 
 #include <Arduino.h>
 #include <FsHelpers.h>
@@ -249,7 +250,7 @@ bool Epub::parseTocNcxFile() const {
     return false;
   }
 
-  const auto ncxBuffer = static_cast<uint8_t*>(malloc(1024));
+  const auto ncxBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(1024));  // alloc-ok
   if (!ncxBuffer) {
     LOG_ERR("EBP", "Could not allocate memory for toc ncx parser");
     tempNcxFile.close();
@@ -311,7 +312,7 @@ bool Epub::parseTocNavFile() const {
     return false;
   }
 
-  const auto navBuffer = static_cast<uint8_t*>(malloc(1024));
+  const auto navBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(1024));  // alloc-ok
   if (!navBuffer) {
     LOG_ERR("EBP", "Could not allocate memory for toc nav parser");
     return false;
