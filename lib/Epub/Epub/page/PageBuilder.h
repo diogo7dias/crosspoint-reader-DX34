@@ -80,6 +80,15 @@ class PageBuilder {
   // page is non-empty). The caller owns extraction + the ImageBlock alloc.
   [[nodiscard]] PageStatus addImage(const std::shared_ptr<ImageBlock>& image, int displayWidth, int displayHeight);
 
+  // Ensure an in-flight page exists (lazily allocating one, cursor reset to 0)
+  // WITHOUT placing content. The parser calls this at paragraph start so a
+  // fresh page's cursor is 0 BEFORE top margin/padding is applied via advanceY
+  // — matching the old makePages(), which created the page (cursor=0) and only
+  // then added top spacing. A no-op (cursor unchanged) when a page is already
+  // open. Without this seam, advanceY-before-the-first-addLine would be lost to
+  // addLine's own ensurePage cursor reset.
+  [[nodiscard]] PageStatus ensureOpenPage() { return ensurePage(); }
+
   // Advance the vertical cursor (paragraph margins / padding / inter-paragraph
   // gap). Pure bookkeeping, cannot allocate. The caller passes the same
   // positive deltas the parser added inline.
@@ -101,8 +110,29 @@ class PageBuilder {
     }
   }
 
-  // Emit the trailing in-flight page (dense-fit applied) at end of section.
-  void finish() { completePage(); }
+  // Bind any still-pending anchors to the in-flight page at end of section —
+  // but only when that page actually has content, mirroring the old parse-end
+  // guard `pendingAnchors non-empty && currentPage && !elements.empty()`. A
+  // trailing anchor on an empty/absent page stays unbound (book ends), exactly
+  // as before.
+  [[nodiscard]] PageStatus bindTrailingAnchors() {
+    if (pendingAnchors_.empty()) return PageStatus::Ok;
+    if (!currentPage_ || currentPage_->elements.empty()) return PageStatus::Ok;
+    return bindPendingAnchors();
+  }
+
+  // Emit the trailing in-flight page (dense-fit applied) at end of section —
+  // ONLY when it has content. The old parse-end completed the last page solely
+  // under `currentPage && !elements.empty()`, so an empty page left open by a
+  // trailing ensureOpenPage / empty final paragraph must NOT be emitted (it
+  // would inflate the page count by one).
+  void finish() {
+    if (currentPage_ && !currentPage_->elements.empty()) {
+      completePage();
+    } else {
+      currentPage_.reset();
+    }
+  }
 
   uint16_t completedPageCount() const { return completedPageCount_; }
   // Visible for tests / diagnostics.

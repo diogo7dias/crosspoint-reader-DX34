@@ -740,11 +740,93 @@ void test_pagebuilder_null_line_is_oom() {
   TEST_ASSERT_TRUE(pb.addLine(nullptr) == PageStatus::Oom);
 }
 
+// RFC #171-followup parity tests: the behaviours the parser relies on that the
+// original PageBuilder tests did not cover (the wiring would silently regress
+// without these).
+
+// ensureOpenPage() before advanceY() preserves a fresh page's top spacing —
+// the parser applies a paragraph's top margin before its first line. Without
+// the seam, addLine's own ensurePage would reset the cursor and drop the margin.
+void test_pagebuilder_top_spacing_survives_fresh_page() {
+  using namespace crosspoint::page;
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  FootnotePlacer fp;
+  PageBuilder pb(
+      pbCfg(), fp, [](std::unique_ptr<Page>) {}, [](const std::string&, uint16_t) {});
+  TEST_ASSERT_TRUE(ok(pb.ensureOpenPage()));
+  pb.advanceY(100);                              // paragraph top margin on a fresh page
+  TEST_ASSERT_EQUAL_INT(100, pb.cursorY());
+  TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));  // baseLineHeight 40
+  TEST_ASSERT_EQUAL_INT(140, pb.cursorY());      // line landed at y=100, NOT reset to 0
+}
+
+// finish() must NOT emit a trailing empty page (e.g. left open by a final
+// ensureOpenPage on an empty paragraph) — that would inflate the page count.
+void test_pagebuilder_finish_skips_empty_page() {
+  using namespace crosspoint::page;
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  FootnotePlacer fp;
+  int emitted = 0;
+  PageBuilder pb(
+      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  TEST_ASSERT_TRUE(ok(pb.ensureOpenPage()));     // open an empty page
+  pb.finish();
+  TEST_ASSERT_EQUAL_UINT(0, pb.completedPageCount());
+  TEST_ASSERT_EQUAL_INT(0, emitted);
+}
+
+// Trailing anchors bind to the last non-empty page; an anchor on an empty page
+// stays unbound (matches the old parse-end guard).
+void test_pagebuilder_trailing_anchors() {
+  using namespace crosspoint::page;
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  FootnotePlacer fp;
+  std::vector<std::pair<std::string, uint16_t>> binds;
+  PageBuilder pb(
+      pbCfg(), fp, [](std::unique_ptr<Page>) {},
+      [&binds](const std::string& a, uint16_t p) { binds.emplace_back(a, p); });
+  pb.queueAnchors({"a1"});
+  TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));  // a1 binds to page 0 as the line lands
+  pb.queueAnchors({"a2"});
+  TEST_ASSERT_TRUE(ok(pb.bindTrailingAnchors()));    // a2 binds to the same non-empty page 0
+  TEST_ASSERT_EQUAL_UINT(2, binds.size());
+  TEST_ASSERT_EQUAL_STRING("a1", binds[0].first.c_str());
+  TEST_ASSERT_EQUAL_STRING("a2", binds[1].first.c_str());
+
+  // A trailing anchor on a fresh/empty builder is NOT bound.
+  PageBuilder pb2(
+      pbCfg(), fp, [](std::unique_ptr<Page>) {},
+      [&binds](const std::string& a, uint16_t p) { binds.emplace_back(a, p); });
+  pb2.queueAnchors({"a3"});
+  TEST_ASSERT_TRUE(ok(pb2.bindTrailingAnchors()));
+  TEST_ASSERT_EQUAL_UINT(2, binds.size());           // unchanged: a3 not bound
+}
+
+// addImage page-breaks only when the current page is non-empty and the image
+// won't fit; a too-tall image on a fresh page is kept.
+void test_pagebuilder_image_break() {
+  using namespace crosspoint::page;
+  crosspoint::heap::clearLargestFreeBlockOverride();
+  FootnotePlacer fp;
+  int emitted = 0;
+  PageBuilder pb(
+      pbCfg(), fp, [&emitted](std::unique_ptr<Page>) { ++emitted; }, [](const std::string&, uint16_t) {});
+  auto img = std::make_shared<ImageBlock>("/x.bmp", 600, 100);
+  for (int i = 0; i < 19; ++i) TEST_ASSERT_TRUE(ok(pb.addLine(makePageLine())));  // cursor 760/800
+  TEST_ASSERT_TRUE(ok(pb.addImage(img, 600, 100)));  // 760+100>800 + non-empty -> break
+  TEST_ASSERT_EQUAL_UINT(1, pb.completedPageCount());
+  TEST_ASSERT_EQUAL_INT(100, pb.cursorY());          // image at y=0 on the new page, cursor=100
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_pagebuilder_page_boundaries);
   RUN_TEST(test_pagebuilder_oom_probe_is_explicit);
   RUN_TEST(test_pagebuilder_null_line_is_oom);
+  RUN_TEST(test_pagebuilder_top_spacing_survives_fresh_page);
+  RUN_TEST(test_pagebuilder_finish_skips_empty_page);
+  RUN_TEST(test_pagebuilder_trailing_anchors);
+  RUN_TEST(test_pagebuilder_image_break);
   RUN_TEST(test_dp_scratch_arena_parity_and_bounded);
   RUN_TEST(test_dp_scratch_arena_overflow_falls_back);
   RUN_TEST(test_layout_parity_plain_wrap);
