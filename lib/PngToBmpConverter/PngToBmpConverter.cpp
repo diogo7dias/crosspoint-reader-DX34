@@ -1,4 +1,5 @@
 #include "PngToBmpConverter.h"
+#include <Memory.h>
 
 #include <HalStorage.h>
 #include <Logging.h>
@@ -540,8 +541,8 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
                           .paletteSize = 0};
 
   // Allocate scanline buffers
-  ctx.currentRow = static_cast<uint8_t*>(malloc(rawRowBytes));
-  ctx.previousRow = static_cast<uint8_t*>(calloc(rawRowBytes, 1));
+  ctx.currentRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(rawRowBytes));  // alloc-ok
+  ctx.previousRow = static_cast<uint8_t*>(crosspoint::mem::tryCalloc(rawRowBytes, 1));  // alloc-ok
   if (!ctx.currentRow || !ctx.previousRow) {
     LOG_ERR("PNG", "Failed to allocate scanline buffers (%u bytes each)", rawRowBytes);
     free(ctx.currentRow);
@@ -641,7 +642,7 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
   }
 
   // Allocate BMP row buffer
-  auto* rowBuffer = static_cast<uint8_t*>(malloc(bytesPerRow));
+  auto* rowBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bytesPerRow));  // alloc-ok
   if (!rowBuffer) {
     LOG_ERR("PNG", "Failed to allocate row buffer");
     mz_inflateEnd(&ctx.zstream);
@@ -711,7 +712,7 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
 
   // Allocate grayscale row buffer - batch-convert each scanline to avoid
   // per-pixel getPixelGray() switch overhead in the hot loops
-  auto* grayRow = static_cast<uint8_t*>(malloc(width));
+  auto* grayRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(width));  // alloc-ok
   if (!grayRow) {
     LOG_ERR("PNG", "Failed to allocate grayscale row buffer");
     delete[] rowAccum;

@@ -1,4 +1,5 @@
 #include "FontDecompressor.h"
+#include <Memory.h>
 
 #include <Arduino.h>
 #include <Logging.h>
@@ -199,14 +200,14 @@ const uint8_t* FontDecompressor::getBitmap(const EpdFontData* fontData, const Ep
     hotGroupIndex = UINT16_MAX;
 
     // Pre-check with malloc: on ESP32, vector::resize() calls abort() on OOM
-    void* check = malloc(group.uncompressedSize);
+    void* check = crosspoint::mem::tryMalloc(group.uncompressedSize);  // alloc-ok
     if (!check) {
       // Page buffer is holding heap — free it and retry.  Remaining glyphs
       // will decompress through the hot-group path (slower, but renders).
       if (pageSlotCount > 0) {
         LOG_INF("FDC", "Hot group OOM — releasing page buffer and retrying");
         freePageBuffer();
-        check = malloc(group.uncompressedSize);
+        check = crosspoint::mem::tryMalloc(group.uncompressedSize);  // alloc-ok
       }
       if (!check) {
         LOG_ERR("FDC", "Failed to allocate %u bytes for hot group %u (free heap: %lu)", group.uncompressedSize,
@@ -238,7 +239,7 @@ const uint8_t* FontDecompressor::getBitmap(const EpdFontData* fontData, const Ep
 
   // Compact just the requested glyph from byte-aligned data into scratch buffer
   if (glyph->dataLength > hotGlyphBuf.size()) {
-    void* check = malloc(glyph->dataLength);
+    void* check = crosspoint::mem::tryMalloc(glyph->dataLength);  // alloc-ok
     if (!check) {
       LOG_ERR("FDC", "Failed to allocate scratch buffer (%u bytes)", glyph->dataLength);
       bitmapAllocFailures_++;  // render-OOM signal — see FontDecompressor.h
@@ -356,8 +357,8 @@ int FontDecompressor::prewarmCache(const EpdFontData* fontData, const char* utf8
   stats.uniqueGroupsAccessed = groupCount;
 
   // Step 3: Allocate page buffer and lookup table for this slot
-  slot.buffer = static_cast<uint8_t*>(malloc(totalBytes));
-  slot.glyphs = static_cast<PageGlyphEntry*>(malloc(glyphCount * sizeof(PageGlyphEntry)));
+  slot.buffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(totalBytes));  // alloc-ok
+  slot.glyphs = static_cast<PageGlyphEntry*>(crosspoint::mem::tryMalloc(glyphCount * sizeof(PageGlyphEntry)));  // alloc-ok
   if (!slot.buffer || !slot.glyphs) {
     LOG_ERR("FDC", "Failed to allocate page buffer (%u bytes, %u glyphs)", totalBytes, glyphCount);
     free(slot.buffer);
@@ -466,7 +467,7 @@ int FontDecompressor::prewarmCache(const EpdFontData* fontData, const char* utf8
     uint16_t groupIdx = neededGroups[g];
     const EpdFontGroup& group = fontData->groups[groupIdx];
 
-    auto* tempBuf = static_cast<uint8_t*>(malloc(group.uncompressedSize));
+    auto* tempBuf = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(group.uncompressedSize));  // alloc-ok
     if (!tempBuf) {
       LOG_ERR("FDC", "Failed to allocate temp buffer (%u bytes) for group %u", group.uncompressedSize, groupIdx);
       missed++;

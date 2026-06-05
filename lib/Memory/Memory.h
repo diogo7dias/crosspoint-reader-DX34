@@ -56,6 +56,10 @@ namespace mem {
 
 [[nodiscard]] inline void* tryMalloc(size_t bytes) { return std::malloc(bytes); }  // alloc-ok
 
+[[nodiscard]] inline void* tryCalloc(size_t count, size_t size) {
+  return std::calloc(count, size);  // alloc-ok
+}
+
 [[nodiscard]] inline void* tryRealloc(void* ptr, size_t bytes) {
   return std::realloc(ptr, bytes);  // alloc-ok
 }
