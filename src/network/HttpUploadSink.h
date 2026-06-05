@@ -23,6 +23,11 @@ namespace crosspoint::net {
 // flush return false so the caller can abort the upload.
 class HttpUploadSink {
  public:
+  // The writer is invoked as `size_t write(const uint8_t* data, size_t len)`
+  // returning the bytes actually written. It is taken as a template parameter
+  // (below), not via this std::function, so the SD-write body inlines into the
+  // per-chunk hot loop with no type-erasure or per-call allocation. `Writer`
+  // documents the expected signature and is the callable type the tests pass.
   using Writer = std::function<size_t(const uint8_t* data, size_t len)>;
 
   explicit HttpUploadSink(size_t capacity) : capacity_(capacity) {}
@@ -30,23 +35,25 @@ class HttpUploadSink {
   // Size the batching buffer (lazily, on UPLOAD_FILE_START). The caller is
   // responsible for any heap pre-flight before calling — under -fno-exceptions
   // a failed resize would abort, so callers gate this with a largest-free-block
-  // probe. Returns true once the buffer is at full capacity. Resets position.
-  bool ensureCapacity() {
+  // probe. Resets position; use hasCapacity() to confirm sizing succeeded.
+  void ensureCapacity() {
     if (buffer_.size() != capacity_) buffer_.resize(capacity_);
     bufferPos_ = 0;
-    return buffer_.size() == capacity_;
   }
 
   bool hasCapacity() const { return buffer_.size() == capacity_; }
 
   // Copy len bytes into the buffer, flushing through `write` whenever the
   // buffer fills. Returns false on a short write (caller should abort).
-  bool append(const uint8_t* data, size_t len, const Writer& write) {
+  template <typename W>
+  bool append(const uint8_t* data, size_t len, const W& write) {
+    // Capacity is an invariant for the whole WRITE phase (ensureCapacity ran
+    // at UPLOAD_FILE_START), so check once here rather than per iteration. Also
+    // rejects misuse: append before ensureCapacity fails instead of an OOB copy.
+    if (buffer_.size() != capacity_) return false;
     while (len > 0) {
       const size_t space = capacity_ - bufferPos_;
       const size_t toCopy = (len < space) ? len : space;
-      // buffer_ is guaranteed sized by ensureCapacity(); guard defensively.
-      if (buffer_.size() != capacity_) return false;
       std::memcpy(buffer_.data() + bufferPos_, data, toCopy);
       bufferPos_ += toCopy;
       data += toCopy;
@@ -60,7 +67,8 @@ class HttpUploadSink {
 
   // Flush whatever remains buffered. No-op (success) when empty. On a short
   // write the position is still cleared so a follow-up flush won't re-emit.
-  bool flush(const Writer& write) {
+  template <typename W>
+  bool flush(const W& write) {
     if (bufferPos_ == 0) return true;
     const size_t written = write(buffer_.data(), bufferPos_);
     const bool ok = (written == bufferPos_);

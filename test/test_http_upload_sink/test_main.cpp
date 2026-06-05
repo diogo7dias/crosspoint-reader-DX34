@@ -50,7 +50,7 @@ void tearDown() {}
 void test_ensure_capacity() {
   HttpUploadSink sink(16);
   TEST_ASSERT_FALSE(sink.hasCapacity());
-  TEST_ASSERT_TRUE(sink.ensureCapacity());
+  sink.ensureCapacity();
   TEST_ASSERT_TRUE(sink.hasCapacity());
   TEST_ASSERT_EQUAL_UINT32(16, sink.capacity());
   TEST_ASSERT_EQUAL_UINT32(0, sink.pending());
@@ -174,7 +174,8 @@ void test_reset_then_reuse() {
   TEST_ASSERT_FALSE(sink.hasCapacity());
   TEST_ASSERT_EQUAL_UINT32(0, sink.pending());
 
-  TEST_ASSERT_TRUE(sink.ensureCapacity());
+  sink.ensureCapacity();
+  TEST_ASSERT_TRUE(sink.hasCapacity());
   FakeFile f2;
   auto data2 = seq(3, 100);
   TEST_ASSERT_TRUE(sink.append(data2.data(), data2.size(), f2.writer()));
