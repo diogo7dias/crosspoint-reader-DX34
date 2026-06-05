@@ -66,19 +66,43 @@ RE_CALLOC = re.compile(r"\b(?:malloc|calloc|realloc)\s*\(")
 RE_NEW = re.compile(r"\bnew\s+(?!\(std::nothrow\))[A-Za-z_:~]")
 
 
-def strip_line_comment(line: str) -> str:
-    # Cheap // stripper (ignores the // inside string literals; baseline absorbs
-    # the rare false positive). Block comments are not stripped — baseline-only.
+RE_STR = re.compile(r'"(?:\\.|[^"\\])*"')
+RE_RAW_OPEN = re.compile(r'R"([^("]*)\(')
+
+
+def strip_strings_and_comment(line: str) -> str:
+    # Blank out normal "..." literals, then drop any trailing // comment. Keeps
+    # `new`/malloc tokens that live inside string literals (embedded web-UI JS
+    # like `new Promise`, or log text like "OOM new WebServer") from registering
+    # as violations. Multi-line raw strings are handled by the caller's state.
+    line = RE_STR.sub('""', line)
     idx = line.find("//")
     return line if idx < 0 else line[:idx]
 
 
 def count_violations(path: Path) -> int:
     n = 0
+    in_raw = False
+    raw_close = ""
     for raw in path.read_text(errors="replace").splitlines():
+        if in_raw:
+            # Inside a C++ raw string literal: skip until its )delim" terminator.
+            end = raw.find(raw_close)
+            if end < 0:
+                continue
+            raw = raw[end + len(raw_close):]
+            in_raw = False
         if "// alloc-ok" in raw:
             continue
-        code = strip_line_comment(raw)
+        code = strip_strings_and_comment(raw)
+        # Detect an unterminated raw-string opener so following lines are skipped.
+        m = RE_RAW_OPEN.search(code)
+        if m:
+            close = ')' + m.group(1) + '"'
+            if code.find(close, m.end()) < 0:
+                in_raw = True
+                raw_close = close
+                code = code[:m.start()]
         if RE_CALLOC.search(code):
             n += 1
         if RE_NEW.search(code):

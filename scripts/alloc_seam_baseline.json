@@ -1,17 +1,8 @@
 {
-  "lib/Epub/Epub.cpp": 4,
-  "lib/Epub/Epub/converters/ImageDecoderFactory.cpp": 2,
   "lib/Epub/Epub/hyphenation/LiangHyphenation.cpp": 1,
-  "lib/Epub/Epub/page/PageBuilder.cpp": 2,
-  "lib/Epub/Epub/parsers/ChapterHtmlSlimParser.cpp": 4,
-  "lib/KOReaderSync/KOReaderSyncClient.cpp": 3,
-  "lib/Xtc/Xtc.cpp": 1,
-  "src/activities/network/CalibreConnectActivity.cpp": 1,
-  "src/activities/network/CrossPointWebServerActivity.cpp": 2,
-  "src/activities/reader/EpubReaderActivity.cpp": 1,
-  "src/activities/reader/ReaderActivity.cpp": 4,
+  "src/activities/reader/ReaderActivity.cpp": 1,
   "src/activities/settings/SettingsActivity.cpp": 8,
   "src/main.cpp": 2,
-  "src/network/CrossPointWebServer.cpp": 15,
+  "src/network/CrossPointWebServer.cpp": 1,
   "src/sleep/WallpaperPlaylistV2.h": 1
 }
