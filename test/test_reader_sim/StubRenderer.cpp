@@ -1,10 +1,9 @@
 // Metrics-only GfxRenderer implementation for the host reader-sim.
 // Answers text-measurement queries from a real built-in EpdFontFamily so
 // ParsedText's line breaking sees realistic widths.
-#include <GfxRenderer.h>  // the shadow (sim_shadows is first on the include path)
-
 #include <EpdFont.h>
 #include <EpdFontFamily.h>
+#include <GfxRenderer.h>         // the shadow (sim_shadows is first on the include path)
 #include <unifont_14_regular.h>  // -I lib/EpdFont/builtinFonts; defines static const EpdFontData
 
 #include <cstdint>
@@ -31,8 +30,7 @@ int GfxRenderer::getTextWidth(int, const char* text, EpdFontFamily::Style style)
   return w;
 }
 
-int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, int letterSpacing,
-                                    EpdFontFamily::Style style) const {
+int GfxRenderer::getTextWidthSpaced(int fontId, const char* text, int letterSpacing, EpdFontFamily::Style style) const {
   int base = getTextWidth(fontId, text, style);
   const size_t n = cpCount(text);
   if (n > 0 && letterSpacing != 0) base += letterSpacing * static_cast<int>(n);
@@ -54,6 +52,4 @@ int GfxRenderer::getLineHeight(int) const {
   return d ? d->advanceY : 16;
 }
 
-bool GfxRenderer::hasGlyph(int, uint32_t cp, EpdFontFamily::Style style) const {
-  return g_family.hasGlyph(cp, style);
-}
+bool GfxRenderer::hasGlyph(int, uint32_t cp, EpdFontFamily::Style style) const { return g_family.hasGlyph(cp, style); }

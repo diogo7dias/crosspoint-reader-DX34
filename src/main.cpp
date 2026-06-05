@@ -40,6 +40,7 @@
 #include "Paths.h"
 #include "ReadingThemeStore.h"
 #include "RecentBooksStore.h"
+#include "SilentRestart.h"
 #include "activities/boot_sleep/BootActivity.h"
 #include "activities/boot_sleep/SleepActivity.h"
 #include "activities/browser/OpdsBookBrowserActivity.h"
@@ -50,12 +51,11 @@
 #include "activities/reader/ReaderActivity.h"
 #include "activities/settings/SettingsActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
+#include "boot/BootSequenceOrchestrator.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "fonts/CustomBinFontIds.h"
 #include "fonts/CustomBinFontManager.h"
-#include "SilentRestart.h"
-#include "boot/BootSequenceOrchestrator.h"
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -838,10 +838,8 @@ void setup() {
     in.randomBookOnBoot = SETTINGS.randomBookOnBoot;
     for (const auto& b : RECENT_BOOKS.getBooks()) in.recentBookPaths.push_back(b.path);
 
-    const crosspoint::boot::BootDecision decision =
-        crosspoint::boot::decideBoot(in, [](uint32_t count) -> uint32_t {
-          return static_cast<uint32_t>(random(static_cast<long>(count)));
-        });
+    const crosspoint::boot::BootDecision decision = crosspoint::boot::decideBoot(
+        in, [](uint32_t count) -> uint32_t { return static_cast<uint32_t>(random(static_cast<long>(count))); });
     readerPath = decision.readerPath;
     goHome = decision.goHome;
 

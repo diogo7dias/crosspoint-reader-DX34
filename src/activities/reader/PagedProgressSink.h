@@ -31,8 +31,7 @@ class PagedProgressSink : public IProgressSink {
   // `cachePath` is the per-book cache dir (no trailing slash). `logTag` is the
   // 3-letter subsystem tag for log lines ("TRS" / "XTR"), preserving the
   // legacy per-reader logging.
-  PagedProgressSink(std::string cachePath, const char* logTag)
-      : cachePath_(std::move(cachePath)), logTag_(logTag) {}
+  PagedProgressSink(std::string cachePath, const char* logTag) : cachePath_(std::move(cachePath)), logTag_(logTag) {}
 
   // IProgressSink — writes ReaderPosition.page as 4-byte LE, synchronously.
   bool write(const ReaderPosition& p) override;

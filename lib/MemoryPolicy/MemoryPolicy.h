@@ -57,7 +57,7 @@ enum class Op : uint8_t {
   // before std::move collapses them; surviving.reserve() threw bad_alloc with
   // the residual largest block at ~47 KB. 64 KB clears the trim peak. Below it,
   // callers bypass the playlist and stream-pick a file by directory index.
-  ScanSleepPlaylist,      // playlist trim peak              (largest >= 64 KB)
+  ScanSleepPlaylist,  // playlist trim peak              (largest >= 64 KB)
 };
 
 namespace detail {
@@ -67,7 +67,8 @@ struct Gate {
 };
 inline Gate gateFor(Op op) {
   switch (op) {
-    case Op::SpawnRenderTask:       return {false, 12 * 1024};
+    case Op::SpawnRenderTask:
+      return {false, 12 * 1024};
     // 48 KB clears the section-load working peak (CSS index + expat read
     // buffer + page LUT + ParsedText word/style vectors) with margin and is
     // what the pre-flight defrag pass targets. PR #95/#100 tried higher
@@ -76,23 +77,29 @@ inline Gate gateFor(Op op) {
     // indefinitely, turning a would-pass layout into a permanent
     // recovery-screen dead-end; the gate stays at the section-peak value and
     // the rebuild *floor* below absorbs the fragmented-device case.
-    case Op::BuildSectionLayout:    return {false, 48 * 1024};
+    case Op::BuildSectionLayout:
+      return {false, 48 * 1024};
     // Hard floor for attempting a section rebuild: below this even a
     // post-defrag malloc is essentially guaranteed to fail. Reverted to PR
     // #96's 20 KB after #95/#100's higher floors bounced every modest book on
     // this device — the retry-once + auto-revert path plus the OOM recovery
     // screen handle a real mid-layout failure cleanly, so the floor optimizes
     // for "try and let the failure path catch it" over "block proactively".
-    case Op::RebuildSectionFloor:   return {false, 20 * 1024};
-    case Op::PrefetchNeighborPages: return {false, 30 * 1024};
+    case Op::RebuildSectionFloor:
+      return {false, 20 * 1024};
+    case Op::PrefetchNeighborPages:
+      return {false, 30 * 1024};
     // Forward-only single-page prefetch (RFC reading-speed Stage 1a): one
     // deserialized Page's working set is ~half the prev+next pair, so a lower
     // floor keeps the *next* page warm under moderate fragmentation (the common
     // forward-reading case) where the 30 KB neighbour gate would close and force
     // a synchronous on-turn SD load (the intermittent ~1 s stalls).
-    case Op::PrefetchNextPage:      return {false, 18 * 1024};
-    case Op::RenderRichSleepScreen: return {true,  30 * 1024};
-    case Op::ScanSleepPlaylist:     return {false, 64 * 1024};
+    case Op::PrefetchNextPage:
+      return {false, 18 * 1024};
+    case Op::RenderRichSleepScreen:
+      return {true, 30 * 1024};
+    case Op::ScanSleepPlaylist:
+      return {false, 64 * 1024};
   }
   return {false, SIZE_MAX};  // unreachable; conservative (gate stays closed)
 }

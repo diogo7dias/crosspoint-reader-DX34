@@ -238,8 +238,8 @@ void CrossPointWebServer::begin() {
   LOG_DBG("WEB", "Creating web server on port %d...", port);
   server.reset(new (std::nothrow) WebServer(port));
   if (!server) {
-    LOG_ERR("WEB", "OOM new WebServer port=%d free=%u largest=%u", port,
-            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    LOG_ERR("WEB", "OOM new WebServer port=%d free=%u largest=%u", port, (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return;  // running stays false; caller sees server unavailable
   }
 
@@ -777,12 +777,24 @@ void CrossPointWebServer::handleFirmwareStatus() const {
     if (esp_ota_get_state_partition(running, &imgState) == ESP_OK) {
       const char* name = "unknown";
       switch (imgState) {
-        case ESP_OTA_IMG_NEW:            name = "new"; break;
-        case ESP_OTA_IMG_PENDING_VERIFY: name = "pending_verify"; break;
-        case ESP_OTA_IMG_VALID:          name = "valid"; break;
-        case ESP_OTA_IMG_INVALID:        name = "invalid"; break;
-        case ESP_OTA_IMG_ABORTED:        name = "aborted"; break;
-        case ESP_OTA_IMG_UNDEFINED:      name = "undefined"; break;
+        case ESP_OTA_IMG_NEW:
+          name = "new";
+          break;
+        case ESP_OTA_IMG_PENDING_VERIFY:
+          name = "pending_verify";
+          break;
+        case ESP_OTA_IMG_VALID:
+          name = "valid";
+          break;
+        case ESP_OTA_IMG_INVALID:
+          name = "invalid";
+          break;
+        case ESP_OTA_IMG_ABORTED:
+          name = "aborted";
+          break;
+        case ESP_OTA_IMG_UNDEFINED:
+          name = "undefined";
+          break;
       }
       doc["ota_state"] = name;
       // VALID = explicitly confirmed; UNDEFINED = app rollback not enabled, so a

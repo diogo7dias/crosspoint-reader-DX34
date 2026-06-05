@@ -30,12 +30,12 @@ namespace boot {
 // Snapshot of every impure input, gathered by the caller from the globals.
 struct BootInputs {
   bool isSilentReboot = false;
-  int silentRebootTarget = -1;          // consumeSilentRebootTarget(): -1 none, 0 home, 1 reader
-  std::string openEpubPath;             // APP_STATE.openEpubPath (read)
-  uint8_t readerActivityLoadCount = 0;  // APP_STATE crash-loop guard (read)
-  bool backHeld = false;                // mappedInputManager.isPressed(Back)
+  int silentRebootTarget = -1;               // consumeSilentRebootTarget(): -1 none, 0 home, 1 reader
+  std::string openEpubPath;                  // APP_STATE.openEpubPath (read)
+  uint8_t readerActivityLoadCount = 0;       // APP_STATE crash-loop guard (read)
+  bool backHeld = false;                     // mappedInputManager.isPressed(Back)
   std::vector<std::string> recentBookPaths;  // RECENT_BOOKS paths, in order, UNFILTERED
-  bool randomBookOnBoot = false;        // SETTINGS.randomBookOnBoot
+  bool randomBookOnBoot = false;             // SETTINGS.randomBookOnBoot
 };
 
 // Count-dependent random, injected. The core calls it with the FILTERED epub
@@ -44,8 +44,8 @@ struct BootInputs {
 using RandomIndexFn = uint32_t (*)(uint32_t count);  // returns [0, count)
 
 struct BootDecision {
-  bool goHome = true;       // true -> RouteId::Home, false -> RouteId::Reader
-  std::string readerPath;   // valid iff !goHome
+  bool goHome = true;      // true -> RouteId::Home, false -> RouteId::Reader
+  std::string readerPath;  // valid iff !goHome
   // When true the caller MUST, before launching the reader, run the durable
   // crash-loop guard side effect: clear openEpubPath; increment
   // readerActivityLoadCount (cap 255); APP_STATE.saveToFileSync(). Returned, not
@@ -55,9 +55,7 @@ struct BootDecision {
 
 namespace detail {
 // Exact legacy predicate (main.cpp:833): p.size() > 5 && rfind(".epub") == size-5.
-inline bool endsWithEpub(const std::string& p) {
-  return p.size() > 5 && p.rfind(".epub") == p.size() - 5;
-}
+inline bool endsWithEpub(const std::string& p) { return p.size() > 5 && p.rfind(".epub") == p.size() - 5; }
 }  // namespace detail
 
 // The whole decision, pure + deterministic given (inputs, rng).

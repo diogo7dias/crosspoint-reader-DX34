@@ -19,11 +19,11 @@
 // The report file is overwritten on each write — most-recent-restart wins.
 
 struct HeapSnapshot {
-  uint32_t freeBytes;            // total free across all 8-bit-capable regions
+  uint32_t freeBytes;              // total free across all 8-bit-capable regions
   uint32_t largestFreeBlockBytes;  // largest contiguous free chunk (8-bit)
-  uint32_t minFreeEverBytes;     // smallest free total seen since boot
-  uint32_t internalFreeBytes;    // free in INTERNAL caps (no SPIRAM split on C3,
-                                 // but kept for forward portability)
+  uint32_t minFreeEverBytes;       // smallest free total seen since boot
+  uint32_t internalFreeBytes;      // free in INTERNAL caps (no SPIRAM split on C3,
+                                   // but kept for forward portability)
   uint32_t internalLargestBytes;
 };
 

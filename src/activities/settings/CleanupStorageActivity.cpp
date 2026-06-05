@@ -156,8 +156,7 @@ void CleanupStorageActivity::runCleanup() {
   failedCount = result.failed;
   bytesFreed = result.bytesFreed;
 
-  LOG_DIAG("CLEANUP", "done: %d removed, %d failed, %u B freed", removedCount, failedCount,
-           (unsigned)bytesFreed);
+  LOG_DIAG("CLEANUP", "done: %d removed, %d failed, %u B freed", removedCount, failedCount, (unsigned)bytesFreed);
 
   if (failedCount > 0 && removedCount == 0) {
     state = FAILED;
@@ -197,8 +196,7 @@ void CleanupStorageActivity::render(Activity::RenderLock&&) {
   if (state == SUCCESS) {
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 20, tr(STR_CLEANUP_STORAGE_DONE), true,
                               EpdFontFamily::REGULAR);
-    std::string resultText =
-        std::to_string(removedCount) + " " + std::string(tr(STR_ITEMS_REMOVED));
+    std::string resultText = std::to_string(removedCount) + " " + std::string(tr(STR_ITEMS_REMOVED));
     if (bytesFreed > 0) {
       resultText += ", " + std::to_string(bytesFreed) + " " + std::string(tr(STR_BYTES_FREED));
     }

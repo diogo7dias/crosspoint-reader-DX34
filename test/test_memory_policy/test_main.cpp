@@ -75,8 +75,8 @@ void test_rich_sleep_reads_total_free_not_largest_block() {
   // Inverse: plenty of total free but fragmented into small blocks.
   setLargestFreeBlockOverride(10 * 1024);
   setTotalFreeOverride(120 * 1024);
-  TEST_ASSERT_TRUE(canAfford(Op::RenderRichSleepScreen));   // 120K total >= 30K
-  TEST_ASSERT_FALSE(canAfford(Op::ScanSleepPlaylist));      // 10K largest < 64K
+  TEST_ASSERT_TRUE(canAfford(Op::RenderRichSleepScreen));  // 120K total >= 30K
+  TEST_ASSERT_FALSE(canAfford(Op::ScanSleepPlaylist));     // 10K largest < 64K
 }
 
 // ── Recovery ladder (pure decision) ────────────────────────────────────────
@@ -160,8 +160,8 @@ void test_room_to_grow_sheds_once_then_succeeds() {
     shedCalls++;
     setLargestFreeBlockOverride(50 * 1024);
   });
-  TEST_ASSERT_TRUE(roomToGrow(20 * 1024));   // flips false -> shed -> true
-  TEST_ASSERT_EQUAL_INT(1, shedCalls);       // shed exactly once
+  TEST_ASSERT_TRUE(roomToGrow(20 * 1024));  // flips false -> shed -> true
+  TEST_ASSERT_EQUAL_INT(1, shedCalls);      // shed exactly once
 }
 
 void test_room_to_grow_fails_when_shed_cannot_free_enough() {

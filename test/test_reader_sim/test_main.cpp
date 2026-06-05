@@ -8,11 +8,10 @@
 // which is exactly where the on-device OOM crashes originate.
 //
 // Run via: pio test -e test_sim -f test_reader_sim
-#include <unity.h>
-
 #include <GfxRenderer.h>  // shadow: full definition needed for g_renderer instance
 #include <HeapGuard.h>
 #include <ParsedText.h>
+#include <unity.h>
 
 #include <chrono>
 #include <functional>
@@ -41,9 +40,9 @@ uint32_t layoutParagraph(int words, int viewportWidth, int longEvery = 0, bool h
     }
   }
   uint32_t lines = 0;
-  pt.layoutAndExtractLines(g_renderer, /*fontId=*/0, static_cast<uint16_t>(viewportWidth),
-                           [&lines](std::shared_ptr<TextBlock>) { ++lines; },
-                           /*includeLastLine=*/true);
+  pt.layoutAndExtractLines(
+      g_renderer, /*fontId=*/0, static_cast<uint16_t>(viewportWidth), [&lines](std::shared_ptr<TextBlock>) { ++lines; },
+      /*includeLastLine=*/true);
   return lines;
 }
 
@@ -89,9 +88,9 @@ void test_layout_under_fragmentation_no_would_abort() {
   SimHeap::disarm();
   crosspoint::heap::clearLargestFreeBlockOverride();
 
-  TEST_ASSERT_FALSE(threw);                     // no throwing alloc reached
-  TEST_ASSERT_EQUAL_UINT(0, wouldAbort);        // no unguarded alloc would crash
-  (void)lines;  // layout may have bailed early via oom_ — that's the safe path
+  TEST_ASSERT_FALSE(threw);               // no throwing alloc reached
+  TEST_ASSERT_EQUAL_UINT(0, wouldAbort);  // no unguarded alloc would crash
+  (void)lines;                            // layout may have bailed early via oom_ — that's the safe path
 }
 
 // Snappiness + memory-churn baseline. Measures layout wall-clock AND the number
@@ -169,7 +168,10 @@ void test_hyphenation_path_under_fragmentation_no_would_abort() {
 void test_fuzz_layout_random_fragmentation_never_aborts() {
   const size_t bins[] = {1024, 4096, 9216, 12288, 25600, 49152, 90000};
   uint32_t lcg = 0xBEEF1234u;
-  auto next = [&]() { lcg = lcg * 1664525u + 1013904223u; return lcg; };
+  auto next = [&]() {
+    lcg = lcg * 1664525u + 1013904223u;
+    return lcg;
+  };
 
   unsigned totalWouldAbort = 0;
   bool anyThrew = false;

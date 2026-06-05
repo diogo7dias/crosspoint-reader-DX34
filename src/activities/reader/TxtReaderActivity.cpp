@@ -1,16 +1,16 @@
 #include "TxtReaderActivity.h"
 
 #include <EpdFontFamily.h>
+#include <Epub/layout/DegradeLevel.h>
 #include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
+#include <HeapGuard.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <MemoryPolicy.h>
 #include <Serialization.h>
 #include <Utf8.h>
-#include <Epub/layout/DegradeLevel.h>
-#include <HeapGuard.h>
-#include <MemoryPolicy.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -1006,12 +1006,11 @@ void TxtReaderActivity::renderPage() {
     renderLines();  // scan pass
     // RFC #164 step 7: trim glyph prewarm to regular-only under heap pressure
     // (Full -> 0x0F on a healthy heap, so unchanged for the common case).
-    const uint8_t prewarmMask =
-        crosspoint::layout::DegradePlan::from(
-            crosspoint::layout::renderLevelFor(crosspoint::heap::largestFreeBlockBytes(),
-                                               crosspoint::mem::kRenderTrimPrewarmBelowBytes),
-            crosspoint::layout::kStyleAll)
-            .prewarmStyleMask;
+    const uint8_t prewarmMask = crosspoint::layout::DegradePlan::from(
+                                    crosspoint::layout::renderLevelFor(crosspoint::heap::largestFreeBlockBytes(),
+                                                                       crosspoint::mem::kRenderTrimPrewarmBelowBytes),
+                                    crosspoint::layout::kStyleAll)
+                                    .prewarmStyleMask;
     scope.endScanAndPrewarm(prewarmMask);
     renderLines();  // actual render (BW)
   } else {
@@ -1177,8 +1176,8 @@ bool TxtReaderActivity::loadPageIndexCache() {
   {
     const size_t needBytes = static_cast<size_t>(numPages) * sizeof(uint32_t);
     if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
-      LOG_ERR("TRS", "OOM pageOffsets reserve: need=%u largest=%u",
-              (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
+      LOG_ERR("TRS", "OOM pageOffsets reserve: need=%u largest=%u", (unsigned)needBytes,
+              (unsigned)crosspoint::heap::largestFreeBlockBytes());
       f.close();
       return false;
     }

@@ -444,15 +444,15 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   // path rather than RTC_SW_SYS_RST.
   bookMetadataCache.reset(new (std::nothrow) BookMetadataCache(cachePath));
   if (!bookMetadataCache) {
-    LOG_ERR("EBP", "OOM new BookMetadataCache (load) free=%u largest=%u",
-            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    LOG_ERR("EBP", "OOM new BookMetadataCache (load) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return false;
   }
   // Always create CssParser - needed for inline style parsing even without CSS files
   cssParser.reset(new (std::nothrow) CssParser(cachePath));
   if (!cssParser) {
-    LOG_ERR("EBP", "OOM new CssParser (load) free=%u largest=%u",
-            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    LOG_ERR("EBP", "OOM new CssParser (load) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return false;
   }
   reporter.report(0);
@@ -621,8 +621,8 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss,
   // Reload the cache from disk so it's in the correct state
   bookMetadataCache.reset(new (std::nothrow) BookMetadataCache(cachePath));
   if (!bookMetadataCache) {
-    LOG_ERR("EBP", "OOM new BookMetadataCache (reload) free=%u largest=%u",
-            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    LOG_ERR("EBP", "OOM new BookMetadataCache (reload) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     return false;
   }
   {
@@ -658,8 +658,8 @@ bool Epub::ensureCssCache(const std::function<void(int)>& progressCallback) {
   if (!cssParser) {
     cssParser.reset(new (std::nothrow) CssParser(cachePath));
     if (!cssParser) {
-      LOG_ERR("EBP", "OOM new CssParser (ensureCssCache) free=%u largest=%u",
-              (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+      LOG_ERR("EBP", "OOM new CssParser (ensureCssCache) free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
       return false;
     }
   }

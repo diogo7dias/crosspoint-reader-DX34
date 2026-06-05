@@ -348,10 +348,10 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   // constructor allocates ~width*2 bytes per row buffer, which can fail
   // independently under fragmentation).
   const bool ditherer1BitOom = oneBit && (!atkinson1BitDitherer || !atkinson1BitDitherer->valid());
-  const bool dithererAtkOom = !oneBit && !USE_8BIT_OUTPUT && USE_ATKINSON &&
-                              (!atkinsonDitherer || !atkinsonDitherer->valid());
-  const bool dithererFsOom = !oneBit && !USE_8BIT_OUTPUT && USE_FLOYD_STEINBERG &&
-                             (!fsDitherer || !fsDitherer->valid());
+  const bool dithererAtkOom =
+      !oneBit && !USE_8BIT_OUTPUT && USE_ATKINSON && (!atkinsonDitherer || !atkinsonDitherer->valid());
+  const bool dithererFsOom =
+      !oneBit && !USE_8BIT_OUTPUT && USE_FLOYD_STEINBERG && (!fsDitherer || !fsDitherer->valid());
   if (ditherer1BitOom || dithererAtkOom || dithererFsOom) {
     LOG_ERR("JPG", "OOM ditherer outWidth=%u", (unsigned)outWidth);
     return false;  // RAII Cleanup frees what was allocated

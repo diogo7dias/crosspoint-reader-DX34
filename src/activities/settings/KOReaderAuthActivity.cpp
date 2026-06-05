@@ -6,8 +6,8 @@
 
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncClient.h"
-#include "SilentRestart.h"
 #include "MappedInputManager.h"
+#include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"

@@ -245,11 +245,11 @@ void ReadingThemesActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     if (selectedRowIndex == 0) {
       exitActivity();
-      enterNewActivity(new (std::nothrow) ReaderSettingsActivity(renderer, mappedInput, bookCachePath,
-                                                                 [this](const bool changed) {
-        pendingSubactivityExit = true;
-        pendingSettingsChanged = changed;
-      }));
+      enterNewActivity(new (std::nothrow)
+                           ReaderSettingsActivity(renderer, mappedInput, bookCachePath, [this](const bool changed) {
+                             pendingSubactivityExit = true;
+                             pendingSettingsChanged = changed;
+                           }));
       return;
     }
     if (selectedRowIndex == 1) {

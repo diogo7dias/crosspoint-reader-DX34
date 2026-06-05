@@ -106,7 +106,8 @@ class PageBuilder {
   // the block boundary onto the current page (mirrors makePages' tail).
   void drainFootnotes() {
     if (!footnotes_.empty() && currentPage_) {
-      footnotes_.drainRemaining([this](const char* number, const char* href) { currentPage_->addFootnote(number, href); });
+      footnotes_.drainRemaining(
+          [this](const char* number, const char* href) { currentPage_->addFootnote(number, href); });
     }
   }
 
@@ -140,8 +141,8 @@ class PageBuilder {
   bool hasOpenPage() const { return static_cast<bool>(currentPage_); }
 
  private:
-  [[nodiscard]] PageStatus ensurePage();        // lazy new(nothrow) Page, resets cursor
-  void completePage();                          // dense-fit + emit + count++ (no alloc)
+  [[nodiscard]] PageStatus ensurePage();  // lazy new(nothrow) Page, resets cursor
+  void completePage();                    // dense-fit + emit + count++ (no alloc)
   [[nodiscard]] PageStatus bindPendingAnchors();
 
   PageConfig cfg_;

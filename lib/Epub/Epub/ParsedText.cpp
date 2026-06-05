@@ -213,8 +213,8 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   if (oom_) return;
 
   std::vector<size_t> lineBreakIndices =
-      computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, words.size(), wordWidths, wordContinues, canBreakBefore,
-                        wordNeedsHyphenAtBreak, arena_);
+      computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, words.size(), wordWidths, wordContinues,
+                        canBreakBefore, wordNeedsHyphenAtBreak, arena_);
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {
@@ -312,8 +312,7 @@ void ParsedText::splitOversizedTokens(const GfxRenderer& renderer, const int fon
         const size_t needBytes = nextCap * sizeof(std::string);
         if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
           LOG_ERR("PT", "OOM splitOversized size=%u cap=%u need=%u largest=%u", (unsigned)words.size(),
-                  (unsigned)words.capacity(), (unsigned)needBytes,
-                  (unsigned)crosspoint::heap::largestFreeBlockBytes());
+                  (unsigned)words.capacity(), (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
           oom_ = true;
           return;
         }
@@ -405,8 +404,7 @@ void ParsedText::expandHyphenationBreaks(const GfxRenderer& renderer, const int 
         const size_t needBytes = nextCap * sizeof(std::string);
         if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
           LOG_ERR("PT", "OOM expandHyphen size=%u cap=%u need=%u largest=%u", (unsigned)words.size(),
-                  (unsigned)words.capacity(), (unsigned)needBytes,
-                  (unsigned)crosspoint::heap::largestFreeBlockBytes());
+                  (unsigned)words.capacity(), (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
           oom_ = true;
           return;
         }
@@ -749,8 +747,8 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     processLine(nullptr);
     return;
   }
-  processLine(std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles),
-                                          blockStyle));
+  processLine(
+      std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), blockStyle));
 }
 
 // — RFC #164 step 4: arena-backed accumulation buffer —
@@ -913,8 +911,9 @@ bool ParsedText::layoutArenaWords(const GfxRenderer& renderer, const int fontId,
   }
   const std::vector<bool> wordNeedsHyphenAtBreak(n, false);
 
-  std::vector<size_t> lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, n, wordWidths,
-                                                           continuesVec, canBreakBefore, wordNeedsHyphenAtBreak, arena_);
+  std::vector<size_t> lineBreakIndices =
+      computeLineBreaks(renderer, fontId, pageWidth, spaceWidth, n, wordWidths, continuesVec, canBreakBefore,
+                        wordNeedsHyphenAtBreak, arena_);
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {

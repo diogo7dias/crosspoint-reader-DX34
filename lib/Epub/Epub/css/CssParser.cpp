@@ -912,8 +912,8 @@ bool CssParser::loadFromCache() {
   {
     const size_t needBytes = static_cast<size_t>(ruleCount) * sizeof(HashedOffset);
     if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
-      LOG_ERR("CSS", "OOM hashedIndex_ reserve: need=%u largest=%u",
-              (unsigned)needBytes, (unsigned)crosspoint::heap::largestFreeBlockBytes());
+      LOG_ERR("CSS", "OOM hashedIndex_ reserve: need=%u largest=%u", (unsigned)needBytes,
+              (unsigned)crosspoint::heap::largestFreeBlockBytes());
       cacheFile_.close();
       cacheFileOpen_ = false;
       return false;

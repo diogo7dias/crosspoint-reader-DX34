@@ -28,18 +28,30 @@ void appendf(std::string& s, const char* fmt, ...) {
 
 const char* resetReasonName(esp_reset_reason_t r) {
   switch (r) {
-    case ESP_RST_UNKNOWN: return "UNKNOWN";
-    case ESP_RST_POWERON: return "POWERON";
-    case ESP_RST_EXT: return "EXT";
-    case ESP_RST_SW: return "SW";
-    case ESP_RST_PANIC: return "PANIC";
-    case ESP_RST_INT_WDT: return "INT_WDT";
-    case ESP_RST_TASK_WDT: return "TASK_WDT";
-    case ESP_RST_WDT: return "WDT";
-    case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
-    case ESP_RST_BROWNOUT: return "BROWNOUT";
-    case ESP_RST_SDIO: return "SDIO";
-    default: return "?";
+    case ESP_RST_UNKNOWN:
+      return "UNKNOWN";
+    case ESP_RST_POWERON:
+      return "POWERON";
+    case ESP_RST_EXT:
+      return "EXT";
+    case ESP_RST_SW:
+      return "SW";
+    case ESP_RST_PANIC:
+      return "PANIC";
+    case ESP_RST_INT_WDT:
+      return "INT_WDT";
+    case ESP_RST_TASK_WDT:
+      return "TASK_WDT";
+    case ESP_RST_WDT:
+      return "WDT";
+    case ESP_RST_DEEPSLEEP:
+      return "DEEPSLEEP";
+    case ESP_RST_BROWNOUT:
+      return "BROWNOUT";
+    case ESP_RST_SDIO:
+      return "SDIO";
+    default:
+      return "?";
   }
 }
 
@@ -56,10 +68,9 @@ HeapSnapshot captureHeapSnapshot() {
 }
 
 void appendHeapSnapshot(std::string& out, const HeapSnapshot& snap) {
-  appendf(out, "free=%u largest=%u min=%u intl=%u intlLargest=%u",
-          static_cast<unsigned>(snap.freeBytes), static_cast<unsigned>(snap.largestFreeBlockBytes),
-          static_cast<unsigned>(snap.minFreeEverBytes), static_cast<unsigned>(snap.internalFreeBytes),
-          static_cast<unsigned>(snap.internalLargestBytes));
+  appendf(out, "free=%u largest=%u min=%u intl=%u intlLargest=%u", static_cast<unsigned>(snap.freeBytes),
+          static_cast<unsigned>(snap.largestFreeBlockBytes), static_cast<unsigned>(snap.minFreeEverBytes),
+          static_cast<unsigned>(snap.internalFreeBytes), static_cast<unsigned>(snap.internalLargestBytes));
 }
 
 bool writeHeapReport(const char* reason) {

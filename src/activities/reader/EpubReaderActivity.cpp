@@ -31,11 +31,11 @@
 #include "MemoryPolicy.h"
 #include "QuotesViewerActivity.h"
 #include "ReaderCommon.h"
-#include "SilentRestart.h"
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
 #include "RecentBooksStore.h"
+#include "SilentRestart.h"
 #include "activities/network/QRShareActivity.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -144,9 +144,8 @@ void EpubReaderActivity::onEnter() {
   // existing pre-flight / silent-restart paths still catch fragmentation.
   layoutHeapAnchor_ = crosspoint::layout::LayoutArena::create(kLayoutHeapAnchorBytes);
   if (layoutHeapAnchor_.ok()) {
-    LOG_DBG("HEAP", "EPUB onEnter:anchor-acquired %u bytes free=%u largest=%u",
-            (unsigned)kLayoutHeapAnchorBytes, (unsigned)ESP.getFreeHeap(),
-            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    LOG_DBG("HEAP", "EPUB onEnter:anchor-acquired %u bytes free=%u largest=%u", (unsigned)kLayoutHeapAnchorBytes,
+            (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
   } else {
     LOG_DIAG("ERS", "EPUB onEnter: layout heap anchor alloc failed (largest=%u) — continuing without",
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
@@ -864,8 +863,7 @@ crosspoint::reader::ReaderInput EpubReaderActivity::snapshotInput() {
   // Power, PageBack, PageForward). MappedInputManager::Button declares them in
   // exactly that order; this static_assert is the drift tripwire.
   static constexpr MB kMap[crosspoint::reader::kReaderButtonCount] = {
-      MB::Back, MB::Confirm, MB::Left,  MB::Right,      MB::Up,
-      MB::Down, MB::Power,   MB::PageBack, MB::PageForward};
+      MB::Back, MB::Confirm, MB::Left, MB::Right, MB::Up, MB::Down, MB::Power, MB::PageBack, MB::PageForward};
   static_assert(static_cast<int>(crosspoint::reader::ReaderButton::Back) == 0 &&
                     static_cast<int>(crosspoint::reader::ReaderButton::PageForward) == 8,
                 "ReaderButton order must mirror MappedInputManager::Button");
@@ -928,8 +926,7 @@ void EpubReaderActivity::applyEffect(const crosspoint::reader::ReaderInputDispat
       {
         RenderLock lock(*this);
         nextPageNumber = 0;
-        currentSpineIndex =
-            (effect.action == A::SkipChapterNext) ? currentSpineIndex + 1 : currentSpineIndex - 1;
+        currentSpineIndex = (effect.action == A::SkipChapterNext) ? currentSpineIndex + 1 : currentSpineIndex - 1;
         // No progress write on chapter skip — saves are lifecycle-only now. The
         // new position lives in currentSpineIndex/nextPageNumber (consumed by the
         // reload below); the post-load render's observe() refreshes the tracker
@@ -1287,13 +1284,12 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     // GO_HOME menu item removed — Back button handles this
     case EpubReaderMenuActivity::MenuAction::THEMES_MENU: {
       exitActivity();
-      enterNewActivity(new (std::nothrow) ReadingThemesActivity(renderer, mappedInput,
-                                                 epub ? epub->getCachePath() : std::string(),
-                                                 [this](const bool changed) {
-                                                   pendingSubactivityExit = true;
-                                                   inputDispatcher_.clearPendingTap();
-                                                   pendingThemeReload = changed;
-                                                 }));
+      enterNewActivity(new (std::nothrow) ReadingThemesActivity(
+          renderer, mappedInput, epub ? epub->getCachePath() : std::string(), [this](const bool changed) {
+            pendingSubactivityExit = true;
+            inputDispatcher_.clearPendingTap();
+            pendingThemeReload = changed;
+          }));
       break;
     }
     // REVERT_THEME menu item removed — use Reading Themes to manage themes
@@ -1979,7 +1975,7 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
     currentPageFootnotes = p->footnotes;
     const auto start = millis();
     const bool renderOk = renderContents(*p, orientedMarginTop, orientedMarginRight, orientedMarginBottom,
-                                          orientedMarginLeft, statusBarLayout);
+                                         orientedMarginLeft, statusBarLayout);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
     if (!renderOk) {
       // Render-time glyph allocations failed on a fragmented heap: the frame
@@ -2552,12 +2548,11 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     // headroom (>=40 KB largest) this resolves to Full -> 0x0F, byte-identical to
     // before; under pressure it warms regular glyphs only, shrinking the
     // simultaneous glyph-cache peak that crowds the render-OOM path.
-    const uint8_t prewarmMask =
-        crosspoint::layout::DegradePlan::from(
-            crosspoint::layout::renderLevelFor(crosspoint::heap::largestFreeBlockBytes(),
-                                               crosspoint::mem::kRenderTrimPrewarmBelowBytes),
-            crosspoint::layout::kStyleAll)
-            .prewarmStyleMask;
+    const uint8_t prewarmMask = crosspoint::layout::DegradePlan::from(
+                                    crosspoint::layout::renderLevelFor(crosspoint::heap::largestFreeBlockBytes(),
+                                                                       crosspoint::mem::kRenderTrimPrewarmBelowBytes),
+                                    crosspoint::layout::kStyleAll)
+                                    .prewarmStyleMask;
     scope.endScanAndPrewarm(prewarmMask);
     auto* fd = fcm->getDecompressor();
     if (fd) fd->resetBitmapAllocFailures();

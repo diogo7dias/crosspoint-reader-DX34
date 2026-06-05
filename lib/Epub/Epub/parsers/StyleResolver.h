@@ -60,7 +60,7 @@ class StyleResolver {
   bool popInlineAtDepth(int depth);
 
   // --- depth flags (was boldUntilDepth / italicUntilDepth / underlineUntilDepth) ---
-  void setBoldFrom(int depth);       // flag = min(flag, depth)
+  void setBoldFrom(int depth);  // flag = min(flag, depth)
   void setItalicFrom(int depth);
   void setUnderlineFrom(int depth);
   void clearDepthFlagsAt(int depth);  // clears each flag whose value == depth

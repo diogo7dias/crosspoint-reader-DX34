@@ -16,9 +16,7 @@ using crosspoint::heap::setLargestFreeBlockOverride;
 void setUp() { clearLargestFreeBlockOverride(); }
 void tearDown() { clearLargestFreeBlockOverride(); }
 
-void test_unset_override_returns_size_max() {
-  TEST_ASSERT_EQUAL_size_t(SIZE_MAX, largestFreeBlockBytes());
-}
+void test_unset_override_returns_size_max() { TEST_ASSERT_EQUAL_size_t(SIZE_MAX, largestFreeBlockBytes()); }
 
 void test_unset_override_allows_any_allocation() {
   TEST_ASSERT_TRUE(canAllocateContiguous(0));

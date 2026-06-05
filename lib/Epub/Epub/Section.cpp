@@ -3,14 +3,13 @@
 #include <Arduino.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <MemoryPolicy.h>
 #include <Serialization.h>
 #include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
 #include <deque>
-
-#include <MemoryPolicy.h>
 
 #include "Page.h"
 #include "parsers/ChapterHtmlSlimParser.h"
@@ -152,7 +151,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
   serialization::writePod(file, textRenderMode);
   serialization::writePod(file, readerBoldSwap);
   serialization::writePod(file, degradeLevel);  // RFC #164 step 7: which DegradeLevel produced this layout
-  serialization::writePod(file, pageCount);  // Placeholder for page count (will be initially 0 when written)
+  serialization::writePod(file, pageCount);     // Placeholder for page count (will be initially 0 when written)
   serialization::writePod(file, static_cast<uint32_t>(0));  // Placeholder for LUT offset
 }
 
@@ -469,18 +468,10 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   // happened before the parser was constructed, holding both peaks
   // simultaneously and crowding out other allocations.
   CssParser* cssParser = (readerStyleMode != 0) ? epub->getCssParser() : nullptr;
-  ChapterParseConfig parseConfig{fontId,
-                                 lineCompression,
-                                 extraParagraphSpacingLevel,
-                                 paragraphAlignment,
-                                 viewportWidth,
-                                 viewportHeight,
-                                 hyphenationEnabled,
-                                 wordSpacingPercent,
-                                 firstLineIndentMode,
-                                 readerStyleMode != 0,
-                                 contentBase,
-                                 imageBasePath};
+  ChapterParseConfig parseConfig{
+      fontId,         lineCompression,    extraParagraphSpacingLevel, paragraphAlignment,  viewportWidth,
+      viewportHeight, hyphenationEnabled, wordSpacingPercent,         firstLineIndentMode, readerStyleMode != 0,
+      contentBase,    imageBasePath};
   // RFC #164 step 6: hand the parser the reader activity's section-lifetime
   // arena (the repurposed 24 KB anchor) when provided, so the bounded word
   // buffer is available even on a fragmented heap.
@@ -488,8 +479,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   // RFC #164 step 7: resolve the level into the per-section degradation plan the
   // parser reads (images branch + hyphenation). prewarmStyleMask is unused at
   // layout time (it gates render-side glyph warmth); kStyleAll is a no-op here.
-  parseConfig.degradePlan =
-      crosspoint::layout::DegradePlan::from(layoutLevel, crosspoint::layout::kStyleAll);
+  parseConfig.degradePlan = crosspoint::layout::DegradePlan::from(layoutLevel, crosspoint::layout::kStyleAll);
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, parseConfig,
       [this, &lut](std::unique_ptr<Page> page) { lut.emplace_back(this->onPageComplete(std::move(page))); },

@@ -4,11 +4,10 @@
 // every chapter open inflates from the EPUB zip).
 //
 // Run via: pio test -e test_sim_zip -f test_reader_sim_zip
-#include <unity.h>
-
 #include <HalStorage.h>
 #include <Print.h>
 #include <ZipFile.h>
+#include <unity.h>
 
 #include <chrono>
 #include <cstdint>
@@ -90,8 +89,7 @@ void test_inflate_chapter_under_fragmentation() {
   SimHeap::disarm();
 
   char msg[128];
-  snprintf(msg, sizeof(msg), "INFLATE@frag(11764): bytes=%zu threw=%d wouldAbort=%u", bytes, threw ? 1 : 0,
-           wouldAbort);
+  snprintf(msg, sizeof(msg), "INFLATE@frag(11764): bytes=%zu threw=%d wouldAbort=%u", bytes, threw ? 1 : 0, wouldAbort);
   TEST_MESSAGE(msg);
 
   // Reaching here without the host process crashing is the minimum bar. The

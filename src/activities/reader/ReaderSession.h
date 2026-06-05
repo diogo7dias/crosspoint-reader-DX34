@@ -31,11 +31,11 @@ namespace reader {
 // tests record calls into vectors.
 struct IReaderEnvPort {
   virtual ~IReaderEnvPort() = default;
-  virtual bool shouldFullRefreshOnEnter(const std::string& path) = 0;   // stateful; call once per enter
+  virtual bool shouldFullRefreshOnEnter(const std::string& path) = 0;  // stateful; call once per enter
   virtual bool boldSwap(const std::string& path) const = 0;
   virtual void registerOpened(const std::string& path, const std::string& title, const std::string& author,
                               const std::string& thumb) = 0;
-  virtual std::string moveBookToRecents(const std::string& path) = 0;   // "" if not relocated
+  virtual std::string moveBookToRecents(const std::string& path) = 0;  // "" if not relocated
 };
 
 // Display seam. Prod wraps GfxRenderer + ReaderCommon::applyReaderOrientation +
@@ -52,27 +52,27 @@ struct IReaderDisplayPort {
 // (position returns {0, currentPage, 1}); the optional onEnter inserts are where
 // Epub does its heap-anchor / CSS / bookmark work.
 struct ReaderHooks {
-  std::function<std::string()>    path;            // REQUIRED
-  std::function<ReaderPosition()> position;        // REQUIRED
-  std::function<void()>           beforeRefresh;   // optional onEnter inserts
-  std::function<void()>           afterOrientation;
-  std::function<void()>           afterRegister;
+  std::function<std::string()> path;         // REQUIRED
+  std::function<ReaderPosition()> position;  // REQUIRED
+  std::function<void()> beforeRefresh;       // optional onEnter inserts
+  std::function<void()> afterOrientation;
+  std::function<void()> afterRegister;
   std::function<void(std::string& title, std::string& author, std::string& thumb)> recentMeta;  // optional
 };
 
 class ReaderSession {
  public:
   struct Ports {
-    IProgressSink&      sink;
-    IReaderEnvPort&     env;
+    IProgressSink& sink;
+    IReaderEnvPort& env;
     IReaderDisplayPort& display;
   };
 
   // applyOrientationOnEnter: Epub/Txt re-apply SETTINGS.orientation to the
   // renderer on enter; the pre-rendered XTC reader does not (false) — its bitmaps
   // are fixed and it never applied orientation on open.
-  ReaderSession(Ports ports, ReaderHooks hooks,
-                uint32_t debounceMs = ReaderProgressTracker::kDefaultDebounceMs, bool applyOrientationOnEnter = true)
+  ReaderSession(Ports ports, ReaderHooks hooks, uint32_t debounceMs = ReaderProgressTracker::kDefaultDebounceMs,
+                bool applyOrientationOnEnter = true)
       : env_(ports.env),
         display_(ports.display),
         hooks_(std::move(hooks)),
@@ -101,11 +101,11 @@ class ReaderSession {
   ReaderProgressTracker& progress() { return progress_; }
 
  private:
-  IReaderEnvPort&       env_;
-  IReaderDisplayPort&   display_;
-  ReaderHooks           hooks_;
+  IReaderEnvPort& env_;
+  IReaderDisplayPort& display_;
+  ReaderHooks hooks_;
   ReaderProgressTracker progress_;
-  bool                  applyOrientationOnEnter_;
+  bool applyOrientationOnEnter_;
 };
 
 }  // namespace reader

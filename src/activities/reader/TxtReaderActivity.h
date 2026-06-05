@@ -15,10 +15,10 @@
 
 #include "CrossPointSettings.h"
 #include "PagedProgressSink.h"
-#include "ReaderStatusBar.h"
 #include "ReaderInputDispatcher.h"
 #include "ReaderSession.h"
 #include "ReaderSessionPorts.h"
+#include "ReaderStatusBar.h"
 #include "activities/ActivityWithSubactivity.h"
 
 struct RecentBook;
@@ -56,14 +56,13 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   crosspoint::reader::ProdEnvPort envPort_;
   crosspoint::reader::ReaderSession session_{
       {progressSink_, envPort_, displayPort_},
-      crosspoint::reader::ReaderHooks{
-          [this] { return txt ? txt->getPath() : std::string(); },
-          [this] { return crosspoint::reader::ReaderPosition{0, currentPage, 1}; },
-          nullptr, nullptr, nullptr,
-          [this](std::string& title, std::string&, std::string&) {
-            const std::string p = txt ? txt->getPath() : std::string();
-            title = p.substr(p.rfind('/') + 1);
-          }}};
+      crosspoint::reader::ReaderHooks{[this] { return txt ? txt->getPath() : std::string(); },
+                                      [this] { return crosspoint::reader::ReaderPosition{0, currentPage, 1}; }, nullptr,
+                                      nullptr, nullptr,
+                                      [this](std::string& title, std::string&, std::string&) {
+                                        const std::string p = txt ? txt->getPath() : std::string();
+                                        title = p.substr(p.rfind('/') + 1);
+                                      }}};
   int recentSwitcherSelection = 0;
   std::vector<RecentBook> recentSwitcherBooks;
 

@@ -78,8 +78,7 @@ void test_double_tap_toggles_render_mode() {
 
   ReaderInput f2 = frame(1200);  // 200ms <= 350 double-tap window
   release(f2, ReaderButton::Confirm);
-  TEST_ASSERT_EQUAL_INT((int)ReaderAction::ToggleTextRenderMode,
-                        act(d.dispatch(f2, relSettings(), normalReading())));
+  TEST_ASSERT_EQUAL_INT((int)ReaderAction::ToggleTextRenderMode, act(d.dispatch(f2, relSettings(), normalReading())));
   TEST_ASSERT_FALSE(d.pendingMenuOpen());
 }
 

@@ -48,8 +48,8 @@ class XtcReaderActivity final : public ActivityWithSubactivity {
       {progressSink_, envPort_, displayPort_},
       crosspoint::reader::ReaderHooks{
           [this] { return xtc ? xtc->getPath() : std::string(); },
-          [this] { return crosspoint::reader::ReaderPosition{0, static_cast<int32_t>(currentPage), 1}; },
-          nullptr, nullptr,
+          [this] { return crosspoint::reader::ReaderPosition{0, static_cast<int32_t>(currentPage), 1}; }, nullptr,
+          nullptr,
           [this] {
             if (xtc) xtc->generateThumbBmp(400);  // afterRegister: cover thumbnail for home
           },

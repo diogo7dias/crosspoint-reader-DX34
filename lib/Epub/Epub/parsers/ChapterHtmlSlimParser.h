@@ -8,13 +8,13 @@
 #include <vector>
 
 #include "../FootnoteEntry.h"
-#include "../layout/LayoutEngine.h"
-#include "../page/PageBuilder.h"
-#include "FootnotePlacer.h"
 #include "../blocks/ImageBlock.h"
 #include "../blocks/TextBlock.h"
 #include "../css/CssParser.h"
 #include "../css/CssStyle.h"
+#include "../layout/LayoutEngine.h"
+#include "../page/PageBuilder.h"
+#include "FootnotePlacer.h"
 #include "StyleResolver.h"
 
 class Page;
@@ -74,9 +74,9 @@ class ChapterHtmlSlimParser {
   // the bounded buffer is available even on a fragmented heap. sectionArena_
   // points at whichever is active for the current parse.
   static constexpr size_t kLayoutScratchArenaBytes = 16 * 1024;
-  crosspoint::layout::LayoutArena layoutArena_;                 // owned self-create fallback
-  crosspoint::layout::LayoutArena* externalArena_ = nullptr;    // activity-owned arena (nullable), from config
-  crosspoint::layout::LayoutArena* sectionArena_ = nullptr;     // active arena for this parse (set in parseAndBuildPages)
+  crosspoint::layout::LayoutArena layoutArena_;               // owned self-create fallback
+  crosspoint::layout::LayoutArena* externalArena_ = nullptr;  // activity-owned arena (nullable), from config
+  crosspoint::layout::LayoutArena* sectionArena_ = nullptr;   // active arena for this parse (set in parseAndBuildPages)
   std::unique_ptr<crosspoint::layout::LayoutEngine> currentTextBlock = nullptr;
   // RFC #171-followup: page assembly (in-flight page, vertical cursor,
   // completed-page count, pending anchors, complete-when-full + dense-fit) lives
