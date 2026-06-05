@@ -550,13 +550,11 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
 
 uint8_t CrossPointSettings::resetLineSpacingPercentForFamily(const uint8_t family) {
   // Value to snap lineSpacingPercent to when the user switches font family.
-  // TT2020 is a monospaced typewriter font whose glyphs sit tight vertically
-  // and needs extra leading. All other families use the historical 90 so
-  // upgrades don't change layout for users who never touch spacing.
-  // Previously TT2020 (removed) needed 120 % for legibility. All remaining
-  // families use the historical 90 %.
+  // Switching font always resets line spacing to a neutral 100 % so the new
+  // family is shown at its native leading; the user re-tunes from a
+  // predictable baseline rather than inheriting the previous family's offset.
   (void)family;
-  return 90;
+  return 100;
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {

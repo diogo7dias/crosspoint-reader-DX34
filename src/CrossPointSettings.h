@@ -188,6 +188,8 @@ class CrossPointSettings {
     EXTRA_SPACING_S = 1,
     EXTRA_SPACING_M = 2,
     EXTRA_SPACING_L = 3,
+    EXTRA_SPACING_XL = 4,
+    EXTRA_SPACING_XXL = 5,
     EXTRA_PARAGRAPH_SPACING_COUNT
   };
 
