@@ -118,14 +118,16 @@ class WallpaperPlaylistV2 {
   bool rebuildSequential();
   bool saveToDisk() const;
   void writeBuffer(const std::vector<std::string>& names, size_t cursor);
-  std::vector<std::string> bufferEntries() const;
   std::string peekAtCursor() const;
   void advanceCursor();
   uint16_t trimToCap(std::vector<SleepBmpEntry>& entries, bool& favoritesCapBlocked);
 
-  // Heap-cheap membership check via direct substring scan of buffer_. Avoids
-  // building the (~500-element) hash_set that materializing bufferEntries()
-  // would require. O(name + buffer_size) per query.
+  // Heap-cheap membership check: walk the '\n'-delimited names in buffer_ and
+  // compare each line to `name` in place — zero allocation, no temporary needle
+  // or materialized name set. O(buffer_size) per query. The char* overload lets
+  // the reconcile walk query straight off the SD layer's stack buffer; the
+  // std::string overload forwards to it.
+  bool nameIsInBuffer(const char* name, size_t len) const;
   bool nameIsInBuffer(const std::string& name) const;
 
   // Probe the heap for a contiguous block large enough for `needBytes`

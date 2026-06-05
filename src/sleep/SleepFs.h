@@ -76,16 +76,21 @@ struct ISleepFs {
     return out;
   }
 
-  // V2 streaming walk: invoke `cb(name, mtime)` once per .bmp under /sleep, in
-  // SD iteration order. Caller decides what to retain — typically only NEW
+  // V2 streaming walk: invoke `cb(name, len, mtime)` once per .bmp under /sleep,
+  // in SD iteration order. Caller decides what to retain — typically only NEW
   // files vs. an existing buffer set, keeping peak heap proportional to the
   // delta (usually 0-3 entries) rather than the full /sleep listing.
   // Required for the boot/home-route reconcile path where materializing all
   // 500 entries as a vector trips bad_alloc on a fragmented heap.
-  // Default impl falls back to listSleepBmpsWithMtime so existing fakes link.
-  virtual void walkSleepBmps(const std::function<void(const std::string& /*name*/, uint32_t /*mtime*/)>& cb) {
+  //
+  // `name` points at storage owned by the callee for the duration of the call
+  // only (the SD impl hands the raw directory-entry buffer) — the callback must
+  // copy if it needs to retain it. Passing char*+len instead of std::string
+  // lets the production impl avoid one heap allocation per file. Default impl
+  // falls back to listSleepBmpsWithMtime so existing fakes link.
+  virtual void walkSleepBmps(const std::function<void(const char* /*name*/, size_t /*len*/, uint32_t /*mtime*/)>& cb) {
     auto entries = listSleepBmpsWithMtime(1024);
-    for (const auto& e : entries) cb(e.name, e.mtime);
+    for (const auto& e : entries) cb(e.name.c_str(), e.name.size(), e.mtime);
   }
 
   // Generic storage ops used during trim / rename bookkeeping.

@@ -378,6 +378,37 @@ void test_healthy_heap_allows_reshuffle_and_advance_returns_name() {
   TEST_ASSERT_FALSE(wp.bufferForTest().empty());
 }
 
+// The zero-allocation membership scan matches whole '\n'-delimited names, so a
+// name that is a prefix (or superstring) of one already in the buffer must not
+// false-match. Here "ab.bmp" is buffered first; adding "a.bmp" (a prefix) must
+// be detected as NEW and spliced on top, while "ab.bmp" must NOT be re-added.
+void test_membership_scan_handles_prefix_collisions() {
+  Fixture fx;
+  fx.fs.seed("ab.bmp", 100);
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();  // buffer = "ab.bmp\n"
+
+  fx.fs.seed("a.bmp", 200);  // prefix of ab.bmp, newer mtime
+  wp.markFolderDirty();
+  wp.reconcile();
+
+  // a.bmp (newest) spliced to the front → shown next; not dropped as a false
+  // prefix match.
+  const auto first = wp.advance();
+  TEST_ASSERT_EQUAL_STRING("a.bmp", first.c_str());
+
+  // A full lap shows exactly the two distinct files — ab.bmp was not duplicated
+  // by a missed membership hit, and neither was dropped.
+  std::unordered_set<std::string> seen;
+  seen.insert(first);
+  seen.insert(wp.advance());
+  TEST_ASSERT_EQUAL(2u, seen.size());
+  TEST_ASSERT_TRUE(seen.count("a.bmp") == 1 && seen.count("ab.bmp") == 1);
+}
+
 void test_unset_heap_probe_treats_heap_as_unlimited() {
   // Mirrors pre-C2 host behaviour: with no probe wired, the playlist must
   // not gate any reserve — every existing test in this file relies on this
@@ -411,6 +442,7 @@ int main(int, char**) {
   RUN_TEST(test_reshuffle_does_not_repeat_just_shown_wallpaper);
   RUN_TEST(test_fragmented_heap_blocks_initial_reshuffle_buffer_stays_empty);
   RUN_TEST(test_healthy_heap_allows_reshuffle_and_advance_returns_name);
+  RUN_TEST(test_membership_scan_handles_prefix_collisions);
   RUN_TEST(test_unset_heap_probe_treats_heap_as_unlimited);
   return UNITY_END();
 }
