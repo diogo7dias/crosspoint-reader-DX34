@@ -1,8 +1,1 @@
-{
-  "lib/Epub/Epub/hyphenation/LiangHyphenation.cpp": 1,
-  "src/activities/reader/ReaderActivity.cpp": 1,
-  "src/activities/settings/SettingsActivity.cpp": 8,
-  "src/main.cpp": 2,
-  "src/network/CrossPointWebServer.cpp": 1,
-  "src/sleep/WallpaperPlaylistV2.h": 1
-}
+{}

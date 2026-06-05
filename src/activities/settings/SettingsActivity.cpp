@@ -675,28 +675,28 @@ void SettingsActivity::toggleCurrentSetting() {
 
     switch (setting.action) {
       case SettingAction::RemapFrontButtons:
-        enterSubActivity(new ButtonRemapActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) ButtonRemapActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::KOReaderSync:
-        enterSubActivity(new KOReaderSettingsActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) KOReaderSettingsActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::OPDSBrowser:
-        enterSubActivity(new CalibreSettingsActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) CalibreSettingsActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::Network:
-        enterSubActivity(new WifiSelectionActivity(renderer, mappedInput, onCompleteBool, false));
+        enterSubActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput, onCompleteBool, false));
         break;
       case SettingAction::ClearCache:
-        enterSubActivity(new ClearCacheActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) ClearCacheActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::CleanupStorage:
-        enterSubActivity(new CleanupStorageActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) CleanupStorageActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::ManageCustomFonts:
-        enterSubActivity(new CustomFontsSettingsActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) CustomFontsSettingsActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::CheckForUpdates:
-        enterSubActivity(new OtaUpdateActivity(renderer, mappedInput, onComplete));
+        enterSubActivity(new (std::nothrow) OtaUpdateActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::RandomizeSleepImages:
         randomizePopupSuccess = SleepActivity::randomizeSleepImagePlaylist();

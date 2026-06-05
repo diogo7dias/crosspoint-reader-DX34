@@ -680,7 +680,7 @@ void setup() {
     setupDisplayAndFonts();
     exitActivity();
     enterNewActivity(
-        new FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", EpdFontFamily::REGULAR));
+        new (std::nothrow) FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", EpdFontFamily::REGULAR));
     return;
   }
 
@@ -799,9 +799,9 @@ void setup() {
   // destination directly.
   BootActivity* bootActivity = nullptr;
   if (!isSilentReboot) {
-    bootActivity = new BootActivity(renderer, mappedInputManager);
-    enterNewActivity(bootActivity);
-    bootActivity->setProgress(32, "Restoring state");
+    bootActivity = new (std::nothrow) BootActivity(renderer, mappedInputManager);
+    enterNewActivity(bootActivity);  // null-safe: routes to OOM recovery
+    if (bootActivity) bootActivity->setProgress(32, "Restoring state");
   }
   {
     // Touch the store so it registers with PersistManager before the sidecar

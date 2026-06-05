@@ -84,6 +84,7 @@ def count_violations(path: Path) -> int:
     n = 0
     in_raw = False
     raw_close = ""
+    in_block = False  # inside a /* ... */ comment
     for raw in path.read_text(errors="replace").splitlines():
         if in_raw:
             # Inside a C++ raw string literal: skip until its )delim" terminator.
@@ -92,8 +93,23 @@ def count_violations(path: Path) -> int:
                 continue
             raw = raw[end + len(raw_close):]
             in_raw = False
+        if in_block:
+            end = raw.find("*/")
+            if end < 0:
+                continue
+            raw = raw[end + 2:]
+            in_block = False
         if "// alloc-ok" in raw:
             continue
+        # Drop any same-line /* ... */ spans; enter block state on an unclosed one.
+        while "/*" in raw:
+            start = raw.find("/*")
+            end = raw.find("*/", start + 2)
+            if end < 0:
+                raw = raw[:start]
+                in_block = True
+                break
+            raw = raw[:start] + " " + raw[end + 2:]
         code = strip_strings_and_comment(raw)
         # Detect an unterminated raw-string opener so following lines are skipped.
         m = RE_RAW_OPEN.search(code)

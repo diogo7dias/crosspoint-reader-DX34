@@ -326,8 +326,14 @@ void CrossPointWebServer::begin() {
   // Collect WebDAV headers and register handler
   const char* davHeaders[] = {"Depth", "Destination", "Overwrite", "If", "Lock-Token", "Timeout"};
   server->collectHeaders(davHeaders, 6);
-  server->addHandler(new WebDAVHandler());  // WebDAVHandler is deleted by WebServer when server stops
-  LOG_DBG("WEB", "WebDAV handler initialized");
+  // WebDAVHandler is owned/deleted by WebServer when the server stops. Skip it on
+  // OOM rather than aborting — WebDAV is optional; core HTTP still serves.
+  if (auto* davHandler = new (std::nothrow) WebDAVHandler()) {
+    server->addHandler(davHandler);
+    LOG_DBG("WEB", "WebDAV handler initialized");
+  } else {
+    LOG_ERR("WEB", "OOM allocating WebDAV handler — WebDAV disabled this session");
+  }
 #endif
   server->begin();
 
