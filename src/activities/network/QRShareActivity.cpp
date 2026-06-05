@@ -5,6 +5,8 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
+
+#include "SilentRestart.h"
 #include <qrcode.h>
 
 #include "WifiSelectionActivity.h"
@@ -97,8 +99,11 @@ void QRShareActivity::startServerAndShowQR() {
 void QRShareActivity::onExit() {
   stopServer();
 
-  // If we started WiFi for this share, clean it up
-  if (WiFi.status() == WL_CONNECTED || WiFi.getMode() != WIFI_MODE_NULL) {
+  // Capture before teardown: did the radio come up for this share? (Captured
+  // now because WiFi.mode(WIFI_OFF) below makes getMode() unreliable.)
+  const bool wifiWasUp = (WiFi.status() == WL_CONNECTED) || (WiFi.getMode() != WIFI_MODE_NULL);
+
+  if (wifiWasUp) {
     WiFi.disconnect(false);
     delay(30);
     WiFi.mode(WIFI_OFF);
@@ -106,6 +111,15 @@ void QRShareActivity::onExit() {
   }
 
   ActivityWithSubactivity::onExit();
+
+  // WiFi/LWIP teardown scatters ~50 KB of long-lived allocations that don't
+  // coalesce without a reboot; a silent restart reclaims them. Guarded so
+  // backing out without bringing WiFi up never reboots. Matches
+  // CrossPointWebServerActivity / CalibreConnectActivity (was missing here —
+  // the leak persisted until the next manual reboot).
+  if (wifiWasUp) {
+    silentRestart("wifi-exit-QRShare");  // does not return
+  }
 }
 
 void QRShareActivity::loop() {
