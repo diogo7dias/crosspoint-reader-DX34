@@ -81,7 +81,7 @@ void BookmarkListActivity::openActionPopup(int bookmarkIndex) {
 void BookmarkListActivity::openKeyboardForRename(int bookmarkIndex) {
   if (bookmarkIndex < 0 || bookmarkIndex >= store.count()) return;
   actionPopupOpen = false;
-  enterNewActivity(new KeyboardEntryActivity(
+  enterNewActivity(new (std::nothrow) KeyboardEntryActivity(
       renderer, mappedInput, tr(STR_BOOKMARK_NAME), "", 10, BookmarkStore::MAX_NAME_LENGTH, false,
       [this, bookmarkIndex](const std::string& name) {
         if (name.empty()) {
@@ -105,7 +105,7 @@ void BookmarkListActivity::openDeleteConfirm(int bookmarkIndex) {
   const std::string label = formatBookmark(store.getAll()[bookmarkIndex]);
   const std::string msg = std::string(tr(STR_DELETE_BOOKMARK_CONFIRM)) + "\n" + label;
   actionPopupOpen = false;
-  enterNewActivity(new ConfirmDialogActivity(
+  enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
       renderer, mappedInput, msg,
       [this, bookmarkIndex] {
         store.remove(bookmarkIndex);

@@ -57,7 +57,7 @@ void CrossPointWebServerActivity::onEnter() {
 
   // Launch network mode selection subactivity
   LOG_DBG("WEBACT", "Launching NetworkModeSelectionActivity...");
-  enterNewActivity(new NetworkModeSelectionActivity(
+  enterNewActivity(new (std::nothrow) NetworkModeSelectionActivity(
       renderer, mappedInput, [this](const NetworkMode mode) { onNetworkModeSelected(mode); },
       [this]() { onGoBack(); }  // Cancel goes back to home
       ));
@@ -124,10 +124,10 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
 
   if (mode == NetworkMode::CONNECT_CALIBRE) {
     exitActivity();
-    enterNewActivity(new CalibreConnectActivity(renderer, mappedInput, [this] {
+    enterNewActivity(new (std::nothrow) CalibreConnectActivity(renderer, mappedInput, [this] {
       exitActivity();
       state = WebServerActivityState::MODE_SELECTION;
-      enterNewActivity(new NetworkModeSelectionActivity(
+      enterNewActivity(new (std::nothrow) NetworkModeSelectionActivity(
           renderer, mappedInput, [this](const NetworkMode nextMode) { onNetworkModeSelected(nextMode); },
           [this]() { onGoBack(); }));
     }));
@@ -141,7 +141,7 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
 
     state = WebServerActivityState::WIFI_SELECTION;
     LOG_DBG("WEBACT", "Launching WifiSelectionActivity...");
-    enterNewActivity(new WifiSelectionActivity(renderer, mappedInput,
+    enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
                                                [this](const bool connected) { onWifiSelectionComplete(connected); }));
   } else {
     // AP mode - start access point
@@ -173,7 +173,7 @@ void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) 
     // User cancelled - go back to mode selection
     exitActivity();
     state = WebServerActivityState::MODE_SELECTION;
-    enterNewActivity(new NetworkModeSelectionActivity(
+    enterNewActivity(new (std::nothrow) NetworkModeSelectionActivity(
         renderer, mappedInput, [this](const NetworkMode mode) { onNetworkModeSelected(mode); },
         [this]() { onGoBack(); }));
   }

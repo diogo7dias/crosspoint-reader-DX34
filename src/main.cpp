@@ -228,18 +228,25 @@ void enterNewActivity(Activity* activity) {
   // On warm/cached destinations onEnter() reaches displayBuffer too quickly
   // and the popup is wiped before the user perceives it.
   TransitionFeedback::ensureMinDisplayElapsed();
-  currentActivity = activity;
-  currentActivity->onEnter();
-  if (!currentActivity->didEntryFail()) {
-    return;
+  if (activity) {
+    currentActivity = activity;
+    currentActivity->onEnter();
+    if (!currentActivity->didEntryFail()) {
+      return;
+    }
+    // Activity could not bring itself up (semaphore alloc, low-largest-block,
+    // or xTaskCreate failure). Replace it with a graceful OOM screen instead
+    // of letting the user see a silent reboot.
+    LOG_ERR("MAIN", "Activity entry failed — swapping to OOM screen");
+    currentActivity->onExit();
+    delete currentActivity;
+    currentActivity = nullptr;
+  } else {
+    // The activity allocation itself failed: new (std::nothrow) returned null.
+    // Fall through into the same recovery ladder as a failed onEnter() so a
+    // route that cannot allocate degrades gracefully instead of null-derefing.
+    LOG_ERR("MAIN", "Activity allocation failed — entering OOM recovery");
   }
-  // Activity could not bring itself up (semaphore alloc, low-largest-block,
-  // or xTaskCreate failure). Replace it with a graceful OOM screen instead
-  // of letting the user see a silent reboot.
-  LOG_ERR("MAIN", "Activity entry failed — swapping to OOM screen");
-  currentActivity->onExit();
-  delete currentActivity;
-  currentActivity = nullptr;
 
   // If a book is open and we still have auto-restart budget, silent-restart
   // to the reader instead of showing the OOM screen. ESP32-C3 heap is
@@ -369,7 +376,7 @@ static void openReaderInline(const std::string& initialEpubPath) {
   // including the in-reader recent-switcher that bypasses this function. Drawing
   // it here too would just FAST_REFRESH the same popup twice.
   exitActivity();
-  enterNewActivity(new ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
+  enterNewActivity(new (std::nothrow) ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
 }
 
 void onGoToReader(const std::string& initialEpubPath) {
@@ -381,7 +388,7 @@ static void openFileTransferInline() {
   TransitionFeedback::show(renderer, tr(STR_STARTING_SERVER));
   crosspoint::sleep::wallpaper::markFolderDirty();
   exitActivity();
-  enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
+  enterNewActivity(new (std::nothrow) CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
 }
 
 void onGoToFileTransfer() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::FileTransfer, ""}); }
@@ -394,9 +401,9 @@ static void openMyLibraryInline(const std::string& path) {
   TransitionFeedback::show(renderer, tr(STR_LOADING_LIBRARY));
   exitActivity();
   if (path.empty()) {
-    enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
+    enterNewActivity(new (std::nothrow) MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
   } else {
-    enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader, path));
+    enterNewActivity(new (std::nothrow) MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader, path));
   }
 }
 
@@ -406,7 +413,7 @@ static void openRecentBooksInline() {
   TransitionFeedback::resetStacking();
   TransitionFeedback::show(renderer, tr(STR_LOADING_RECENTS));
   exitActivity();
-  enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
+  enterNewActivity(new (std::nothrow) RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
 }
 
 void onGoToRecentBooks() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::RecentBooks, ""}); }
@@ -419,7 +426,7 @@ static void openBrowserInline() {
   TransitionFeedback::resetStacking();
   TransitionFeedback::show(renderer, tr(STR_LOADING_BROWSER));
   exitActivity();
-  enterNewActivity(new OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
+  enterNewActivity(new (std::nothrow) OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
 }
 
 void onGoToBrowser() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""}); }
@@ -428,7 +435,7 @@ static void openHomeInline() {
   TransitionFeedback::resetStacking();
   TransitionFeedback::show(renderer, tr(STR_LOADING_HOME));
   exitActivity();
-  enterNewActivity(new HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
+  enterNewActivity(new (std::nothrow) HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
                                     onGoToSettings, onGoToFileTransfer, onGoToBrowser));
 }
 
@@ -454,14 +461,14 @@ static void wireActivityRouter() {
     LOG_DBG("MAIN", "Entering deep sleep");
     powerManager.startDeepSleep(gpio);
   };
-  deps.enterSleepActivity = []() { enterNewActivity(new SleepActivity(renderer, mappedInputManager)); };
+  deps.enterSleepActivity = []() { enterNewActivity(new (std::nothrow) SleepActivity(renderer, mappedInputManager)); };
   router.setDeps(std::move(deps));
 
   router.setRouteFactory(lifecycle::RouteId::Settings, [](const std::string& /*payload*/) {
     TransitionFeedback::resetStacking();
     TransitionFeedback::show(renderer, tr(STR_LOADING_SETTINGS));
     exitActivity();
-    enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
+    enterNewActivity(new (std::nothrow) SettingsActivity(renderer, mappedInputManager, onGoHome));
   });
   router.setRouteFactory(lifecycle::RouteId::Reader, [](const std::string& payload) { openReaderInline(payload); });
   router.setRouteFactory(lifecycle::RouteId::MyLibrary,

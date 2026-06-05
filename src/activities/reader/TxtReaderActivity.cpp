@@ -271,7 +271,7 @@ void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x, const in
 void TxtReaderActivity::openReadingThemes() {
   flushProgressIfNeeded(true);
   exitActivity();
-  enterNewActivity(new ReadingThemesActivity(renderer, mappedInput, txt ? txt->getCachePath() : std::string(),
+  enterNewActivity(new (std::nothrow) ReadingThemesActivity(renderer, mappedInput, txt ? txt->getCachePath() : std::string(),
                                              [this](const bool changed) {
                                                pendingSubactivityExit = true;
                                                if (changed) {

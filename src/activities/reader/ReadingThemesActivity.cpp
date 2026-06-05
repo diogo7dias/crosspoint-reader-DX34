@@ -74,7 +74,7 @@ void ReadingThemesActivity::openKeyboardForNewTheme() {
 
   const std::string suggestedName = READING_THEMES.makeUniqueName(tr(STR_THEME));
   exitActivity();
-  enterNewActivity(new KeyboardEntryActivity(
+  enterNewActivity(new (std::nothrow) KeyboardEntryActivity(
       renderer, mappedInput, tr(STR_THEME_NAME), "", 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
       [this, suggestedName](const std::string& name) {
         const std::string effective = name.empty() ? suggestedName : name;
@@ -97,7 +97,7 @@ void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
   }
 
   exitActivity();
-  enterNewActivity(new KeyboardEntryActivity(
+  enterNewActivity(new (std::nothrow) KeyboardEntryActivity(
       renderer, mappedInput, tr(STR_RENAME_THEME), "", 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
       [this, themeIndex](const std::string& name) {
         if (name.empty()) {
@@ -157,7 +157,7 @@ void ReadingThemesActivity::executeThemeAction() {
       const ReadingTheme* delTheme = READING_THEMES.getTheme(actionPopupThemeIndex);
       const std::string themeName = delTheme ? delTheme->name : "theme";
       const int delIndex = actionPopupThemeIndex;
-      enterNewActivity(new ConfirmDialogActivity(
+      enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
           renderer, mappedInput, std::string(tr(STR_DELETE_THEME_CONFIRM)) + "\n" + themeName,
           [this, delIndex]() {
             exitActivity();
@@ -257,7 +257,7 @@ void ReadingThemesActivity::loop() {
       return;
     }
     if (selectedRowIndex == 2) {
-      enterNewActivity(new ConfirmDialogActivity(
+      enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
           renderer, mappedInput, tr(STR_RESET_GLOBAL_STYLE_CONFIRM),
           [this]() {
             exitActivity();

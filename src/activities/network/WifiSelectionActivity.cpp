@@ -218,7 +218,7 @@ void WifiSelectionActivity::selectNetwork(const int index) {
     // Show password entry
     state = WifiSelectionState::PASSWORD_ENTRY;
     // Don't allow screen updates while changing activity
-    enterNewActivity(new KeyboardEntryActivity(
+    enterNewActivity(new (std::nothrow) KeyboardEntryActivity(
         renderer, mappedInput, tr(STR_ENTER_WIFI_PASSWORD),
         "",     // No initial text
         50,     // Y position

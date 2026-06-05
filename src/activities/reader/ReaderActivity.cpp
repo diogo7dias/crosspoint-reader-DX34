@@ -137,7 +137,7 @@ void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
   ReadingThemeStore::loadBookSettingsIntoCurrent(epub->getCachePath());
   currentBookPath = epubPath;
   exitActivity();
-  enterNewActivity(new EpubReaderActivity(
+  enterNewActivity(new (std::nothrow) EpubReaderActivity(
       renderer, mappedInput, std::move(epub), [this, epubPath] { goToLibrary(epubPath); }, [this] { onGoBack(); },
       [this](const std::string& path) { openBookPath(path); }));
 }
@@ -147,7 +147,7 @@ void ReaderActivity::onGoToXtcReader(std::unique_ptr<Xtc> xtc) {
   ReadingThemeStore::loadBookSettingsIntoCurrent(xtc->getCachePath());
   currentBookPath = xtcPath;
   exitActivity();
-  enterNewActivity(new XtcReaderActivity(
+  enterNewActivity(new (std::nothrow) XtcReaderActivity(
       renderer, mappedInput, std::move(xtc), [this, xtcPath] { goToLibrary(xtcPath); }, [this] { onGoBack(); },
       [this](const std::string& path) { openBookPath(path); }));
 }
@@ -157,7 +157,7 @@ void ReaderActivity::onGoToTxtReader(std::unique_ptr<Txt> txt) {
   ReadingThemeStore::loadBookSettingsIntoCurrent(txt->getCachePath());
   currentBookPath = txtPath;
   exitActivity();
-  enterNewActivity(new TxtReaderActivity(
+  enterNewActivity(new (std::nothrow) TxtReaderActivity(
       renderer, mappedInput, std::move(txt), [this, txtPath] { goToLibrary(txtPath); }, [this] { onGoBack(); },
       [this](const std::string& path) { openBookPath(path); }));
 }
@@ -191,7 +191,7 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
       onGoToXtcReader(std::move(xtc));
     } else {
       exitActivity();
-      enterNewActivity(new FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_XTC_FAILED)));
+      enterNewActivity(new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_XTC_FAILED)));
     }
     return;
   }
@@ -210,7 +210,7 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
       onGoToTxtReader(std::move(txt));
     } else {
       exitActivity();
-      enterNewActivity(new FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_TXT_FAILED)));
+      enterNewActivity(new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_TXT_FAILED)));
     }
     return;
   }
@@ -221,7 +221,7 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
     onGoToEpubReader(std::move(epub));
   } else {
     exitActivity();
-    enterNewActivity(new FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_EPUB_FAILED)));
+    enterNewActivity(new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_EPUB_FAILED)));
   }
 }
 

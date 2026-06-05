@@ -80,7 +80,7 @@ void KOReaderAuthActivity::onEnter() {
   }
 
   // Launch WiFi selection
-  enterNewActivity(new WifiSelectionActivity(renderer, mappedInput,
+  enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
                                              [this](const bool connected) { onWifiSelectionComplete(connected); }));
 }
 

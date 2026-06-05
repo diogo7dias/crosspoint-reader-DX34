@@ -276,7 +276,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
 }
 
 void MyLibraryActivity::openSearchActivity() {
-  enterNewActivity(new LibrarySearchActivity(
+  enterNewActivity(new (std::nothrow) LibrarySearchActivity(
       renderer, mappedInput, basepath, files, activeSearchQuery,
       [this](const std::string& query) {
         pendingSearchQuery = query;
@@ -538,7 +538,7 @@ void MyLibraryActivity::openKeyboardForRenameImage() {
   pendingRenameBase.clear();
   pendingRenameSubmit = false;
   pendingRenameCancel = false;
-  enterNewActivity(new KeyboardEntryActivity(
+  enterNewActivity(new (std::nothrow) KeyboardEntryActivity(
       renderer, mappedInput, tr(STR_RENAME_IMAGE_TITLE), "", 10, 200, false,
       [this](const std::string& newBase) {
         pendingRenameBase = newBase;
@@ -1058,7 +1058,7 @@ void MyLibraryActivity::loopFileActions() {
         case 4:
           actionsOpenedFromViewer = false;
           exitActivity();
-          enterNewActivity(new QRShareActivity(
+          enterNewActivity(new (std::nothrow) QRShareActivity(
               renderer, mappedInput,
               [this] {
                 exitActivity();
@@ -1069,7 +1069,7 @@ void MyLibraryActivity::loopFileActions() {
         case 5: {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
-          enterNewActivity(new ConfirmDialogActivity(
+          enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
               renderer, mappedInput, std::string(tr(STR_DELETE_FILE_CONFIRM)) + "\n" + fileName,
               [this, pathToDelete]() {
                 // Optimistic UX: snapshot the entry, remove from list
@@ -1137,7 +1137,7 @@ void MyLibraryActivity::loopFileActions() {
           break;
         case 2:
           exitActivity();
-          enterNewActivity(new QRShareActivity(
+          enterNewActivity(new (std::nothrow) QRShareActivity(
               renderer, mappedInput,
               [this] {
                 requestCleanRefresh();
@@ -1148,7 +1148,7 @@ void MyLibraryActivity::loopFileActions() {
         case 3: {
           const std::string pathToDelete = selectedFilePath;
           const std::string fileName = getBasename(pathToDelete);
-          enterNewActivity(new ConfirmDialogActivity(
+          enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
               renderer, mappedInput, std::string(tr(STR_DELETE_FILE_CONFIRM)) + "\n" + fileName,
               [this, pathToDelete]() {
                 // Optimistic UX: snapshot + remove before the rename so the

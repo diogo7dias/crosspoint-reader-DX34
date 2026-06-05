@@ -1164,7 +1164,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         break;
       }
       exitActivity();
-      enterNewActivity(new QuotesViewerActivity(this->renderer, this->mappedInput, quotesPath,
+      enterNewActivity(new (std::nothrow) QuotesViewerActivity(this->renderer, this->mappedInput, quotesPath,
                                                 [this] { pendingSubactivityExit = true; }));
       break;
     }
@@ -1179,7 +1179,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       exitActivity();
 
       // 2. Open the Chapter Selector
-      enterNewActivity(new EpubReaderChapterSelectionActivity(
+      enterNewActivity(new (std::nothrow) EpubReaderChapterSelectionActivity(
           this->renderer, this->mappedInput, epub, path, spineIdx, currentTocIndex,
           [this] {
             exitActivity();
@@ -1239,7 +1239,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const int spineIdx = currentSpineIndex;
       const int pageNum = section ? section->currentPage : 0;
       exitActivity();
-      enterNewActivity(new BookmarkListActivity(
+      enterNewActivity(new (std::nothrow) BookmarkListActivity(
           this->renderer, this->mappedInput, epub, bookmarkStore, epub->getCachePath(), spineIdx, pageNum,
           [this] {
             exitActivity();
@@ -1266,7 +1266,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::FOOTNOTES: {
       exitActivity();
-      enterNewActivity(new EpubReaderFootnotesActivity(
+      enterNewActivity(new (std::nothrow) EpubReaderFootnotesActivity(
           this->renderer, this->mappedInput, currentPageFootnotes,
           [this] {
             // Go back from footnotes list
@@ -1392,7 +1392,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
       exitActivity();
-      enterNewActivity(new ConfirmDialogActivity(
+      enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
           renderer, mappedInput, tr(STR_CLEAR_CACHE_CONFIRM),
           [this]() {
             // Confirmed — clear cache and reset progress.
@@ -1431,7 +1431,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         const int currentPage = section ? section->currentPage : 0;
         const int totalPages = section ? section->pageCount : 0;
         exitActivity();
-        enterNewActivity(new KOReaderSyncActivity(
+        enterNewActivity(new (std::nothrow) KOReaderSyncActivity(
             renderer, mappedInput, epub, epub->getPath(), currentSpineIndex, currentPage, totalPages,
             [this]() {
               // On cancel - defer exit to avoid use-after-free
@@ -1454,7 +1454,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::DELETE_BOOK: {
       const std::string bookTitle = epub ? epub->getTitle() : "";
       exitActivity();
-      enterNewActivity(new ConfirmDialogActivity(
+      enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
           renderer, mappedInput, std::string(tr(STR_DELETE_FROM_DEVICE)) + "\n" + bookTitle,
           [this]() {
             exitActivity();
@@ -1489,7 +1489,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::REMOVE_FROM_RECENT: {
       const std::string bookTitle = epub ? epub->getTitle() : "";
       exitActivity();
-      enterNewActivity(new ConfirmDialogActivity(
+      enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
           renderer, mappedInput, std::string(tr(STR_REMOVE_FROM_RECENTS_CONFIRM)) + "\n" + bookTitle,
           [this]() {
             exitActivity();
@@ -1511,7 +1511,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::SHARE_QR: {
       if (epub) {
         exitActivity();
-        enterNewActivity(new QRShareActivity(
+        enterNewActivity(new (std::nothrow) QRShareActivity(
             renderer, mappedInput,
             [this] {
               exitActivity();

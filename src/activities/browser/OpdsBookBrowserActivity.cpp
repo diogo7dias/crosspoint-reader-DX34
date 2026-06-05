@@ -375,7 +375,7 @@ void OpdsBookBrowserActivity::launchWifiSelection() {
   state = BrowserState::WIFI_SELECTION;
   requestUpdate();
 
-  enterNewActivity(new WifiSelectionActivity(renderer, mappedInput,
+  enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
                                              [this](const bool connected) { onWifiSelectionComplete(connected); }));
 }
 

@@ -126,7 +126,7 @@ void CustomFontsSettingsActivity::runDeleteSize() {
   const std::string prompt = std::string(tr(STR_DELETE_CUSTOM_FONT_SIZE_CONFIRM)) + "\n\n" + header;
   inActionMenu = false;
   exitActivity();
-  enterNewActivity(new ConfirmDialogActivity(
+  enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
       renderer, mappedInput, prompt,
       [this, name, sizePt]() {
         const size_t removed = crosspoint::fonts::CustomBinFontManager::instance().deleteFamilySize(name, sizePt);
@@ -151,7 +151,7 @@ void CustomFontsSettingsActivity::runDeleteFamily() {
   const std::string prompt = std::string(tr(STR_DELETE_CUSTOM_FONT_FAMILY_CONFIRM)) + "\n\n" + name;
   inActionMenu = false;
   exitActivity();
-  enterNewActivity(new ConfirmDialogActivity(
+  enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
       renderer, mappedInput, prompt,
       [this, name]() {
         const size_t removed = crosspoint::fonts::CustomBinFontManager::instance().deleteFamily(name);

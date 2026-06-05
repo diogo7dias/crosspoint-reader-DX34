@@ -63,7 +63,7 @@ void QRShareActivity::onEnter() {
     LOG_INF("QRSHARE", "WiFi not connected, launching WiFi selection...");
     WiFi.mode(WIFI_STA);
     state = QRShareState::WIFI_SELECTION;
-    enterNewActivity(new WifiSelectionActivity(renderer, mappedInput,
+    enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
                                                [this](const bool connected) { onWifiSelectionComplete(connected); }));
   }
 }

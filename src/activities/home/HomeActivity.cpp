@@ -292,7 +292,7 @@ void HomeActivity::loop() {
       if (!selectedPath.empty()) {
         const std::string title = recentBooks[bookIndex].title;
         const std::string path = selectedPath;
-        enterNewActivity(new ConfirmDialogActivity(
+        enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
             renderer, mappedInput, std::string(tr(STR_REMOVE_FROM_RECENTS)) + "?\n" + title,
             [this, path]() {
               RECENT_BOOKS.removeBook(path);

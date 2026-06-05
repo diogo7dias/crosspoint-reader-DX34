@@ -232,7 +232,7 @@ void XtcReaderActivity::openChapterMenu() {
   }
   flushProgressIfNeeded(true);
   exitActivity();
-  enterNewActivity(new XtcReaderChapterSelectionActivity(
+  enterNewActivity(new (std::nothrow) XtcReaderChapterSelectionActivity(
       this->renderer, this->mappedInput, xtc, currentPage,
       [this] {
         exitActivity();
