@@ -9,6 +9,7 @@
 #include <set>
 #include <utility>
 
+#include "HeapGuard.h"  // crosspoint::heap::setLargestFreeBlockOverride (host seam)
 #include "activities/reader/SectionPageCache.h"
 
 using crosspoint::reader::PendingNav;
@@ -40,8 +41,8 @@ struct LoaderRec {
 };
 }  // namespace
 
-void setUp() {}
-void tearDown() {}
+void setUp() { crosspoint::heap::clearLargestFreeBlockOverride(); }
+void tearDown() { crosspoint::heap::clearLargestFreeBlockOverride(); }
 
 // ---- Lifecycle ----
 void test_attach_sets_spine_clears_entries() {
@@ -225,6 +226,62 @@ void test_refresh_window_single_page_section() {
   TEST_ASSERT_EQUAL_INT(0u, rec.loaded.size());
 }
 
+// ---- refreshWindow heap-gated prefetch (RFC reading-speed Stage 1a) ----
+
+// Moderate fragmentation (18 KB <= largest < 30 KB): the FORWARD slot still
+// prefetches (cheaper PrefetchNextPage gate), the BACKWARD slot is skipped
+// (full PrefetchNeighborPages gate closed). This is the fix for the on-turn
+// SD-load stalls during forward reading.
+void test_refresh_window_forward_prefetch_under_moderate_pressure() {
+  crosspoint::heap::setLargestFreeBlockOverride(20 * 1024);
+  Cache c;
+  c.attach(0);
+  LoaderRec rec;
+
+  c.refreshWindow(/*center=*/5, /*current=*/makePage(5), /*pc=*/10, rec.fn());
+
+  TEST_ASSERT_TRUE(c.contains(5));   // center always cached
+  TEST_ASSERT_TRUE(c.contains(6));   // forward prefetched (18 KB gate open)
+  TEST_ASSERT_FALSE(c.contains(4));  // backward skipped (30 KB gate closed)
+  TEST_ASSERT_EQUAL_INT(2, c.entryCount());
+  TEST_ASSERT_EQUAL_INT(1u, rec.loaded.size());
+  TEST_ASSERT_TRUE(rec.loaded.count(6) == 1);
+  TEST_ASSERT_TRUE(rec.loaded.count(4) == 0);
+}
+
+// Severe fragmentation (< 18 KB largest): both neighbours skipped, only the
+// current page cached — the original tight-heap behaviour preserved.
+void test_refresh_window_no_prefetch_under_severe_pressure() {
+  crosspoint::heap::setLargestFreeBlockOverride(10 * 1024);
+  Cache c;
+  c.attach(0);
+  LoaderRec rec;
+
+  c.refreshWindow(5, makePage(5), 10, rec.fn());
+
+  TEST_ASSERT_TRUE(c.contains(5));
+  TEST_ASSERT_FALSE(c.contains(4));
+  TEST_ASSERT_FALSE(c.contains(6));
+  TEST_ASSERT_EQUAL_INT(1, c.entryCount());
+  TEST_ASSERT_EQUAL_INT(0u, rec.loaded.size());
+}
+
+// Healthy heap (>= 30 KB): both neighbours prefetched (unchanged behaviour).
+void test_refresh_window_full_prefetch_when_healthy() {
+  crosspoint::heap::setLargestFreeBlockOverride(64 * 1024);
+  Cache c;
+  c.attach(0);
+  LoaderRec rec;
+
+  c.refreshWindow(5, makePage(5), 10, rec.fn());
+
+  TEST_ASSERT_TRUE(c.contains(4));
+  TEST_ASSERT_TRUE(c.contains(5));
+  TEST_ASSERT_TRUE(c.contains(6));
+  TEST_ASSERT_EQUAL_INT(3, c.entryCount());
+  TEST_ASSERT_EQUAL_INT(2u, rec.loaded.size());
+}
+
 // ---- Pending-nav bundle ----
 void test_pending_nav_empty_by_default() {
   Cache c;
@@ -295,6 +352,9 @@ int main(int, char**) {
   RUN_TEST(test_refresh_window_out_of_bounds_clears);
   RUN_TEST(test_refresh_window_reuses_cached_neighbours);
   RUN_TEST(test_refresh_window_single_page_section);
+  RUN_TEST(test_refresh_window_forward_prefetch_under_moderate_pressure);
+  RUN_TEST(test_refresh_window_no_prefetch_under_severe_pressure);
+  RUN_TEST(test_refresh_window_full_prefetch_when_healthy);
   RUN_TEST(test_pending_nav_empty_by_default);
   RUN_TEST(test_pending_nav_percent_jump);
   RUN_TEST(test_pending_nav_anchor);

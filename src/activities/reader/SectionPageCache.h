@@ -128,26 +128,26 @@ class SectionPageCache {
   //
   // If centerPage is out of bounds, cache is cleared.
   //
-  // When the largest contiguous heap block is below the prefetch gate
-  // (MemoryPolicy Op::PrefetchNeighborPages) at window-build time, the
-  // prev/next slots are skipped and only the
-  // current page is cached. This sacrifices fast page-turns on big books
-  // (each turn re-reads from the section cache file, ~200-500 ms) in
-  // exchange for ~6-10 KB of contiguous heap headroom -- enough to let
-  // the next section build run on heavy books like Wolfe that previously
-  // hit the layout pre-flight floor and could not open at all. When heap
-  // recovers (e.g. after a back-to-home cycle), the next refreshWindow
-  // call re-enables full prefetch automatically.
+  // Prefetch is heap-gated, and asymmetrically (RFC reading-speed Stage 1a):
+  //   - the FORWARD (next) slot uses the cheaper Op::PrefetchNextPage gate
+  //     (largest-block >= 18 KB) — forward reading is the common case, so we
+  //     keep the next page warm even under moderate fragmentation where the
+  //     full pair gate would close, avoiding the synchronous on-turn SD load
+  //     that produced the intermittent ~1 s stalls.
+  //   - the BACKWARD (prev) slot keeps the original Op::PrefetchNeighborPages
+  //     gate (>= 30 KB); backward turns are rarer, so it yields heap first.
+  // Below 18 KB largest-block, both slots are skipped and only the current page
+  // is cached (subsequent turns load on demand) — the original tight-heap
+  // behaviour, preserving the headroom heavy section builds need. When heap
+  // recovers, the next refreshWindow re-enables prefetch automatically.
   void refreshWindow(int centerPage, PagePtr currentPage, int sectionPageCount, const PageLoader& loader) {
     if (centerPage < 0 || centerPage >= sectionPageCount) {
       clearEntries_();
       return;
     }
 
-    // Heap-pressured below Op::PrefetchNeighborPages (largest-block >= 30 KB,
-    // byte-identical to the prior kPrefetchHeapFloor compare): skip the
-    // prev/next slots, cache only the current page.
-    const bool prefetchOk = crosspoint::mem::canAfford(crosspoint::mem::Op::PrefetchNeighborPages);
+    const bool prevOk = crosspoint::mem::canAfford(crosspoint::mem::Op::PrefetchNeighborPages);
+    const bool nextOk = crosspoint::mem::canAfford(crosspoint::mem::Op::PrefetchNextPage);
 
     std::array<Entry, kWindow> next{};
     const int targets[kWindow] = {centerPage - 1, centerPage, centerPage + 1};
@@ -159,11 +159,11 @@ class SectionPageCache {
       PagePtr p;
       if (t == centerPage) {
         p = currentPage;
-      } else if (!prefetchOk) {
-        // Heap-pressured: leave the prev/next slot empty.  Subsequent
-        // page-turns will load on demand.
-        continue;
       } else {
+        // Forward slot (t > center) gates on the cheaper next-page floor;
+        // backward slot (t < center) on the full neighbour floor.
+        const bool allowed = (t > centerPage) ? nextOk : prevOk;
+        if (!allowed) continue;  // heap-pressured: load this neighbour on demand later
         p = getRaw_(t);
         if (!p && loader) p = loader(t);
       }
