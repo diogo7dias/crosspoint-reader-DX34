@@ -577,6 +577,9 @@ void setupDisplayAndFonts() {
   if (heap_caps_register_failed_alloc_callback(&onHeapAllocFailed) != ESP_OK) {
     LOG_ERR("MAIN", "heap_caps_register_failed_alloc_callback failed");
   }
+  // Install the C++ new-handler: the guaranteed-retry shed-and-recover net for
+  // operator new / STL growth (the C-level callback above covers raw malloc).
+  crosspoint::mem::installOomHandler();
   LOG_DBG("MAIN", "Fonts setup");
 }
 
@@ -920,6 +923,10 @@ void loop() {
   static unsigned long lastMemPrint = 0;
 
   gpio.update();
+
+  // Re-arm the OOM new-handler net and reset its per-episode shed budget, so a
+  // memory-pressure episode in one tick gets a fresh shed-and-retry next tick.
+  crosspoint::mem::installOomHandler();
 
   // Drain any coalesced dirty writes. Stores flush only when debounce
   // window has elapsed since the last markDirty; most ticks are no-ops.

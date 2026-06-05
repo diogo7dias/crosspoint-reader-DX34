@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <new>
 
 #include "HeapGuard.h"
 
@@ -209,6 +210,47 @@ inline bool roomToGrow(size_t needBytes, size_t headroom = crosspoint::heap::kDe
   if (crosspoint::heap::canAllocateContiguous(needBytes, headroom)) return true;
   shedUnderPressure();
   return crosspoint::heap::canAllocateContiguous(needBytes, headroom);
+}
+
+// ── Global out-of-memory handler (the last-resort net for STL growth) ────────
+// std::vector/std::string/std::map growth calls the throwing ::operator new,
+// which under -fno-exceptions ends in abort() on failure — bypassing every
+// recovery path and resetting the device. operator new first invokes the
+// installed std::new_handler in a loop, so one handler intercepts EVERY
+// allocation failure in the firmware, including the implicit STL grows that
+// `roomToGrow` can't guard.
+//
+// Strategy: on the first failure of an episode, shed the throwaway caches once
+// (alloc-free, SafeAnywhere) and return so operator new retries — this recovers
+// the common "heap fragmented, caches pinned" case automatically, everywhere.
+// On a second consecutive call (the retry still failed) step aside by clearing
+// the handler so the allocation fails the normal way: `new (std::nothrow)`
+// returns nullptr (handled at the call sites migrated in the allocation-seam
+// work) and a throwing grow aborts only when the heap is genuinely exhausted.
+// installOomHandler() re-arms the net and resets the per-episode shed budget;
+// call it at boot and each loop tick so every episode gets a fresh shed.
+namespace detail {
+inline bool& oomShedTried() {
+  static bool v = false;
+  return v;
+}
+}  // namespace detail
+
+inline void oomNewHandler() {
+  if (!detail::oomShedTried()) {
+    detail::oomShedTried() = true;
+    shedUnderPressure();
+    return;  // operator new retries the allocation with the freed memory
+  }
+  // Shed already tried this episode and the retry still failed: stop the
+  // new-handler loop and let this allocation fail normally.
+  std::set_new_handler(nullptr);
+}
+
+// (Re)arm the OOM net and reset the per-episode shed budget.
+inline void installOomHandler() {
+  detail::oomShedTried() = false;
+  std::set_new_handler(&oomNewHandler);
 }
 
 }  // namespace mem

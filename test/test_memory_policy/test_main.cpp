@@ -185,6 +185,32 @@ void test_shed_under_pressure_runs_all_registered_evictors() {
   TEST_ASSERT_EQUAL_INT(1, b);
 }
 
+// The global OOM new-handler: first call sheds once and stays armed (operator
+// new will retry); a second consecutive call steps aside (clears the handler)
+// so the allocation fails normally; installOomHandler re-arms and resets the
+// per-episode shed budget.
+void test_oom_handler_sheds_once_then_steps_aside_then_rearms() {
+  static int sheds;
+  sheds = 0;
+  registerShedEvictor([]() { sheds++; });
+
+  crosspoint::mem::installOomHandler();
+  TEST_ASSERT_TRUE(std::get_new_handler() == &crosspoint::mem::oomNewHandler);
+
+  crosspoint::mem::oomNewHandler();  // first failure: shed + stay armed
+  TEST_ASSERT_EQUAL_INT(1, sheds);
+  TEST_ASSERT_TRUE(std::get_new_handler() == &crosspoint::mem::oomNewHandler);
+
+  crosspoint::mem::oomNewHandler();  // retry still failed: step aside
+  TEST_ASSERT_EQUAL_INT(1, sheds);
+  TEST_ASSERT_TRUE(std::get_new_handler() == nullptr);
+
+  crosspoint::mem::installOomHandler();  // re-arm: fresh episode
+  crosspoint::mem::oomNewHandler();
+  TEST_ASSERT_EQUAL_INT(2, sheds);
+  std::set_new_handler(nullptr);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_render_task_gate_boundary_at_12k);
@@ -201,5 +227,6 @@ int main(int, char**) {
   RUN_TEST(test_room_to_grow_sheds_once_then_succeeds);
   RUN_TEST(test_room_to_grow_fails_when_shed_cannot_free_enough);
   RUN_TEST(test_shed_under_pressure_runs_all_registered_evictors);
+  RUN_TEST(test_oom_handler_sheds_once_then_steps_aside_then_rearms);
   return UNITY_END();
 }
