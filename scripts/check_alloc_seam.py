@@ -28,9 +28,14 @@ import re
 import sys
 from pathlib import Path
 
-# Repo root = parent of this script's dir (scripts/).
-ROOT = Path(__file__).resolve().parent.parent
-BASELINE = Path(__file__).resolve().parent / "alloc_seam_baseline.json"
+# Repo root = parent of this script's dir (scripts/). Under PlatformIO the script
+# is exec'd by SCons without __file__ set, but with cwd at the project root.
+try:
+    _SCRIPT_DIR = Path(__file__).resolve().parent
+except NameError:
+    _SCRIPT_DIR = Path.cwd() / "scripts"
+ROOT = _SCRIPT_DIR.parent
+BASELINE = _SCRIPT_DIR / "alloc_seam_baseline.json"
 
 # Directories scanned for OUR code.
 SCAN_DIRS = ["src", "lib"]

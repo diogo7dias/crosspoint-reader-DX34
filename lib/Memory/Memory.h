@@ -26,16 +26,17 @@
 // to migrate them to in a future cleanup pass, and the preferred form for
 // any new allocation site.
 
-template <typename T, typename... Args>
-  requires(!std::is_array_v<T>)
+// SFINAE (not a C++20 `requires` clause) so this header compiles on the
+// framework's GCC 8 toolchain, which only partially supports C++20 concepts.
+template <typename T, typename... Args,
+          typename std::enable_if<!std::is_array<T>::value, int>::type = 0>
 std::unique_ptr<T> makeUniqueNoThrow(Args&&... args) {
   return std::unique_ptr<T>(new (std::nothrow) T(std::forward<Args>(args)...));
 }
 
-template <typename T>
-  requires std::is_unbounded_array_v<T>
+template <typename T, typename std::enable_if<std::is_array<T>::value && std::extent<T>::value == 0, int>::type = 0>
 std::unique_ptr<T> makeUniqueNoThrow(size_t count) {
-  using Elem = std::remove_extent_t<T>;
+  using Elem = typename std::remove_extent<T>::type;
   return std::unique_ptr<T>(new (std::nothrow) Elem[count]());
 }
 
