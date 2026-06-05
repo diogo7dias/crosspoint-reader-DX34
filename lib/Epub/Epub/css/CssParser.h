@@ -138,10 +138,19 @@ class CssParser {
 
   // Small LRU of recently-resolved styles keyed by selector. Avoids
   // re-reading the same rule from SD for every element that uses it.
-  // Kept intentionally small (a few KB) so the savings vs the in-RAM map
-  // are preserved on books with large stylesheets.
-  static constexpr size_t LRU_CAP = 24;
+  // BYTE-budgeted (not count-capped): a fixed entry count let resident bytes
+  // drift with selector-string lengths, bloating the very heap the disk-paged
+  // index exists to protect. Evicting by an explicit byte budget bounds the
+  // resident size regardless of selector length. ~32 KB is generous over the
+  // typical working set while staying under the contiguous block a section
+  // build needs.
+  static constexpr size_t kLruByteBudget = 32 * 1024;
+  // Per-entry fixed overhead estimate (std::string object + deque node + pair
+  // padding + heap-alloc rounding) added to key.size()+sizeof(CssStyle) so the
+  // budget tracks real resident cost, not just the payload.
+  static constexpr size_t kLruEntryOverhead = 48;
   mutable std::deque<std::pair<std::string, CssStyle>> lru_;
+  mutable size_t lruBytes_ = 0;  // running resident-byte estimate of lru_
 
   // Internal disk-paged helpers
   [[nodiscard]] bool readStyleAtOffset(uint32_t offset, CssStyle& out) const;

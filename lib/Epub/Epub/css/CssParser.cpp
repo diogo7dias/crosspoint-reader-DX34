@@ -852,7 +852,10 @@ void CssParser::lruPut(const std::string& key, const CssStyle& value) const {
     }
   }
   lru_.emplace_front(key, value);
-  if (lru_.size() > LRU_CAP) {
+  lruBytes_ += key.size() + sizeof(CssStyle) + kLruEntryOverhead;
+  // Evict least-recently-used until under the byte budget; always keep >= 1.
+  while (lruBytes_ > kLruByteBudget && lru_.size() > 1) {
+    lruBytes_ -= lru_.back().first.size() + sizeof(CssStyle) + kLruEntryOverhead;
     lru_.pop_back();
   }
 }
@@ -862,6 +865,7 @@ void CssParser::clear() {
   hashedIndex_.clear();
   hashedIndex_.shrink_to_fit();
   lru_.clear();
+  lruBytes_ = 0;
   if (cacheFileOpen_) {
     cacheFile_.close();
     cacheFileOpen_ = false;
