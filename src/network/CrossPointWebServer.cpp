@@ -1167,25 +1167,6 @@ static unsigned long uploadStartTime = 0;
 static unsigned long totalWriteTime = 0;
 static size_t writeCount = 0;
 
-static bool flushUploadBuffer(CrossPointWebServer::UploadState& state) {
-  if (state.bufferPos > 0 && state.file) {
-    esp_task_wdt_reset();  // Reset watchdog before potentially slow SD write
-    const unsigned long writeStart = millis();
-    const size_t written = state.file.write(state.buffer.data(), state.bufferPos);
-    totalWriteTime += millis() - writeStart;
-    writeCount++;
-    esp_task_wdt_reset();  // Reset watchdog after SD write
-
-    if (written != state.bufferPos) {
-      LOG_DBG("WEB", "[UPLOAD] Buffer flush failed: expected %d, wrote %d", state.bufferPos, written);
-      state.bufferPos = 0;
-      return false;
-    }
-    state.bufferPos = 0;
-  }
-  return true;
-}
-
 void CrossPointWebServer::handleUpload(UploadState& state) const {
   static size_t lastLoggedSize = 0;
 
@@ -1200,6 +1181,19 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
 
   const HTTPUpload& upload = server->upload();
 
+  // Sink writer: a watchdog-bracketed, timed SD write. Shared by the WRITE
+  // auto-flush and the END final flush so the buffering loop lives in
+  // HttpUploadSink, not here.
+  const auto sdWriter = [&state](const uint8_t* d, size_t n) -> size_t {
+    esp_task_wdt_reset();  // before potentially slow SD write
+    const unsigned long writeStart = millis();
+    const size_t written = state.file.write(d, n);
+    totalWriteTime += millis() - writeStart;
+    writeCount++;
+    esp_task_wdt_reset();  // after SD write
+    return written;
+  };
+
   if (upload.status == UPLOAD_FILE_START) {
     // Reset watchdog - this is the critical 1% crash point
     esp_task_wdt_reset();
@@ -1210,16 +1204,15 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     state.error = "";
     uploadStartTime = millis();
     lastLoggedSize = 0;
-    state.bufferPos = 0;
     totalWriteTime = 0;
     writeCount = 0;
-    // Pre-flight heap check before vector::resize. Exceptions are disabled
-    // (-fno-exceptions), so a bad_alloc inside resize would call terminate()
-    // and abort the firmware. Phone-on-STA after fetching the 64 KB JS bundle
-    // hits this path: heap can fragment below the buffer size mid-upload.
-    // Before bailing, drop reclaimable caches and re-probe — most often the
-    // fragmentation is glyph hot-group + page slots from rendering the UI.
-    if (state.buffer.size() != UploadState::UPLOAD_BUFFER_SIZE) {
+    // Pre-flight heap check before sizing the batching buffer. Exceptions are
+    // disabled (-fno-exceptions), so a bad_alloc inside resize would call
+    // terminate() and abort the firmware. Phone-on-STA after fetching the
+    // 64 KB JS bundle hits this path: heap can fragment below the buffer size
+    // mid-upload. Before bailing, drop reclaimable caches and re-probe — most
+    // often the fragmentation is glyph hot-group + page slots from the UI.
+    if (!state.sink.hasCapacity()) {
       // Probe-then-shed-then-reprobe for the contiguous buffer, with the same
       // +1024 headroom the hand-rolled loop used. roomToGrow drops the
       // registered SafeAnywhere evictor (the font cache — same drop the old
@@ -1231,7 +1224,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
                 ESP.getMinFreeHeap());
         return;
       }
-      state.buffer.resize(UploadState::UPLOAD_BUFFER_SIZE);
+      state.sink.ensureCapacity();
     }
 
     // Get upload path from query parameter (defaults to root if not specified)
@@ -1276,28 +1269,11 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     LOG_DBG("WEB", "[UPLOAD] File created successfully: %s", filePath.c_str());
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (state.file && state.error.isEmpty()) {
-      // Buffer incoming data and flush when buffer is full
-      // This reduces SD card write operations and improves throughput
-      const uint8_t* data = upload.buf;
-      size_t remaining = upload.currentSize;
-
-      while (remaining > 0) {
-        const size_t space = UploadState::UPLOAD_BUFFER_SIZE - state.bufferPos;
-        const size_t toCopy = (remaining < space) ? remaining : space;
-
-        memcpy(state.buffer.data() + state.bufferPos, data, toCopy);
-        state.bufferPos += toCopy;
-        data += toCopy;
-        remaining -= toCopy;
-
-        // Flush buffer when full
-        if (state.bufferPos >= UploadState::UPLOAD_BUFFER_SIZE) {
-          if (!flushUploadBuffer(state)) {
-            state.error = "Failed to write to SD card - disk may be full";
-            state.file.close();
-            return;
-          }
-        }
+      // Buffer incoming data and flush when full (batches small SD writes).
+      if (!state.sink.append(upload.buf, upload.currentSize, sdWriter)) {
+        state.error = "Failed to write to SD card - disk may be full";
+        state.file.close();
+        return;
       }
 
       state.size += upload.currentSize;
@@ -1314,7 +1290,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
   } else if (upload.status == UPLOAD_FILE_END) {
     if (state.file) {
       // Flush any remaining buffered data
-      if (!flushUploadBuffer(state)) {
+      if (!state.sink.flush(sdWriter)) {
         state.error = "Failed to write final data to SD card";
       }
       state.file.close();
@@ -1336,10 +1312,8 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         clearBookCacheIfNeeded(filePath);
       }
     }
-    std::vector<uint8_t>().swap(state.buffer);
-    state.bufferPos = 0;
+    state.sink.reset();
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    state.bufferPos = 0;  // Discard buffered data
     if (state.file) {
       state.file.close();
       // Try to delete the incomplete file
@@ -1349,7 +1323,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
       Storage.remove(filePath.c_str());
     }
     state.error = "Upload aborted";
-    std::vector<uint8_t>().swap(state.buffer);
+    state.sink.reset();
     LOG_DBG("WEB", "Upload aborted");
   }
 }
@@ -1809,12 +1783,20 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
 
   const HTTPUpload& upload = server->upload();
 
+  // Sink writer: watchdog-bracketed SD write, shared by WRITE auto-flush and
+  // END final flush. Buffering loop lives in HttpUploadSink.
+  const auto sdWriter = [&state](const uint8_t* d, size_t n) -> size_t {
+    esp_task_wdt_reset();
+    const size_t written = state.file.write(d, n);
+    esp_task_wdt_reset();
+    return written;
+  };
+
   if (upload.status == UPLOAD_FILE_START) {
     esp_task_wdt_reset();
     state.size = 0;
     state.success = false;
     state.error = "";
-    state.bufferPos = 0;
     state.family = "";
     state.tmpPath = "";
     state.finalPath = "";
@@ -1823,7 +1805,7 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     // can fragment below the 4 KB buffer size. Before bailing, drop
     // reclaimable caches and re-probe so a fragmented-but-recoverable heap
     // doesn't force the user back to a desktop browser.
-    if (state.buffer.size() != FontUploadState::UPLOAD_BUFFER_SIZE) {
+    if (!state.sink.hasCapacity()) {
       // Same probe-then-shed-then-reprobe as the file-upload path above.
       if (!crosspoint::mem::roomToGrow(FontUploadState::UPLOAD_BUFFER_SIZE, 1024)) {
         state.error = "out of memory (try again from desktop browser)";
@@ -1832,7 +1814,7 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
                 ESP.getMinFreeHeap());
         return;
       }
-      state.buffer.resize(FontUploadState::UPLOAD_BUFFER_SIZE);
+      state.sink.ensureCapacity();
     }
 
     // Extract (family, variant, size) from the query string — multipart
@@ -1877,24 +1859,10 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
             state.tmpPath.c_str());
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (!state.file || !state.error.isEmpty()) return;
-    const uint8_t* data = upload.buf;
-    size_t remaining = upload.currentSize;
-    while (remaining > 0) {
-      const size_t space = FontUploadState::UPLOAD_BUFFER_SIZE - state.bufferPos;
-      const size_t toCopy = (remaining < space) ? remaining : space;
-      memcpy(state.buffer.data() + state.bufferPos, data, toCopy);
-      state.bufferPos += toCopy;
-      data += toCopy;
-      remaining -= toCopy;
-      if (state.bufferPos >= FontUploadState::UPLOAD_BUFFER_SIZE) {
-        const int written = state.file.write(state.buffer.data(), state.bufferPos);
-        if (written != static_cast<int>(state.bufferPos)) {
-          state.error = "write failed";
-          state.file.close();
-          return;
-        }
-        state.bufferPos = 0;
-      }
+    if (!state.sink.append(upload.buf, upload.currentSize, sdWriter)) {
+      state.error = "write failed";
+      state.file.close();
+      return;
     }
     state.size += upload.currentSize;
     // Reject oversized payloads mid-stream so we don't waste SD on garbage.
@@ -1905,16 +1873,12 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     if (state.file) {
-      if (state.bufferPos > 0 && state.error.isEmpty()) {
-        const int written = state.file.write(state.buffer.data(), state.bufferPos);
-        if (written != static_cast<int>(state.bufferPos)) {
-          state.error = "final write failed";
-        }
-        state.bufferPos = 0;
+      if (state.error.isEmpty() && !state.sink.flush(sdWriter)) {
+        state.error = "final write failed";
       }
       state.file.close();
     }
-    std::vector<uint8_t>().swap(state.buffer);
+    state.sink.reset();
     if (!state.error.isEmpty()) return;
 
     // Validate the CPBN header before committing with the rename.
@@ -1939,7 +1903,7 @@ void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
     if (state.file) state.file.close();
     if (!state.tmpPath.isEmpty()) Storage.remove(state.tmpPath.c_str());
     state.error = "upload aborted";
-    std::vector<uint8_t>().swap(state.buffer);
+    state.sink.reset();
     LOG_DBG("FONTUP", "aborted");
   }
 }
