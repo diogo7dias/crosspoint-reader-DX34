@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace crosspoint {
 namespace sleep {
@@ -14,7 +12,6 @@ namespace {
 
 constexpr const char* kSleepDir = "/sleep";
 constexpr const char* kSleepPauseDir = "/sleep pause";
-constexpr size_t kHeaderMaxLen = 32;
 
 // Headroom over the requested allocation when probing the heap. Covers the
 // transient std::string growth peak (capacity often rounded up to the next
@@ -33,28 +30,21 @@ std::string makePausePath(const std::string& filename) {
   return std::string(kSleepPauseDir) + "/" + filename;
 }
 
-// Format: "v1 cursor=N\n<name1>\n<name2>\n..."
-std::string serializeOrderFile(const std::string& namesRegion, size_t cursor) {
-  char header[kHeaderMaxLen];
-  const int n = std::snprintf(header, sizeof(header), "v1 cursor=%zu\n", cursor);
-  std::string out;
-  out.reserve(static_cast<size_t>(n) + namesRegion.size());
-  out.append(header, static_cast<size_t>(n));
-  out.append(namesRegion);
-  return out;
-}
-
-bool parseOrderFile(const std::string& blob, std::string& namesRegion, size_t& cursor) {
+// Parse the "v1 cursor=N\n" header in place. On success, `namesStart` is the
+// byte offset where the names region begins (one past the header newline) and
+// `cursor` holds the parsed value. The caller strips the header by erasing
+// [0, namesStart) and moving the blob straight into buffer_ — no second
+// full-size copy of the names region (the old substr path doubled peak heap).
+bool parseOrderHeader(const std::string& blob, size_t& namesStart, size_t& cursor) {
   cursor = 0;
-  namesRegion.clear();
+  namesStart = 0;
   if (blob.size() < 3 || blob.compare(0, 3, "v1 ") != 0) return false;
   const auto firstNewline = blob.find('\n');
   if (firstNewline == std::string::npos) return false;
-  const std::string header = blob.substr(0, firstNewline);
-  const auto eq = header.find("cursor=");
-  if (eq == std::string::npos) return false;
-  cursor = static_cast<size_t>(std::strtoul(header.c_str() + eq + 7, nullptr, 10));
-  namesRegion = blob.substr(firstNewline + 1);
+  const auto eq = blob.find("cursor=");
+  if (eq == std::string::npos || eq >= firstNewline) return false;
+  cursor = static_cast<size_t>(std::strtoul(blob.c_str() + eq + 7, nullptr, 10));
+  namesStart = firstNewline + 1;
   return true;
 }
 
@@ -97,31 +87,34 @@ bool WallpaperPlaylistV2::ensureLoaded() {
 
 bool WallpaperPlaylistV2::loadFromDisk() {
   if (!deps_.fileIO) return false;
-  const std::string blob = deps_.fileIO->safeRead(deps_.orderFilePath);
+  std::string blob = deps_.fileIO->safeRead(deps_.orderFilePath);
   if (blob.empty()) {
     buffer_.clear();
     cursor_ = 0;
     return false;
   }
-  std::string names;
+  size_t namesStart = 0;
   size_t cursor = 0;
-  if (!parseOrderFile(blob, names, cursor)) {
+  if (!parseOrderHeader(blob, namesStart, cursor)) {
     buffer_.clear();
     cursor_ = 0;
     return false;
   }
-  buffer_ = std::move(names);
+  // Strip the header in place (memmove, no allocation) and take ownership of
+  // the buffer — peak heap is one blob, not blob + a substr copy.
+  blob.erase(0, namesStart);
+  buffer_ = std::move(blob);
   cursor_ = cursor;
   return true;
 }
 
 bool WallpaperPlaylistV2::saveToDisk() const {
   if (!deps_.fileIO) return false;
-  // Stream the write so peak heap is bounded — serializeOrderFile would
-  // concatenate header + buffer_ into a fresh std::string of full size,
-  // which doubles transient memory pressure right when reconcile already
-  // holds two buffer copies. safeWriteStreamed hands us a JsonSink-like
-  // byte sink wired straight to the .tmp file; no intermediate copy.
+  // Stream the write so peak heap is bounded — concatenating header + buffer_
+  // into a fresh full-size std::string would double transient memory pressure
+  // right when reconcile already holds two buffer copies. safeWriteStreamed
+  // hands us a JsonSink-like byte sink wired straight to the .tmp file; no
+  // intermediate copy.
   return deps_.fileIO->safeWriteStreamed(deps_.orderFilePath, [this](crosspoint::persist::JsonSink& sink) {
     char header[32];
     const int hn = std::snprintf(header, sizeof(header), "v1 cursor=%zu\n", cursor_);
@@ -156,19 +149,6 @@ void WallpaperPlaylistV2::writeBuffer(const std::vector<std::string>& names, siz
   saveToDisk();
 }
 
-std::vector<std::string> WallpaperPlaylistV2::bufferEntries() const {
-  std::vector<std::string> out;
-  if (buffer_.empty()) return out;
-  size_t start = 0;
-  for (size_t i = 0; i < buffer_.size(); ++i) {
-    if (buffer_[i] == '\n') {
-      if (i > start) out.emplace_back(buffer_.data() + start, i - start);
-      start = i + 1;
-    }
-  }
-  return out;
-}
-
 size_t WallpaperPlaylistV2::entryCountForTest() const {
   size_t n = 0;
   for (char c : buffer_) {
@@ -198,67 +178,70 @@ uint16_t WallpaperPlaylistV2::trimToCap(std::vector<SleepBmpEntry>& entries, boo
   favoritesCapBlocked = false;
   if (entries.size() <= kSleepFolderCap) return 0;
 
-  // Bug A (RFC #156): trim partitions `entries` into up to three transient
-  // vectors (nonFav + favs + surviving), whose backbones peak at ~3x the entry
-  // vector. Production reconcile already runs under the sleep-playlist heap
-  // gate, but probe here too so the module is self-safe if a future caller
-  // invokes it ungated — a bad_alloc would abort the -fno-exceptions build.
-  // Bail (no trim this cycle) when the heap is too tight; the next reconcile
-  // retries once it recovers, and the over-cap files simply wait in /sleep.
-  const size_t transientPeak = entries.size() * sizeof(SleepBmpEntry) * 3;
-  if (!heapHasContiguous(transientPeak)) {
+  // RFC #156 Bug A: the old trim partitioned `entries` into three transient
+  // vectors (nonFav + favs + surviving), peaking at ~3x the entry vector — the
+  // largest sleep-path allocation and the one most likely to bail on (or, if
+  // ever called ungated, abort) a fragmented heap. This rewrite works in place
+  // on the single `entries` vector, so peak is ~1x. Production reconcile still
+  // runs under the sleep-playlist heap gate; we keep a self-safety probe (now
+  // sized to that single vector) so an ungated future caller still bails rather
+  // than risk a bad_alloc under -fno-exceptions. Bail = no trim this cycle; the
+  // next reconcile retries once heap recovers and the over-cap files wait in
+  // /sleep meanwhile.
+  if (!heapHasContiguous(entries.size() * sizeof(SleepBmpEntry))) {
     return 0;
   }
 
-  std::vector<SleepBmpEntry> nonFav;
-  nonFav.reserve(entries.size());
-  std::vector<SleepBmpEntry> favs;
-  favs.reserve(entries.size());
-  for (auto& e : entries) {
-    const bool fav = deps_.isFavorite && deps_.isFavorite(makeSleepPath(e.name));
-    if (fav)
-      favs.push_back(std::move(e));
-    else
-      nonFav.push_back(std::move(e));
-  }
+  // Partition non-favorites to the front (favorites are never moved). isFavorite
+  // is evaluated once per entry. std::partition is in place — no temp vector;
+  // relative order is not relied upon (the favorites-saturated branch demotes
+  // every non-favorite regardless of order, and the normal branch re-sorts the
+  // non-favorite prefix by mtime below).
+  const auto firstFav = std::partition(entries.begin(), entries.end(), [this](const SleepBmpEntry& e) {
+    return !(deps_.isFavorite && deps_.isFavorite(makeSleepPath(e.name)));
+  });
+  const size_t nonFavCount = static_cast<size_t>(firstFav - entries.begin());
+  const size_t favCount = entries.size() - nonFavCount;
 
-  const size_t excess = entries.size() - kSleepFolderCap;
-  if (favs.size() >= kSleepFolderCap) {
+  if (deps_.fs) deps_.fs->mkdir(kSleepPauseDir);
+
+  // Favorites alone fill the cap: demote every non-favorite (e.g. a fresh
+  // upload that has nowhere to go) and keep only the favorites.
+  if (favCount >= kSleepFolderCap) {
     favoritesCapBlocked = true;
-    if (deps_.fs) deps_.fs->mkdir(kSleepPauseDir);
     uint16_t moved = 0;
-    for (const auto& e : nonFav) {
-      const std::string from = makeSleepPath(e.name);
-      const std::string to = makePausePath(e.name);
+    for (size_t i = 0; i < nonFavCount; ++i) {
+      const std::string from = makeSleepPath(entries[i].name);
+      const std::string to = makePausePath(entries[i].name);
       if (deps_.fs && deps_.fs->rename(from, to)) {
         if (deps_.onPathRenamed) deps_.onPathRenamed(from, to);
         ++moved;
       }
     }
-    entries = std::move(favs);
+    entries.erase(entries.begin(), entries.begin() + nonFavCount);
     return moved;
   }
 
-  std::sort(nonFav.begin(), nonFav.end(),
+  // Normal branch: demote the oldest-by-mtime non-favorites. Sort only the
+  // non-favorite prefix [0, nonFavCount) ascending; favorites in the tail stay
+  // put. Renames happen oldest-first, matching the previous behaviour.
+  std::sort(entries.begin(), entries.begin() + nonFavCount,
             [](const SleepBmpEntry& a, const SleepBmpEntry& b) { return a.mtime < b.mtime; });
-
-  if (deps_.fs) deps_.fs->mkdir(kSleepPauseDir);
+  const size_t excess = entries.size() - kSleepFolderCap;
+  const size_t toMove = std::min(excess, nonFavCount);
   uint16_t moved = 0;
-  size_t toMove = std::min(excess, nonFav.size());
   for (size_t i = 0; i < toMove; ++i) {
-    const std::string from = makeSleepPath(nonFav[i].name);
-    const std::string to = makePausePath(nonFav[i].name);
+    const std::string from = makeSleepPath(entries[i].name);
+    const std::string to = makePausePath(entries[i].name);
     if (deps_.fs && deps_.fs->rename(from, to)) {
       if (deps_.onPathRenamed) deps_.onPathRenamed(from, to);
       ++moved;
     }
   }
-
-  std::vector<SleepBmpEntry> surviving;
-  surviving.reserve(favs.size() + nonFav.size() - toMove);
-  for (auto& e : favs) surviving.push_back(std::move(e));
-  for (size_t i = toMove; i < nonFav.size(); ++i) surviving.push_back(std::move(nonFav[i]));
-  entries = std::move(surviving);
+  // Drop the moved entries; favorites + surviving non-favorites remain. Order of
+  // the survivors is irrelevant — the caller re-derives newFiles from this set
+  // and re-sorts before splicing.
+  entries.erase(entries.begin(), entries.begin() + toMove);
   return moved;
 }
 
@@ -272,19 +255,27 @@ bool WallpaperPlaylistV2::heapHasContiguous(size_t needBytes) const {
   return deps_.largestFreeBlockFn() >= needBytes + kAllocProbeHeadroomBytes;
 }
 
+bool WallpaperPlaylistV2::nameIsInBuffer(const char* name, size_t len) const {
+  if (buffer_.empty() || !name || len == 0) return false;
+  // Walk the '\n'-delimited names in buffer_ and compare each whole line to
+  // `name`. No temporary needle string — the old path allocated a "\nname\n"
+  // needle on every call (~500-1000x per over-cap reconcile). Comparing whole
+  // lines (bounded by the separators) means prefix collisions like "a.bmp" vs
+  // "ab.bmp" can never false-match.
+  const char* data = buffer_.data();
+  const size_t bsize = buffer_.size();
+  size_t start = 0;
+  while (start < bsize) {
+    size_t nl = buffer_.find('\n', start);
+    if (nl == std::string::npos) nl = bsize;  // tolerate a missing final '\n'
+    if (nl - start == len && std::memcmp(data + start, name, len) == 0) return true;
+    start = nl + 1;
+  }
+  return false;
+}
+
 bool WallpaperPlaylistV2::nameIsInBuffer(const std::string& name) const {
-  if (buffer_.empty() || name.empty()) return false;
-  // Match "name\n" at position 0, or "\nname\n" anywhere. \n separators bound
-  // the search so prefix-collisions are not misreported (e.g. "a.bmp" vs "ab.bmp").
-  const size_t nlen = name.size();
-  if (buffer_.size() > nlen && buffer_.compare(0, nlen, name) == 0 && buffer_[nlen] == '\n') return true;
-  // Search for "\nname\n" — caller-side concat into a temporary needle.
-  std::string needle;
-  needle.reserve(nlen + 2);
-  needle.push_back('\n');
-  needle.append(name);
-  needle.push_back('\n');
-  return buffer_.find(needle) != std::string::npos;
+  return nameIsInBuffer(name.data(), name.size());
 }
 
 void WallpaperPlaylistV2::reconcile() {
@@ -305,12 +296,16 @@ void WallpaperPlaylistV2::reconcile() {
   std::vector<SleepBmpEntry> newFiles;
   newFiles.reserve(8);  // typical delta upper bound; grows if exceeded
   size_t diskCount = 0;
-  size_t favCount = 0;
 
-  deps_.fs->walkSleepBmps([&](const std::string& name, uint32_t mtime) {
+  // Zero-allocation walk: the callback receives the name straight off the SD
+  // layer's stack buffer (no per-file std::string), and nameIsInBuffer scans
+  // buffer_ in place. Only genuinely new files (typically 0-3) materialize a
+  // string. The former per-file favorite probe here was dead (its count was
+  // never read) and cost a makeSleepPath allocation + isFavorite call on every
+  // one of the ~500 files — removed.
+  deps_.fs->walkSleepBmps([&](const char* name, size_t len, uint32_t mtime) {
     ++diskCount;
-    if (deps_.isFavorite && deps_.isFavorite(makeSleepPath(name))) ++favCount;
-    if (!nameIsInBuffer(name)) newFiles.push_back({name, mtime});
+    if (!nameIsInBuffer(name, len)) newFiles.push_back({std::string(name, len), mtime});
   });
 
   // Trim path. Only enters here if /sleep is over the cap — gates the heavy

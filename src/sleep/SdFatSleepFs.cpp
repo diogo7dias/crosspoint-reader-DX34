@@ -91,7 +91,7 @@ std::vector<std::string> SdFatSleepFs::listSleepBmps(size_t maxEntries) {
   return out;
 }
 
-void SdFatSleepFs::walkSleepBmps(const std::function<void(const std::string&, uint32_t)>& cb) {
+void SdFatSleepFs::walkSleepBmps(const std::function<void(const char*, size_t, uint32_t)>& cb) {
   auto dir = Storage.open(kSleepDir);
   if (!dir || !dir.isDirectory()) {
     if (dir) dir.close();
@@ -106,10 +106,10 @@ void SdFatSleepFs::walkSleepBmps(const std::function<void(const std::string&, ui
         uint16_t fdate = 0, ftime = 0;
         file.getModifyDateTime(&fdate, &ftime);
         const uint32_t mtime = (static_cast<uint32_t>(fdate) << 16) | ftime;
-        // Construct a small temporary string for the callback. Heap cost is
-        // one short alloc per file, freed before the next iteration. Caller
-        // decides what (if anything) to retain.
-        cb(std::string(name), mtime);
+        // Hand the callback the name straight off the stack buffer — zero heap
+        // per file. It is valid only for the duration of the call; the caller
+        // copies only the files it actually retains (typically 0-3 new ones).
+        cb(name, std::strlen(name), mtime);
       }
     }
     file.close();
