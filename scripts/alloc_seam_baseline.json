@@ -2,15 +2,11 @@
   "lib/EpdFont/EpdBinFontLoader.cpp": 3,
   "lib/EpdFont/FontDecompressor.cpp": 6,
   "lib/Epub/Epub.cpp": 6,
-  "lib/Epub/Epub/blocks/ImageBlock.cpp": 1,
   "lib/Epub/Epub/converters/ImageDecoderFactory.cpp": 2,
-  "lib/Epub/Epub/converters/PixelCache.h": 1,
   "lib/Epub/Epub/hyphenation/LiangHyphenation.cpp": 1,
   "lib/Epub/Epub/page/PageBuilder.cpp": 2,
   "lib/Epub/Epub/parsers/ChapterHtmlSlimParser.cpp": 4,
   "lib/GfxRenderer/GfxRenderer.cpp": 6,
-  "lib/InflateReader/InflateReader.cpp": 1,
-  "lib/JpegToBmpConverter/JpegToBmpConverter.cpp": 2,
   "lib/KOReaderSync/KOReaderSyncClient.cpp": 3,
   "lib/PngToBmpConverter/PngToBmpConverter.cpp": 4,
   "lib/Xtc/Xtc.cpp": 5,
@@ -37,6 +33,5 @@
   "src/activities/settings/SettingsActivity.cpp": 8,
   "src/main.cpp": 11,
   "src/network/CrossPointWebServer.cpp": 15,
-  "src/sleep/WallpaperPlaylistV2.h": 1,
-  "src/util/PxcRenderer.cpp": 2
+  "src/sleep/WallpaperPlaylistV2.h": 1
 }

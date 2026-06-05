@@ -2,6 +2,7 @@
 
 #include <GfxRenderer.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Serialization.h>
 
 #include <new>
@@ -65,20 +66,20 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   // Read and render row by row to minimize memory usage
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
-  uint8_t* rowBuffer = (uint8_t*)malloc(bytesPerRow);
+  auto rowBuffer = crosspoint::mem::CMallocPtr<uint8_t>(static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bytesPerRow)));
   if (!rowBuffer) {
     LOG_ERR("IMG", "Failed to allocate row buffer");
     cacheFile.close();
     return false;
   }
+  uint8_t* rb = rowBuffer.get();  // RAII owns; rb is a non-owning view for read/index
 
   DirectPixelWriter pw;
   pw.init(renderer);
 
   for (int row = 0; row < cachedHeight; row++) {
-    if (cacheFile.read(rowBuffer, bytesPerRow) != bytesPerRow) {
+    if (cacheFile.read(rb, bytesPerRow) != bytesPerRow) {
       LOG_ERR("IMG", "Cache read error at row %d", row);
-      free(rowBuffer);
       cacheFile.close();
       return false;
     }
@@ -88,13 +89,12 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
     for (int col = 0; col < cachedWidth; col++) {
       const int byteIdx = col >> 2;            // col / 4
       const int bitShift = 6 - (col & 3) * 2;  // MSB first within byte
-      uint8_t pixelValue = (rowBuffer[byteIdx] >> bitShift) & 0x03;
+      uint8_t pixelValue = (rb[byteIdx] >> bitShift) & 0x03;
 
       pw.writePixel(x + col, pixelValue);
     }
   }
 
-  free(rowBuffer);
   cacheFile.close();
   LOG_DBG("IMG", "Cache render complete");
   return true;

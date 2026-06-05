@@ -1,5 +1,7 @@
 #include "InflateReader.h"
 
+#include <Memory.h>
+
 #include <cstring>
 #include <type_traits>
 
@@ -17,7 +19,8 @@ bool InflateReader::init(const bool streaming) {
   deinit();  // free any previously allocated ring buffer and reset state
 
   if (streaming) {
-    ringBuffer = static_cast<uint8_t*>(malloc(INFLATE_DICT_SIZE));
+    // Member buffer; freed in deinit(). Audited C-ownership site.
+    ringBuffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(INFLATE_DICT_SIZE));  // alloc-ok
     if (!ringBuffer) return false;
     memset(ringBuffer, 0, INFLATE_DICT_SIZE);
   }
