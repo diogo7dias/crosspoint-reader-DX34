@@ -174,7 +174,7 @@ cutting the v3.0.0 tag.
 
 ## Active
 
-- [ ] **WiFi exit heap leak: QRShare + KOReaderAuth never silent-restart (salvaged from closed RFC #169).** Both activities bring the radio up but skip the silent-restart-on-exit that every other WiFi activity does, so ~50 KB of LWIP scatter is held until the next reboot. Verified in code:
+- [x] **DONE 2026-06-05 (commit 6e53e53f, device-validated, on main): WiFi exit heap leak: QRShare + KOReaderAuth now silent-restart on exit (salvaged from closed RFC #169).** Capture wifiWasUp before teardown, silentRestart() when set, guarded against no-join backout. Mirrors CrossPointWebServerActivity/CalibreConnectActivity. Both activities bring the radio up but skipped the silent-restart-on-exit that every other WiFi activity does, so ~50 KB of LWIP scatter was held until the next reboot. Verified in code:
     - `QRShareActivity.cpp`: `WiFi.mode(WIFI_STA)` at :63, `onExit` does `WIFI_OFF` at :104 but no `silentRestart`.
     - `KOReaderAuthActivity.cpp`: `WiFi.mode(WIFI_STA)` at :57, `onExit` `WIFI_OFF` at :92, no `silentRestart`.
   - Fix: add a silent-restart on exit when the radio actually came up, matching `CrossPointWebServerActivity`/`CalibreConnectActivity` (→ home) — KOReaderAuth is reached from settings so home is fine; QRShare likewise. Small just-code change; the RFC #169 lifecycle-unification extraction was closed as YAGNI, only these two fixes are worth doing. Build → flash → confirm `/heap_report.txt` shows the reclaim after exiting each.
