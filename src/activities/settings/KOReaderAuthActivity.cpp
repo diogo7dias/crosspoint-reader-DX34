@@ -7,7 +7,7 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncClient.h"
 #include "MappedInputManager.h"
-#include "SilentRestart.h"
+#include "network/WifiTeardown.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -85,26 +85,12 @@ void KOReaderAuthActivity::onEnter() {
 }
 
 void KOReaderAuthActivity::onExit() {
+  // Sample before teardown: getMode() is unreliable once WIFI_OFF is set.
+  const bool wifiWasUp = (WiFi.status() == WL_CONNECTED) || (WiFi.getMode() != WIFI_MODE_NULL);
+
   ActivityWithSubactivity::onExit();
 
-  // Capture before teardown: did the radio come up? (getMode() is unreliable
-  // after WiFi.mode(WIFI_OFF) below.)
-  const bool wifiWasUp = (WiFi.getMode() != WIFI_MODE_NULL);
-
-  // Turn off wifi
-  WiFi.disconnect(false);
-  delay(100);
-  WiFi.mode(WIFI_OFF);
-  delay(100);
-
-  // WiFi/LWIP teardown scatters ~50 KB of long-lived allocations that don't
-  // coalesce without a reboot; a silent restart reclaims them. Guarded so a
-  // no-WiFi exit never reboots. Matches CrossPointWebServerActivity /
-  // CalibreConnectActivity (was missing here — the leak persisted until the
-  // next manual reboot).
-  if (wifiWasUp) {
-    silentRestart("wifi-exit-KOReaderAuth");  // does not return
-  }
+  net::teardownAndReclaim(wifiWasUp, net::WifiRestartTarget::Home, "wifi-exit-KOReaderAuth");
 }
 
 void KOReaderAuthActivity::render(Activity::RenderLock&&) {

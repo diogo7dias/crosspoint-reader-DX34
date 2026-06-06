@@ -14,7 +14,7 @@
 
 #include "MappedInputManager.h"
 #include "NetworkModeSelectionActivity.h"
-#include "SilentRestart.h"
+#include "network/WifiTeardown.h"
 #include "WifiSelectionActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
 #include "components/themes/BaseTheme.h"
@@ -64,6 +64,10 @@ void CrossPointWebServerActivity::onEnter() {
 }
 
 void CrossPointWebServerActivity::onExit() {
+  // Sample before any teardown: getMode() is unreliable post-WIFI_OFF. Covers
+  // both AP (getMode()==WIFI_AP) and STA (status()==WL_CONNECTED) sessions.
+  const bool wifiWasUp = (WiFi.status() == WL_CONNECTED) || (WiFi.getMode() != WIFI_MODE_NULL);
+
   ActivityWithSubactivity::onExit();
 
   state = WebServerActivityState::SHUTTING_DOWN;
@@ -81,30 +85,10 @@ void CrossPointWebServerActivity::onExit() {
     dnsServer.reset();
   }
 
-  // Brief wait for LWIP stack to flush pending packets
+  // Brief wait for LWIP stack to flush pending packets before the radio drops
   delay(50);
 
-  // Disconnect WiFi gracefully
-  if (isApMode) {
-    LOG_DBG("WEBACT", "Stopping WiFi AP...");
-    WiFi.softAPdisconnect(true);
-  } else {
-    LOG_DBG("WEBACT", "Disconnecting WiFi (graceful)...");
-    WiFi.disconnect(false);  // false = don't erase credentials, send disconnect frame
-  }
-  delay(30);  // Allow disconnect frame to be sent
-
-  LOG_DBG("WEBACT", "Setting WiFi mode OFF...");
-  WiFi.mode(WIFI_OFF);
-  delay(30);  // Allow WiFi hardware to power down
-
-  // WiFi/LWIP teardown scatters long-lived allocations across the heap; the
-  // contiguous space lost (~50 KB) is unrecoverable without a reboot. Silent
-  // restart clears the fragmentation cleanly. Guarded so backing out of mode
-  // selection without ever joining a network doesn't trigger a reboot cycle.
-  if (WiFi.getMode() != WIFI_MODE_NULL) {
-    silentRestart("wifi-exit-CrossPointWebServer");
-  }
+  net::teardownAndReclaim(wifiWasUp, net::WifiRestartTarget::Home, "wifi-exit-CrossPointWebServer", isApMode);
 }
 
 void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) {
