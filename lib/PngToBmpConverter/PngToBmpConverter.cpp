@@ -198,13 +198,16 @@ struct PngDecodeContext {
   uint32_t chunkBytesRemaining;  // bytes left in current IDAT chunk
   bool idatFinished;             // no more IDAT chunks
 
-  // File read buffer for feeding zlib
-  uint8_t readBuf[2048];
-
-  // Palette for indexed color (type 3)
-  uint8_t palette[256 * 3];
+  // File read buffer for feeding zlib + palette for indexed color (type 3).
+  // Heap-backed (not inline arrays) to keep the struct off the stack — see the
+  // allocation in pngFileToBmpStreamInternal.
+  std::unique_ptr<uint8_t[]> readBuf;   // kReadBufSize bytes
+  std::unique_ptr<uint8_t[]> palette;   // kPaletteBytes bytes
   int paletteSize;
 };
+
+static constexpr size_t kReadBufSize = 2048;
+static constexpr size_t kPaletteBytes = 256 * 3;
 
 // Read the next IDAT chunk header, skipping non-IDAT chunks
 // Returns true if an IDAT chunk was found
@@ -249,14 +252,14 @@ static int feedZlibInput(PngDecodeContext& ctx) {
   }
 
   // Read from current IDAT chunk
-  size_t toRead = sizeof(ctx.readBuf);
+  size_t toRead = kReadBufSize;
   if (toRead > ctx.chunkBytesRemaining) toRead = ctx.chunkBytesRemaining;
 
-  int bytesRead = ctx.file.read(ctx.readBuf, toRead);
+  int bytesRead = ctx.file.read(ctx.readBuf.get(), toRead);
   if (bytesRead <= 0) return -1;
 
   ctx.chunkBytesRemaining -= bytesRead;
-  ctx.zstream.next_in = ctx.readBuf;
+  ctx.zstream.next_in = ctx.readBuf.get();
   ctx.zstream.avail_in = bytesRead;
 
   return bytesRead;
@@ -382,7 +385,7 @@ static void convertScanlineToGray(const PngDecodeContext& ctx, uint8_t* grayRow)
     case PNG_COLOR_PALETTE: {
       const int ppb = 8 / ctx.bitDepth;
       const uint8_t mask = (1 << ctx.bitDepth) - 1;
-      const uint8_t* pal = ctx.palette;
+      const uint8_t* pal = ctx.palette.get();
       const int palSize = ctx.paletteSize;
       for (uint32_t x = 0; x < w; x++) {
         int shift = (ppb - 1 - (x % ppb)) * ctx.bitDepth;
@@ -540,6 +543,16 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
                           .palette = {},
                           .paletteSize = 0};
 
+  // readBuf (2 KB) + palette (768 B) live on the heap, not in the struct, so a
+  // stack-resident PngDecodeContext stays tiny — the fixed FreeRTOS task stack
+  // overflows silently if a ~2.8 KB local lands on it.
+  ctx.readBuf = makeUniqueNoThrow<uint8_t[]>(kReadBufSize);
+  ctx.palette = makeUniqueNoThrow<uint8_t[]>(kPaletteBytes);
+  if (!ctx.readBuf || !ctx.palette) {
+    LOG_ERR("PNG", "Failed to allocate decode buffers");
+    return false;
+  }
+
   // Allocate scanline buffers
   ctx.currentRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(rawRowBytes));  // alloc-ok
   ctx.previousRow = static_cast<uint8_t*>(crosspoint::mem::tryCalloc(rawRowBytes, 1));  // alloc-ok
@@ -565,7 +578,7 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
       if (entries > 256) entries = 256;
       ctx.paletteSize = entries;
       size_t palBytes = entries * 3;
-      pngFile.read(ctx.palette, palBytes);
+      pngFile.read(ctx.palette.get(), palBytes);
       // Skip any remaining palette data
       if (chunkLen > palBytes) pngFile.seekCur(chunkLen - palBytes);
       pngFile.seekCur(4);  // CRC
