@@ -34,6 +34,13 @@ void armAndRestart(uint32_t target, const char* label, const char* reason) {
   // Dump /heap_report.txt before rebooting. Best-effort — failure is logged
   // by writeHeapReport itself, but never blocks the restart.
   writeHeapReport(reason);
+  // Flush pending durable state BEFORE the reboot (after the heap report, so the
+  // report still captures the trigger-time heap, not the post-flush heap). Most
+  // callers don't flush themselves, so this guarantees a silent reboot never
+  // drops a debounced write. Best-effort: flushNow uses nothrow safeWrite, so a
+  // flush that can't allocate under the pressure that triggered the restart just
+  // returns false rather than blocking the reboot.
+  runPreRestartHooks();
   // 50 ms is upstream's value — gives the LOG line time to drain to USB CDC
   // and the WiFi disconnect frame above this call time to leave the radio.
   delay(50);

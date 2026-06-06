@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 // ESP.restart() with an RTC_NOINIT flag that survives the reboot, so setup()
@@ -40,3 +41,45 @@ void clearSilentRestartLoopGuard();
 // actually claim a slot when the ladder lands on SilentRestart. Does not
 // mutate the guard (no magic init), unlike tryReserveAutoSilentRestart().
 uint8_t remainingAutoSilentRestarts();
+
+// ── Pre-restart hooks ───────────────────────────────────────────────────────
+// Run, in registration order, inside EVERY silentRestart*/armAndRestart path
+// immediately before ESP.restart(), so a silent reboot can never silently drop
+// pending durable state. The motivating gap: most silent-restart call sites
+// (WiFi-session exits, OOM-on-activity-entry) reboot without flushing, so a
+// debounced write queued just before the restart (e.g. KOReader credentials)
+// was lost. Register one hook at boot that flushes all dirty persist stores
+// (PersistManager().flushAll()) and the durability becomes structural — no call
+// site can forget. Plain function pointers (no heap, callback-safe), fixed
+// capacity, matching the MemoryPolicy ShedFn idiom. Header-only so the registry
+// + runner are host-testable without pulling the ESP-only armAndRestart in.
+using PreRestartHook = void (*)();
+inline constexpr size_t kMaxPreRestartHooks = 4;
+
+namespace detail {
+struct PreRestartRegistry {
+  PreRestartHook fns[kMaxPreRestartHooks];
+  size_t count;
+};
+inline PreRestartRegistry& preRestartRegistry() {
+  static PreRestartRegistry r{};
+  return r;
+}
+}  // namespace detail
+
+inline void registerPreRestartHook(PreRestartHook fn) {
+  detail::PreRestartRegistry& r = detail::preRestartRegistry();
+  if (fn && r.count < kMaxPreRestartHooks) {
+    r.fns[r.count++] = fn;
+  }
+}
+
+// Invoked by armAndRestart before the reboot. Safe to call standalone in tests.
+inline void runPreRestartHooks() {
+  detail::PreRestartRegistry& r = detail::preRestartRegistry();
+  for (size_t i = 0; i < r.count; ++i) {
+    r.fns[i]();
+  }
+}
+
+inline void clearPreRestartHooksForTest() { detail::preRestartRegistry().count = 0; }
