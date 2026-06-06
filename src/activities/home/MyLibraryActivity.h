@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "../ActivityWithSubactivity.h"
+#include "LibraryEnvPort.h"
 #include "RecentBooksStore.h"
 #include "util/ButtonNavigator.h"
 
@@ -74,6 +75,10 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   // Callbacks
   const std::function<void(const std::string& path)> onSelectBook;
   const std::function<void()> onGoHome;
+
+  // Settings/state/recents access seam (RFC #175). Defaults to the prod
+  // adapter over the real singletons; host tests inject a fake.
+  crosspoint::home::ILibraryEnvPort& env_;
 
   // Data loading
   void loadFiles();
@@ -136,11 +141,13 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   explicit MyLibraryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                              const std::function<void()>& onGoHome,
                              const std::function<void(const std::string& path)>& onSelectBook,
-                             std::string initialPath = "/")
+                             std::string initialPath = "/",
+                             crosspoint::home::ILibraryEnvPort& env = crosspoint::home::defaultLibraryEnv())
       : ActivityWithSubactivity("MyLibrary", renderer, mappedInput),
         basepath(initialPath.empty() ? "/" : std::move(initialPath)),
         onSelectBook(onSelectBook),
-        onGoHome(onGoHome) {}
+        onGoHome(onGoHome),
+        env_(env) {}
   void onEnter() override;
   void onExit() override;
   void loop() override;

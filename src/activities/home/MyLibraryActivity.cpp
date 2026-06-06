@@ -95,6 +95,7 @@ void collectMoveDestinationPaths(const std::string& basePath, std::vector<std::s
   char name[256];
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
     file.getName(name, sizeof(name));
+    // Free helper (no activity instance here) — stays on the SETTINGS macro.
     if ((!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0) {
       file.close();
       continue;
@@ -215,7 +216,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
   char name[256];
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
     file.getName(name, sizeof(name));
-    if ((!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0) {
+    if ((!env_.showHiddenFiles() && name[0] == '.') || strcmp(name, "System Volume Information") == 0) {
       file.close();
       continue;
     }
@@ -240,7 +241,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
       for (auto next = root.openNextFile(); next; next = root.openNextFile()) {
         next.getName(name, sizeof(name));
         const bool skip =
-            (!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0;
+            (!env_.showHiddenFiles() && name[0] == '.') || strcmp(name, "System Volume Information") == 0;
         const bool relevant = !skip && (next.isDirectory() || isManagedFile(std::string(name)));
         next.close();
         esp_task_wdt_reset();
@@ -264,7 +265,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
 
   // Randomize display order for media-browsing folders
   bool shouldShuffle = (basepath == "/sleep pause" || basepath == "/sleep library");
-  if (basepath == "/books" && SETTINGS.booksFolderOrder == 1) shouldShuffle = true;
+  if (basepath == "/books" && env_.shuffleBooksFolder()) shouldShuffle = true;
   if (shouldShuffle) {
     // Directories stay sorted at top; shuffle only files
     auto firstFile = std::partition_point(files.begin(), files.end(),
@@ -486,7 +487,7 @@ std::string MyLibraryActivity::getRowTextForListIndex(const size_t listIndex) {
       // page turn. Hitting it first avoids the per-row EPUB spine+TOC parse
       // + progress.bin read that BookProgress::getPercent does, which was
       // the dominant cost on library scroll.
-      const int recentPercent = RECENT_BOOKS.getCachedPercent(fullPath);
+      const int recentPercent = env_.cachedPercent(fullPath);
       std::optional<int> percent;
       if (recentPercent >= 0) {
         percent = recentPercent;
@@ -621,7 +622,7 @@ void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
   }
 
   FavoriteImage::replacePathReferences(selectedFilePath, targetPath);
-  APP_STATE.saveToFile();
+  env_.persistState();
 
   const std::string newName = getBasename(targetPath);
   if (const auto rawIndex = rawFileIndexForPath(selectedFilePath); rawIndex.has_value()) {
@@ -787,10 +788,10 @@ bool MyLibraryActivity::moveSelectedFileTo(const std::string& targetDir, std::st
         LOG_ERR("LIB", "Failed to move QUOTES sidecar: %s", quotesOld.c_str());
       }
     }
-    RECENT_BOOKS.removeBook(selectedFilePath);
+    env_.removeRecent(selectedFilePath);
   } else if (isImageFile(selectedFilePath)) {
     FavoriteImage::replacePathReferences(selectedFilePath, destination);
-    APP_STATE.saveToFile();
+    env_.persistState();
   }
   if (destinationPath != nullptr) {
     *destinationPath = destination;
@@ -803,7 +804,7 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
   esp_task_wdt_reset();
 
   if (isBookFile(path)) {
-    RECENT_BOOKS.removeBook(path);
+    env_.removeRecent(path);
     esp_task_wdt_reset();
   }
 
@@ -818,7 +819,7 @@ bool MyLibraryActivity::deleteFile(const std::string& path) {
 
   if (isImageFile(path)) {
     FavoriteImage::removePathReferences(path);
-    APP_STATE.saveToFile();
+    env_.persistState();
   }
   if (selectedFilePath == path) selectedFilePath.clear();
   return true;
