@@ -140,6 +140,127 @@ void test_ladder_proceeds_optimistically_above_hard_floor() {
   TEST_ASSERT_EQUAL(Recovery::Proceed, nextRecoveryStep(ctx));
 }
 
+// ── Recovery ladder EXECUTION loop (runRecoveryLadder) ──────────────────────
+// These drive the whole loop (re-probe + flag flips + gate re-check + budget
+// branch) that used to live untested inside EpubReaderActivity, using a fake
+// that scripts the heap through the same setLargestFreeBlockOverride seam.
+
+namespace {
+struct LoopFake {
+  int anchorCalls = 0;
+  int maxCalls = 0;
+  int restartCalls = 0;
+  size_t afterAnchor = 0;  // largest the heap "reveals" after releaseAnchor
+  size_t afterMax = 0;     // largest after releaseMaxResources
+  bool restartTriggers = false;  // trySilentRestart return (false = budget lost)
+};
+size_t loopFakeAnchor(void* p) {
+  auto* f = static_cast<LoopFake*>(p);
+  f->anchorCalls++;
+  setLargestFreeBlockOverride(f->afterAnchor);
+  return f->afterAnchor;
+}
+size_t loopFakeMax(void* p) {
+  auto* f = static_cast<LoopFake*>(p);
+  f->maxCalls++;
+  setLargestFreeBlockOverride(f->afterMax);
+  return f->afterMax;
+}
+bool loopFakeRestart(void* p) {
+  auto* f = static_cast<LoopFake*>(p);
+  f->restartCalls++;
+  return f->restartTriggers;
+}
+crosspoint::mem::RecoveryActions actionsFor(LoopFake& f) {
+  return crosspoint::mem::RecoveryActions{loopFakeAnchor, loopFakeMax, loopFakeRestart, &f};
+}
+}  // namespace
+
+using crosspoint::mem::layoutHeapRecovered;
+using crosspoint::mem::RecoveryActions;
+using crosspoint::mem::RecoveryRun;
+using crosspoint::mem::RecoverySeed;
+using crosspoint::mem::runRecoveryLadder;
+
+void test_loop_gate_already_open_runs_no_actions() {
+  setLargestFreeBlockOverride(50 * 1024);  // above the 48K gate
+  LoopFake f;
+  RecoverySeed seed{true, true, 2};
+  TEST_ASSERT_EQUAL(RecoveryRun::GateOpen, runRecoveryLadder(seed, actionsFor(f)));
+  TEST_ASSERT_EQUAL_INT(0, f.anchorCalls);
+  TEST_ASSERT_EQUAL_INT(0, f.maxCalls);
+  TEST_ASSERT_EQUAL_INT(0, f.restartCalls);
+}
+
+void test_loop_anchor_release_alone_clears_gate() {
+  setLargestFreeBlockOverride(30 * 1024);  // gate closed
+  LoopFake f;
+  f.afterAnchor = 50 * 1024;  // dropping the anchor crosses the 48K gate
+  RecoverySeed seed{/*anchorHeld=*/true, /*bookOpen=*/true, /*budget=*/2};
+  TEST_ASSERT_EQUAL(RecoveryRun::GateOpen, runRecoveryLadder(seed, actionsFor(f)));
+  TEST_ASSERT_EQUAL_INT(1, f.anchorCalls);
+  TEST_ASSERT_EQUAL_INT(0, f.maxCalls);  // never escalated past the anchor
+  TEST_ASSERT_EQUAL_INT(0, f.restartCalls);
+}
+
+void test_loop_escalates_anchor_then_max_then_proceeds() {
+  setLargestFreeBlockOverride(30 * 1024);
+  LoopFake f;
+  f.afterAnchor = 35 * 1024;  // still < 48K gate
+  f.afterMax = 30 * 1024;     // >= 20K floor, < 48K gate -> Proceed optimistically
+  RecoverySeed seed{/*anchorHeld=*/true, /*bookOpen=*/true, /*budget=*/2};
+  TEST_ASSERT_EQUAL(RecoveryRun::GateOpen, runRecoveryLadder(seed, actionsFor(f)));
+  TEST_ASSERT_EQUAL_INT(1, f.anchorCalls);
+  TEST_ASSERT_EQUAL_INT(1, f.maxCalls);
+  TEST_ASSERT_EQUAL_INT(0, f.restartCalls);
+}
+
+void test_loop_triggers_silent_restart_below_floor_with_budget() {
+  setLargestFreeBlockOverride(10 * 1024);
+  LoopFake f;
+  f.afterAnchor = 10 * 1024;
+  f.afterMax = 10 * 1024;  // below the 20K hard floor
+  f.restartTriggers = true;
+  RecoverySeed seed{/*anchorHeld=*/true, /*bookOpen=*/true, /*budget=*/2};
+  TEST_ASSERT_EQUAL(RecoveryRun::Restarted, runRecoveryLadder(seed, actionsFor(f)));
+  TEST_ASSERT_EQUAL_INT(1, f.anchorCalls);
+  TEST_ASSERT_EQUAL_INT(1, f.maxCalls);
+  TEST_ASSERT_EQUAL_INT(1, f.restartCalls);
+}
+
+void test_loop_gives_up_when_restart_reserve_lost() {
+  setLargestFreeBlockOverride(10 * 1024);
+  LoopFake f;
+  f.afterAnchor = 10 * 1024;
+  f.afterMax = 10 * 1024;
+  f.restartTriggers = false;  // budget vanished between peek and claim
+  RecoverySeed seed{/*anchorHeld=*/true, /*bookOpen=*/true, /*budget=*/2};
+  TEST_ASSERT_EQUAL(RecoveryRun::GiveUp, runRecoveryLadder(seed, actionsFor(f)));
+  TEST_ASSERT_EQUAL_INT(1, f.restartCalls);  // it tried
+}
+
+void test_loop_gives_up_below_floor_when_budget_zero_never_tries_restart() {
+  setLargestFreeBlockOverride(10 * 1024);
+  LoopFake f;
+  f.afterMax = 10 * 1024;  // below floor
+  RecoverySeed seed{/*anchorHeld=*/false, /*bookOpen=*/true, /*budget=*/0};
+  TEST_ASSERT_EQUAL(RecoveryRun::GiveUp, runRecoveryLadder(seed, actionsFor(f)));
+  TEST_ASSERT_EQUAL_INT(0, f.anchorCalls);  // anchor not held
+  TEST_ASSERT_EQUAL_INT(1, f.maxCalls);
+  TEST_ASSERT_EQUAL_INT(0, f.restartCalls);  // budget 0 -> GiveUp, restart never attempted
+}
+
+void test_loop_convenience_wrapper_maps_to_bool() {
+  setLargestFreeBlockOverride(50 * 1024);
+  LoopFake f1;
+  TEST_ASSERT_TRUE(layoutHeapRecovered(RecoverySeed{true, true, 2}, actionsFor(f1)));
+
+  setLargestFreeBlockOverride(10 * 1024);
+  LoopFake f2;
+  f2.afterMax = 10 * 1024;
+  TEST_ASSERT_FALSE(layoutHeapRecovered(RecoverySeed{false, true, 0}, actionsFor(f2)));
+}
+
 // ── Dynamic probe-before-grow + shed ───────────────────────────────────────
 
 void test_room_to_grow_passes_without_shedding_when_heap_ample() {
@@ -223,6 +344,13 @@ int main(int, char**) {
   RUN_TEST(test_ladder_gives_up_below_hard_floor_when_budget_exhausted);
   RUN_TEST(test_ladder_gives_up_below_hard_floor_when_no_book_open);
   RUN_TEST(test_ladder_proceeds_optimistically_above_hard_floor);
+  RUN_TEST(test_loop_gate_already_open_runs_no_actions);
+  RUN_TEST(test_loop_anchor_release_alone_clears_gate);
+  RUN_TEST(test_loop_escalates_anchor_then_max_then_proceeds);
+  RUN_TEST(test_loop_triggers_silent_restart_below_floor_with_budget);
+  RUN_TEST(test_loop_gives_up_when_restart_reserve_lost);
+  RUN_TEST(test_loop_gives_up_below_floor_when_budget_zero_never_tries_restart);
+  RUN_TEST(test_loop_convenience_wrapper_maps_to_bool);
   RUN_TEST(test_room_to_grow_passes_without_shedding_when_heap_ample);
   RUN_TEST(test_room_to_grow_sheds_once_then_succeeds);
   RUN_TEST(test_room_to_grow_fails_when_shed_cannot_free_enough);

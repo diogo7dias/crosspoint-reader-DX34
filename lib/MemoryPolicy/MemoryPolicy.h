@@ -22,6 +22,19 @@
 
 #include "HeapGuard.h"
 
+// The recovery-ladder execution loop below (runRecoveryLadder) emits the same
+// LOG_DIAG("ERS", ...) trail the reader pre-flight gate has always written to
+// the RTC ring / crash report. Logging.h pulls in Arduino HWCDC, which does not
+// compile on the host test target, so route through a guarded macro: real
+// LOG_DIAG on device, a no-op under UNIT_TEST_HOST (where the lib is ignored
+// and tests assert on outcomes/counters, not log text).
+#ifdef UNIT_TEST_HOST
+#define CROSSPOINT_ERS_LOG(...) ((void)0)
+#else
+#include "Logging.h"
+#define CROSSPOINT_ERS_LOG(...) LOG_DIAG("ERS", __VA_ARGS__)
+#endif
+
 namespace crosspoint {
 namespace mem {
 
@@ -151,6 +164,105 @@ inline Recovery nextRecoveryStep(const RecoveryContext& c) {
     return (c.bookOpen && c.restartBudget > 0) ? Recovery::SilentRestart : Recovery::GiveUp;
   }
   return Recovery::Proceed;
+}
+
+// ── Recovery ladder (impure EXECUTION loop, host-testable) ───────────────────
+// The other half of the ladder: nextRecoveryStep decides the order, this runs
+// it. Lifted verbatim from EpubReaderActivity::heapHeadroomOkForLayout so the
+// loop (re-probe, flag flips, the 48 KB re-check after the anchor drop, the
+// 20 KB hard-floor + restart-budget branch, and the LOG_DIAG trail) is finally
+// reproducible on the host instead of only on a fragmented device. The caller
+// supplies the three impure rung actions; everything between them is here.
+enum class RecoveryRun : uint8_t {
+  GateOpen,   // layout may proceed (gate cleared, or optimistic above the floor)
+  Restarted,  // a silent restart was triggered (device: never returns after;
+              // host: the fake returned, so callers must treat it as "stop")
+  GiveUp,     // budget/floor exhausted -> caller routes to the recovery screen
+};
+
+// Starting flags the caller computes once (largestAfterStep is seeded here from
+// the first probe). Mirrors the fields the old hand-rolled ctx set up.
+struct RecoverySeed {
+  bool anchorHeld = false;
+  bool bookOpen = false;     // silent-restart-to-reader needs an open EPUB
+  uint8_t restartBudget = 0;  // remainingAutoSilentRestarts() (0..2)
+};
+
+// The impure rungs, injected as plain function pointers (callback-safe, no heap,
+// GCC-8/C++11-clean — matches the ShedFn idiom below). `userData` is forwarded
+// to each (the activity passes `this`; tests pass a fake). releaseAnchor /
+// releaseMaxResources each perform their side effect and return the RE-PROBED
+// largest-free-block, so the loop needs no heap probe of its own beyond the
+// gate check. trySilentRestart reserves a slot and (on success) persists +
+// reboots: true => restart triggered (noreturn on device); false => budget was
+// exhausted between the peek and the claim.
+struct RecoveryActions {
+  size_t (*releaseAnchor)(void* userData) = nullptr;
+  size_t (*releaseMaxResources)(void* userData) = nullptr;
+  bool (*trySilentRestart)(void* userData) = nullptr;
+  void* userData = nullptr;
+};
+
+inline RecoveryRun runRecoveryLadder(const RecoverySeed& seed, const RecoveryActions& a) {
+  if (canAfford(Op::BuildSectionLayout)) {
+    return RecoveryRun::GateOpen;
+  }
+  const size_t largest0 = crosspoint::heap::largestFreeBlockBytes();
+  CROSSPOINT_ERS_LOG("pre-flight gate: largest=%u below %u, running defrag pass", (unsigned)largest0,
+                     (unsigned)thresholdFor(Op::BuildSectionLayout));
+
+  RecoveryContext ctx;
+  ctx.anchorHeld = seed.anchorHeld;
+  ctx.maxAlreadyDropped = false;
+  ctx.bookOpen = seed.bookOpen;
+  ctx.restartBudget = seed.restartBudget;
+  ctx.largestAfterStep = largest0;
+
+  for (;;) {
+    switch (nextRecoveryStep(ctx)) {
+      case Recovery::ReleaseAnchor:
+        ctx.largestAfterStep = a.releaseAnchor(a.userData);
+        ctx.anchorHeld = false;
+        CROSSPOINT_ERS_LOG("pre-flight gate: anchor released, largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
+                           (unsigned)largest0);
+        if (canAfford(Op::BuildSectionLayout)) {
+          return RecoveryRun::GateOpen;
+        }
+        break;
+
+      case Recovery::ReleaseMaxResources:
+        ctx.largestAfterStep = a.releaseMaxResources(a.userData);
+        ctx.maxAlreadyDropped = true;
+        CROSSPOINT_ERS_LOG("pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
+                           (unsigned)largest0);
+        break;
+
+      case Recovery::SilentRestart:
+        CROSSPOINT_ERS_LOG("pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)ctx.largestAfterStep,
+                           (unsigned)kLayoutHardFloorBytes);
+        if (a.trySilentRestart(a.userData)) {
+          return RecoveryRun::Restarted;  // device: unreachable (reboot)
+        }
+        CROSSPOINT_ERS_LOG("pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
+        return RecoveryRun::GiveUp;
+
+      case Recovery::GiveUp:
+        CROSSPOINT_ERS_LOG("pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)ctx.largestAfterStep,
+                           (unsigned)kLayoutHardFloorBytes);
+        CROSSPOINT_ERS_LOG("pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
+        return RecoveryRun::GiveUp;
+
+      case Recovery::Proceed:
+        return RecoveryRun::GateOpen;
+    }
+  }
+}
+
+// Convenience for the reader pre-flight: true == proceed with layout. Both
+// Restarted (host fake only) and GiveUp map to false. Keeps the existing
+// `if (!heapHeadroomOkForLayout())` call site a one-liner.
+inline bool layoutHeapRecovered(const RecoverySeed& seed, const RecoveryActions& a) {
+  return runRecoveryLadder(seed, a) == RecoveryRun::GateOpen;
 }
 
 // ── Layout/render degradation thresholds (RFC #164 step 7, Tier A) ──────────

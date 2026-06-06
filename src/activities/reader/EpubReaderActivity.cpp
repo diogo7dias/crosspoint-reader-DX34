@@ -386,90 +386,51 @@ void EpubReaderActivity::releaseMaxResources() {
 
 bool EpubReaderActivity::heapHeadroomOkForLayout() {
   namespace mem = crosspoint::mem;
-  if (mem::canAfford(mem::Op::BuildSectionLayout)) {
-    return true;
-  }
-  const size_t largest = crosspoint::heap::largestFreeBlockBytes();
-  LOG_DIAG("ERS", "pre-flight gate: largest=%u below %u, running defrag pass", (unsigned)largest,
-           (unsigned)mem::thresholdFor(mem::Op::BuildSectionLayout));
 
-  // The escalation order (release the layout anchor → releaseMaxResources →
-  // silent-restart / give-up) is now decided by the pure, host-testable
-  // crosspoint::mem::nextRecoveryStep (RFC #163). This activity still RUNS each
-  // rung's impure action — they need its render lock, `this`, and the live
-  // anchor — but the ordering, the 48 KB re-check after the anchor drop, the
-  // 20 KB hard-floor interplay, and the restart-budget branch are all the
-  // policy core's job, so the melomaniac-class fragmentation ladder is finally
-  // reproducible on the host (test/test_memory_policy).
-  //
-  // Anchor (allocated at onEnter, kLayoutHeapAnchorBytes of guaranteed-
-  // contiguous space): dropping it first can clear the gate without the more
-  // expensive releaseMaxResources() (which also evicts CSS + font + page cache
-  // and forces a slower next paint). It is one-shot per chapter; the
-  // post-build re-acquire is best-effort.
-  mem::RecoveryContext ctx;
-  ctx.anchorHeld = layoutHeapAnchor_.ok();
-  ctx.maxAlreadyDropped = false;
-  ctx.bookOpen = true;  // an open EPUB is what silentRestartToReader resumes
-  ctx.restartBudget = remainingAutoSilentRestarts();
-  ctx.largestAfterStep = largest;
+  // Both halves of the recovery ladder now live in the host-testable
+  // MemoryPolicy (RFC #163): nextRecoveryStep decides the order, runRecoveryLadder
+  // runs the loop (re-probe, flag flips, the 48 KB re-check after the anchor
+  // drop, the 20 KB hard-floor + restart-budget branch, and the LOG_DIAG trail).
+  // This activity supplies only the three impure rungs — they need `this`, the
+  // render lock, and the live anchor. The melomaniac-class fragmentation ladder
+  // is reproduced on the host in test/test_memory_policy (runRecoveryLadder).
+  const mem::RecoverySeed seed{
+      /*anchorHeld=*/layoutHeapAnchor_.ok(),
+      /*bookOpen=*/true,  // an open EPUB is what silentRestartToReader resumes
+      /*restartBudget=*/remainingAutoSilentRestarts(),
+  };
 
-  for (;;) {
-    switch (mem::nextRecoveryStep(ctx)) {
-      case mem::Recovery::ReleaseAnchor:
-        // Free the arena block (24 KB contiguous) for the retry. The retry's
-        // layout finds no arena and runs the std::vector fallback (RFC #164
-        // step 4) in the freed space — the original anchor-release semantics.
-        layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
-        ctx.anchorHeld = false;
-        ctx.largestAfterStep = crosspoint::heap::largestFreeBlockBytes();
-        LOG_DIAG("ERS", "pre-flight gate: anchor released, largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
-                 (unsigned)largest);
-        if (mem::canAfford(mem::Op::BuildSectionLayout)) {
-          return true;
-        }
-        break;
-
-      case mem::Recovery::ReleaseMaxResources:
-        releaseMaxResources();
-        ctx.maxAlreadyDropped = true;
-        ctx.largestAfterStep = crosspoint::heap::largestFreeBlockBytes();
-        LOG_DIAG("ERS", "pre-flight gate: post-defrag largest=%u (was %u)", (unsigned)ctx.largestAfterStep,
-                 (unsigned)largest);
-        break;
-
-      case mem::Recovery::SilentRestart:
-        // Last-resort recovery: heap fragmentation is non-moving on ESP32-C3
-        // and releaseMaxResources() already evicted every droppable cache, so
-        // a reboot is the only reliable way to reclaim the contiguous space
-        // the next layout peak needs. silentRestartToReader routes back to
-        // APP_STATE.openEpubPath so the user lands on the same book. The
-        // budget peek above let the policy core pick this rung; claim the slot
-        // now (a failed reserve — exhausted between peek and here — falls
-        // through to the recovery screen, exactly as before).
-        LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)ctx.largestAfterStep,
-                 (unsigned)mem::kLayoutHardFloorBytes);
-        if (tryReserveAutoSilentRestart()) {
-          LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
-          persistProgressBeforeRestart();
-          silentRestartToReader("reader-preflight-frag-recovery");  // does not return
-        }
-        LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
-        return false;
-
-      case mem::Recovery::GiveUp:
-        LOG_DIAG("ERS", "pre-flight gate: hard floor breached (largest=%u < %u)", (unsigned)ctx.largestAfterStep,
-                 (unsigned)mem::kLayoutHardFloorBytes);
-        LOG_DIAG("ERS", "pre-flight gate: auto-restart budget exhausted, falling through to recovery screen");
-        return false;
-
-      case mem::Recovery::Proceed:
-        // Above the hard floor (20 KB) but below the 48 KB gate: attempt the
-        // layout optimistically and let the retry-once + auto-revert path in
-        // ensureSectionLoaded catch a real mid-layout malloc failure.
-        return true;
+  mem::RecoveryActions acts;
+  acts.userData = this;
+  // Drop the 24 KB arena anchor (allocated at onEnter): the retry's layout finds
+  // no arena and runs the std::vector fallback (RFC #164 step 4) in the freed
+  // space. Dropping it first can clear the gate without the costlier cache evict.
+  acts.releaseAnchor = [](void* p) -> size_t {
+    auto* self = static_cast<EpubReaderActivity*>(p);
+    self->layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
+    return crosspoint::heap::largestFreeBlockBytes();
+  };
+  acts.releaseMaxResources = [](void* p) -> size_t {
+    auto* self = static_cast<EpubReaderActivity*>(p);
+    self->releaseMaxResources();  // evicts CSS index + page + font + status caches
+    return crosspoint::heap::largestFreeBlockBytes();
+  };
+  // Last-resort: non-moving C3 fragmentation only clears via reboot.
+  // silentRestartToReader routes back to APP_STATE.openEpubPath so the user
+  // lands on the same book. A reserve that fails (budget lost between the peek
+  // and here) returns false -> the loop falls through to the recovery screen.
+  acts.trySilentRestart = [](void* p) -> bool {
+    auto* self = static_cast<EpubReaderActivity*>(p);
+    if (!tryReserveAutoSilentRestart()) {
+      return false;
     }
-  }
+    LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
+    self->persistProgressBeforeRestart();
+    silentRestartToReader("reader-preflight-frag-recovery");  // does not return
+    return true;  // unreachable
+  };
+
+  return mem::layoutHeapRecovered(seed, acts);
 }
 
 void EpubReaderActivity::showLayoutRecoveryScreen(LayoutRecoveryState newState) {
