@@ -9,7 +9,7 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
 #include "MappedInputManager.h"
-#include "SilentRestart.h"
+#include "network/WifiTeardown.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -226,21 +226,14 @@ void KOReaderSyncActivity::onEnter() {
 }
 
 void KOReaderSyncActivity::onExit() {
+  // NO_CREDENTIALS never activates WiFi, so only that state skips the reclaim.
+  // (Session flag, not a radio query — sampled before teardown for clarity.)
+  const bool wifiWasUp = (state != NO_CREDENTIALS);
+
   ActivityWithSubactivity::onExit();
 
-  // Turn off wifi
-  WiFi.disconnect(false);
-  delay(100);
-  WiFi.mode(WIFI_OFF);
-  delay(100);
-
-  // Clear WiFi/LWIP heap fragmentation via reboot. Route back to the open
-  // EPUB so the user lands where they were before launching sync.
-  // NO_CREDENTIALS state never activates WiFi — only silent-restart if a
-  // session actually touched the radio.
-  if (state != NO_CREDENTIALS) {
-    silentRestartToReader("wifi-exit-KOReaderSync");
-  }
+  // Route back to the open EPUB so the user lands where they were before sync.
+  net::teardownAndReclaim(wifiWasUp, net::WifiRestartTarget::Reader, "wifi-exit-KOReaderSync");
 }
 
 void KOReaderSyncActivity::render(Activity::RenderLock&&) {

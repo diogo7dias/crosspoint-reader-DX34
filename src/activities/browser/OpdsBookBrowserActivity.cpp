@@ -10,7 +10,7 @@
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "Paths.h"
-#include "SilentRestart.h"
+#include "network/WifiTeardown.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -39,10 +39,10 @@ void OpdsBookBrowserActivity::onEnter() {
 }
 
 void OpdsBookBrowserActivity::onExit() {
-  ActivityWithSubactivity::onExit();
+  // Sample before any teardown: getMode() is unreliable once WIFI_OFF is set.
+  const bool wifiWasUp = (WiFi.status() == WL_CONNECTED) || (WiFi.getMode() != WIFI_MODE_NULL);
 
-  // Turn off WiFi when exiting
-  WiFi.mode(WIFI_OFF);
+  ActivityWithSubactivity::onExit();
 
   // Drop allocated capacity, not just size — large OPDS feeds can leave
   // 5-10 KB of unused vector capacity per browse session that the next
@@ -50,11 +50,7 @@ void OpdsBookBrowserActivity::onExit() {
   std::vector<OpdsEntry>().swap(entries);
   std::vector<std::string>().swap(navigationHistory);
 
-  // Clear WiFi/LWIP heap fragmentation via reboot. Skip if user backed out
-  // of mode selection without joining a network.
-  if (WiFi.getMode() != WIFI_MODE_NULL) {
-    silentRestart("wifi-exit-OpdsBookBrowser");
-  }
+  net::teardownAndReclaim(wifiWasUp, net::WifiRestartTarget::Home, "wifi-exit-OpdsBookBrowser");
 }
 
 void OpdsBookBrowserActivity::loop() {

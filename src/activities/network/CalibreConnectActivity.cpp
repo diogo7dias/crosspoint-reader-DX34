@@ -9,8 +9,8 @@
 #include <new>
 
 #include "MappedInputManager.h"
-#include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
+#include "network/WifiTeardown.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 
@@ -45,22 +45,17 @@ void CalibreConnectActivity::onEnter() {
 }
 
 void CalibreConnectActivity::onExit() {
+  // Sample before any teardown: getMode() is unreliable post-WIFI_OFF, and the
+  // WifiSelection subactivity's onExit() can power the radio down.
+  const bool wifiWasUp = (WiFi.status() == WL_CONNECTED) || (WiFi.getMode() != WIFI_MODE_NULL);
+
   ActivityWithSubactivity::onExit();
 
   stopWebServer();
   MDNS.end();
 
-  delay(50);
-  WiFi.disconnect(false);
-  delay(30);
-  WiFi.mode(WIFI_OFF);
-  delay(30);
-
-  // Clear WiFi/LWIP heap fragmentation via reboot. Skip if user backed out
-  // of mode selection without joining a network.
-  if (WiFi.getMode() != WIFI_MODE_NULL) {
-    silentRestart("wifi-exit-CalibreConnect");
-  }
+  delay(50);  // let LWIP flush pending server traffic before the radio drops
+  net::teardownAndReclaim(wifiWasUp, net::WifiRestartTarget::Home, "wifi-exit-CalibreConnect");
 }
 
 void CalibreConnectActivity::onWifiSelectionComplete(const bool connected) {
