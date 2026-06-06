@@ -48,18 +48,35 @@ class FilePrint : public Print {
   FILE* f_;
 };
 
-// Inflate the chapter from the EPUB into a temp file (disarmed). Returns bytes.
-size_t extractChapterToTmp() {
+// Inflate one EPUB entry into the temp file (disarmed). Returns bytes written.
+size_t extractEntryToTmp(const char* entry) {
   FILE* tf = std::fopen(kTmpHtml, "wb");
   if (!tf) return 0;
   FilePrint fp(tf);
   std::string epubPath = SIM_EPUB_PATH;
   ZipFile zip(epubPath);
-  zip.readFileToStream(kChapterEntry, fp, 4096);
+  zip.readFileToStream(entry, fp, 4096);
   const long n = std::ftell(tf);
   std::fclose(tf);
   return n < 0 ? 0 : static_cast<size_t>(n);
 }
+
+// Inflate the canonical single chapter (kChapterEntry) — used by the per-chapter
+// fidelity + fragmentation tests below.
+size_t extractChapterToTmp() { return extractEntryToTmp(kChapterEntry); }
+
+// Build the entry name of spine section N for this fixture (Standard Ebooks
+// Pride & Prejudice, GP 1342). Sections are h-0..h-15; index -1 is the front
+// wrapper. Returned by value into `out` (caller-sized buffer).
+void bookSectionEntry(int n, char* out, size_t cap) {
+  if (n < 0) {
+    snprintf(out, cap, "OEBPS/wrap0000.html");
+  } else {
+    snprintf(out, cap, "OEBPS/7910875783089588439_1342-h-%d.htm.html", n);
+  }
+}
+constexpr int kBookFirstSection = -1;  // wrap0000.html
+constexpr int kBookLastSection = 15;   // h-15
 
 GfxRenderer g_renderer;
 
@@ -143,6 +160,84 @@ void test_parse_chapter_under_fragmentation() {
   TEST_MESSAGE(msg);
   TEST_ASSERT_FALSE(threw);
   TEST_ASSERT_EQUAL_UINT(0, wouldAbort);
+}
+
+// Whole-book sweep (healthy heap): parse EVERY spine section, not just one
+// chapter. A real open-and-read drives all sections; a section heavier than h-4
+// (more footnotes/images/markup) could OOM where the single-chapter test never
+// looks. Each section is armed on a fresh fragmentation ceiling, modelling the
+// reader freeing the prior section before loading the next. Asserts the whole
+// book parses with ZERO would-abort (no unguarded throwing allocation anywhere).
+void test_parse_whole_book_healthy() {
+  uint32_t totalPages = 0;
+  unsigned totalWouldAbort = 0;
+  long long totalUs = 0;
+  int parsed = 0;
+  char entry[96];
+  for (int n = kBookFirstSection; n <= kBookLastSection; ++n) {
+    bookSectionEntry(n, entry, sizeof(entry));
+    const size_t bytes = extractEntryToTmp(entry);
+    if (bytes == 0) continue;  // entry absent in this fixture — skip
+
+    SimHeap::arm(/*cap=*/8u * 1024 * 1024, /*budget=*/64u * 1024 * 1024);
+    const auto t0 = std::chrono::steady_clock::now();
+    const uint32_t pages = parseChapter();
+    const auto t1 = std::chrono::steady_clock::now();
+    totalWouldAbort += SimHeap::wouldAbortThrows();
+    SimHeap::disarm();
+
+    totalPages += pages;
+    totalUs += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    ++parsed;
+  }
+
+  char msg[160];
+  snprintf(msg, sizeof(msg), "WHOLE BOOK: %d sections | %u pages | %lld us | wouldAbort=%u", parsed, totalPages,
+           totalUs, totalWouldAbort);
+  TEST_MESSAGE(msg);
+
+  // All 16 content sections (h-0..h-15) must parse; the wrapper may or may not.
+  TEST_ASSERT_GREATER_OR_EQUAL_INT(16, parsed);
+  // The whole book is far larger than the single 57-page chapter — sanity floor,
+  // not a fidelity gate (that stays on test_parse_chapter_healthy).
+  TEST_ASSERT_GREATER_THAN_UINT(300, totalPages);
+  TEST_ASSERT_EQUAL_UINT(0, totalWouldAbort);
+}
+
+// Whole-book sweep under the v3.0.1 / melomaniac fragmentation ceiling. Every
+// section must reach OOM (if at all) only through guarded nothrow/probe paths,
+// never a throwing allocation — book-wide, not just on h-4. A wouldAbort>0 on
+// ANY section is a real unguarded-OOM finding to chase.
+void test_parse_whole_book_under_fragmentation() {
+  unsigned totalWouldAbort = 0;
+  int threwSection = -2;  // sentinel: no throw
+  int parsed = 0;
+  char entry[96];
+  for (int n = kBookFirstSection; n <= kBookLastSection; ++n) {
+    bookSectionEntry(n, entry, sizeof(entry));
+    if (extractEntryToTmp(entry) == 0) continue;  // disarmed extraction
+
+    crosspoint::heap::setLargestFreeBlockOverride(11764);
+    SimHeap::arm(/*cap=*/11764, /*budget=*/142824);
+    try {
+      parseChapter();
+    } catch (const std::bad_alloc&) {
+      if (threwSection == -2) threwSection = n;
+    }
+    totalWouldAbort += SimHeap::wouldAbortThrows();
+    SimHeap::disarm();
+    crosspoint::heap::clearLargestFreeBlockOverride();
+    ++parsed;
+  }
+
+  char msg[160];
+  snprintf(msg, sizeof(msg), "WHOLE BOOK@frag(11764): %d sections | threwSection=%d | wouldAbort=%u", parsed,
+           threwSection, totalWouldAbort);
+  TEST_MESSAGE(msg);
+
+  TEST_ASSERT_GREATER_OR_EQUAL_INT(16, parsed);
+  TEST_ASSERT_EQUAL_INT(-2, threwSection);     // no section threw bad_alloc
+  TEST_ASSERT_EQUAL_UINT(0, totalWouldAbort);  // no unguarded OOM anywhere in the book
 }
 
 // ---------------------------------------------------------------------------
@@ -839,6 +934,8 @@ int main(int, char**) {
   RUN_TEST(test_arena_byte_overflow_migrates);
   RUN_TEST(test_parse_chapter_healthy);
   RUN_TEST(test_parse_chapter_under_fragmentation);
+  RUN_TEST(test_parse_whole_book_healthy);
+  RUN_TEST(test_parse_whole_book_under_fragmentation);
   RUN_TEST(test_style_plain_is_regular);
   RUN_TEST(test_style_bold_tag);
   RUN_TEST(test_style_em_then_bold_nested);
