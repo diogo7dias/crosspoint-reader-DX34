@@ -815,6 +815,12 @@ void setup() {
       LOG_INF("MAIN", "First boot of %s — SD sidecar backup written", CROSSPOINT_VERSION);
     }
   }
+  // Guarantee every silent restart flushes pending durable state before
+  // rebooting: most silent-restart call sites (WiFi-session exits, OOM-on-entry)
+  // don't flush themselves, so a debounced write queued just before the reboot
+  // would be lost. One boot-time hook makes the flush structural.
+  registerPreRestartHook([] { (void)crosspoint::persist::PersistManager().flushAll(); });
+
   APP_STATE.loadFromFile();
   logHeapStage("after_app_state");
 
