@@ -5,6 +5,7 @@
 #include <esp_attr.h>
 
 #include "HeapReport.h"
+#include "network/WifiDiagReport.h"
 
 namespace {
 
@@ -34,6 +35,10 @@ void armAndRestart(uint32_t target, const char* label, const char* reason) {
   // Dump /heap_report.txt before rebooting. Best-effort — failure is logged
   // by writeHeapReport itself, but never blocks the restart.
   writeHeapReport(reason);
+  // Also capture the WiFi diagnostic timeline so a WiFi-induced silent reboot
+  // leaves /diag_report.txt, not just /heap_report.txt. No-op when no WiFi
+  // attempt happened this boot, so it never clobbers an earlier failure report.
+  WifiDiagReport::captureForReboot();
   // Flush pending durable state BEFORE the reboot (after the heap report, so the
   // report still captures the trigger-time heap, not the post-flush heap). Most
   // callers don't flush themselves, so this guarantees a silent reboot never

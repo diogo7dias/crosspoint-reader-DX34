@@ -605,6 +605,9 @@ void writeReportOnFailure(FailureKind kind) {
     case FailureKind::OtaInstallFailed:
       kindName = "OTA_INSTALL_FAILED";
       break;
+    case FailureKind::SilentRestart:
+      kindName = "SILENT_RESTART (timeline capture)";
+      break;
     case FailureKind::StatusFailed:
     default:
       kindName = "CONNECT_FAILED";
@@ -622,6 +625,16 @@ void writeReportOnFailure(FailureKind kind) {
   f.close();
   LOG_INF("WIFI_DIAG", "Wrote %s (kind=%s, reason=%d)", REPORT_PATH, kindName,
           static_cast<int>(s_lastDisconnectReason));
+}
+
+void captureForReboot() {
+  // Only capture if a WiFi attempt left a timeline this boot. A non-WiFi silent
+  // restart (e.g. reader OOM) must NOT clobber an earlier real failure report
+  // with an empty one — so skip when nothing was recorded.
+  if (s_timelineCount == 0) {
+    return;
+  }
+  writeReportOnFailure(FailureKind::SilentRestart);
 }
 
 }  // namespace WifiDiagReport

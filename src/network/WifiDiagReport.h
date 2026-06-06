@@ -24,6 +24,7 @@ enum class FailureKind : uint8_t {
   Timeout,           // 15 s timeout in checkConnectionStatus
   OtaCheckFailed,    // OtaUpdater::checkForUpdate returned a failure tag
   OtaInstallFailed,  // OtaUpdater::installUpdate returned a failure tag
+  SilentRestart,     // captured on a silent reboot (not a WiFi failure per se)
 };
 
 // Register the WiFi event handler. Call once from setup(). Idempotent.
@@ -57,6 +58,13 @@ void noteScanSummary(size_t totalNetworks, bool targetFound, int32_t targetRssi,
 // Serialize the timeline + environment to /diag_report.txt. Overwrites any
 // previous report. Safe to call from any task.
 void writeReportOnFailure(FailureKind kind);
+
+// Capture the WiFi diagnostic report on a silent restart, so a WiFi-induced
+// reboot leaves its timeline on the SD card (the heap report alone misses it).
+// No-op when no WiFi attempt happened this boot (s_timelineCount == 0) — so a
+// pure reader-OOM restart never clobbers an earlier real failure report with an
+// empty one. Safe to call from the reboot path.
+void captureForReboot();
 
 // ---- OTA breadcrumbs (RFC #146 stage 1) ----
 // Reset OTA section state at the start of an attempt. Idempotent.
