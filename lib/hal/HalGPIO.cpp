@@ -11,6 +11,8 @@ void HalGPIO::update() { inputMgr.update(); }
 
 bool HalGPIO::isPressed(uint8_t buttonIndex) const { return inputMgr.isPressed(buttonIndex); }
 
+bool HalGPIO::isAnyPressed() const { return inputMgr.isAnyPressed(); }
+
 bool HalGPIO::wasPressed(uint8_t buttonIndex) const { return inputMgr.wasPressed(buttonIndex); }
 
 bool HalGPIO::wasAnyPressed() const { return inputMgr.wasAnyPressed(); }

@@ -24,7 +24,11 @@ class HalPowerManager {
   mutable int _batteryCachedPercent = 0;
 
  public:
-  static constexpr int LOW_POWER_FREQ = 10;                    // MHz
+  // 80 MHz (was 10): at 10 MHz the first button press after the 3s idle window
+  // crawled — ADC sampling + the idle-loop tick both ran at 1/24th clock, so a
+  // page-turn after any reading pause felt unresponsive. 80 MHz keeps a real
+  // power saving (1/3 of the 240 MHz normal freq) while restoring snappy wake.
+  static constexpr int LOW_POWER_FREQ = 80;                   // MHz
   static constexpr unsigned long IDLE_POWER_SAVING_MS = 3000;  // ms
 
   void begin();

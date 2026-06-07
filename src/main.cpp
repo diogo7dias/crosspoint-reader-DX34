@@ -982,9 +982,14 @@ void loop() {
     }
   }
 
-  // Check for any user activity (button press or release) or active background work
+  // Check for any user activity (button press or release), a button currently
+  // held down (e.g. hold-to-scroll), or active background work. isAnyPressed()
+  // keeps the CPU at full clock for the entire duration of a held button so the
+  // idle power-saving throttle never engages mid-press and makes navigation
+  // feel sluggish.
   static unsigned long lastActivityTime = millis();
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || (currentActivity && currentActivity->preventAutoSleep())) {
+  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.isAnyPressed() ||
+      (currentActivity && currentActivity->preventAutoSleep())) {
     lastActivityTime = millis();         // Reset inactivity timer
     powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity
   }
@@ -1060,9 +1065,13 @@ void loop() {
     yield();                             // Give FreeRTOS a chance to run tasks, but return immediately
   } else {
     if (millis() - lastActivityTime >= HalPowerManager::IDLE_POWER_SAVING_MS) {
-      // If we've been inactive for a while, increase the delay to save power
+      // If we've been inactive for a while, increase the delay to save power.
+      // 20ms (was 50): caps the worst-case button-sample latency on the first
+      // press after a reading pause to ~20ms instead of ~50ms, so a page-turn
+      // after the 3s idle window no longer feels laggy. Still far cheaper than
+      // the hot 2ms active loop.
       powerManager.setPowerSaving(true);  // Lower CPU frequency after extended inactivity
-      delay(50);
+      delay(20);
     } else {
       // Short delay to prevent tight loop while still being responsive. 2ms
       // (was 10ms, then 5ms) further trims worst-case button-detection latency
