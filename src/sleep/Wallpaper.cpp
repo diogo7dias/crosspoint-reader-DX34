@@ -121,8 +121,20 @@ std::string pickDirectBasename() {
   if (!sfs) return {};
   const size_t count = sfs->countSleepBmps(kSleepFolderCap);
   if (count == 0) return {};
-  const size_t idx = static_cast<size_t>(::random(static_cast<long>(count)));
-  return sfs->nthSleepBmp(idx);
+  // Anti-repeat: this random last-resort has no playlist cursor, so a naive
+  // single roll can return the wallpaper we just showed (a 1/N chance —
+  // glaring on small libraries). Re-roll a few times to avoid the last-shown
+  // basename. With >1 file this converges almost immediately; with exactly
+  // one file we accept it (nothing else to show). lastShownSleepFilename and
+  // nthSleepBmp both deal in basenames, so the comparison is apples-to-apples.
+  const std::string& lastShown = APP_STATE.lastShownSleepFilename;
+  std::string pick;
+  for (int tries = 0; tries < 5; ++tries) {
+    const size_t idx = static_cast<size_t>(::random(static_cast<long>(count)));
+    pick = sfs->nthSleepBmp(idx);
+    if (count <= 1 || pick.empty() || pick != lastShown) break;
+  }
+  return pick;
 }
 
 SleepPick makePickFromBasename(const std::string& basename) {
@@ -158,27 +170,26 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
     // where a failed paused render falls into the rotation loop.
   }
 
-  // Below the sleep-playlist gate (MemoryPolicy Op::ScanSleepPlaylist,
-  // largest-block >= 64 KB): bypass the playlist trim peak and stream-pick a
-  // file directly. (The former facade copy of this 64 KB constant, duplicated
-  // with SleepActivity, is gone — one threshold lives in the gate table now.)
-  const bool useDirectPick = !crosspoint::mem::canAfford(crosspoint::mem::Op::ScanSleepPlaylist);
-
+  // Always try the sequential playlist FIRST. advance() is cheap whenever a
+  // persisted order buffer already exists (just a cursor walk + peek — no big
+  // allocation), which is the steady-state case across deep-sleep wakes. Its
+  // only heavy steps (the reconcile trim listing and the empty-buffer rebuild)
+  // now self-guard against the heap inside WallpaperPlaylistV2, returning empty
+  // rather than risking a bad_alloc under -fno-exceptions. So it is safe to
+  // call even on a fragmented heap.
+  //
+  // This replaces the old facade-level 64 KB ScanSleepPlaylist gate that, when
+  // unmet (common on the fragmented C3 heap), skipped the playlist entirely and
+  // fell to a memoryless random pick — the source of "wallpaper repeats too
+  // soon". The direct pick is now a true last resort, only when advance() can
+  // genuinely not proceed, and it is anti-repeat too.
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
-    std::string basename;
-    if (useDirectPick) {
+    // Buffer-backed playlist advance via the facade entry point, so the
+    // RFC #145 reconcile notice is drained + persisted here too (a direct
+    // v2 advance would skip applyReconcileNotice).
+    std::string basename = advance();
+    if (basename.empty()) {
       basename = pickDirectBasename();
-    } else {
-      // Buffer-backed playlist advance via the facade entry point, so the
-      // RFC #145 reconcile notice is drained + persisted here too (a direct
-      // v2 advance would skip applyReconcileNotice). Internal heap probes
-      // (WallpaperPlaylistV2::reconcile / writeBuffer) bail to empty if the
-      // contiguous block is too small — we then fall through to the streaming
-      // direct pick on the same iteration.
-      basename = advance();
-      if (basename.empty()) {
-        basename = pickDirectBasename();
-      }
     }
     if (basename.empty()) {
       break;  // /sleep is empty — no point retrying.

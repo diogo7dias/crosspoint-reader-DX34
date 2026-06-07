@@ -312,7 +312,14 @@ void WallpaperPlaylistV2::reconcile() {
   // full-listing materialization on a count-only streaming pass first.
   bool capBlocked = false;
   uint16_t moved = 0;
-  if (diskCount > kSleepFolderCap) {
+  // Heap-guard the trim path's full-listing alloc. listSleepBmpsWithMtime
+  // materializes one contiguous vector of up to (cap+64) SleepBmpEntry — the
+  // biggest allocation on the sleep path. Build is -fno-exceptions, so probe
+  // for a contiguous block first; if it won't fit, skip trim this cycle (the
+  // over-cap files simply wait in /sleep) and still splice any new files the
+  // cheap streaming walk already found. A later wake retries once heap allows.
+  if (diskCount > kSleepFolderCap &&
+      heapHasContiguous((kSleepFolderCap + 64) * sizeof(SleepBmpEntry))) {
     std::vector<SleepBmpEntry> all = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap + 64);
     moved = trimToCap(all, capBlocked);
     // Record outcome as data; the facade drains it via takeNotice() after
@@ -430,6 +437,24 @@ std::string WallpaperPlaylistV2::advance() {
 
 bool WallpaperPlaylistV2::rebuildSequential() {
   if (!deps_.fs) return false;
+  // Heap-guard the rebuild's full-listing alloc, mirroring the trim path.
+  // countSleepBmps is O(1) heap, so size the probe from the real file count
+  // before materializing the SleepBmpEntry vector. If the contiguous block is
+  // too small, bail WITHOUT touching buffer_ (leave any loaded order intact)
+  // and let the caller fall back to the streaming direct pick. For small
+  // libraries the probe is a few KB and passes even on a fragmented heap, so
+  // the sequential playlist stays the normal path — which is exactly where the
+  // early-repeat symptom was most visible.
+  const size_t fileCount = deps_.fs->countSleepBmps(kSleepFolderCap);
+  if (fileCount == 0) {
+    buffer_.clear();
+    cursor_ = 0;
+    saveToDisk();
+    return false;
+  }
+  if (!heapHasContiguous(fileCount * sizeof(SleepBmpEntry))) {
+    return false;
+  }
   auto entries = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap);
   if (entries.empty()) {
     buffer_.clear();
