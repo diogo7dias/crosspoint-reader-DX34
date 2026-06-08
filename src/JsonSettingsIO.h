@@ -13,6 +13,9 @@
 #include <ArduinoJson.h>
 #include <WString.h>
 
+#include <functional>
+
+class Print;
 class CrossPointSettings;
 class WifiCredentialStore;
 class KOReaderCredentialStore;
@@ -37,6 +40,14 @@ DeserializationError safeDeserializeFile(const char* path, JsonDocument& doc);
 // Exposed so background-write paths (AsyncWriter) can reuse the same atomic
 // rotation as synchronous savers.
 bool safeWriteFile(const char* path, const String& json);
+
+// Streaming atomic write: same crash-safe .tmp→.bak→target rotation as
+// safeWriteFile, but `serialize` writes straight to the open file (a Print)
+// instead of the caller first building a full-size String. Use for the larger
+// payloads (recent books, reading themes) so peak heap is just the JsonDocument
+// during the write, not document + serialized String. `serialize` returns true
+// iff it wrote successfully (typically `serializeJson(doc, out) > 0`).
+bool safeWriteFileStreamed(const char* path, const std::function<bool(Print&)>& serialize);
 
 // CrossPointSettings
 bool saveSettings(const CrossPointSettings& s, const char* path);

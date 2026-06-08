@@ -179,7 +179,13 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
 // 2. Erase old .bak
 // 3. Rename current to .bak
 // 4. Rename .tmp to current
-bool JsonSettingsIO::safeWriteFile(const char* path, const String& json) {
+namespace {
+// Shared crash-safe atomic write: validate path, ensure parent dir, write to
+// the .tmp via `writeTmp`, then rotate (prior primary -> .bak, .tmp ->
+// primary). The String saver (safeWriteFile) and the streamed saver
+// (safeWriteFileStreamed) both delegate here so the rotation lives in one
+// place. `writeTmp(activeTmp)` owns step 1 (and its own logging/cleanup).
+bool atomicWriteRotate(const char* path, const std::function<bool(const char* activeTmp)>& writeTmp) {
   // Path + ".corrupt" (longest suffix) must fit in 128-char buffers used below.
   if (!path || strlen(path) > 119) {
     LOG_ERR("JSN", "safeWriteFile: path null or too long");
@@ -270,11 +276,9 @@ bool JsonSettingsIO::safeWriteFile(const char* path, const String& json) {
       activeTmp = altTmpPath;
     }
   }
-  if (!Storage.writeFile(activeTmp, json)) {
-    LOG_ERR("JSN", "safeWriteFile: failed to write tmp %s", activeTmp);
-    return false;
+  if (!writeTmp(activeTmp)) {
+    return false;  // step 1 (callback logs + cleans up its own tmp on failure)
   }
-  LOG_DIAG("JSN", "safeWriteFile step1 wrote tmp=%s bytes=%u", activeTmp, (unsigned)json.length());
 
   // 2. Remove stale backup
   if (Storage.exists(bakPath)) {
@@ -313,6 +317,38 @@ bool JsonSettingsIO::safeWriteFile(const char* path, const String& json) {
   LOG_DIAG("JSN", "safeWriteFile step4 promoted tmp->%s ok primary_exists=%d", path, Storage.exists(path) ? 1 : 0);
 
   return true;
+}
+}  // namespace
+
+bool JsonSettingsIO::safeWriteFile(const char* path, const String& json) {
+  return atomicWriteRotate(path, [&](const char* activeTmp) -> bool {
+    if (!Storage.writeFile(activeTmp, json)) {
+      LOG_ERR("JSN", "safeWriteFile: failed to write tmp %s", activeTmp);
+      return false;
+    }
+    LOG_DIAG("JSN", "safeWriteFile step1 wrote tmp=%s bytes=%u", activeTmp, (unsigned)json.length());
+    return true;
+  });
+}
+
+bool JsonSettingsIO::safeWriteFileStreamed(const char* path, const std::function<bool(Print&)>& serialize) {
+  return atomicWriteRotate(path, [&](const char* activeTmp) -> bool {
+    FsFile f;
+    if (!Storage.openFileForWrite("JSN", activeTmp, f)) {
+      LOG_ERR("JSN", "safeWriteFileStreamed: failed to open tmp %s", activeTmp);
+      return false;
+    }
+    const bool ok = serialize ? serialize(f) : false;
+    f.flush();
+    f.close();
+    if (!ok) {
+      LOG_ERR("JSN", "safeWriteFileStreamed: serialize failed for %s", activeTmp);
+      Storage.remove(activeTmp);
+      return false;
+    }
+    LOG_DIAG("JSN", "safeWriteFileStreamed step1 wrote tmp=%s", activeTmp);
+    return true;
+  });
 }
 
 // Read the JSON file, automatically trying fallbacks if a crash occurred
@@ -921,7 +957,24 @@ String JsonSettingsIO::serializeRecentBooks(const RecentBooksStore& store) {
 }
 
 bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* path) {
-  return safeWriteFile(path, serializeRecentBooks(store));
+  // Stream the document straight to the file — no full-size serialized String
+  // alongside the doc. recent.json save runs on the book-open hot path and is
+  // the largest payload. (serializeRecentBooks() is kept for the async writer,
+  // which deliberately snapshots a String off-thread.)
+  return safeWriteFileStreamed(path, [&](Print& out) -> bool {
+    JsonDocument doc;
+    JsonArray arr = doc["books"].to<JsonArray>();
+    for (const auto& book : store.getBooks()) {
+      JsonObject obj = arr.add<JsonObject>();
+      obj["path"] = book.path;
+      obj["title"] = book.title;
+      obj["author"] = book.author;
+      obj["coverBmpPath"] = book.coverBmpPath;
+      obj["boldSwap"] = book.boldSwap;
+      obj["percent"] = book.percent;
+    }
+    return serializeJson(doc, out) > 0;
+  });
 }
 
 // Populate from an already-parsed document. Macro, not a shared function, for
@@ -1004,17 +1057,18 @@ bool JsonSettingsIO::loadReadingThemeFromFile(ReadingTheme& theme, const char* p
 }
 
 bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store, const char* path) {
-  JsonDocument doc;
-  doc["lastEditedThemeIndex"] = store.getLastEditedThemeIndex();
-  JsonArray arr = doc["themes"].to<JsonArray>();
-  for (const auto& theme : store.getThemes()) {
-    JsonObject obj = arr.add<JsonObject>();
-    writeReadingThemeObject(obj, theme);
-  }
-
-  String json;
-  serializeJson(doc, json);
-  return safeWriteFile(path, json);
+  // Stream straight to the file (no full-size serialized String alongside the
+  // doc). reading_themes.json is the other large payload.
+  return safeWriteFileStreamed(path, [&](Print& out) -> bool {
+    JsonDocument doc;
+    doc["lastEditedThemeIndex"] = store.getLastEditedThemeIndex();
+    JsonArray arr = doc["themes"].to<JsonArray>();
+    for (const auto& theme : store.getThemes()) {
+      JsonObject obj = arr.add<JsonObject>();
+      writeReadingThemeObject(obj, theme);
+    }
+    return serializeJson(doc, out) > 0;
+  });
 }
 
 // Populate from an already-parsed document. Macro, not a shared function, for
