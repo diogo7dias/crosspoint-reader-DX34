@@ -612,14 +612,38 @@ CssStyle CssParser::resolveStyle(const std::string& tagName, const std::string& 
   applySelectorInto(tag, result);
 
   // 2. Apply class styles (medium priority) then element.class (higher).
+  // Tokenize classAttr in place and reuse two scratch buffers instead of
+  // building a splitWhitespace() vector<string> plus a fresh concatenated
+  // selector string per class — this runs for every styled element during
+  // layout. A class token has no internal whitespace, so normalizing it is just
+  // lowercasing (matches normalized() for single tokens). The two passes keep
+  // the original cascade order (all ".class" before all "tag.class").
   if (!classAttr.empty()) {
-    const auto classes = splitWhitespace(classAttr);
-    for (const auto& cls : classes) {
-      applySelectorInto("." + normalized(cls), result);
-    }
-    for (const auto& cls : classes) {
-      applySelectorInto(tag + "." + normalized(cls), result);
-    }
+    std::string normCls;  // normalized single class token (reused)
+    std::string key;      // selector key (reused)
+    auto applyClassSelectors = [&](bool withTag) {
+      for (size_t i = 0; i < classAttr.size();) {
+        while (i < classAttr.size() && isCssWhitespace(classAttr[i])) i++;
+        const size_t start = i;
+        while (i < classAttr.size() && !isCssWhitespace(classAttr[i])) i++;
+        if (i == start) continue;
+        normCls.clear();
+        for (size_t k = start; k < i; k++) {
+          normCls.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(classAttr[k]))));
+        }
+        key.clear();
+        if (withTag) {
+          key.append(tag);
+          key.push_back('.');
+        } else {
+          key.push_back('.');
+        }
+        key.append(normCls);
+        applySelectorInto(key, result);
+      }
+    };
+    applyClassSelectors(false);  // ".class"
+    applyClassSelectors(true);   // "tag.class"
   }
 
   return result;

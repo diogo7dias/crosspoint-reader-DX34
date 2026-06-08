@@ -102,6 +102,14 @@ class PageBuilder {
     if (!anchors.empty()) pendingAnchors_.insert(pendingAnchors_.end(), anchors.begin(), anchors.end());
   }
 
+  // Queue a single anchor, appending directly to the pending list. Lets the
+  // parser hot path push anchors straight from the expat attribute buffer
+  // without first materializing a per-element std::vector<std::string> (and the
+  // subsequent copy that queueAnchors does). No-op on null/empty.
+  void queueAnchor(const char* anchor) {
+    if (anchor && anchor[0]) pendingAnchors_.emplace_back(anchor);
+  }
+
   // End-of-block fallback: drain any footnotes whose word index fell exactly on
   // the block boundary onto the current page (mirrors makePages' tail).
   void drainFootnotes() {

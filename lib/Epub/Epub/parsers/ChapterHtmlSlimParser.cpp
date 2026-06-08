@@ -138,10 +138,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
     return;
   }
 
-  // Extract class and style attributes for CSS processing
+  // Extract class and style attributes for CSS processing. Anchors (id/name)
+  // are queued straight from the expat attribute buffer — no per-element
+  // std::vector<std::string> + copy on this hot path (most elements carry an
+  // id, so that allocation churned the heap once per element during layout).
   std::string classAttr;
   std::string styleAttr;
-  std::vector<std::string> anchors;
   if (atts != nullptr) {
     for (int i = 0; atts[i]; i += 2) {
       if (strcmp(atts[i], "class") == 0) {
@@ -151,12 +153,10 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       } else if ((strcmp(atts[i], "id") == 0 || strcmp(atts[i], "xml:id") == 0 ||
                   (strcmp(atts[i], "name") == 0 && strcmp(name, "a") == 0)) &&
                  atts[i + 1] != nullptr && atts[i + 1][0] != '\0') {
-        anchors.emplace_back(atts[i + 1]);
+        self->pageBuilder_->queueAnchor(atts[i + 1]);
       }
     }
   }
-
-  self->pageBuilder_->queueAnchors(anchors);
 
   // Compute CSS style for this element early so display:none can short-circuit
   // before tag-specific branches emit any content or metadata.
