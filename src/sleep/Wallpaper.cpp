@@ -11,6 +11,7 @@
 #include "../persist/PersistManager.h"
 #include "../persist/SdFatFileIO.h"
 #include "../util/FavoriteImage.h"
+#include "HeapGuard.h"
 #include "MemoryPolicy.h"
 #include "SdFatSleepFs.h"
 #include "WallpaperPlaylistV2.h"
@@ -113,6 +114,48 @@ namespace {
 // RFC #156 lands, both copies coexist.
 constexpr int kNextSleepFileRetries = 5;
 
+// Slack added on top of the measured sequential-playlist cost before deciding
+// it's affordable. Covers small ancillary allocations during load/reconcile.
+constexpr size_t kSeqGateHeadroom = 12 * 1024;
+
+// Decide whether the sequential playlist (advance/reconcile/rebuild) can be
+// materialized safely this cycle, or whether to fall back to the O(1)-heap
+// direct pick.
+//
+// The previous fixed 64 KB gate (Op::ScanSleepPlaylist) ignored filename
+// LENGTH. The order buffer is one byte per filename char, and on a rebuild the
+// reconcile also builds a vector<SleepBmpEntry> plus per-name std::strings, and
+// safeRead loads the order file via an Arduino String + a std::string copy
+// (~2-3x the buffer, transiently). A folder of many long-named .pxc files
+// therefore materializes to FAR more than 64 KB, so the gate opened and
+// reconcile OOM-aborted on lock (the "can't lock" crash). This measures the
+// REAL cost with a streaming, zero-heap walk (sums filename bytes) and requires
+// both enough contiguous heap (largest single block) and enough total free.
+// Conservative on purpose: under-gating only costs a direct pick; over-gating
+// costs a brick.
+bool sequentialPlaylistAffordable() {
+  auto* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
+  if (!sfs) return false;
+  size_t count = 0;
+  size_t bufferBytes = 0;  // == order-buffer size: sum of (filename length + 1)
+  sfs->walkSleepBmps([&](const char* /*name*/, size_t len, uint32_t /*mtime*/) {
+    ++count;
+    bufferBytes += len + 1;
+  });
+  if (count == 0) return false;  // empty folder — direct pick returns empty too
+
+  const size_t entryVecBytes = count * sizeof(crosspoint::sleep::SleepBmpEntry);
+  // Largest single contiguous allocation the path makes: the order buffer, or
+  // (on rebuild) the entry vector — whichever is bigger.
+  const size_t contigNeed = (bufferBytes > entryVecBytes ? bufferBytes : entryVecBytes) + kSeqGateHeadroom;
+  // Worst-case coexisting transient peak: order buffer + safeRead's String +
+  // std::string copy (~3x buffer) plus the entry vector and its per-name strings.
+  const size_t totalNeed = bufferBytes * 3 + entryVecBytes * 2 + kSeqGateHeadroom;
+
+  return crosspoint::heap::largestFreeBlockBytes() >= contigNeed &&
+         crosspoint::mem::totalFreeBytes() >= totalNeed;
+}
+
 // Streaming fragment-safe pick — direct mirror of SleepActivity's
 // pickSleepFileDirect helper. Touches O(1) heap beyond the returned
 // basename. Empty if /sleep is empty or fs not wired.
@@ -170,18 +213,14 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
     // where a failed paused render falls into the rotation loop.
   }
 
-  // Below the sleep-playlist gate (Op::ScanSleepPlaylist, largest block >= 64
-  // KB): bypass the playlist and stream-pick a file directly. This gate is
-  // load-bearing: reconcile() accumulates one heap std::string per /sleep file
-  // not yet in the order buffer (every file, when the buffer is empty/stale),
-  // and on the fragmented low-heap sleep-entry path that unbounded growth
-  // OOM-aborts under -fno-exceptions (the "can't lock" crash). When the gate is
-  // closed we use the cheap, anti-repeat direct pick instead — exactly the
-  // long-standing behaviour. (An earlier change dropped this gate to make the
-  // sequential playlist the always-on path; that reintroduced the sleep-entry
-  // OOM, so the gate is restored. The direct pick is now anti-repeat, which is
-  // what fixed the original "repeats too soon" report.)
-  const bool useDirectPick = !crosspoint::mem::canAfford(crosspoint::mem::Op::ScanSleepPlaylist);
+  // Sequential-playlist gate: only run the buffer-backed advance()/reconcile()
+  // when the heap can truly afford to materialize the order list for THIS
+  // folder (measured by real filename bytes — see sequentialPlaylistAffordable);
+  // otherwise fall back to the O(1)-heap, anti-repeat direct pick. The old fixed
+  // 64 KB gate ignored filename length, so a folder of many long-named .pxc
+  // files slipped through and OOM-aborted on lock. Direct pick reads /sleep one
+  // entry at a time and never builds a list, so it is safe at any folder size.
+  const bool useDirectPick = !sequentialPlaylistAffordable();
 
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
     std::string basename;
