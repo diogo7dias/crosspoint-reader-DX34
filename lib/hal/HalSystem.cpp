@@ -3,6 +3,7 @@
 #include <string>
 
 #include "Arduino.h"
+#include "CrashInfo.h"
 #include "HalStorage.h"
 #include "Logging.h"
 #include "esp_private/panic_internal.h"
@@ -75,15 +76,10 @@ void begin() {
 
 void checkPanic() {
   if (isRebootFromPanic()) {
-    auto panicInfo = getPanicInfo(true);
-    auto file = Storage.open("/crash_report.txt", O_WRITE | O_CREAT | O_TRUNC);
-    if (file) {
-      file.write(panicInfo.c_str(), panicInfo.size());
-      file.close();
-      LOG_INF("SYS", "Dumped panic info to SD card");
-    } else {
-      LOG_ERR("SYS", "Failed to open crash_report.txt for writing");
-    }
+    // Append the panic dump to the consolidated /CRASH_INFO.TXT (was its own
+    // overwriting /crash_report.txt). Runs at boot after a panic, where the heap
+    // is fresh, so the append + cap-trim is safe.
+    crosspoint::diag::appendCrashSection("PANIC", getPanicInfo(true));
   }
 }
 

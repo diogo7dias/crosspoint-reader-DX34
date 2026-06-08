@@ -1,6 +1,7 @@
 #include "WifiDiagReport.h"
 
 #include <Arduino.h>
+#include <CrashInfo.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <WiFi.h>
@@ -19,7 +20,6 @@ namespace WifiDiagReport {
 
 namespace {
 
-constexpr const char* REPORT_PATH = "/diag_report.txt";
 constexpr size_t TIMELINE_CAPACITY = 32;
 
 enum class EntryKind : uint8_t {
@@ -465,9 +465,12 @@ void writeReportOnFailure(FailureKind kind) {
   s_attemptInProgress = false;
   const bool isOtaKind = (kind == FailureKind::OtaCheckFailed || kind == FailureKind::OtaInstallFailed);
 
-  HalFile f = Storage.open(REPORT_PATH, O_WRITE | O_CREAT | O_TRUNC);
-  if (!f) {
-    LOG_ERR("WIFI_DIAG", "Failed to open %s for writing", REPORT_PATH);
+  // Append a WIFI section to the consolidated /CRASH_INFO.TXT (was its own
+  // overwriting /diag_report.txt). beginCrashSection writes the section header
+  // and positions at end; endCrashSection closes + cap-trims.
+  HalFile f;
+  if (!crosspoint::diag::beginCrashSection("WIFI", f)) {
+    LOG_ERR("WIFI_DIAG", "Failed to open crash-info for writing");
     return;
   }
 
@@ -619,11 +622,11 @@ void writeReportOnFailure(FailureKind kind) {
             disconnectReasonName(s_lastDisconnectReason));
   }
   appendf(f, "Hint:            %s\n", failureHint(kind, s_lastDisconnectReason, sawConnected));
-  appendf(f, "\nEnd of report.\n");
+  appendf(f, "End of report.\n");
 
   f.flush();
-  f.close();
-  LOG_INF("WIFI_DIAG", "Wrote %s (kind=%s, reason=%d)", REPORT_PATH, kindName,
+  crosspoint::diag::endCrashSection(f);
+  LOG_INF("WIFI_DIAG", "Appended WIFI section (kind=%s, reason=%d)", kindName,
           static_cast<int>(s_lastDisconnectReason));
 }
 

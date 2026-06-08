@@ -112,25 +112,32 @@ void cleanupOrphansInDir(const char* dirPath, CleanupResult& result) {
   }
 }
 
-// Pre-RFC-#146 firmware wrote to /wifi_report.txt; the current path is
-// /diag_report.txt. Old file is dead weight on upgraded SD cards.
-void cleanupLegacyWifiReport(CleanupResult& result) {
-  constexpr const char* kLegacy = "/wifi_report.txt";
-  if (!Storage.exists(kLegacy)) return;
+// The three per-type report files (panic /crash_report.txt, WiFi/OTA
+// /diag_report.txt, heap /heap_report.txt) plus the pre-RFC-#146
+// /wifi_report.txt are all superseded by the single appended, self-capping
+// /CRASH_INFO.TXT. On an upgraded SD card the old files are dead weight — remove
+// them. /CRASH_INFO.TXT itself is the live diagnostics file (bounded by its own
+// cap) and is intentionally NOT removed here.
+void cleanupLegacyReports(CleanupResult& result) {
+  constexpr const char* kLegacyReports[] = {"/wifi_report.txt", "/crash_report.txt", "/diag_report.txt",
+                                            "/heap_report.txt"};
+  for (const char* path : kLegacyReports) {
+    if (!Storage.exists(path)) continue;
 
-  FsFile f;
-  uint32_t sz = 0;
-  if (Storage.openFileForRead("CLEANUP", kLegacy, f)) {
-    sz = static_cast<uint32_t>(f.size());
-    f.close();
-  }
-  if (Storage.remove(kLegacy)) {
-    result.removed++;
-    result.bytesFreed += sz;
-    LOG_DIAG("CLEANUP", "removed legacy %s (%u B)", kLegacy, (unsigned)sz);
-  } else {
-    result.failed++;
-    LOG_DIAG("CLEANUP", "FAILED to remove legacy %s", kLegacy);
+    FsFile f;
+    uint32_t sz = 0;
+    if (Storage.openFileForRead("CLEANUP", path, f)) {
+      sz = static_cast<uint32_t>(f.size());
+      f.close();
+    }
+    if (Storage.remove(path)) {
+      result.removed++;
+      result.bytesFreed += sz;
+      LOG_DIAG("CLEANUP", "removed legacy %s (%u B)", path, (unsigned)sz);
+    } else {
+      result.failed++;
+      LOG_DIAG("CLEANUP", "FAILED to remove legacy %s", path);
+    }
   }
 }
 
@@ -150,7 +157,7 @@ void CleanupStorageActivity::runCleanup() {
 
   cleanupOrphansInDir("/", result);
   cleanupOrphansInDir("/.crosspoint", result);
-  cleanupLegacyWifiReport(result);
+  cleanupLegacyReports(result);
 
   removedCount = result.removed;
   failedCount = result.failed;

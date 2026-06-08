@@ -1,6 +1,7 @@
 #include "HeapReport.h"
 
 #include <Arduino.h>
+#include <CrashInfo.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <esp_heap_caps.h>
@@ -12,8 +13,6 @@
 #endif
 
 namespace {
-
-constexpr const char* REPORT_PATH = "/heap_report.txt";
 
 void appendf(std::string& s, const char* fmt, ...) {
   char buf[160];
@@ -107,11 +106,11 @@ bool writeHeapReport(const char* reason) {
   // Total heap configured at boot, for reference.
   appendf(body, "Total heap:      %u bytes\n", static_cast<unsigned>(ESP.getHeapSize()));
 
-  if (!Storage.writeFile(REPORT_PATH, String(body.c_str()))) {
-    LOG_ERR("HEAP_RPT", "Failed to write %s", REPORT_PATH);
-    return false;
-  }
-  LOG_INF("HEAP_RPT", "Wrote %s (%u B, reason=%s)", REPORT_PATH, static_cast<unsigned>(body.size()),
+  // Append to the consolidated /CRASH_INFO.TXT (was its own overwriting
+  // /heap_report.txt). appendCrashSection is heap-free, safe on this low-heap
+  // pre-fragmentation-restart path.
+  crosspoint::diag::appendCrashSection("HEAP", body);
+  LOG_INF("HEAP_RPT", "Appended HEAP section (%u B, reason=%s)", static_cast<unsigned>(body.size()),
           reason ? reason : "(none)");
   return true;
 }
