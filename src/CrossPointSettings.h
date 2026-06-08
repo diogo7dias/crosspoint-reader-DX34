@@ -271,7 +271,9 @@ class CrossPointSettings {
   uint8_t statusBarTitlePosition = STATUS_AT_BOTTOM;
   uint8_t statusBarTextAlignment = STATUS_TEXT_RIGHT;
   uint8_t statusBarProgressStyle = STATUS_BAR_THICK;
-  uint8_t statusBarFontSize = STATUS_FONT_SMALL;
+  // Retained for JSON back-compat only; no longer user-configurable. The status
+  // bar always uses the larger font (see getStatusBarFontId()). Default now MEDIUM.
+  uint8_t statusBarFontSize = STATUS_FONT_MEDIUM;
   uint8_t statusBarBarThickness = STATUS_BAR_THICKNESS_NORMAL;
   uint8_t statusBarShowBookPageCounter = 0;
   uint8_t statusBarBookPageCounterPosition = STATUS_TEXT_BOTTOM_CENTER;

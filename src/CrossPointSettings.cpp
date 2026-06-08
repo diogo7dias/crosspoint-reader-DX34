@@ -894,5 +894,9 @@ int CrossPointSettings::getStatusBarProgressBarHeight() const {
 }
 
 int CrossPointSettings::getStatusBarFontId() const {
-  return statusBarFontSize == STATUS_FONT_MEDIUM ? UI_10_FONT_ID : SMALL_FONT_ID;
+  // Status-bar font size is no longer user-configurable: always use the larger
+  // (clear) UI font. The small option was hard to read and has been removed.
+  // statusBarFontSize is ignored here but kept as a field for JSON back-compat.
+  (void)statusBarFontSize;
+  return UI_10_FONT_ID;
 }
