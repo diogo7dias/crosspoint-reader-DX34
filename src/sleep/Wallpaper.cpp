@@ -170,26 +170,32 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
     // where a failed paused render falls into the rotation loop.
   }
 
-  // Always try the sequential playlist FIRST. advance() is cheap whenever a
-  // persisted order buffer already exists (just a cursor walk + peek — no big
-  // allocation), which is the steady-state case across deep-sleep wakes. Its
-  // only heavy steps (the reconcile trim listing and the empty-buffer rebuild)
-  // now self-guard against the heap inside WallpaperPlaylistV2, returning empty
-  // rather than risking a bad_alloc under -fno-exceptions. So it is safe to
-  // call even on a fragmented heap.
-  //
-  // This replaces the old facade-level 64 KB ScanSleepPlaylist gate that, when
-  // unmet (common on the fragmented C3 heap), skipped the playlist entirely and
-  // fell to a memoryless random pick — the source of "wallpaper repeats too
-  // soon". The direct pick is now a true last resort, only when advance() can
-  // genuinely not proceed, and it is anti-repeat too.
+  // Below the sleep-playlist gate (Op::ScanSleepPlaylist, largest block >= 64
+  // KB): bypass the playlist and stream-pick a file directly. This gate is
+  // load-bearing: reconcile() accumulates one heap std::string per /sleep file
+  // not yet in the order buffer (every file, when the buffer is empty/stale),
+  // and on the fragmented low-heap sleep-entry path that unbounded growth
+  // OOM-aborts under -fno-exceptions (the "can't lock" crash). When the gate is
+  // closed we use the cheap, anti-repeat direct pick instead — exactly the
+  // long-standing behaviour. (An earlier change dropped this gate to make the
+  // sequential playlist the always-on path; that reintroduced the sleep-entry
+  // OOM, so the gate is restored. The direct pick is now anti-repeat, which is
+  // what fixed the original "repeats too soon" report.)
+  const bool useDirectPick = !crosspoint::mem::canAfford(crosspoint::mem::Op::ScanSleepPlaylist);
+
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
-    // Buffer-backed playlist advance via the facade entry point, so the
-    // RFC #145 reconcile notice is drained + persisted here too (a direct
-    // v2 advance would skip applyReconcileNotice).
-    std::string basename = advance();
-    if (basename.empty()) {
+    std::string basename;
+    if (useDirectPick) {
       basename = pickDirectBasename();
+    } else {
+      // Buffer-backed playlist advance via the facade entry point, so the
+      // RFC #145 reconcile notice is drained + persisted here too (a direct
+      // v2 advance would skip applyReconcileNotice). advance() can still bail to
+      // empty under its internal heap probes — fall through to the direct pick.
+      basename = advance();
+      if (basename.empty()) {
+        basename = pickDirectBasename();
+      }
     }
     if (basename.empty()) {
       break;  // /sleep is empty — no point retrying.

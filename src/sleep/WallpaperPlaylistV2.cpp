@@ -20,6 +20,13 @@ constexpr const char* kSleepPauseDir = "/sleep pause";
 // here would abort — we must probe before allocating big buffers.
 constexpr size_t kAllocProbeHeadroomBytes = 4 * 1024;
 
+// Defense-in-depth cap on how many NEW files reconcile() materializes in one
+// pass. Each new entry is a heap std::string, and an empty/stale order buffer
+// makes every /sleep file "new" — an unbounded batch bad_alloc-aborts under
+// -fno-exceptions on the low sleep-entry heap (the "can't lock" crash). Excess
+// new files are simply absorbed by a later reconcile (a subsequent sleep wake).
+constexpr uint16_t kMaxNewFilesPerReconcile = 64;
+
 std::string makeSleepPath(const std::string& filename) {
   if (filename.empty()) return {};
   return std::string(kSleepDir) + "/" + filename;
@@ -303,9 +310,20 @@ void WallpaperPlaylistV2::reconcile() {
   // string. The former per-file favorite probe here was dead (its count was
   // never read) and cost a makeSleepPath allocation + isFavorite call on every
   // one of the ~500 files — removed.
+  bool newFilesTruncated = false;
   deps_.fs->walkSleepBmps([&](const char* name, size_t len, uint32_t mtime) {
     ++diskCount;
-    if (!nameIsInBuffer(name, len)) newFiles.push_back({std::string(name, len), mtime});
+    if (newFilesTruncated || nameIsInBuffer(name, len)) return;
+    // Bound this batch: cap the count and stop if the heap is tight, so a large
+    // all-new /sleep folder can never grow this vector into a bad_alloc-abort on
+    // the low sleep-entry heap. Truncated files are picked up by a later
+    // reconcile; the wallpaper still rotates from the buffer / direct pick.
+    if (newFiles.size() >= kMaxNewFilesPerReconcile ||
+        !heapHasContiguous((newFiles.size() + 4) * sizeof(SleepBmpEntry))) {
+      newFilesTruncated = true;
+      return;
+    }
+    newFiles.push_back({std::string(name, len), mtime});
   });
 
   // Trim path. Only enters here if /sleep is over the cap — gates the heavy
