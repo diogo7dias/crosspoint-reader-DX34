@@ -2302,7 +2302,11 @@ void CrossPointWebServer::handleFirmwareUploadDone() {
 void CrossPointWebServer::handleUpdatePage() const {
   if (!running || !server) return;
 
-  String html = R"(<!DOCTYPE html><html><head><meta charset="utf-8">
+  // Served from flash in chunks (head + version + tail) rather than assembled
+  // into one ~8 KB heap String. This page runs on the WiFi-active path where
+  // free heap is lowest, so a single large contiguous String + send() copy was
+  // the lone fragmentation-prone outlier among the otherwise PROGMEM pages.
+  static const char kUpdatePageHead[] PROGMEM = R"(<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CrossPoint Update</title>
 <link rel="stylesheet" href="/css/brutalist.css">
@@ -2317,8 +2321,8 @@ progress { width: 100%; height: 20px; }
 </head><body>
 <h1>Firmware Update</h1>
 <p>Current: <code id="cur">)";
-  html += CROSSPOINT_VERSION;
-  html += R"(</code></p>
+
+  static const char kUpdatePageTail[] PROGMEM = R"(</code></p>
 <p>Latest: <code id="latest">checking...</code></p>
 <p id="status"></p>
 
@@ -2545,5 +2549,11 @@ installManualBtn.addEventListener('click', async () => {
 });
 </script>
 </body></html>)";
-  server->send(200, "text/html", html);
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "text/html", "");
+  server->sendContent_P(kUpdatePageHead);
+  server->sendContent(CROSSPOINT_VERSION);
+  server->sendContent_P(kUpdatePageTail);
+  server->sendContent("");  // terminate the chunked response
 }
