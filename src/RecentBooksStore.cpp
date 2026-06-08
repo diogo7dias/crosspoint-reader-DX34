@@ -362,9 +362,11 @@ bool RecentBooksStore::loadFromFile() {
     return false;
   }
 
-  String json = JsonSettingsIO::safeReadFile(RECENT_BOOKS_FILE_JSON);
-  if (!json.isEmpty()) {
-    return JsonSettingsIO::loadRecentBooks(*this, json.c_str());
+  // Stream-parse straight from disk (primary → .bak → .tmp) instead of
+  // slurping the whole recent.json into a String first — it is the largest of
+  // the persisted JSON files, so this is the biggest single-file heap-peak win.
+  if (JsonSettingsIO::loadRecentBooksFromFile(*this, RECENT_BOOKS_FILE_JSON)) {
+    return true;
   }
 
   // Fall back to binary migration — check upstream path first, then DX34 legacy

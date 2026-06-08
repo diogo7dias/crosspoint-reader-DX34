@@ -80,19 +80,16 @@ bool ReadingThemeStore::saveToFile() const {
 }
 
 bool ReadingThemeStore::loadFromFile() {
-  const String json = JsonSettingsIO::safeReadFile(READING_THEMES_FILE_JSON);
-  if (json.isEmpty()) {
-    LOG_ERR("RTH", "loadFromFile: no readable theme file found");
-    return false;
-  }
-  if (!JsonSettingsIO::loadReadingThemes(*this, json.c_str())) {
-    // Primary parse failed or returned 0 themes while we had some in memory.
-    // Try the .bak file explicitly as a recovery path.
+  // Stream-parse straight from disk. loadReadingThemesFromFile handles the
+  // primary → .bak → .tmp ladder internally without slurping the whole
+  // reading_themes.json into a String first.
+  if (!JsonSettingsIO::loadReadingThemesFromFile(*this, READING_THEMES_FILE_JSON)) {
+    // Primary parsed but was rejected (e.g. 0 themes while we had some in
+    // memory), or no readable source. Retry the .bak path explicitly.
     LOG_ERR("RTH", "loadFromFile: primary parse rejected — trying .bak");
     char bakPath[128];
     snprintf(bakPath, sizeof(bakPath), "%s.bak", READING_THEMES_FILE_JSON);
-    const String bakJson = JsonSettingsIO::safeReadFile(bakPath);
-    if (bakJson.isEmpty() || !JsonSettingsIO::loadReadingThemes(*this, bakJson.c_str())) {
+    if (!JsonSettingsIO::loadReadingThemesFromFile(*this, bakPath)) {
       LOG_ERR("RTH", "loadFromFile: .bak recovery also failed");
       return false;
     }
@@ -458,12 +455,8 @@ bool ReadingThemeStore::loadBookSettings(const std::string& cachePath, ReadingTh
     return false;
   }
 
-  const String json = JsonSettingsIO::safeReadFile(bookReaderSettingsPath(cachePath).c_str());
-  if (json.isEmpty()) {
-    return false;
-  }
-
-  return JsonSettingsIO::loadReadingTheme(theme, json.c_str());
+  // Stream-parse straight from disk (no full-file String).
+  return JsonSettingsIO::loadReadingThemeFromFile(theme, bookReaderSettingsPath(cachePath).c_str());
 }
 
 bool ReadingThemeStore::loadBookSettingsIntoCurrent(const std::string& cachePath) {

@@ -43,15 +43,15 @@ bool WifiCredentialStore::loadFromFile() {
     return false;
   }
 
-  String json = JsonSettingsIO::safeReadFile(WIFI_FILE_JSON);
-  if (!json.isEmpty()) {
-    bool resave = false;
-    bool result = JsonSettingsIO::loadWifi(*this, json.c_str(), &resave);
-    if (result && resave) {
+  // Stream-parse straight from disk (primary → .bak → .tmp) instead of
+  // slurping the whole file into a String first.
+  bool resave = false;
+  if (JsonSettingsIO::loadWifiFromFile(*this, WIFI_FILE_JSON, &resave)) {
+    if (resave) {
       LOG_DBG("WCS", "Resaving JSON with obfuscated passwords");
       saveToFile();
     }
-    return result;
+    return true;
   }
 
   // Fall back to binary migration

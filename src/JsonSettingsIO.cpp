@@ -354,6 +354,43 @@ String JsonSettingsIO::safeReadFile(const char* path) {
   return "";
 }
 
+DeserializationError JsonSettingsIO::safeDeserializeFile(const char* path, JsonDocument& doc) {
+  // Mirror safeReadFile's fallback order (primary → .bak → .tmp), but parse
+  // each tier by STREAMING from the open file rather than slurping it into a
+  // String first. ArduinoJson reads the file incrementally, so the only
+  // full-size allocation is the parsed document — no transient String/std::
+  // string copy of the payload. On a tier that exists but fails to parse, we
+  // clear the doc and try the next tier (same recovery intent as safeReadFile
+  // skipping an empty read).
+  const char* suffixes[] = {"", ".bak", ".tmp"};
+  const char* labels[] = {"primary", "bak", "tmp"};
+  char altPath[128];
+  for (int i = 0; i < 3; ++i) {
+    const char* p = path;
+    if (i != 0) {
+      snprintf(altPath, sizeof(altPath), "%s%s", path, suffixes[i]);
+      p = altPath;
+    }
+    if (!Storage.exists(p)) continue;
+    FsFile f;
+    if (!Storage.openFileForRead("JSN", p, f)) continue;
+    if (f.size() == 0) {
+      f.close();
+      continue;
+    }
+    const DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (!err) {
+      LOG_DIAG("JSN", "safeDeserializeFile: source=%s path=%s", labels[i], p);
+      return err;  // Ok
+    }
+    LOG_ERR("JSN", "safeDeserializeFile: parse fail (%s) %s: %s", labels[i], p, err.c_str());
+    doc.clear();  // drop any partial parse before falling through to the next tier
+  }
+  LOG_DIAG("JSN", "safeDeserializeFile: source=none path=%s (no readable source)", path);
+  return DeserializationError::EmptyInput;
+}
+
 // ---- CrossPointSettings ----
 
 void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocument& doc) {
@@ -815,6 +852,33 @@ bool JsonSettingsIO::saveWifi(const WifiCredentialStore& store, const char* path
   return safeWriteFile(path, json);
 }
 
+// Populate the store from an already-parsed document. Defined as a macro body
+// rather than a shared function because the store's private members are only
+// reachable from the specific friended JsonSettingsIO functions (granting
+// friendship to a JsonDocument-taking helper would force ArduinoJson into the
+// widely-included store header, which leaks `using namespace ArduinoJson` and
+// breaks unqualified `detail::` references across the tree). Both friended
+// entry points below expand it.
+#define CROSSPOINT_POPULATE_WIFI(store, doc, needsResave)                                    \
+  do {                                                                                       \
+    (store).lastConnectedSsid = (doc)["lastConnectedSsid"] | std::string("");                \
+    (store).credentials.clear();                                                             \
+    JsonArray arr = (doc)["credentials"].as<JsonArray>();                                    \
+    for (JsonObject obj : arr) {                                                             \
+      if ((store).credentials.size() >= (store).MAX_NETWORKS) break;                         \
+      WifiCredential cred;                                                                   \
+      cred.ssid = obj["ssid"] | std::string("");                                             \
+      bool ok = false;                                                                       \
+      cred.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &ok);     \
+      if (!ok || cred.password.empty()) {                                                    \
+        cred.password = obj["password"] | std::string("");                                   \
+        if (!cred.password.empty() && (needsResave)) *(needsResave) = true;                  \
+      }                                                                                       \
+      (store).credentials.push_back(cred);                                                   \
+    }                                                                                         \
+    LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", (store).credentials.size());     \
+  } while (0)
+
 bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool* needsResave) {
   if (needsResave) *needsResave = false;
   JsonDocument doc;
@@ -823,27 +887,18 @@ bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool
     LOG_ERR("WCS", "JSON parse error: %s", error.c_str());
     return false;
   }
-
-  store.lastConnectedSsid = doc["lastConnectedSsid"] | std::string("");
-
-  store.credentials.clear();
-  JsonArray arr = doc["credentials"].as<JsonArray>();
-  for (JsonObject obj : arr) {
-    if (store.credentials.size() >= store.MAX_NETWORKS) break;
-    WifiCredential cred;
-    cred.ssid = obj["ssid"] | std::string("");
-    bool ok = false;
-    cred.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &ok);
-    if (!ok || cred.password.empty()) {
-      cred.password = obj["password"] | std::string("");
-      if (!cred.password.empty() && needsResave) *needsResave = true;
-    }
-    store.credentials.push_back(cred);
-  }
-
-  LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", store.credentials.size());
+  CROSSPOINT_POPULATE_WIFI(store, doc, needsResave);
   return true;
 }
+
+bool JsonSettingsIO::loadWifiFromFile(WifiCredentialStore& store, const char* path, bool* needsResave) {
+  if (needsResave) *needsResave = false;
+  JsonDocument doc;
+  if (safeDeserializeFile(path, doc)) return false;
+  CROSSPOINT_POPULATE_WIFI(store, doc, needsResave);
+  return true;
+}
+#undef CROSSPOINT_POPULATE_WIFI
 
 // ---- RecentBooksStore ----
 
@@ -869,6 +924,26 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
   return safeWriteFile(path, serializeRecentBooks(store));
 }
 
+// Populate from an already-parsed document. Macro, not a shared function, for
+// the same friendship/header reason as the Wifi loader above.
+#define CROSSPOINT_POPULATE_RECENT_BOOKS(store, doc)                                    \
+  do {                                                                                  \
+    (store).recentBooks.clear();                                                        \
+    JsonArray arr = (doc)["books"].as<JsonArray>();                                     \
+    for (JsonObject obj : arr) {                                                        \
+      if ((store).getCount() >= RecentBooksStore::MAX_RECENT_BOOKS) break;              \
+      RecentBook book;                                                                  \
+      book.path = obj["path"] | std::string("");                                        \
+      book.title = obj["title"] | std::string("");                                      \
+      book.author = obj["author"] | std::string("");                                    \
+      book.coverBmpPath = obj["coverBmpPath"] | std::string("");                        \
+      book.boldSwap = (obj["boldSwap"] | (uint8_t)0) != 0 ? 1 : 0;                      \
+      book.percent = static_cast<int8_t>(obj["percent"] | -1);                          \
+      (store).recentBooks.push_back(book);                                              \
+    }                                                                                   \
+    LOG_DBG("RBS", "Recent books loaded from file (%d entries)", (store).getCount());   \
+  } while (0)
+
 bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
@@ -876,27 +951,17 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
     LOG_ERR("RBS", "JSON parse error: %s", error.c_str());
     return false;
   }
-
-  store.recentBooks.clear();
-  JsonArray arr = doc["books"].as<JsonArray>();
-  for (JsonObject obj : arr) {
-    if (store.getCount() >= RecentBooksStore::MAX_RECENT_BOOKS) break;
-    RecentBook book;
-    book.path = obj["path"] | std::string("");
-    book.title = obj["title"] | std::string("");
-    book.author = obj["author"] | std::string("");
-    book.coverBmpPath = obj["coverBmpPath"] | std::string("");
-    // Missing field (older recent.json) -> default OFF.
-    book.boldSwap = (obj["boldSwap"] | (uint8_t)0) != 0 ? 1 : 0;
-    // Missing field (older recent.json) -> -1 = unknown; first read while
-    // book is open will populate it.
-    book.percent = static_cast<int8_t>(obj["percent"] | -1);
-    store.recentBooks.push_back(book);
-  }
-
-  LOG_DBG("RBS", "Recent books loaded from file (%d entries)", store.getCount());
+  CROSSPOINT_POPULATE_RECENT_BOOKS(store, doc);
   return true;
 }
+
+bool JsonSettingsIO::loadRecentBooksFromFile(RecentBooksStore& store, const char* path) {
+  JsonDocument doc;
+  if (safeDeserializeFile(path, doc)) return false;
+  CROSSPOINT_POPULATE_RECENT_BOOKS(store, doc);
+  return true;
+}
+#undef CROSSPOINT_POPULATE_RECENT_BOOKS
 
 // ---- ReadingThemeStore ----
 
@@ -910,6 +975,18 @@ bool JsonSettingsIO::saveReadingTheme(const ReadingTheme& theme, const char* pat
   return safeWriteFile(path, json);
 }
 
+namespace {
+bool populateReadingTheme(ReadingTheme& theme, JsonDocument& doc) {
+  JsonObject obj = doc.as<JsonObject>();
+  if (obj.isNull()) {
+    LOG_ERR("RTH", "Missing reading theme object");
+    return false;
+  }
+  readReadingThemeObject(obj, theme);
+  return true;
+}
+}  // namespace
+
 bool JsonSettingsIO::loadReadingTheme(ReadingTheme& theme, const char* json) {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
@@ -917,15 +994,13 @@ bool JsonSettingsIO::loadReadingTheme(ReadingTheme& theme, const char* json) {
     LOG_ERR("RTH", "JSON parse error: %s", error.c_str());
     return false;
   }
+  return populateReadingTheme(theme, doc);
+}
 
-  JsonObject obj = doc.as<JsonObject>();
-  if (obj.isNull()) {
-    LOG_ERR("RTH", "Missing reading theme object");
-    return false;
-  }
-
-  readReadingThemeObject(obj, theme);
-  return true;
+bool JsonSettingsIO::loadReadingThemeFromFile(ReadingTheme& theme, const char* path) {
+  JsonDocument doc;
+  if (safeDeserializeFile(path, doc)) return false;
+  return populateReadingTheme(theme, doc);
 }
 
 bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store, const char* path) {
@@ -942,6 +1017,35 @@ bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store, const cha
   return safeWriteFile(path, json);
 }
 
+// Populate from an already-parsed document. Macro, not a shared function, for
+// the same friendship/header reason as the loaders above. Note: it can `return
+// false` from the enclosing function on the corruption-guard path (parsed 0
+// themes while some are held in memory), which both entry points below want.
+#define CROSSPOINT_POPULATE_READING_THEMES(store, doc)                                       \
+  do {                                                                                       \
+    /* Parse into a temporary list first — never clear in-memory themes until we know the */ \
+    /* file actually contained data, so a valid-but-empty JSON can't wipe the user's set. */ \
+    std::vector<ReadingTheme> parsed;                                                        \
+    JsonArray arr = (doc)["themes"].as<JsonArray>();                                         \
+    for (JsonObject obj : arr) {                                                             \
+      if (parsed.size() >= ReadingThemeStore::MAX_THEMES) break;                             \
+      ReadingTheme theme;                                                                    \
+      readReadingThemeObject(obj, theme);                                                    \
+      parsed.push_back(theme);                                                               \
+    }                                                                                        \
+    if (parsed.empty() && !(store).themes.empty()) {                                         \
+      LOG_ERR("RTH", "Parsed 0 themes from JSON but %u in memory — rejecting load",          \
+              (unsigned)(store).themes.size());                                              \
+      return false;                                                                          \
+    }                                                                                        \
+    (store).themes = std::move(parsed);                                                      \
+    (store).lastEditedThemeIndex = (doc)["lastEditedThemeIndex"] | -1;                       \
+    if ((store).lastEditedThemeIndex < 0 ||                                                  \
+        (store).lastEditedThemeIndex >= static_cast<int>((store).themes.size())) {           \
+      (store).lastEditedThemeIndex = -1;                                                     \
+    }                                                                                        \
+  } while (0)
+
 bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store, const char* json) {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
@@ -949,34 +1053,14 @@ bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store, const char* jso
     LOG_ERR("RTH", "JSON parse error: %s", error.c_str());
     return false;
   }
-
-  // Parse into a temporary list first — never clear in-memory themes until we
-  // know the file actually contained data.  This prevents a valid-but-empty
-  // JSON (e.g. truncated write, SD corruption) from wiping the user's themes.
-  std::vector<ReadingTheme> parsed;
-  JsonArray arr = doc["themes"].as<JsonArray>();
-  for (JsonObject obj : arr) {
-    if (parsed.size() >= ReadingThemeStore::MAX_THEMES) {
-      break;
-    }
-    ReadingTheme theme;
-    readReadingThemeObject(obj, theme);
-    parsed.push_back(theme);
-  }
-
-  if (parsed.empty() && !store.themes.empty()) {
-    LOG_ERR("RTH",
-            "Parsed 0 themes from JSON but %u in memory — rejecting load "
-            "(possible file corruption)",
-            (unsigned)store.themes.size());
-    return false;
-  }
-
-  store.themes = std::move(parsed);
-  store.lastEditedThemeIndex = doc["lastEditedThemeIndex"] | -1;
-  if (store.lastEditedThemeIndex < 0 || store.lastEditedThemeIndex >= static_cast<int>(store.themes.size())) {
-    store.lastEditedThemeIndex = -1;
-  }
-
+  CROSSPOINT_POPULATE_READING_THEMES(store, doc);
   return true;
 }
+
+bool JsonSettingsIO::loadReadingThemesFromFile(ReadingThemeStore& store, const char* path) {
+  JsonDocument doc;
+  if (safeDeserializeFile(path, doc)) return false;
+  CROSSPOINT_POPULATE_READING_THEMES(store, doc);
+  return true;
+}
+#undef CROSSPOINT_POPULATE_READING_THEMES

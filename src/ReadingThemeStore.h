@@ -59,6 +59,7 @@ class ReadingThemeStore;
 namespace JsonSettingsIO {
 bool saveReadingThemes(const ReadingThemeStore& store, const char* path);
 bool loadReadingThemes(ReadingThemeStore& store, const char* json);
+bool loadReadingThemesFromFile(ReadingThemeStore& store, const char* path);
 }  // namespace JsonSettingsIO
 
 class ReadingThemeStore {
@@ -73,6 +74,7 @@ class ReadingThemeStore {
   std::string lastAppliedThemeName;
 
   friend bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store, const char* json);
+  friend bool JsonSettingsIO::loadReadingThemesFromFile(ReadingThemeStore& store, const char* path);
 
  public:
   static constexpr size_t MAX_THEMES = 16;

@@ -11,6 +11,7 @@ class WifiCredentialStore;
 namespace JsonSettingsIO {
 bool saveWifi(const WifiCredentialStore& store, const char* path);
 bool loadWifi(WifiCredentialStore& store, const char* json, bool* needsResave);
+bool loadWifiFromFile(WifiCredentialStore& store, const char* path, bool* needsResave);
 }  // namespace JsonSettingsIO
 
 /**
@@ -34,6 +35,7 @@ class WifiCredentialStore {
 
   friend bool JsonSettingsIO::saveWifi(const WifiCredentialStore&, const char*);
   friend bool JsonSettingsIO::loadWifi(WifiCredentialStore&, const char*, bool*);
+  friend bool JsonSettingsIO::loadWifiFromFile(WifiCredentialStore&, const char*, bool*);
 
  public:
   // Delete copy constructor and assignment

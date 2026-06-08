@@ -21,14 +21,15 @@ bool parseBookmarksFile(const std::string& path, std::vector<BookmarkStore::Book
     f.close();
     return false;
   }
-  std::vector<char> buf(sz + 1);
-  const int rd = f.read(buf.data(), sz);
-  f.close();
-  if (rd != static_cast<int>(sz)) return false;
-  buf[sz] = '\0';
-
+  // Stream-parse straight from the file. ArduinoJson reads the file
+  // incrementally, so the bookmark payload is never duplicated into a
+  // separate full-size buffer (this used to slurp the whole file into a
+  // std::vector<char> that lived alongside the parsed doc). The size guard
+  // above still bounds the input.
   JsonDocument doc;
-  if (deserializeJson(doc, buf.data()) != DeserializationError::Ok) return false;
+  const DeserializationError err = deserializeJson(doc, f);
+  f.close();
+  if (err != DeserializationError::Ok) return false;
 
   out.clear();
   JsonArray arr = doc.as<JsonArray>();
