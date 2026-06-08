@@ -18,6 +18,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v4.0.0 release notes 2026-06-02: settings-OOM fix, lifecycle-only progress saves, 2ms input tick. Remaining snappiness lever — cache the ~75ms per-page layout compute — is now tracked in the Active backlog below.)*
 
+*(Drained into v5.5.5 release notes 2026-06-08: snappier input (80 MHz idle freq + 20 ms idle loop + held-button keepalive); wallpaper rotation fixes (anti-repeat + measured-cost gate that ends the "can't lock" sleep-entry OOM crash); memory-load reductions (streaming JSON load + save, glyph-prewarm scan, /update page served from flash); status-bar font-size setting removed (always large); consolidated /CRASH_INFO.TXT diagnostics; HTML/CSS parser allocation-churn cleanup.)*
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 
