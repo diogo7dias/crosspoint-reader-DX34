@@ -51,7 +51,14 @@ class FontCacheManager {
 
   enum class ScanMode : uint8_t { None, Scanning };
   ScanMode scanMode_ = ScanMode::None;
-  std::string scanText_;
+  // Distinct codepoints seen during the scan pass, deduplicated in recordText().
+  // Replaces a full-page scanText_ std::string: prewarm only needs the set of
+  // distinct glyphs, so we accumulate the distinct codepoints directly in a
+  // fixed buffer (no per-page heap string that churned right before the big
+  // prewarm allocations). Sized to the prewarm glyph cap (MAX_PAGE_GLYPHS=512).
+  static constexpr uint16_t kMaxScanCodepoints = 512;
+  uint32_t scanCodepoints_[kMaxScanCodepoints] = {};
+  uint16_t scanCodepointCount_ = 0;
   uint32_t scanStyleCounts_[4] = {};
   int scanFontId_ = -1;
 };
