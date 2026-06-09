@@ -115,6 +115,7 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
   if (useArenaWords_) {
     if (!ensureArenaWords() || arenaCount_ >= arenaCap_) {
       migrateArenaWordsToVectors();
+      if (oom_) return;
     }
   }
   if (useArenaWords_) {
@@ -125,6 +126,7 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
     }
     // String region full — migrate and append below on the vector path.
     migrateArenaWordsToVectors();
+    if (oom_) return;
   }
 
   // Heap-probe the next vector growth. std::vector doubles capacity, so
@@ -176,7 +178,7 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
       return;
     }
     migrateArenaWordsToVectors();
-    if (words.empty()) {
+    if (oom_ || words.empty()) {
       return;
     }
   }
@@ -782,6 +784,18 @@ bool ParsedText::ensureArenaWords() {
 
 void ParsedText::migrateArenaWordsToVectors() {
   if (!useArenaWords_) return;
+  // Same probe-then-set-oom_ contract as addWord: these reserves plus the
+  // per-word string copies land on the general heap, and a bad_alloc aborts
+  // under -fno-exceptions. The vector<string> reserve is the heaviest single
+  // contiguous block; probe it and bail with oom_ set (arena state untouched)
+  // so callers surface parseFailed instead of crashing mid-migration.
+  const size_t needBytes = (words.size() + arenaCount_) * sizeof(std::string);
+  if (!crosspoint::heap::canAllocateContiguous(needBytes)) {
+    LOG_ERR("PT", "OOM migrateArenaWords count=%u need=%u largest=%u", (unsigned)arenaCount_, (unsigned)needBytes,
+            (unsigned)crosspoint::heap::largestFreeBlockBytes());
+    oom_ = true;
+    return;
+  }
   words.reserve(words.size() + arenaCount_);
   wordStyles.reserve(wordStyles.size() + arenaCount_);
   wordContinues.reserve(wordContinues.size() + arenaCount_);
@@ -850,6 +864,7 @@ void ParsedText::consumeArenaPrefix(const size_t consumed) {
     // Defensive (survivors are a subset of what just fit, so unreachable in
     // practice): spill the rest to the vectors.
     migrateArenaWordsToVectors();
+    if (oom_) return;
     for (size_t j = i; j < survivors.size(); ++j) {
       words.push_back(std::move(survivors[j].bytes));
       wordStyles.push_back(survivors[j].style);
