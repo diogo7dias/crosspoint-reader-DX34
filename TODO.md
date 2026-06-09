@@ -20,6 +20,13 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v5.5.5 release notes 2026-06-08: snappier input (80 MHz idle freq + 20 ms idle loop + held-button keepalive); wallpaper rotation fixes (anti-repeat + measured-cost gate that ends the "can't lock" sleep-entry OOM crash); memory-load reductions (streaming JSON load + save, glyph-prewarm scan, /update page served from flash); status-bar font-size setting removed (always large); consolidated /CRASH_INFO.TXT diagnostics; HTML/CSS parser allocation-churn cleanup.)*
 
+### Pending (post-v5.5.5 audit, 2026-06-09)
+
+- Wallpaper reconcile hardening: a truncated 64-file batch now keeps the playlist dirty so the remainder is absorbed on the next sleep (was stranded until the next upload/reboot); the trim-branch re-derive respects the same 64-per-pass cap (was uncapped — up to ~500 strings spliced in one pass on the sleep-entry heap); the splice insertion buffer is heap-probed before reserve.
+- Wallpaper reshuffle ("shuffle now" in settings) is now gated by a measured-cost heap probe before materializing the up-to-500-name listing, and reports failure honestly when the buffer write bails.
+- EPUB layout: `migrateArenaWordsToVectors` (arena→vector word-buffer spill) now uses the same probe-then-`oom_` contract as `addWord` — was the last unguarded multi-KB reserve on the render path.
+- Tests: stale `test_settings_gateway` suite removed (feature deleted in #93); highlight line-nav test updated to the wrap semantics shipped in cb45b32d. Host suite green: 0 failures.
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 

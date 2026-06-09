@@ -248,16 +248,18 @@ void test_line_move_nearest_x_on_target_line() {
   TEST_ASSERT_EQUAL_INT(5, h.cursorIndex());
 }
 
-void test_line_move_no_line_falls_through_to_word() {
+void test_line_move_single_line_is_noop() {
+  // Since cb45b32d ("wrap line nav") up/down wraps to the opposite line of the
+  // SAME page instead of falling through to a word-step. On a single-line page
+  // the wrap target is the current line, so the nearest-x word is the cursor
+  // itself: a deliberate no-op, not an advance.
   HighlightController h;
   h.enter();
   h.setWordsForPage(0, makeWordsSingleLine(4));
-  // Single line only — moving up/down has no target; falls through to moveCursor.
   h.moveCursor(+1, ctx(0, 1, 4));  // cursor=1
   auto r = h.moveCursorLine(+1, ctx(0, 1, 4));
-  // Fallthrough advances by 1 in SELECT_START within-page.
-  TEST_ASSERT_EQUAL_INT(2, h.cursorIndex());
-  TEST_ASSERT_TRUE(r.stateChanged);
+  TEST_ASSERT_EQUAL_INT(1, h.cursorIndex());
+  TEST_ASSERT_FALSE(r.stateChanged);
 }
 
 int main(int, char**) {
@@ -276,6 +278,6 @@ int main(int, char**) {
   RUN_TEST(test_underline_timeout);
   RUN_TEST(test_underline_timeout_false_when_not_showing);
   RUN_TEST(test_line_move_nearest_x_on_target_line);
-  RUN_TEST(test_line_move_no_line_falls_through_to_word);
+  RUN_TEST(test_line_move_single_line_is_noop);
   return UNITY_END();
 }
