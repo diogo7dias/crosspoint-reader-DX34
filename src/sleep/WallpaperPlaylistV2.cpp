@@ -339,21 +339,37 @@ void WallpaperPlaylistV2::reconcile() {
   if (diskCount > kSleepFolderCap &&
       heapHasContiguous((kSleepFolderCap + 64) * sizeof(SleepBmpEntry))) {
     std::vector<SleepBmpEntry> all = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap + 64);
+    // If the listing itself hit its cap, files beyond it were never seen —
+    // stay dirty so a later reconcile finishes the job.
+    const bool listingCapHit = all.size() >= kSleepFolderCap + 64;
     moved = trimToCap(all, capBlocked);
     // Record outcome as data; the facade drains it via takeNotice() after
     // advance() and persists it for the next-wake home warning / toast.
     pendingNotice_.favoritesCapBlocked = capBlocked;
     pendingNotice_.movedToPause = moved;
     // Re-derive newFiles after trim — some new arrivals may have been pushed
-    // to /sleep pause if the cap was favorites-saturated.
+    // to /sleep pause if the cap was favorites-saturated. Same 64-per-pass cap
+    // as the streaming walk above: a stale/lost order file makes every
+    // survivor "new" (~500 entries), and an uncapped splice of that batch is
+    // exactly the bad_alloc-abort shape the cap exists to prevent. Excess is
+    // absorbed by later reconciles via the kept dirty_ flag.
     newFiles.clear();
+    newFilesTruncated = listingCapHit;
     for (auto& e : all) {
-      if (!nameIsInBuffer(e.name)) newFiles.push_back(std::move(e));
+      if (nameIsInBuffer(e.name)) continue;
+      if (newFiles.size() >= kMaxNewFilesPerReconcile ||
+          !heapHasContiguous((newFiles.size() + 4) * sizeof(SleepBmpEntry))) {
+        newFilesTruncated = true;
+        break;
+      }
+      newFiles.push_back(std::move(e));
     }
   }
 
   if (newFiles.empty()) {
-    dirty_ = false;
+    // Truncation with an empty batch (heap too tight to retain even one
+    // entry): keep dirty_ so the next sleep retries.
+    dirty_ = newFilesTruncated;
     return;
   }
 
@@ -369,6 +385,11 @@ void WallpaperPlaylistV2::reconcile() {
   std::string insertion;
   size_t insLen = 0;
   for (const auto& nf : newFiles) insLen += nf.name.size() + 1;
+  // -fno-exceptions: probe before the reserve, like every other big alloc on
+  // this path. Bail with dirty_ kept so the next sleep retries.
+  if (!heapHasContiguous(insLen)) {
+    return;
+  }
   insertion.reserve(insLen);
   for (const auto& nf : newFiles) {
     insertion.append(nf.name);
@@ -379,7 +400,9 @@ void WallpaperPlaylistV2::reconcile() {
   // full sequential lap from disk (newest first). NOT a shuffle — shuffles
   // only happen on the user-initiated settings button.
   if (buffer_.empty()) {
-    rebuildSequential();
+    if (!rebuildSequential()) {
+      return;  // heap-gated bail — dirty_ stays set, retry next sleep
+    }
   } else {
     // Exact-size rebuild rather than buffer_.insert() — std::string::insert()
     // doubles capacity which on a 14 KB buffer triggers a 28 KB single
@@ -406,7 +429,10 @@ void WallpaperPlaylistV2::reconcile() {
     saveToDisk();
   }
 
-  dirty_ = false;
+  // A truncated batch means files remain unabsorbed — stay dirty so the next
+  // sleep's reconcile continues where this one stopped (pre-fix this cleared
+  // unconditionally, stranding the remainder until the next upload or reboot).
+  dirty_ = newFilesTruncated;
 }
 
 std::string WallpaperPlaylistV2::advance() {
@@ -494,6 +520,27 @@ bool WallpaperPlaylistV2::rebuildSequential() {
 
 bool WallpaperPlaylistV2::reshuffle() {
   if (!deps_.fs) return false;
+  // Measured-cost gate, mirroring rebuildSequential: listSleepBmps materializes
+  // up to 500 heap std::strings plus the vector spine, and writeBuffer then
+  // needs the contiguous order buffer. Measure the real cost with a zero-heap
+  // walk and bail BEFORE the listing if the heap can't carry it — reshuffle is
+  // user-initiated so a false return just leaves the current order in place.
+  size_t count = 0;
+  size_t nameBytes = 0;  // == order-buffer size: sum of (filename length + 1)
+  deps_.fs->walkSleepBmps([&](const char* /*name*/, size_t len, uint32_t /*mtime*/) {
+    if (count >= kSleepFolderCap) return;
+    ++count;
+    nameBytes += len + 1;
+  });
+  if (count == 0) {
+    buffer_.clear();
+    cursor_ = 0;
+    saveToDisk();
+    return false;
+  }
+  if (!heapHasContiguous(nameBytes) || !heapHasContiguous(count * sizeof(std::string))) {
+    return false;  // keep the existing order; user can retry once heap recovers
+  }
   auto names = deps_.fs->listSleepBmps(kSleepFolderCap);
   if (names.empty()) {
     buffer_.clear();
@@ -522,7 +569,10 @@ bool WallpaperPlaylistV2::reshuffle() {
   }
   writeBuffer(names, startCursor);
   loaded_ = true;
-  return true;
+  // writeBuffer can still bail on its own contiguous probe (heap shrank
+  // between the gate above and the reserve); report that honestly so the
+  // settings UI doesn't claim a shuffle that never happened.
+  return !buffer_.empty();
 }
 
 void WallpaperPlaylistV2::rememberRendered(const std::string& fullPath, const std::string& filename) {

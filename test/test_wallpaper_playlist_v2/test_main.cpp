@@ -28,13 +28,22 @@ class FakeSleepFs : public crosspoint::sleep::ISleepFs {
   std::unordered_set<std::string> existsSet;
   std::vector<std::pair<std::string, std::string>> renames;
 
+  // Counts materializing-listing calls so heap-gate tests can assert the
+  // playlist bailed BEFORE building the full name vector.
+  size_t listCalls = 0;
+
   size_t countSleepBmps(size_t /*scanCap*/) override {
     size_t n = 0;
     for (const auto& f : sleepFiles)
       if (isBmp(f.name)) ++n;
     return n;
   }
+  void walkSleepBmps(const std::function<void(const char*, size_t, uint32_t)>& cb) override {
+    for (const auto& f : sleepFiles)
+      if (isBmp(f.name)) cb(f.name.c_str(), f.name.size(), f.mtime);
+  }
   std::vector<std::string> listSleepBmps(size_t maxEntries) override {
+    ++listCalls;
     std::vector<std::string> out;
     for (const auto& f : sleepFiles)
       if (isBmp(f.name)) out.push_back(f.name);
@@ -426,6 +435,79 @@ void test_unset_heap_probe_treats_heap_as_unlimited() {
   TEST_ASSERT_FALSE(first.empty());
 }
 
+// A reconcile that truncates its new-file batch (kMaxNewFilesPerReconcile=64)
+// must STAY dirty so the next sleep's reconcile absorbs the remainder. Pre-fix
+// it cleared dirty_, stranding the excess files until the next upload/reboot.
+void test_truncated_reconcile_stays_dirty_and_converges() {
+  Fixture fx;
+  for (int i = 0; i < 10; ++i) fx.fs.seed("base_" + std::to_string(i) + ".bmp", 100 + i);
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+  TEST_ASSERT_EQUAL(10u, wp.entryCountForTest());
+
+  for (int i = 0; i < 100; ++i) fx.fs.seed("new_" + std::to_string(i) + ".bmp", 1000 + i);
+  wp.markFolderDirty();
+  wp.reconcile();
+  TEST_ASSERT_EQUAL(74u, wp.entryCountForTest());  // 10 + one 64-file batch
+  TEST_ASSERT_TRUE_MESSAGE(wp.dirty(), "truncated reconcile must keep dirty_ set");
+
+  wp.reconcile();  // NO markFolderDirty — must self-continue
+  TEST_ASSERT_EQUAL(110u, wp.entryCountForTest());
+  TEST_ASSERT_FALSE(wp.dirty());
+}
+
+// User-initiated reshuffle materializes a vector of up to 500 heap strings.
+// Under a fragmented heap it must bail BEFORE building that listing (the walk
+// is zero-heap; the listing is not) and report failure to the caller.
+void test_reshuffle_bails_before_listing_on_fragmented_heap() {
+  Fixture fx;
+  for (int i = 0; i < 40; ++i)
+    fx.fs.seed("very_long_wallpaper_filename_to_inflate_measured_cost_" + std::to_string(i) + ".bmp", 100 + i);
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+  const auto bufferBefore = wp.bufferForTest();
+  fx.fs.listCalls = 0;
+
+  fx.largestFreeBlockFn = []() -> size_t { return 1024; };
+  fx.wire(wp);  // rewire with fragmented probe; setDeps marks dirty, irrelevant here
+
+  TEST_ASSERT_FALSE_MESSAGE(wp.reshuffle(), "reshuffle must report failure under fragmented heap");
+  TEST_ASSERT_EQUAL_MESSAGE(0u, fx.fs.listCalls, "reshuffle must not materialize the listing when gated");
+}
+
+// Trim-branch re-derive (order file stale + /sleep over cap) used to rebuild
+// newFiles UNCAPPED — up to ~500 strings spliced in one pass on the low
+// sleep-entry heap. It must respect the same 64-per-pass cap and converge
+// across subsequent reconciles.
+void test_trim_branch_rederive_capped_per_pass() {
+  Fixture fx;
+  fx.isFavoriteFn = [](const std::string&) { return false; };
+  fx.fs.seed("seed.bmp", 1);
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+  TEST_ASSERT_EQUAL(1u, wp.entryCountForTest());
+
+  for (int i = 0; i < 501; ++i) fx.fs.seed("bulk_" + std::to_string(i) + ".bmp", 1000 + i);
+  wp.markFolderDirty();
+  wp.reconcile();  // disk=502 > cap → trim runs, re-derive must cap at 64
+  TEST_ASSERT_TRUE_MESSAGE(wp.entryCountForTest() <= 65u, "re-derived splice must be capped per pass");
+  TEST_ASSERT_TRUE_MESSAGE(wp.dirty(), "capped trim-branch reconcile must stay dirty");
+
+  for (int pass = 0; pass < 12 && wp.dirty(); ++pass) wp.reconcile();
+  TEST_ASSERT_FALSE(wp.dirty());
+  // seed.bmp (demoted by trim) stays as a stale buffer line; all 500 survivors present.
+  TEST_ASSERT_EQUAL(501u, wp.entryCountForTest());
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -444,5 +526,8 @@ int main(int, char**) {
   RUN_TEST(test_healthy_heap_allows_reshuffle_and_advance_returns_name);
   RUN_TEST(test_membership_scan_handles_prefix_collisions);
   RUN_TEST(test_unset_heap_probe_treats_heap_as_unlimited);
+  RUN_TEST(test_truncated_reconcile_stays_dirty_and_converges);
+  RUN_TEST(test_reshuffle_bails_before_listing_on_fragmented_heap);
+  RUN_TEST(test_trim_branch_rederive_capped_per_pass);
   return UNITY_END();
 }
