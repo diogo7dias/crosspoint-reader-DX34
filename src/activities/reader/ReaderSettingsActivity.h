@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "activities/Activity.h"
+#include "activities/settings/FontFamilyPicker.h"
 #include "activities/settings/SettingsActivity.h"
 #include "util/ButtonNavigator.h"
 
@@ -94,6 +95,14 @@ class ReaderSettingsActivity final : public Activity {
   uint8_t valueEditDraft = 0;
   uint8_t valueEditMin = 0;
   uint8_t valueEditMax = 0;
+  // Per-direction timestamp of the last value-edit tap, for quick-double-tap
+  // detection (a tap within kValueEditDoubleTapMs jumps by 10 instead of 1).
+  // 0 = no prior tap this edit session.
+  unsigned long lastValueUpTapMs = 0;
+  unsigned long lastValueDownTapMs = 0;
+
+  // Modal font-family picker overlay (opened from the Font Family row).
+  crosspoint::settings::FontFamilyPicker fontPicker;
 
   std::string bookCachePath;
   const std::function<void(bool)> onClose;

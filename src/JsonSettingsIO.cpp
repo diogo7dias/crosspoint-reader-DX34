@@ -68,7 +68,6 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["statusBarTitlePosition"] = theme.statusBarTitlePosition;
   obj["statusBarTextAlignment"] = theme.statusBarTextAlignment;
   obj["statusBarProgressStyle"] = theme.statusBarProgressStyle;
-  obj["statusBarFontSize"] = theme.statusBarFontSize;
   obj["statusBarBarThickness"] = theme.statusBarBarThickness;
   obj["statusBarShowBookPageCounter"] = theme.statusBarShowBookPageCounter;
   obj["statusBarBookPageCounterPosition"] = theme.statusBarBookPageCounterPosition;
@@ -163,7 +162,6 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.statusBarTitlePosition = obj["statusBarTitlePosition"] | (uint8_t)CrossPointSettings::STATUS_AT_BOTTOM;
   theme.statusBarTextAlignment = obj["statusBarTextAlignment"] | (uint8_t)CrossPointSettings::STATUS_TEXT_RIGHT;
   theme.statusBarProgressStyle = obj["statusBarProgressStyle"] | (uint8_t)CrossPointSettings::STATUS_BAR_THICK;
-  theme.statusBarFontSize = obj["statusBarFontSize"] | (uint8_t)CrossPointSettings::STATUS_FONT_SMALL;
   theme.statusBarBarThickness = obj["statusBarBarThickness"] | (uint8_t)CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
   theme.statusBarShowBookPageCounter = obj["statusBarShowBookPageCounter"] | (uint8_t)0;
   theme.statusBarBookPageCounterPosition =
@@ -458,7 +456,6 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["statusBarTitlePosition"] = s.statusBarTitlePosition;
   doc["statusBarTextAlignment"] = s.statusBarTextAlignment;
   doc["statusBarProgressStyle"] = s.statusBarProgressStyle;
-  doc["statusBarFontSize"] = s.statusBarFontSize;
   doc["statusBarBarThickness"] = s.statusBarBarThickness;
   doc["extraParagraphSpacingLevel"] = s.extraParagraphSpacingLevel;
   // Legacy compatibility key for older builds that still expect a toggle.
@@ -658,8 +655,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                                          S::STATUS_TEXT_ALIGNMENT_COUNT, S::STATUS_TEXT_RIGHT);
     s.statusBarProgressStyle = clampEnum(doc["statusBarProgressStyle"] | (uint8_t)S::STATUS_BAR_THICK,
                                          S::STATUS_BAR_PROGRESS_STYLE_COUNT, S::STATUS_BAR_THICK);
-    s.statusBarFontSize = clampEnum(doc["statusBarFontSize"] | (uint8_t)S::STATUS_FONT_SMALL,
-                                    S::STATUS_BAR_FONT_SIZE_COUNT, S::STATUS_FONT_SMALL);
     s.statusBarBarThickness = clampEnum(doc["statusBarBarThickness"] | (uint8_t)S::STATUS_BAR_THICKNESS_NORMAL,
                                         S::STATUS_BAR_BAR_THICKNESS_COUNT, S::STATUS_BAR_THICKNESS_NORMAL);
   } else {

@@ -7,8 +7,10 @@
 #include <algorithm>
 
 #include "CrossPointSettings.h"
+#include "FontFamilyApply.h"
 #include "MappedInputManager.h"
 #include "ReadingThemeStore.h"
+#include "ValueEditStep.h"
 #include "components/themes/BaseTheme.h"
 #include "fonts/CustomBinFontManager.h"
 #include "util/TransitionFeedback.h"
@@ -25,10 +27,6 @@ std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
     return std::to_string(fontSize);
   }
   return std::to_string(CrossPointSettings::fontSizeToPointSize(family, fontSize));
-}
-
-int getValueEditHoldStep(const MappedInputManager& mappedInput, const ReaderSettingInfo&) {
-  return mappedInput.getHeldTime() >= 3000 ? 10 : 1;
 }
 
 }  // namespace
@@ -156,6 +154,8 @@ void ReaderSettingsActivity::startValueEdit(const ReaderSettingInfo& setting, co
   valueEditMin = setting.valueRange.min;
   valueEditMax = setting.valueRange.max;
   valueEditDraft = std::clamp(SETTINGS.*(setting.valuePtr), valueEditMin, valueEditMax);
+  lastValueUpTapMs = 0;
+  lastValueDownTapMs = 0;
 }
 
 void ReaderSettingsActivity::adjustValueEdit(const int delta) {
@@ -317,9 +317,6 @@ void ReaderSettingsActivity::buildSettingsList() {
 
   // --- Build status bar settings directly ---
   statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BAR, &CrossPointSettings::statusBarEnabled));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(StrId::STR_STATUS_FONT_SIZE,
-                                                      &CrossPointSettings::statusBarFontSize,
-                                                      {StrId::STR_STATUS_FONT_MIN, StrId::STR_STATUS_FONT_MAX}));
   statusBarSettings.push_back(
       ReaderSettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
                               {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE}));
@@ -430,84 +427,11 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
       startFontSizeEdit();
       return;
     } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-      // Font-family picker = 6 built-in StrIds + N deduped custom names.
-      // Cycling resolves against the sum. Landing on a custom slot sets
-      // fontFamily=CUSTOM_FAMILY + customFontName + customFontSizePt
-      // (smallest available for that name, preserving prior choice if
-      // still valid for the new family).
-      const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
-      const size_t builtinCount = setting.enumValues.size();  // 6
-      const size_t customCount = names.size();
-      const size_t total = builtinCount + customCount;
-      size_t currentIndex = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
-      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-        currentIndex = builtinCount;  // default to first custom if name not found
-        for (size_t i = 0; i < names.size(); ++i) {
-          if (names[i] == SETTINGS.customFontName) {
-            currentIndex = builtinCount + i;
-            break;
-          }
-        }
-      }
-      const size_t nextIndex = total == 0 ? 0 : (currentIndex + 1) % total;
-
-      // Snapshot before any mutation so we can revert atomically if the
-      // new family is a custom one whose tables don't fit the per-variant
-      // budget — without this revert, the persisted SETTINGS point at a
-      // font the renderer never accepted and ensureSectionLoaded re-tries
-      // the failing activate on every chapter.
-      const auto prevFamily = SETTINGS.fontFamily;
-      const auto prevName = SETTINGS.customFontName;
-      const auto prevSize = SETTINGS.customFontSizePt;
-      const auto prevFontSize = SETTINGS.fontSize;
-      const auto prevLineSpacing = SETTINGS.lineSpacingPercent;
-
-      if (nextIndex < builtinCount) {
-        SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(nextIndex));
-        SETTINGS.customFontName.clear();
-        SETTINGS.customFontSizePt = 0;
-      } else {
-        SETTINGS.fontFamily = CrossPointSettings::CUSTOM_FAMILY;
-        const size_t customSlot = nextIndex - builtinCount;
-        SETTINGS.customFontName = names[customSlot];
-        const auto sizes =
-            crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
-        // Keep the previously-selected size if it still exists for the
-        // new family; otherwise pick the smallest so the picker has a
-        // valid default.
-        bool keep = false;
-        for (auto s : sizes) {
-          if (s == SETTINGS.customFontSizePt) {
-            keep = true;
-            break;
-          }
-        }
-        if (!keep) SETTINGS.customFontSizePt = sizes.empty() ? 0 : sizes.front();
-      }
-      SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
-      SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-      SETTINGS.lineSpacingPercent = CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
-      auto& customBinFonts = crosspoint::fonts::CustomBinFontManager::instance();
-      // activate() is atomic: on failure the previous active font stays
-      // registered. Try first, then deactivate only when the new state
-      // is a built-in family or the new custom activation succeeded.
-      bool ok = true;
-      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
-        ok = customBinFonts.activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
-      } else {
-        customBinFonts.deactivate();
-      }
-      if (!ok) {
-        SETTINGS.fontFamily = prevFamily;
-        SETTINGS.customFontName = prevName;
-        SETTINGS.customFontSizePt = prevSize;
-        SETTINGS.fontSize = prevFontSize;
-        SETTINGS.lineSpacingPercent = prevLineSpacing;
-        TransitionFeedback::show(renderer, tr(STR_FONT_LOAD_FAILED));
-        return;
-      }
-      buildSettingsList();
-      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+      // Open the modal vertical-list font picker. The chosen row is applied in
+      // loop() when the user confirms; opening alone changes nothing.
+      fontPicker.open();
+      requestUpdate();
+      return;
     } else {
       const int currentValue = SETTINGS.*(setting.valuePtr);
       SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
@@ -535,6 +459,46 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
 }
 
 void ReaderSettingsActivity::loop() {
+  if (fontPicker.isOpen()) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      fontPicker.close();  // cancel: keep the previous font
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      const bool ok = crosspoint::settings::applyFontFamilyByDisplayIndex(fontPicker.selectedDisplayIndex(),
+                                                                          fontPicker.builtinCount())
+                          .ok;
+      fontPicker.close();
+      if (ok) {
+        buildSettingsList();
+        selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+        persistSettings("reader font family");
+      } else {
+        TransitionFeedback::show(renderer, tr(STR_FONT_LOAD_FAILED));
+      }
+      requestUpdate();
+      return;
+    }
+    buttonNavigator.onNextRelease([this] {
+      fontPicker.moveDown();
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousRelease([this] {
+      fontPicker.moveUp();
+      requestUpdate();
+    });
+    buttonNavigator.onNextContinuous([this] {
+      fontPicker.moveDown();
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousContinuous([this] {
+      fontPicker.moveUp();
+      requestUpdate();
+    });
+    return;
+  }
+
   if (fontSizeEditMode) {
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       fontSizeEditMode = false;
@@ -578,28 +542,28 @@ void ReaderSettingsActivity::loop() {
       return;
     }
 
+    // Tap: +-1. A quick second tap (within kValueEditDoubleTapMs) jumps +-10.
     buttonNavigator.onNextRelease([this] {
-      adjustValueEdit(+1);
+      const unsigned long now = millis();
+      adjustValueEdit(+crosspoint::settings::valueEditTapStep(lastValueUpTapMs, now,
+                                                              crosspoint::settings::kValueEditDoubleTapMs));
+      lastValueUpTapMs = now;
       requestUpdate();
     });
     buttonNavigator.onPreviousRelease([this] {
-      adjustValueEdit(-1);
+      const unsigned long now = millis();
+      adjustValueEdit(-crosspoint::settings::valueEditTapStep(lastValueDownTapMs, now,
+                                                              crosspoint::settings::kValueEditDoubleTapMs));
+      lastValueDownTapMs = now;
       requestUpdate();
     });
+    // Hold: steady +-1 repeat (no acceleration).
     buttonNavigator.onNextContinuous([this] {
-      const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
-        return;
-      }
-      adjustValueEdit(+getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(+1);
       requestUpdate();
     });
     buttonNavigator.onPreviousContinuous([this] {
-      const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
-        return;
-      }
-      adjustValueEdit(-getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(-1);
       requestUpdate();
     });
     return;
@@ -890,7 +854,9 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
     rowYOffset += thisRowHeight;
   }
 
-  const char* confirmLabel = (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM) : tr(STR_TOGGLE);
+  const char* confirmLabel = fontPicker.isOpen() ? tr(STR_SELECT)
+                             : (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM)
+                                                                   : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
@@ -1030,6 +996,10 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
           2 + ((static_cast<int>(valueEditDraft) - static_cast<int>(valueEditMin)) * std::max(1, barW - 4)) / range;
       renderer.fillRect(barX + 2, barY + 2, filledW, std::max(1, barH - 4), true);
     }
+  }
+
+  if (fontPicker.isOpen()) {
+    fontPicker.render(renderer, pageWidth, pageHeight);
   }
 
   renderer.displayBuffer();

@@ -13,6 +13,8 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "CustomFontsSettingsActivity.h"
+#include "FontFamilyApply.h"
+#include "ValueEditStep.h"
 #include "KOReaderSettingsActivity.h"
 #include "MappedInputManager.h"
 #include "OtaUpdateActivity.h"
@@ -178,6 +180,8 @@ void SettingsActivity::startValueEdit(const SettingInfo& setting, const int cate
   valueEditMax = setting.valueRange.max;
   valueEditOriginal = SETTINGS.*(setting.valuePtr);
   valueEditDraft = std::clamp(valueEditOriginal, valueEditMin, valueEditMax);
+  valueEditLastUpTapMs = 0;
+  valueEditLastDownTapMs = 0;
 }
 
 void SettingsActivity::adjustValueEdit(const int delta) {
@@ -185,12 +189,6 @@ void SettingsActivity::adjustValueEdit(const int delta) {
   valueEditDraft =
       static_cast<uint8_t>(std::clamp(next, static_cast<int>(valueEditMin), static_cast<int>(valueEditMax)));
 }
-
-namespace {
-int getValueEditHoldStep(const MappedInputManager& mappedInput, const SettingInfo&) {
-  return mappedInput.getHeldTime() >= 3000 ? 10 : 1;
-}
-}  // namespace
 
 void SettingsActivity::applyValueEdit() {
   if (!valueEditMode) {
@@ -356,6 +354,47 @@ void SettingsActivity::loop() {
     return;
   }
 
+  if (fontPicker.isOpen()) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      fontPicker.close();  // cancel: keep the previous font
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      const bool ok = crosspoint::settings::applyFontFamilyByDisplayIndex(fontPicker.selectedDisplayIndex(),
+                                                                          fontPicker.builtinCount())
+                          .ok;
+      fontPicker.close();
+      if (ok) {
+        buildSettingsList();
+        selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+        persistSettingsWithLog("settings font family");
+      } else {
+        messagePopupText = tr(STR_FONT_LOAD_FAILED);
+        messagePopupOpen = true;
+      }
+      requestUpdate();
+      return;
+    }
+    buttonNavigator.onNextRelease([this] {
+      fontPicker.moveDown();
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousRelease([this] {
+      fontPicker.moveUp();
+      requestUpdate();
+    });
+    buttonNavigator.onNextContinuous([this] {
+      fontPicker.moveDown();
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousContinuous([this] {
+      fontPicker.moveUp();
+      requestUpdate();
+    });
+    return;
+  }
+
   const auto dismissPopupOnAnyPress = [this](bool& popupOpen) {
     const bool anyPress = mappedInput.wasPressed(MappedInputManager::Button::Confirm) ||
                           mappedInput.wasPressed(MappedInputManager::Button::Back) ||
@@ -445,31 +484,31 @@ void SettingsActivity::loop() {
       return;
     }
 
+    // Tap: +-1. A quick second tap (within kValueEditDoubleTapMs) jumps +-10.
     buttonNavigator.onNextRelease([this] {
-      adjustValueEdit(+1);
+      const unsigned long now = millis();
+      adjustValueEdit(+crosspoint::settings::valueEditTapStep(valueEditLastUpTapMs, now,
+                                                              crosspoint::settings::kValueEditDoubleTapMs));
+      valueEditLastUpTapMs = now;
       requestUpdate();
     });
 
     buttonNavigator.onPreviousRelease([this] {
-      adjustValueEdit(-1);
+      const unsigned long now = millis();
+      adjustValueEdit(-crosspoint::settings::valueEditTapStep(valueEditLastDownTapMs, now,
+                                                              crosspoint::settings::kValueEditDoubleTapMs));
+      valueEditLastDownTapMs = now;
       requestUpdate();
     });
 
+    // Hold: steady +-1 repeat (no acceleration).
     buttonNavigator.onNextContinuous([this] {
-      const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
-        return;
-      }
-      adjustValueEdit(+getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(+1);
       requestUpdate();
     });
 
     buttonNavigator.onPreviousContinuous([this] {
-      const auto* settings = settingsForCategory(valueEditCategoryIndex);
-      if (!settings || valueEditSettingIndex < 0 || valueEditSettingIndex >= static_cast<int>(settings->size())) {
-        return;
-      }
-      adjustValueEdit(-getValueEditHoldStep(mappedInput, (*settings)[valueEditSettingIndex]));
+      adjustValueEdit(-1);
       requestUpdate();
     });
     return;
@@ -557,73 +596,11 @@ void SettingsActivity::toggleCurrentSetting() {
       startFontSizeEdit();
       return;
     } else if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-      // Picker: 5 built-in StrIds + N installed custom families. Cycle
-      // resolves against the sum. Custom slots set fontFamily =
-      // CUSTOM_FAMILY + customFontName + a valid customFontSizePt
-      // (preserving the previous choice when still installed for the
-      // new family — see TODO #77 for the in-book parity).
-      const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
-      const size_t builtinCount = setting.enumValues.size();
-      const size_t customCount = names.size();
-      const size_t total = builtinCount + customCount;
-      size_t currentIndex = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
-      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-        currentIndex = builtinCount;
-        for (size_t i = 0; i < names.size(); ++i) {
-          if (names[i] == SETTINGS.customFontName) {
-            currentIndex = builtinCount + i;
-            break;
-          }
-        }
-      }
-      const size_t nextIndex = total == 0 ? 0 : (currentIndex + 1) % total;
-
-      // Snapshot before any mutation so we can revert atomically if the
-      // new family is a custom one whose tables don't fit the per-variant
-      // budget — without this revert, the persisted SETTINGS point at a
-      // font the renderer never accepted and ensureSectionLoaded re-tries
-      // the failing activate on every chapter.
-      const auto prevFamily = SETTINGS.fontFamily;
-      const auto prevName = SETTINGS.customFontName;
-      const auto prevSize = SETTINGS.customFontSizePt;
-
-      if (nextIndex < builtinCount) {
-        SETTINGS.fontFamily = CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(nextIndex));
-        SETTINGS.customFontName.clear();
-        SETTINGS.customFontSizePt = 0;
-      } else {
-        SETTINGS.fontFamily = CrossPointSettings::CUSTOM_FAMILY;
-        SETTINGS.customFontName = names[nextIndex - builtinCount];
-        const auto sizes =
-            crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
-        bool keep = false;
-        for (auto s : sizes) {
-          if (s == SETTINGS.customFontSizePt) {
-            keep = true;
-            break;
-          }
-        }
-        if (!keep) SETTINGS.customFontSizePt = sizes.empty() ? 0 : sizes.front();
-      }
-      auto& customBinFonts = crosspoint::fonts::CustomBinFontManager::instance();
-      // activate() is atomic: on failure the previous active font stays
-      // registered. Try first, then deactivate only when the new state
-      // is a built-in family or the new custom activation succeeded.
-      bool ok = true;
-      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
-        ok = customBinFonts.activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
-      } else {
-        customBinFonts.deactivate();
-      }
-      if (!ok) {
-        SETTINGS.fontFamily = prevFamily;
-        SETTINGS.customFontName = prevName;
-        SETTINGS.customFontSizePt = prevSize;
-        messagePopupText = tr(STR_FONT_LOAD_FAILED);
-        messagePopupOpen = true;
-        requestUpdate();
-        return;
-      }
+      // Open the modal vertical-list font picker. The chosen row is applied in
+      // loop() when the user confirms; opening alone changes nothing.
+      fontPicker.open();
+      requestUpdate();
+      return;
     } else if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
       const uint8_t count = getLanguageCount();
       SETTINGS.uiLanguage = count > 0 ? static_cast<uint8_t>((currentValue + 1) % count) : 0;
@@ -632,13 +609,6 @@ void SettingsActivity::toggleCurrentSetting() {
       selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     } else {
       SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
-    }
-    if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-      SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(SETTINGS.fontFamily);
-      SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
-      SETTINGS.lineSpacingPercent = CrossPointSettings::resetLineSpacingPercentForFamily(SETTINGS.fontFamily);
-      buildSettingsList();
-      selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
     }
     if (setting.valuePtr == &CrossPointSettings::dynamicMargins) {
       buildSettingsList();
@@ -1013,7 +983,9 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   }
 
   // Draw help text
-  const char* confirmLabel = (fontSizeEditMode || valueEditMode) ? tr(STR_CONFIRM) : tr(STR_TOGGLE);
+  const char* confirmLabel = fontPicker.isOpen() ? tr(STR_SELECT)
+                             : (fontSizeEditMode || valueEditMode) ? tr(STR_CONFIRM)
+                                                                   : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
@@ -1171,6 +1143,10 @@ void SettingsActivity::render(Activity::RenderLock&&) {
           2 + ((static_cast<int>(valueEditDraft) - static_cast<int>(valueEditMin)) * std::max(1, barW - 4)) / range;
       renderer.fillRect(barX + 2, barY + 2, filledW, std::max(1, barH - 4), true);
     }
+  }
+
+  if (fontPicker.isOpen()) {
+    fontPicker.render(renderer, pageWidth, pageHeight);
   }
 
   // Always use standard refresh for settings screen

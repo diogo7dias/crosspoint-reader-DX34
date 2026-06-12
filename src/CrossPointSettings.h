@@ -73,7 +73,6 @@ class CrossPointSettings {
     STATUS_PAGE_LEFT_TEXT = 1,
     STATUS_BAR_PAGE_COUNTER_MODE_COUNT
   };
-  enum STATUS_BAR_FONT_SIZE { STATUS_FONT_SMALL = 0, STATUS_FONT_MEDIUM = 1, STATUS_BAR_FONT_SIZE_COUNT };
   enum STATUS_BAR_BAR_THICKNESS {
     STATUS_BAR_THICKNESS_NORMAL = 0,
     STATUS_BAR_THICKNESS_DOUBLE = 1,
@@ -271,9 +270,6 @@ class CrossPointSettings {
   uint8_t statusBarTitlePosition = STATUS_AT_BOTTOM;
   uint8_t statusBarTextAlignment = STATUS_TEXT_RIGHT;
   uint8_t statusBarProgressStyle = STATUS_BAR_THICK;
-  // Retained for JSON back-compat only; no longer user-configurable. The status
-  // bar always uses the larger font (see getStatusBarFontId()). Default now MEDIUM.
-  uint8_t statusBarFontSize = STATUS_FONT_MEDIUM;
   uint8_t statusBarBarThickness = STATUS_BAR_THICKNESS_NORMAL;
   uint8_t statusBarShowBookPageCounter = 0;
   uint8_t statusBarBookPageCounterPosition = STATUS_TEXT_BOTTOM_CENTER;
@@ -387,7 +383,6 @@ class CrossPointSettings {
   static uint8_t fontFamilyToDisplayIndex(uint8_t family);
   static uint8_t displayIndexToFontFamily(uint8_t displayIndex);
   static uint8_t normalizeFontSizeForFamily(uint8_t family, uint8_t fontSize);
-  static uint8_t resetLineSpacingPercentForFamily(uint8_t family);
   static uint8_t nextFontSize(uint8_t family, uint8_t fontSize);
   static uint8_t fontSizeToPointSize(uint8_t family, uint8_t fontSize);
   static uint8_t fontSizeOptionCount(uint8_t family);

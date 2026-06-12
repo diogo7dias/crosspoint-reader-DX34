@@ -172,10 +172,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
                                     &CrossPointSettings::statusBarNoTitleTruncation, "statusBarNoTitleTruncation",
                                     StrId::STR_STATUS_BAR));
-    // Status-bar font-size setting removed: the smaller option was hard to read,
-    // so the status bar now always uses the larger (clear) font. The
-    // statusBarFontSize field is retained for settings/theme JSON back-compat
-    // but no longer user-selectable (getStatusBarFontId() forces the large font).
+    // Status-bar font-size setting removed entirely: the smaller option was hard
+    // to read, so the status bar always uses the larger (clear) font
+    // (getStatusBarFontId()). The field, enum, JSON key and theme sync are gone;
+    // a stale statusBarFontSize key in an old JSON file is simply ignored on load.
     s.push_back(SettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
                                   {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE},
                                   "statusBarBarThickness", StrId::STR_STATUS_BAR));

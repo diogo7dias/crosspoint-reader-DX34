@@ -49,7 +49,6 @@ struct ReadingTheme {
   uint8_t statusBarTitlePosition = CrossPointSettings::STATUS_AT_BOTTOM;
   uint8_t statusBarTextAlignment = CrossPointSettings::STATUS_TEXT_RIGHT;
   uint8_t statusBarProgressStyle = CrossPointSettings::STATUS_BAR_THICK;
-  uint8_t statusBarFontSize = CrossPointSettings::STATUS_FONT_SMALL;
   uint8_t statusBarBarThickness = CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
   uint8_t statusBarShowBookPageCounter = 0;
   uint8_t statusBarBookPageCounterPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;

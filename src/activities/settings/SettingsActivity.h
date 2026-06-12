@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "activities/ActivityWithSubactivity.h"
+#include "activities/settings/FontFamilyPicker.h"
 #include "util/ButtonNavigator.h"
 
 class CrossPointSettings;
@@ -169,6 +170,14 @@ class SettingsActivity final : public ActivityWithSubactivity {
   uint8_t valueEditDraft = 0;
   uint8_t valueEditMin = 0;
   uint8_t valueEditMax = 0;
+  // Per-direction timestamp of the last value-edit tap, for quick-double-tap
+  // detection (a tap within kValueEditDoubleTapMs jumps by 10 instead of 1).
+  // Separate from the lastNext/PreviousTapMs used for menu category jumps.
+  unsigned long valueEditLastUpTapMs = 0;
+  unsigned long valueEditLastDownTapMs = 0;
+
+  // Modal font-family picker overlay (opened from the Font Family row).
+  crosspoint::settings::FontFamilyPicker fontPicker;
 
   // Per-category settings derived from shared list + device-only actions
   std::vector<SettingInfo> displaySettings;

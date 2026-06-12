@@ -548,15 +548,6 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
   }
 }
 
-uint8_t CrossPointSettings::resetLineSpacingPercentForFamily(const uint8_t family) {
-  // Value to snap lineSpacingPercent to when the user switches font family.
-  // Switching font always resets line spacing to a neutral 100 % so the new
-  // family is shown at its native leading; the user re-tunes from a
-  // predictable baseline rather than inheriting the previous family's offset.
-  (void)family;
-  return 100;
-}
-
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
   // Custom .bin: the source-of-truth size is customFontSizePt (9..16),
   // not the fontSize enum. Enum value is unused by the reader path for
@@ -894,9 +885,7 @@ int CrossPointSettings::getStatusBarProgressBarHeight() const {
 }
 
 int CrossPointSettings::getStatusBarFontId() const {
-  // Status-bar font size is no longer user-configurable: always use the larger
-  // (clear) UI font. The small option was hard to read and has been removed.
-  // statusBarFontSize is ignored here but kept as a field for JSON back-compat.
-  (void)statusBarFontSize;
+  // Status-bar font size is not user-configurable: always use the larger (clear)
+  // UI font. The small option was hard to read and was removed entirely.
   return UI_10_FONT_ID;
 }
