@@ -22,6 +22,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v5.5.6 release notes 2026-06-09: wallpaper reconcile hardening (truncated batch keeps playlist dirty, trim re-derive capped + probed, reshuffle measured-cost gated); EPUB layout arena→vector spill heap-probed; test-suite cleanup.)*
 
+*(Drained into v5.5.7 release notes 2026-06-13: reader font picker is now a modal vertical list in both settings menus; switching font keeps your line spacing (no reset); status-bar font-size setting removed entirely; value sliders use tap = ±1, quick double-tap = ±10, hold = steady ±1.)*
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 
