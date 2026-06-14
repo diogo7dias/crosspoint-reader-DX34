@@ -80,6 +80,14 @@ class Page {
   int getTextLineCount() const;
   int getFirstLineY() const;
   int getUsedHeight(int lineHeight) const;
+  // Visual ink bounds of the page text in page-local Y (same coordinate as
+  // element->yPos and the y passed to render). Scans only the first and last
+  // text line — every interior line sits a full lineHeight below the first, so
+  // it can never define the topmost/bottommost ink pixel. Lets the reader
+  // center text by real glyph ink instead of nominal line boxes (the font
+  // ascender over-reserves space above caps; line-spacing leading sits below
+  // the last line). Returns false if the page has no measurable text ink.
+  bool getInkBounds(const GfxRenderer& renderer, int fontId, int* inkTop, int* inkBottom) const;
   bool applyDensePageVerticalFit(int lineHeight, int viewportHeight, int minDenseLines, int maxFirstLineY);
 
   // Check if page contains any images (used to force full refresh)

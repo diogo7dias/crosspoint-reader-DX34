@@ -974,16 +974,52 @@ void TxtReaderActivity::renderPage() {
   renderer.setRenderMode(GfxRenderer::BW);
   renderer.setTextRenderStyle(SETTINGS.textRenderMode);
 
-  // Vertically center text on full pages to distribute leftover space evenly
-  // between top and bottom, so the visual gap matches the configured margins.
-  // Only full pages qualify — partial (last) pages stay top-aligned.
+  // Vertically center text on full pages so the visible *ink* sits with equal
+  // top and bottom gaps. Nominal line boxes leave the gaps uneven: the font
+  // ascender reserves space above caps that a normal first line never fills,
+  // and the line-spacing leading sits below the last line. Measure the real
+  // glyph ink of the first and last inked line and center that block instead.
+  // Only full pages qualify — partial (last) pages stay top-aligned. (Mirrors
+  // EpubReaderActivity::renderContents; see there for the page-turn jitter
+  // trade-off.)
   int verticalCenterOffset = 0;
   if (static_cast<int>(currentPageLines.size()) == linesPerPage && linesPerPage > 0) {
-    const int usedHeight = linesPerPage * lineHeight;
     const int vpHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
-    const int slack = vpHeight - usedHeight;
-    if (slack > 0 && slack < lineHeight) {
-      verticalCenterOffset = slack / 2;
+    const int lineCount = static_cast<int>(currentPageLines.size());
+    int inkTop = 0;
+    int inkBottom = 0;
+    bool haveTop = false;
+    bool haveBottom = false;
+    for (int i = 0; i < lineCount && !haveTop; i++) {
+      int t;
+      int b;
+      if (!currentPageLines[i].text.empty() &&
+          renderer.measureTextInk(cachedFontId, currentPageLines[i].text.c_str(), &t, &b)) {
+        inkTop = i * lineHeight + t;
+        haveTop = true;
+      }
+    }
+    for (int i = lineCount - 1; i >= 0 && !haveBottom; i--) {
+      int t;
+      int b;
+      if (!currentPageLines[i].text.empty() &&
+          renderer.measureTextInk(cachedFontId, currentPageLines[i].text.c_str(), &t, &b)) {
+        inkBottom = i * lineHeight + b;
+        haveBottom = true;
+      }
+    }
+    if (haveTop && haveBottom) {
+      const int inkHeight = inkBottom - inkTop;
+      if (inkHeight > 0 && inkHeight <= vpHeight) {
+        verticalCenterOffset = (vpHeight - inkHeight) / 2 - inkTop;
+      }
+    } else {
+      // No measurable ink (blank page) — fall back to nominal box centering.
+      const int usedHeight = linesPerPage * lineHeight;
+      const int slack = vpHeight - usedHeight;
+      if (slack > 0 && slack < lineHeight) {
+        verticalCenterOffset = slack / 2;
+      }
     }
   }
 

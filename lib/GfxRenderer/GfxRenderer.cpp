@@ -1015,6 +1015,42 @@ int GfxRenderer::getTextHeight(const int fontId) const {
   return fontIt->second.getData(EpdFontFamily::REGULAR)->ascender;
 }
 
+bool GfxRenderer::measureTextInk(const int fontId, const char* text, int* inkTop, int* inkBottom,
+                                 const EpdFontFamily::Style style) const {
+  if (text == nullptr || *text == '\0') {
+    return false;
+  }
+  const auto fontIt = fontMap.find(fontId);
+  if (fontIt == fontMap.end()) {
+    return false;
+  }
+  const auto& font = fontIt->second;
+  // Baseline is placed at boxTop + REGULAR ascender (see drawTextSpaced), so the
+  // ink offset of a glyph from the box top is `ascender - glyph->top`.
+  const int ascender = font.getData(EpdFontFamily::REGULAR)->ascender;
+
+  int top = INT32_MAX;
+  int bottom = INT32_MIN;
+  const char* cursor = text;
+  uint32_t cp;
+  while ((cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&cursor)))) {
+    const EpdGlyph* glyph = font.getGlyph(cp, style);
+    if (!glyph) glyph = font.getGlyph(REPLACEMENT_GLYPH, style);
+    if (!glyph || glyph->height == 0) continue;  // no ink (e.g. space)
+    const int t = ascender - glyph->top;
+    const int b = t + glyph->height;
+    if (t < top) top = t;
+    if (b > bottom) bottom = b;
+  }
+
+  if (top == INT32_MAX) {
+    return false;  // string had no inked glyphs
+  }
+  *inkTop = top;
+  *inkBottom = bottom;
+  return true;
+}
+
 void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y, const char* text, const bool black,
                                       const EpdFontFamily::Style style) const {
   // Cannot draw a NULL / empty string

@@ -2510,20 +2510,33 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   renderer.setTextRenderStyle(SETTINGS.textRenderMode);
 
   const int viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
-  // Vertically center text on full pages to distribute leftover space evenly
-  // between top and bottom, so the visual gap matches the configured margins.
-  // Only text-only full pages qualify — partial (last) pages stay top-aligned.
+  // Vertically center text on full pages so the visible *ink* sits with equal
+  // top and bottom gaps. Centering by nominal line boxes leaves the gaps
+  // uneven: the font ascender reserves space above caps that a normal first
+  // line never fills (extra top gap), and the line-spacing leading sits below
+  // the last line (extra bottom gap). We measure the real glyph ink box and
+  // center that instead. Only text-only full pages qualify — partial (last)
+  // pages stay top-aligned. Trade-off: the shift is content-dependent, so the
+  // first/last line ink can nudge the block a few px between pages; on a full
+  // e-ink page-turn redraw this is imperceptible.
   int contentY = orientedMarginTop;
   if (page.isTextOnly()) {
-    const int lineHeight = renderer.getLineHeight(SETTINGS.getReaderFontId());
+    const int fontId = SETTINGS.getReaderFontId();
+    const int lineHeight = renderer.getLineHeight(fontId);
     if (lineHeight > 0) {
       const int usedHeight = page.getUsedHeight(lineHeight);
-      if (usedHeight > 0 && usedHeight < viewportHeight) {
-        const int slack = viewportHeight - usedHeight;
-        // Only center if slack is less than one line — that means
-        // the page is full (just has rounding leftover).
-        if (slack < lineHeight) {
-          contentY += slack / 2;
+      const int boxSlack = viewportHeight - usedHeight;
+      // Full page = at most one line of nominal box slack (dense-fit pages sit
+      // at ~0). Partial pages fall through and stay top-aligned.
+      if (usedHeight > 0 && boxSlack >= 0 && boxSlack < lineHeight) {
+        int inkTop;
+        int inkBottom;
+        if (page.getInkBounds(renderer, fontId, &inkTop, &inkBottom)) {
+          const int inkHeight = inkBottom - inkTop;
+          if (inkHeight > 0 && inkHeight <= viewportHeight) {
+            // Land the ink box centered: its top sits at margin + (slack)/2.
+            contentY = orientedMarginTop + (viewportHeight - inkHeight) / 2 - inkTop;
+          }
         }
       }
     }

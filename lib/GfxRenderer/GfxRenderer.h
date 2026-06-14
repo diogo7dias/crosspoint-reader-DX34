@@ -174,6 +174,15 @@ class GfxRenderer {
                            EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   int getTextHeight(int fontId) const;
 
+  // Vertical ink extent of `text`, measured relative to the line-box top (the
+  // `y` you would pass to drawText). On success fills inkTop/inkBottom with the
+  // topmost/bottommost ink-pixel offsets (inkTop = ascender - tallestGlyph.top,
+  // inkBottom = that + glyph.height). Whitespace-only / empty strings have no
+  // ink and return false. Baseline uses the REGULAR ascender so the result
+  // matches how drawText positions glyphs regardless of `style`.
+  bool measureTextInk(int fontId, const char* text, int* inkTop, int* inkBottom,
+                      EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
+
   // Grayscale functions
   void setRenderMode(const RenderMode mode) { this->renderMode = mode; }
   RenderMode getRenderMode() const { return renderMode; }

@@ -1,5 +1,6 @@
 #include "Page.h"
 
+#include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
 
@@ -127,6 +128,72 @@ int Page::getUsedHeight(const int lineHeight) const {
     }
   }
   return usedHeight;
+}
+
+namespace {
+// Ink top/bottom of a single text line in page-local Y. Measures every word
+// (each may carry its own bold/italic style) and unions their ink extents.
+bool measureLineInk(const GfxRenderer& renderer, const int fontId, const PageLine& line, int* top, int* bottom) {
+  const TextBlock& block = line.getTextBlock();
+  const auto& words = block.getWords();
+  const auto& styles = block.getWordStyles();
+  bool found = false;
+  int mn = 0;
+  int mx = 0;
+  for (size_t i = 0; i < words.size(); i++) {
+    const EpdFontFamily::Style style = (i < styles.size()) ? styles[i] : EpdFontFamily::REGULAR;
+    int t;
+    int b;
+    if (!renderer.measureTextInk(fontId, words[i].c_str(), &t, &b, style)) continue;
+    if (!found) {
+      mn = t;
+      mx = b;
+      found = true;
+    } else {
+      mn = std::min(mn, t);
+      mx = std::max(mx, b);
+    }
+  }
+  if (!found) return false;
+  *top = static_cast<int>(line.yPos) + mn;
+  *bottom = static_cast<int>(line.yPos) + mx;
+  return true;
+}
+}  // namespace
+
+bool Page::getInkBounds(const GfxRenderer& renderer, const int fontId, int* inkTop, int* inkBottom) const {
+  const PageLine* firstLine = nullptr;
+  const PageLine* lastLine = nullptr;
+  int firstY = INT16_MAX;
+  int lastY = INT16_MIN;
+  for (const auto& element : elements) {
+    if (element->getTag() != TAG_PageLine) continue;
+    if (element->yPos < firstY) {
+      firstY = element->yPos;
+      firstLine = static_cast<const PageLine*>(element.get());
+    }
+    if (element->yPos > lastY) {
+      lastY = element->yPos;
+      lastLine = static_cast<const PageLine*>(element.get());
+    }
+  }
+  if (!firstLine || !lastLine) return false;
+
+  int top;
+  int firstBottom;
+  if (!measureLineInk(renderer, fontId, *firstLine, &top, &firstBottom)) return false;
+  if (firstLine == lastLine) {
+    *inkTop = top;
+    *inkBottom = firstBottom;
+    return true;
+  }
+
+  int lastTop;
+  int bottom;
+  if (!measureLineInk(renderer, fontId, *lastLine, &lastTop, &bottom)) return false;
+  *inkTop = top;
+  *inkBottom = bottom;
+  return true;
 }
 
 bool Page::applyDensePageVerticalFit(const int lineHeight, const int viewportHeight, const int minDenseLines,
