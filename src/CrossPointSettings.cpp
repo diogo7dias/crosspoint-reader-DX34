@@ -774,6 +774,14 @@ int CrossPointSettings::wordSpacingSettingToPixelDelta(const uint8_t mode, const
 }
 
 int CrossPointSettings::getReaderFontId() const {
+  // Emergency render-degrade: a mid-render OOM on a fragmented heap latches this
+  // so layout AND render (both resolve their font through here) drop to the
+  // smallest built-in font, whose glyph groups fit the largest free block. The
+  // latch is transient and never persisted, so the user's real font returns on
+  // the next open. See EpubReaderActivity render-OOM recovery + onExit clear.
+  if (emergencyRenderFontDowngrade) {
+    return CHAREINK_12_FONT_ID;
+  }
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
   if (normalizedFamily == CUSTOM_FAMILY) {

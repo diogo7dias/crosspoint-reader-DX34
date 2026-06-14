@@ -308,6 +308,14 @@ class CrossPointSettings {
   // Reader font settings
   uint8_t fontFamily = CHAREINK;
   uint8_t fontSize = SIZE_16;
+  // Transient (NEVER serialized) emergency render-degrade latch. When the
+  // reader exhausts the heap mid-render on a fragmented heap, it sets this so
+  // getReaderFontId() resolves to the smallest built-in font (CHAREINK 12),
+  // whose tiny glyph groups fit the largest free block. Because JsonSettingsIO
+  // never writes it, it physically cannot leak to disk — the user's real font
+  // is restored on the next book open (the reader also clears it on exit). See
+  // EpubReaderActivity render-OOM recovery.
+  bool emergencyRenderFontDowngrade = false;
   // When fontFamily == CUSTOM_FAMILY, this names the user-dropped family
   // to dispatch to (filename stem, e.g. "unifont"). Empty string falls
   // back to CHAREINK at reader-font-id resolution time.

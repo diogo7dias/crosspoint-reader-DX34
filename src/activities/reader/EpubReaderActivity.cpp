@@ -319,6 +319,11 @@ void EpubReaderActivity::onExit() {
     APP_STATE.readerActivityLoadCount = 0;
     APP_STATE.saveToFile();
   }
+  // Snap back the user's chosen font: the emergency render-degrade latch is
+  // transient and dies with the book session, so the next open uses the real
+  // font again (and re-degrades only if it OOMs again). Never persisted, so the
+  // on-disk font was never touched — this just restores the live SETTINGS global.
+  SETTINGS.emergencyRenderFontDowngrade = false;
   clearPageCache();
   section.reset();
   epub.reset();
@@ -1741,10 +1746,13 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   // loadSectionFile on big cached sections.
   TransitionFeedback::maybeShowStillWorkingToast(renderer);
   TransitionFeedback::dismiss(renderer);
-  // Section layout completed without breaching the pre-flight hard floor.
-  // Clear the auto-restart guard so the user gets a fresh budget for the
-  // next fragmentation crisis (e.g. opening a different heavier chapter).
-  clearSilentRestartLoopGuard();
+  // NOTE: do NOT clear the silent-restart budget here. Section layout completing
+  // is not proof the page can be displayed — renderContents() allocates the
+  // glyph bitmaps later and can still OOM on a fragmented heap. The budget is
+  // cleared only after a frame is verifiably on screen (see render()'s success
+  // block). Clearing at layout time reset the budget every open, so a
+  // render-OOM book never exhausted its 2-attempt cap and silent-restarted
+  // forever (the v5.5.x reader-render-oom bootloop brick).
   // Best-effort: re-grab the heap reservation anchor if there's enough
   // headroom. The next chapter change will then have the same 24 KB
   // contiguous safety net the first one did.
@@ -1940,7 +1948,31 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
     if (!renderOk) {
       // Render-time glyph allocations failed on a fragmented heap: the frame
-      // was NOT displayed (it would be scattered-glyph garbage). Mirror the
+      // was NOT displayed (it would be scattered-glyph garbage).
+      //
+      // First-line recovery: if we are not already on the smallest built-in
+      // font, latch the transient emergency downgrade and re-lay-out + re-render
+      // this section at CHAREINK 12. Its glyph groups are small enough to fit
+      // the largest free block that defeated the user's heavier font, so the
+      // book opens in place instead of reboot-looping. The latch is never
+      // persisted and is cleared on book exit (onExit), so the user's real font
+      // returns on the next open and only re-degrades if it OOMs again.
+      if (!SETTINGS.emergencyRenderFontDowngrade && SETTINGS.getReaderFontId() != CHAREINK_12_FONT_ID) {
+        LOG_DIAG("ERS", "render-oom: latching emergency font downgrade -> CHAREINK 12, re-laying out");
+        SETTINGS.emergencyRenderFontDowngrade = true;
+        // Flash a brief notice. Mirrors giveUpOpenToHome's OOM-path draw and
+        // uses the already-resident UI font, not the book font that just OOMed.
+        renderer.clearScreen();
+        renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
+        renderer.displayBuffer();
+        // Drop the old-font caches; loop() rebuilds + re-renders at the smaller
+        // font on the next tick (same deferral the page-load-fail path uses).
+        if (section) section->clearCache();
+        clearPageCache();
+        pendingSectionReset = true;
+        return;
+      }
+      // Already at the smallest font (or it still cannot fit): mirror the
       // pre-flight gate's recovery — silent-restart to a fresh heap where the
       // page can decompress and render, bounded by the auto-restart loop
       // guard. Once the budget is exhausted, fall through to the user-facing
@@ -1956,6 +1988,14 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       giveUpOpenToHome();
       return;
     }
+    // Render succeeded — a frame is verifiably on screen. NOW (not at section-
+    // layout time) clear the silent-restart budget so the next fragmentation
+    // crisis (e.g. a heavier chapter) gets a fresh 2-attempt allowance. Gating
+    // on render success is what bounds a render-OOM book: it lays its section
+    // out fine and only fails in renderContents() above, so a layout-time clear
+    // reset the budget every cycle and the cap was never reached. RTC-only, no
+    // SD cost, so it runs unconditionally on every good frame.
+    clearSilentRestartLoopGuard();
     // Render succeeded — the book is verifiably on screen. Clear the durable
     // boot crash-loop guard (set in main.cpp before launch) so a later
     // power-cycle resumes this book normally instead of force-routing home.

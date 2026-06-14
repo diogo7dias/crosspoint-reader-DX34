@@ -24,6 +24,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v5.5.7 release notes 2026-06-13: reader font picker is now a modal vertical list in both settings menus; switching font keeps your line spacing (no reset); status-bar font-size setting removed entirely; value sliders use tap = ±1, quick double-tap = ±10, hold = steady ±1.)*
 
+*(Drained into v5.5.8 release notes 2026-06-14: fixed a reboot-loop where a memory-heavy book that ran out of memory while drawing a page restarted forever instead of giving up — the retry budget was reset every cycle so the cap of 2 was never reached; the reader now also auto-shrinks to the smallest built-in font to open such a book in place, reverting to your chosen font on the next open.)*
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 
