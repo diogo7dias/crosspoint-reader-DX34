@@ -76,7 +76,7 @@ class ReadingThemeStore {
   friend bool JsonSettingsIO::loadReadingThemesFromFile(ReadingThemeStore& store, const char* path);
 
  public:
-  static constexpr size_t MAX_THEMES = 16;
+  static constexpr size_t MAX_THEMES = 30;
   static constexpr size_t MAX_THEME_NAME_LENGTH = 20;
 
   static ReadingThemeStore& getInstance() { return instance; }
