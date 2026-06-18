@@ -37,6 +37,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                   "sleepScreenCoverFilter", StrId::STR_CAT_DISPLAY));
     s.push_back(SettingInfo::Toggle(StrId::STR_SHOW_SLEEP_IMAGE_FILENAME, &CrossPointSettings::showSleepImageFilename,
                                     "showSleepImageFilename", StrId::STR_CAT_DISPLAY));
+    s.push_back(SettingInfo::Toggle(StrId::STR_SHOW_SLEEP_FAVORITE_BADGE, &CrossPointSettings::showSleepFavoriteBadge,
+                                    "showSleepFavoriteBadge", StrId::STR_CAT_DISPLAY));
     s.push_back(SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                                   {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideBatteryPercentage",
                                   StrId::STR_CAT_DISPLAY));

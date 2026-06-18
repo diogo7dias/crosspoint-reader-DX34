@@ -247,6 +247,8 @@ class CrossPointSettings {
   uint8_t sleepScreenCoverFilter = NO_FILTER;
   // Show custom sleep image filename label
   uint8_t showSleepImageFilename = 0;
+  // Show a small "[F]" badge bottom-left when the sleep wallpaper is a favorite
+  uint8_t showSleepFavoriteBadge = 0;
   // Status bar settings
   uint8_t statusBar = FULL;
   uint8_t statusBarEnabled = 1;

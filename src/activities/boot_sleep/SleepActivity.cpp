@@ -11,6 +11,7 @@
 #include <esp_task_wdt.h>
 
 #include <algorithm>
+#include <cstring>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -69,6 +70,34 @@ void drawSleepFilenameLabel(const GfxRenderer& renderer, const char* filename) {
   renderer.fillRect(boxX, boxY, boxWidth, boxHeight, true);
   renderer.drawRect(boxX, boxY, boxWidth, boxHeight, false);
   renderer.drawText(UI_10_FONT_ID, textX, textY, text.c_str(), false, EpdFontFamily::REGULAR);
+}
+
+// The wallpaper facade hands us pick.displayName, which FavoriteImage prefixes
+// with "[F] " for favorites (FavoriteImage::displayNameForPath). That prefix is
+// the render-time signal that the current wallpaper is a favorite.
+bool sleepDisplayNameIsFavorite(const char* displayName) {
+  return displayName != nullptr && std::strncmp(displayName, "[F] ", 4) == 0;
+}
+
+// Standalone "[F]" badge bottom-left, drawn when SETTINGS.showSleepFavoriteBadge
+// is on and the wallpaper is a favorite. Mirrors drawSleepFilenameLabel's box
+// geometry so it sits in the same safe corner.
+void drawSleepFavoriteBadge(const GfxRenderer& renderer) {
+  const char* label = "[F]";
+  const int screenHeight = renderer.getScreenHeight();
+  const int safeInset = 18;
+  const int paddingX = 4;
+  const int paddingY = 2;
+  const int textLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::REGULAR);
+  const int boxWidth = textWidth + paddingX * 2;
+  const int boxHeight = textLineHeight + paddingY * 2;
+  const int boxX = safeInset;
+  const int boxY = std::max(safeInset, screenHeight - boxHeight - safeInset);
+
+  renderer.fillRect(boxX, boxY, boxWidth, boxHeight, true);
+  renderer.drawRect(boxX, boxY, boxWidth, boxHeight, false);
+  renderer.drawText(UI_10_FONT_ID, boxX + paddingX, boxY + paddingY, label, false, EpdFontFamily::REGULAR);
 }
 }  // namespace
 
@@ -260,6 +289,10 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
 
   if (SETTINGS.showSleepImageFilename && sourceFilename != nullptr) {
     drawSleepFilenameLabel(renderer, sourceFilename);
+  } else if (SETTINGS.showSleepFavoriteBadge && sleepDisplayNameIsFavorite(sourceFilename)) {
+    // Filename label already carries the "[F] " prefix, so the standalone badge
+    // only fires when that label is off (otherwise they collide bottom-left).
+    drawSleepFavoriteBadge(renderer);
   }
 
   // FAST_REFRESH for snappier sleep entry. Grayscale path below handles its
@@ -374,6 +407,9 @@ bool SleepActivity::renderPxcSleepScreen(const std::string& path, const char* so
 
   if (sourceFilename != nullptr && SETTINGS.showSleepImageFilename) {
     drawSleepFilenameLabel(renderer, sourceFilename);
+    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  } else if (SETTINGS.showSleepFavoriteBadge && sleepDisplayNameIsFavorite(sourceFilename)) {
+    drawSleepFavoriteBadge(renderer);
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   }
   return true;
