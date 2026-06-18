@@ -11,7 +11,8 @@
 
 namespace PxcRenderer {
 
-bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::GrayscaleMode mode) {
+bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::GrayscaleMode mode,
+               const std::function<void()>& overlay) {
   FsFile file;
   if (!Storage.openFileForRead("PXC", path, file)) {
     LOG_ERR("PXC", "Cannot open: %s", path.c_str());
@@ -55,6 +56,9 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::Gray
       }
       if ((row & 31) == 0) esp_task_wdt_reset();
     }
+    // Drawn into each plane so the overlay is baked into the grayscale frame
+    // (fillRect/drawText are GRAY2-aware and invert polarity accordingly).
+    if (overlay) overlay();
   });
 
   file.close();

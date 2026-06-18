@@ -2,6 +2,7 @@
 
 #include <GfxRenderer.h>
 
+#include <functional>
 #include <string>
 
 namespace PxcRenderer {
@@ -22,10 +23,19 @@ namespace PxcRenderer {
 // Does NOT call displayBuffer afterward — the grayscale composite is
 // pushed inside renderGrayscale via displayGrayBuffer.
 //
+// `overlay`, when set, is invoked once per grayscale plane (LSB and MSB)
+// after the image rows are streamed, so any GfxRenderer draw it issues
+// (drawText / fillRect / drawRect — all GRAY2-aware) becomes part of the
+// grayscale frame. This is the only way to keep a small overlay (e.g. a
+// favorite badge or filename label) on top of a full-screen grayscale
+// wallpaper: drawing it after renderGrayscale would push a stale plane
+// buffer and a later grayscale redraw would cover it.
+//
 // PXC layout: uint16_t width, uint16_t height, then packed 2 bpp payload
 // (4 px/byte, MSB first). Pixel convention: 0=Black, 1=DarkGray,
 // 2=LightGray, 3=White (matches Bitmap::readNextRow).
-bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::GrayscaleMode mode);
+bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::GrayscaleMode mode,
+               const std::function<void()>& overlay = {});
 
 // Streams the PXC and writes a 1-bit BW representation into the renderer's
 // current frameBuffer. Pixels with pv < 3 (Black/DarkGray/LightGray) are

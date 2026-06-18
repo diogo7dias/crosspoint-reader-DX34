@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -83,7 +84,10 @@ bool sleepDisplayNameIsFavorite(const char* displayName) {
 // is on and the wallpaper is a favorite. Mirrors drawSleepFilenameLabel's box
 // geometry so it sits in the same safe corner.
 void drawSleepFavoriteBadge(const GfxRenderer& renderer) {
-  const char* label = "[F]";
+  // Just "F" inside a drawn box: the box border reads as the brackets, while
+  // the literal "[F]" rendered with wide built-in side-bearing on the UI_10
+  // bracket glyphs, which looked like "[ F ]".
+  const char* label = "F";
   const int screenHeight = renderer.getScreenHeight();
   const int safeInset = 18;
   const int paddingX = 4;
@@ -287,13 +291,16 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
     renderer.invertScreen();
   }
 
+  // The filename label already carries the "[F] " prefix, so the standalone
+  // badge only fires when that label is off (otherwise they collide
+  // bottom-left).
+  std::function<void()> overlay;
   if (SETTINGS.showSleepImageFilename && sourceFilename != nullptr) {
-    drawSleepFilenameLabel(renderer, sourceFilename);
+    overlay = [this, sourceFilename]() { drawSleepFilenameLabel(renderer, sourceFilename); };
   } else if (SETTINGS.showSleepFavoriteBadge && sleepDisplayNameIsFavorite(sourceFilename)) {
-    // Filename label already carries the "[F] " prefix, so the standalone badge
-    // only fires when that label is off (otherwise they collide bottom-left).
-    drawSleepFavoriteBadge(renderer);
+    overlay = [this]() { drawSleepFavoriteBadge(renderer); };
   }
+  if (overlay) overlay();
 
   // FAST_REFRESH for snappier sleep entry. Grayscale path below handles its
   // own pre-flash (HALF for factory mode) so contrast on the final frame is
@@ -306,6 +313,10 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
     renderer.renderGrayscale(mode, [&]() {
       bitmap.rewindToData();
       renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
+      // Re-draw the overlay into each grayscale plane: the FAST_REFRESH frame
+      // above is wiped by the factory pre-flash, so without this the label /
+      // badge would vanish on greyscale wallpapers.
+      if (overlay) overlay();
     });
   }
 
@@ -401,18 +412,20 @@ bool SleepActivity::renderPxcSleepScreen(const std::string& path, const char* so
   // Differential is the fallback when the user has the factory LUT off.
   const auto mode =
       SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
-  if (!PxcRenderer::renderPxc(renderer, path, mode)) {
-    return false;
+
+  // Overlays must be baked into the grayscale planes — drawing them after
+  // renderGrayscale would push a stale plane buffer (reversed-looking image)
+  // and a full-screen wallpaper would cover them anyway. The filename label
+  // already carries the "[F] " prefix, so the standalone badge only fires
+  // when that label is off (otherwise they collide bottom-left).
+  std::function<void()> overlay;
+  if (sourceFilename != nullptr && SETTINGS.showSleepImageFilename) {
+    overlay = [this, sourceFilename]() { drawSleepFilenameLabel(renderer, sourceFilename); };
+  } else if (SETTINGS.showSleepFavoriteBadge && sleepDisplayNameIsFavorite(sourceFilename)) {
+    overlay = [this]() { drawSleepFavoriteBadge(renderer); };
   }
 
-  if (sourceFilename != nullptr && SETTINGS.showSleepImageFilename) {
-    drawSleepFilenameLabel(renderer, sourceFilename);
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
-  } else if (SETTINGS.showSleepFavoriteBadge && sleepDisplayNameIsFavorite(sourceFilename)) {
-    drawSleepFavoriteBadge(renderer);
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
-  }
-  return true;
+  return PxcRenderer::renderPxc(renderer, path, mode, overlay);
 }
 
 void SleepActivity::renderBlankSleepScreen() const {
