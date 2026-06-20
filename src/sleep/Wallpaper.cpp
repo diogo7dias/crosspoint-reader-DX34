@@ -156,28 +156,23 @@ bool sequentialPlaylistAffordable() {
          crosspoint::mem::totalFreeBytes() >= totalNeed;
 }
 
-// Streaming fragment-safe pick — direct mirror of SleepActivity's
-// pickSleepFileDirect helper. Touches O(1) heap beyond the returned
-// basename. Empty if /sleep is empty or fs not wired.
-std::string pickDirectBasename() {
+// Streaming fragment-safe pick that still honors the rotation ORDER. Touches
+// O(1) heap beyond the returned basename. Empty if /sleep is empty or fs not
+// wired.
+//
+// Returns the wallpaper immediately after `after` in the V2 canonical order
+// (newest mtime first, then name), i.e. the same strict sequence the
+// buffer-backed playlist walks. A new upload (newest mtime) leads each lap, so
+// "new wallpapers on top" holds even here. This replaces the former RANDOM
+// last-resort pick, which abandoned the rotation order whenever heap pressure
+// forced this fallback — the "wallpapers stop following their order under
+// memory pressure" report. Anti-repeat is inherent: the successor is strictly
+// past `after` (or wraps to the newest, which differs from `after` unless
+// /sleep holds a single file).
+std::string pickDirectBasename(const std::string& after) {
   auto* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
   if (!sfs) return {};
-  const size_t count = sfs->countSleepBmps(kSleepFolderCap);
-  if (count == 0) return {};
-  // Anti-repeat: this random last-resort has no playlist cursor, so a naive
-  // single roll can return the wallpaper we just showed (a 1/N chance —
-  // glaring on small libraries). Re-roll a few times to avoid the last-shown
-  // basename. With >1 file this converges almost immediately; with exactly
-  // one file we accept it (nothing else to show). lastShownSleepFilename and
-  // nthSleepBmp both deal in basenames, so the comparison is apples-to-apples.
-  const std::string& lastShown = APP_STATE.lastShownSleepFilename;
-  std::string pick;
-  for (int tries = 0; tries < 5; ++tries) {
-    const size_t idx = static_cast<size_t>(::random(static_cast<long>(count)));
-    pick = sfs->nthSleepBmp(idx);
-    if (count <= 1 || pick.empty() || pick != lastShown) break;
-  }
-  return pick;
+  return sfs->nextSleepBmpByMtimeDesc(after);
 }
 
 SleepPick makePickFromBasename(const std::string& basename) {
@@ -222,18 +217,31 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
   // entry at a time and never builds a list, so it is safe at any folder size.
   const bool useDirectPick = !sequentialPlaylistAffordable();
 
+  // Cursor for the ordered direct pick. Seeded with the last-shown wallpaper so
+  // the fallback continues the strict rotation from wherever the buffer-backed
+  // playlist left off, and advanced on every pick so a candidate the probe
+  // rejects is skipped forward in order (mirrors the buffer path's
+  // advanceCursor-on-failure) instead of being re-offered each retry.
+  std::string directCursor = APP_STATE.lastShownSleepFilename;
+  auto orderedDirectPick = [&]() -> std::string {
+    std::string n = pickDirectBasename(directCursor);
+    if (!n.empty()) directCursor = n;
+    return n;
+  };
+
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
     std::string basename;
     if (useDirectPick) {
-      basename = pickDirectBasename();
+      basename = orderedDirectPick();
     } else {
       // Buffer-backed playlist advance via the facade entry point, so the
       // RFC #145 reconcile notice is drained + persisted here too (a direct
       // v2 advance would skip applyReconcileNotice). advance() can still bail to
-      // empty under its internal heap probes — fall through to the direct pick.
+      // empty under its internal heap probes — fall through to the ordered
+      // direct pick, which keeps the rotation order rather than jumping randomly.
       basename = advance();
       if (basename.empty()) {
-        basename = pickDirectBasename();
+        basename = orderedDirectPick();
       }
     }
     if (basename.empty()) {

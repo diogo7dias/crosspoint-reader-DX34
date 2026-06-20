@@ -8,6 +8,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -53,6 +54,36 @@ struct ISleepFs {
   // O(n) time, O(1) heap. Order follows the SD iteration order (not sorted).
   // Returns empty if n >= total count.
   virtual std::string nthSleepBmp(size_t n) = 0;
+
+  // Streaming successor in the V2 canonical rotation order: mtime DESCENDING
+  // (newest first), then name ascending as a deterministic tiebreak — the exact
+  // order the buffer-backed playlist materializes. Returns the basename that
+  // comes immediately after `afterName` in that order, wrapping to the FRONT
+  // (newest) when `afterName` is the last entry, is empty, or is not present.
+  // Empty only when /sleep has no wallpapers.
+  //
+  // This lets the low-heap direct-pick fallback follow the STRICT rotation
+  // order — a freshly uploaded wallpaper (newest mtime) leads each lap, matching
+  // the "new wallpapers on top" semantics — instead of jumping to a random file
+  // whenever heap pressure forces the fallback. The default impl materializes
+  // the listing (fine for host tests); SdFatSleepFs overrides with an O(1)-heap
+  // streaming scan so the device never allocates the full listing on the very
+  // path the fallback exists to keep heap-cheap.
+  virtual std::string nextSleepBmpByMtimeDesc(const std::string& afterName) {
+    auto entries = listSleepBmpsWithMtime(1024);
+    if (entries.empty()) return {};
+    std::sort(entries.begin(), entries.end(), [](const SleepBmpEntry& a, const SleepBmpEntry& b) {
+      if (a.mtime != b.mtime) return a.mtime > b.mtime;
+      return a.name < b.name;
+    });
+    if (afterName.empty()) return entries.front().name;
+    for (size_t i = 0; i < entries.size(); ++i) {
+      if (entries[i].name == afterName) {
+        return (i + 1 < entries.size()) ? entries[i + 1].name : entries.front().name;
+      }
+    }
+    return entries.front().name;
+  }
 
   // Combined count + lex-next in a single directory scan. Large strategy
   // steady state needs both (count for hysteresis, next for advance) —

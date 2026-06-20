@@ -77,18 +77,25 @@ The X4 firmware does **not** present as a USB drive — only a USB serial port. 
 
 ## Playlist behavior
 
-The playlist cap is **200 entries**.
+The playlist cap is **500 entries**.
 
-**Up to 200 images:**
-- A persisted playlist lives in memory and on SD.
-- Default order is stable and filename-based.
-- **Randomize Sleep Images** reshuffles the playlist.
-- New images added to `/sleep` are pushed near the front so they appear quickly.
+- A persisted order lives on SD (`/.crosspoint/sleep_order.txt`) and is rebuilt
+  in memory when the heap can afford it.
+- Default order is **newest first** — files are sorted by modification time
+  descending, so the most recently added wallpaper is on top.
+- New images added to `/sleep` are spliced at the **front** of the order and
+  the rotation resets to them, so a fresh upload is the next wallpaper shown.
+- On reaching the end of the list the rotation replays the same order from the
+  top — it never auto-shuffles. Only **Randomize Sleep Images** reshuffles.
 
-**More than 200 images:**
-- The firmware avoids storing the full playlist (ESP32-C3 RAM is tight).
-- **Randomize Sleep Images** picks a random starting file.
-- After that, the device advances sequentially through sorted filenames.
+### Ordering under memory pressure
+
+When the ESP32-C3 heap is too fragmented to materialize the full order list,
+the firmware falls back to a streaming, O(1)-heap pick. That fallback still
+follows the **same strict newest-first order**, continuing from the
+last-shown wallpaper — it does not jump to a random file. New uploads (newest
+modification time) still lead each lap. So the rotation order is honored
+whether or not the heap is under pressure.
 
 ## Favorites
 
