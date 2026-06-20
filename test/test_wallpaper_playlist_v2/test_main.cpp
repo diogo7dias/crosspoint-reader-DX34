@@ -508,6 +508,64 @@ void test_trim_branch_rederive_capped_per_pass() {
   TEST_ASSERT_EQUAL(501u, wp.entryCountForTest());
 }
 
+// The low-heap direct-pick fallback (Wallpaper.cpp pickDirectBasename) follows
+// nextSleepBmpByMtimeDesc, which must reproduce the buffer's canonical order
+// STRICTLY: newest mtime first, deterministic, never random. Exercises the
+// ISleepFs contract that backs that fallback.
+void test_direct_order_successor_follows_mtime_desc_strictly() {
+  FakeSleepFs fs;
+  fs.seed("a.bmp", 100);
+  fs.seed("b.bmp", 300);
+  fs.seed("c.bmp", 200);
+  // Canonical order newest-first: b(300) → c(200) → a(100).
+  TEST_ASSERT_EQUAL_STRING("b.bmp", fs.nextSleepBmpByMtimeDesc("").c_str());       // fresh start → newest
+  TEST_ASSERT_EQUAL_STRING("c.bmp", fs.nextSleepBmpByMtimeDesc("b.bmp").c_str());
+  TEST_ASSERT_EQUAL_STRING("a.bmp", fs.nextSleepBmpByMtimeDesc("c.bmp").c_str());
+  TEST_ASSERT_EQUAL_STRING("b.bmp", fs.nextSleepBmpByMtimeDesc("a.bmp").c_str());  // lap end wraps to newest
+  // A last-shown name no longer on disk wraps to the front — never a random jump.
+  TEST_ASSERT_EQUAL_STRING("b.bmp", fs.nextSleepBmpByMtimeDesc("ghost.bmp").c_str());
+}
+
+// "New wallpapers on top" must hold on the fallback path too: a fresh upload
+// (newest mtime) leads the order and re-leads each lap.
+void test_direct_order_new_upload_leads_each_lap() {
+  FakeSleepFs fs;
+  fs.seed("old1.bmp", 100);
+  fs.seed("old2.bmp", 110);
+  fs.seed("fresh.bmp", 999);  // newest upload
+  TEST_ASSERT_EQUAL_STRING("fresh.bmp", fs.nextSleepBmpByMtimeDesc("").c_str());
+  // After the oldest file (lap end), the order wraps back to the newest upload.
+  TEST_ASSERT_EQUAL_STRING("fresh.bmp", fs.nextSleepBmpByMtimeDesc("old1.bmp").c_str());
+}
+
+// Equal mtimes (e.g. a batch import) order by name ascending so the sequence is
+// total and reproducible — strict, not random.
+void test_direct_order_mtime_ties_break_by_name() {
+  FakeSleepFs fs;
+  fs.seed("b.bmp", 100);
+  fs.seed("a.bmp", 100);
+  fs.seed("c.bmp", 100);
+  TEST_ASSERT_EQUAL_STRING("a.bmp", fs.nextSleepBmpByMtimeDesc("").c_str());
+  TEST_ASSERT_EQUAL_STRING("b.bmp", fs.nextSleepBmpByMtimeDesc("a.bmp").c_str());
+  TEST_ASSERT_EQUAL_STRING("c.bmp", fs.nextSleepBmpByMtimeDesc("b.bmp").c_str());
+  TEST_ASSERT_EQUAL_STRING("a.bmp", fs.nextSleepBmpByMtimeDesc("c.bmp").c_str());  // wrap
+}
+
+void test_direct_order_empty_folder_returns_empty() {
+  FakeSleepFs fs;
+  TEST_ASSERT_TRUE(fs.nextSleepBmpByMtimeDesc("").empty());
+  TEST_ASSERT_TRUE(fs.nextSleepBmpByMtimeDesc("whatever.bmp").empty());
+}
+
+// A single wallpaper is the only thing to show: the successor stays on it
+// rather than returning empty, so the fallback never blanks a non-empty folder.
+void test_direct_order_single_file_repeats() {
+  FakeSleepFs fs;
+  fs.seed("only.bmp", 100);
+  TEST_ASSERT_EQUAL_STRING("only.bmp", fs.nextSleepBmpByMtimeDesc("").c_str());
+  TEST_ASSERT_EQUAL_STRING("only.bmp", fs.nextSleepBmpByMtimeDesc("only.bmp").c_str());
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -529,5 +587,10 @@ int main(int, char**) {
   RUN_TEST(test_truncated_reconcile_stays_dirty_and_converges);
   RUN_TEST(test_reshuffle_bails_before_listing_on_fragmented_heap);
   RUN_TEST(test_trim_branch_rederive_capped_per_pass);
+  RUN_TEST(test_direct_order_successor_follows_mtime_desc_strictly);
+  RUN_TEST(test_direct_order_new_upload_leads_each_lap);
+  RUN_TEST(test_direct_order_mtime_ties_break_by_name);
+  RUN_TEST(test_direct_order_empty_folder_returns_empty);
+  RUN_TEST(test_direct_order_single_file_repeats);
   return UNITY_END();
 }

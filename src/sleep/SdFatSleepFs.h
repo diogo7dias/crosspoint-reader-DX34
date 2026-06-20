@@ -21,6 +21,7 @@ class SdFatSleepFs final : public ISleepFs {
   void walkSleepBmps(const std::function<void(const char*, size_t, uint32_t)>& cb) override;
   std::string nextSleepBmpAfter(const std::string& after) override;
   std::string nthSleepBmp(size_t n) override;
+  std::string nextSleepBmpByMtimeDesc(const std::string& afterName) override;
   NextBmpResult nextSleepBmpAfterWithCount(const std::string& after, size_t scanCap) override;
   bool exists(const std::string& path) override;
   bool mkdir(const std::string& path) override;

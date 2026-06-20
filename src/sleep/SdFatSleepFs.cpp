@@ -271,6 +271,98 @@ std::string SdFatSleepFs::nthSleepBmp(size_t n) {
   return result;
 }
 
+std::string SdFatSleepFs::nextSleepBmpByMtimeDesc(const std::string& afterName) {
+  auto dir = Storage.open(kSleepDir);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return "";
+  }
+
+  // Position in the rotation order: lower index == shown earlier. Newest mtime
+  // leads; equal mtimes order by name ascending so the sequence is total and
+  // deterministic (batch imports share an mtime). `seqLess(a, b)` is true when
+  // a comes BEFORE b.
+  auto seqLess = [](uint32_t am, const char* an, uint32_t bm, const char* bn) -> bool {
+    if (am != bm) return am > bm;
+    return std::strcmp(an, bn) < 0;
+  };
+
+  // Pass 1: locate the front of the order (for wrap) and the mtime of the
+  // last-shown file, if it is still present. O(1) heap — only two bounded
+  // basenames are retained.
+  bool firstFound = false;
+  uint32_t firstMtime = 0;
+  std::string firstName;
+  bool afterFound = false;
+  uint32_t afterMtime = 0;
+  size_t iter = 0;
+  char name[256];
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    if (!file.isDirectory()) {
+      file.getName(name, sizeof(name));
+      if (isBmpName(name)) {
+        uint16_t fdate = 0, ftime = 0;
+        file.getModifyDateTime(&fdate, &ftime);
+        const uint32_t mtime = (static_cast<uint32_t>(fdate) << 16) | ftime;
+        if (!firstFound || seqLess(mtime, name, firstMtime, firstName.c_str())) {
+          firstFound = true;
+          firstMtime = mtime;
+          firstName = name;
+        }
+        if (!afterName.empty() && afterName == name) {
+          afterFound = true;
+          afterMtime = mtime;
+        }
+      }
+    }
+    file.close();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();
+    }
+  }
+
+  if (!firstFound) {
+    dir.close();
+    return "";  // /sleep has no wallpapers
+  }
+  if (!afterFound) {
+    dir.close();
+    return firstName;  // fresh start or last-shown deleted → lead with newest
+  }
+
+  // Pass 2: find the entry immediately after the last-shown one — the earliest
+  // entry that still sorts strictly after it. Wraps to the front at lap end.
+  dir.rewindDirectory();
+  bool succFound = false;
+  uint32_t succMtime = 0;
+  std::string succName;
+  iter = 0;
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    if (!file.isDirectory()) {
+      file.getName(name, sizeof(name));
+      if (isBmpName(name)) {
+        uint16_t fdate = 0, ftime = 0;
+        file.getModifyDateTime(&fdate, &ftime);
+        const uint32_t mtime = (static_cast<uint32_t>(fdate) << 16) | ftime;
+        if (seqLess(afterMtime, afterName.c_str(), mtime, name) &&
+            (!succFound || seqLess(mtime, name, succMtime, succName.c_str()))) {
+          succFound = true;
+          succMtime = mtime;
+          succName = name;
+        }
+      }
+    }
+    file.close();
+    if (++iter % kWdtResetInterval == 0) {
+      esp_task_wdt_reset();
+      yield();
+    }
+  }
+  dir.close();
+  return succFound ? succName : firstName;
+}
+
 bool SdFatSleepFs::exists(const std::string& path) { return Storage.exists(path.c_str()); }
 
 bool SdFatSleepFs::mkdir(const std::string& path) { return Storage.mkdir(path.c_str()); }
