@@ -7,7 +7,6 @@
 #include <algorithm>
 
 #include "ButtonRemapActivity.h"
-#include "SleepWallpaperListActivity.h"
 #include "CalibreSettingsActivity.h"
 #include "CleanupStorageActivity.h"
 #include "ClearCacheActivity.h"
@@ -19,6 +18,7 @@
 #include "MappedInputManager.h"
 #include "OtaUpdateActivity.h"
 #include "SettingsList.h"
+#include "SleepWallpaperListActivity.h"
 #include "ValueEditStep.h"
 #include "activities/boot_sleep/SleepActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
@@ -307,8 +307,7 @@ void SettingsActivity::buildSettingsList() {
 
   displaySettings.push_back(
       SettingInfo::Action(StrId::STR_RANDOMIZE_SLEEP_IMAGES, SettingAction::RandomizeSleepImages));
-  displaySettings.push_back(
-      SettingInfo::Action(StrId::STR_VIEW_SLEEP_WALLPAPERS, SettingAction::ViewSleepWallpapers));
+  displaySettings.push_back(SettingInfo::Action(StrId::STR_VIEW_SLEEP_WALLPAPERS, SettingAction::ViewSleepWallpapers));
 
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),

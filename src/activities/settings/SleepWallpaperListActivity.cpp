@@ -32,7 +32,7 @@ crosspoint::sleep::OrderPage SleepWallpaperListActivity::loadPage(size_t start, 
   if (Storage.exists(orderPath.c_str())) {
     HalFile f;
     if (Storage.openFileForRead("SWL", orderPath, f)) {
-      char buf[256];
+      char buf[256] = {0};
       int len = 0;
       int pos = 0;
       auto reader = [&](std::string& out) -> bool {
