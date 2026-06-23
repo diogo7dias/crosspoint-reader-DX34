@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "ButtonRemapActivity.h"
+#include "SleepWallpaperListActivity.h"
 #include "CalibreSettingsActivity.h"
 #include "CleanupStorageActivity.h"
 #include "ClearCacheActivity.h"
@@ -306,6 +307,8 @@ void SettingsActivity::buildSettingsList() {
 
   displaySettings.push_back(
       SettingInfo::Action(StrId::STR_RANDOMIZE_SLEEP_IMAGES, SettingAction::RandomizeSleepImages));
+  displaySettings.push_back(
+      SettingInfo::Action(StrId::STR_VIEW_SLEEP_WALLPAPERS, SettingAction::ViewSleepWallpapers));
 
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
@@ -672,6 +675,9 @@ void SettingsActivity::toggleCurrentSetting() {
         randomizePopupSuccess = SleepActivity::randomizeSleepImagePlaylist();
         randomizePopupOpen = true;
         requestUpdate();
+        break;
+      case SettingAction::ViewSleepWallpapers:
+        enterSubActivity(new (std::nothrow) SleepWallpaperListActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::RefreshHomeStats: {
         homeStatsScanning = true;

@@ -22,6 +22,7 @@ enum class SettingAction {
   ClearCache,
   CheckForUpdates,
   RandomizeSleepImages,
+  ViewSleepWallpapers,
   RefreshHomeStats,
   ManageCustomFonts,
   CleanupStorage,
