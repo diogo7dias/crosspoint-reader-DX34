@@ -109,11 +109,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                   {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80,
                                    StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240},
                                   "wordSpacingPercent", StrId::STR_CAT_READER));
-    s.push_back(SettingInfo::Enum(
-        StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
-        {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25, StrId::STR_PARA_SPACING_33,
-         StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50},
-        "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
+    s.push_back(SettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
+                                  {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
+                                   StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50},
+                                  "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
                                   {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC},
                                   "textRenderMode", StrId::STR_CAT_READER));

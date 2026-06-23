@@ -66,8 +66,8 @@ FontApplyResult applyFontFamilyByDisplayIndex(std::size_t displayIndex, std::siz
     return {false, false};
   }
 
-  const bool changed = prevFamily != SETTINGS.fontFamily || prevName != SETTINGS.customFontName ||
-                       prevSize != SETTINGS.customFontSizePt;
+  const bool changed =
+      prevFamily != SETTINGS.fontFamily || prevName != SETTINGS.customFontName || prevSize != SETTINGS.customFontSizePt;
   return {true, changed};
 }
 

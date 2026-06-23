@@ -1,8 +1,8 @@
 #include "FontDecompressor.h"
-#include <Memory.h>
 
 #include <Arduino.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Utf8.h>
 
 #include <cstdlib>
@@ -358,7 +358,8 @@ int FontDecompressor::prewarmCache(const EpdFontData* fontData, const char* utf8
 
   // Step 3: Allocate page buffer and lookup table for this slot
   slot.buffer = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(totalBytes));  // alloc-ok
-  slot.glyphs = static_cast<PageGlyphEntry*>(crosspoint::mem::tryMalloc(glyphCount * sizeof(PageGlyphEntry)));  // alloc-ok
+  slot.glyphs =
+      static_cast<PageGlyphEntry*>(crosspoint::mem::tryMalloc(glyphCount * sizeof(PageGlyphEntry)));  // alloc-ok
   if (!slot.buffer || !slot.glyphs) {
     LOG_ERR("FDC", "Failed to allocate page buffer (%u bytes, %u glyphs)", totalBytes, glyphCount);
     free(slot.buffer);

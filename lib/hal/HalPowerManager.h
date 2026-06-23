@@ -28,7 +28,7 @@ class HalPowerManager {
   // crawled — ADC sampling + the idle-loop tick both ran at 1/24th clock, so a
   // page-turn after any reading pause felt unresponsive. 80 MHz keeps a real
   // power saving (1/3 of the 240 MHz normal freq) while restoring snappy wake.
-  static constexpr int LOW_POWER_FREQ = 80;                   // MHz
+  static constexpr int LOW_POWER_FREQ = 80;                    // MHz
   static constexpr unsigned long IDLE_POWER_SAVING_MS = 3000;  // ms
 
   void begin();

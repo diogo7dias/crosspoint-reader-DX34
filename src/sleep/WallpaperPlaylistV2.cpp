@@ -336,8 +336,7 @@ void WallpaperPlaylistV2::reconcile() {
   // for a contiguous block first; if it won't fit, skip trim this cycle (the
   // over-cap files simply wait in /sleep) and still splice any new files the
   // cheap streaming walk already found. A later wake retries once heap allows.
-  if (diskCount > kSleepFolderCap &&
-      heapHasContiguous((kSleepFolderCap + 64) * sizeof(SleepBmpEntry))) {
+  if (diskCount > kSleepFolderCap && heapHasContiguous((kSleepFolderCap + 64) * sizeof(SleepBmpEntry))) {
     std::vector<SleepBmpEntry> all = deps_.fs->listSleepBmpsWithMtime(kSleepFolderCap + 64);
     // If the listing itself hit its cap, files beyond it were never seen —
     // stay dirty so a later reconcile finishes the job.

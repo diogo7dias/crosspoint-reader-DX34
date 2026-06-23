@@ -1,9 +1,9 @@
 #include "GfxRenderer.h"
-#include <Memory.h>
 
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Utf8.h>
 
 GfxRenderer::~GfxRenderer() { freeBwBufferChunks(); }
@@ -646,7 +646,7 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
   // IMPORTANT: Use int, not uint8_t, to avoid overflow for images > 1020 pixels
   // wide
   const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(outputRowSize));  // alloc-ok
+  auto* outputRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(outputRowSize));        // alloc-ok
   auto* rowBytes = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bitmap.getRowBytes()));  // alloc-ok
 
   if (!outputRow || !rowBytes) {
@@ -735,7 +735,7 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
   // For 1-bit BMP, output is still 2-bit packed (for consistency with
   // readNextRow)
   const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(outputRowSize));  // alloc-ok
+  auto* outputRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(outputRowSize));        // alloc-ok
   auto* rowBytes = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(bitmap.getRowBytes()));  // alloc-ok
 
   if (!outputRow || !rowBytes) {

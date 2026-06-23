@@ -152,32 +152,25 @@ bool sequentialPlaylistAffordable() {
   // std::string copy (~3x buffer) plus the entry vector and its per-name strings.
   const size_t totalNeed = bufferBytes * 3 + entryVecBytes * 2 + kSeqGateHeadroom;
 
-  return crosspoint::heap::largestFreeBlockBytes() >= contigNeed &&
-         crosspoint::mem::totalFreeBytes() >= totalNeed;
+  return crosspoint::heap::largestFreeBlockBytes() >= contigNeed && crosspoint::mem::totalFreeBytes() >= totalNeed;
 }
 
-// Streaming fragment-safe pick — direct mirror of SleepActivity's
-// pickSleepFileDirect helper. Touches O(1) heap beyond the returned
+// Streaming fragment-safe pick — touches O(1) heap beyond the returned
 // basename. Empty if /sleep is empty or fs not wired.
-std::string pickDirectBasename() {
+//
+// Sequential, NOT random: returns the lexicographically next .bmp/.pxc after
+// `after`, wrapping to the lex-min file at the end of the folder. This mirrors
+// the buffer playlist's strict no-repeat rotation. The previous implementation
+// rolled a random index with only single-file anti-repeat, which — on the small
+// libraries common in /sleep, and on the C3 where tight sleep-entry heap routes
+// here often — produced the "same wallpapers too frequently / no order" symptom:
+// a random pick that merely dodges the one last-shown file still revisits the
+// rest constantly and follows no order at all. nextSleepBmpAfter is a streaming
+// directory scan (no list materialized), so it stays safe at any folder size.
+std::string pickDirectBasename(const std::string& after) {
   auto* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
   if (!sfs) return {};
-  const size_t count = sfs->countSleepBmps(kSleepFolderCap);
-  if (count == 0) return {};
-  // Anti-repeat: this random last-resort has no playlist cursor, so a naive
-  // single roll can return the wallpaper we just showed (a 1/N chance —
-  // glaring on small libraries). Re-roll a few times to avoid the last-shown
-  // basename. With >1 file this converges almost immediately; with exactly
-  // one file we accept it (nothing else to show). lastShownSleepFilename and
-  // nthSleepBmp both deal in basenames, so the comparison is apples-to-apples.
-  const std::string& lastShown = APP_STATE.lastShownSleepFilename;
-  std::string pick;
-  for (int tries = 0; tries < 5; ++tries) {
-    const size_t idx = static_cast<size_t>(::random(static_cast<long>(count)));
-    pick = sfs->nthSleepBmp(idx);
-    if (count <= 1 || pick.empty() || pick != lastShown) break;
-  }
-  return pick;
+  return sfs->nextSleepBmpAfter(after);
 }
 
 SleepPick makePickFromBasename(const std::string& basename) {
@@ -222,10 +215,17 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
   // entry at a time and never builds a list, so it is safe at any folder size.
   const bool useDirectPick = !sequentialPlaylistAffordable();
 
+  // Direct-pick walks the folder sequentially from the last-shown file. Track a
+  // local cursor so that if a candidate fails to render, the next retry advances
+  // PAST it (mirroring the buffer playlist's advanceCursor-on-reject) instead of
+  // re-picking the same broken file every attempt.
+  std::string directCursor = APP_STATE.lastShownSleepFilename;
+
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
     std::string basename;
     if (useDirectPick) {
-      basename = pickDirectBasename();
+      basename = pickDirectBasename(directCursor);
+      directCursor = basename;
     } else {
       // Buffer-backed playlist advance via the facade entry point, so the
       // RFC #145 reconcile notice is drained + persisted here too (a direct
@@ -233,7 +233,8 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
       // empty under its internal heap probes — fall through to the direct pick.
       basename = advance();
       if (basename.empty()) {
-        basename = pickDirectBasename();
+        basename = pickDirectBasename(directCursor);
+        directCursor = basename;
       }
     }
     if (basename.empty()) {

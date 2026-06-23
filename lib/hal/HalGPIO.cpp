@@ -11,7 +11,18 @@ void HalGPIO::update() { inputMgr.update(); }
 
 bool HalGPIO::isPressed(uint8_t buttonIndex) const { return inputMgr.isPressed(buttonIndex); }
 
-bool HalGPIO::isAnyPressed() const { return inputMgr.isAnyPressed(); }
+bool HalGPIO::isAnyPressed() const {
+  // The SDK's InputManager exposes per-button isPressed() plus edge events, but
+  // no single "is any button currently held" query, so OR isPressed() across
+  // every button. This reproduces the level-triggered any-button-held check
+  // main.cpp uses to keep the CPU at full clock while a button is depressed.
+  // isPressed() returns false during input suppression, so this stays
+  // suppression-aware too.
+  for (uint8_t i = BTN_BACK; i <= BTN_POWER; ++i) {
+    if (inputMgr.isPressed(i)) return true;
+  }
+  return false;
+}
 
 bool HalGPIO::wasPressed(uint8_t buttonIndex) const { return inputMgr.wasPressed(buttonIndex); }
 

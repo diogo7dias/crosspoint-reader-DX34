@@ -304,10 +304,10 @@ void ReaderSettingsActivity::buildSettingsList() {
   pushReader(ReaderSettingInfo::Enum(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacingPercent,
                                      {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80,
                                       StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240}));
-  pushReader(ReaderSettingInfo::Enum(
-      StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
-      {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25, StrId::STR_PARA_SPACING_33,
-       StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50}));
+  pushReader(
+      ReaderSettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
+                              {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
+                               StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
                                      {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
   if (!txt) {
@@ -545,8 +545,8 @@ void ReaderSettingsActivity::loop() {
     // Tap: +-1. A quick second tap (within kValueEditDoubleTapMs) jumps +-10.
     buttonNavigator.onNextRelease([this] {
       const unsigned long now = millis();
-      adjustValueEdit(+crosspoint::settings::valueEditTapStep(lastValueUpTapMs, now,
-                                                              crosspoint::settings::kValueEditDoubleTapMs));
+      adjustValueEdit(
+          +crosspoint::settings::valueEditTapStep(lastValueUpTapMs, now, crosspoint::settings::kValueEditDoubleTapMs));
       lastValueUpTapMs = now;
       requestUpdate();
     });
@@ -854,7 +854,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
     rowYOffset += thisRowHeight;
   }
 
-  const char* confirmLabel = fontPicker.isOpen() ? tr(STR_SELECT)
+  const char* confirmLabel = fontPicker.isOpen()                   ? tr(STR_SELECT)
                              : (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM)
                                                                    : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));

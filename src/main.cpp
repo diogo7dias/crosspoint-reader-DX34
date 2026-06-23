@@ -376,7 +376,8 @@ static void openReaderInline(const std::string& initialEpubPath) {
   // including the in-reader recent-switcher that bypasses this function. Drawing
   // it here too would just FAST_REFRESH the same popup twice.
   exitActivity();
-  enterNewActivity(new (std::nothrow) ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
+  enterNewActivity(new (std::nothrow)
+                       ReaderActivity(renderer, mappedInputManager, bookPath, onGoHome, onGoToMyLibraryWithPath));
 }
 
 void onGoToReader(const std::string& initialEpubPath) {
@@ -435,7 +436,8 @@ static void openHomeInline() {
   TransitionFeedback::resetStacking();
   TransitionFeedback::show(renderer, tr(STR_LOADING_HOME));
   exitActivity();
-  enterNewActivity(new (std::nothrow) HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
+  enterNewActivity(new (std::nothrow)
+                       HomeActivity(renderer, mappedInputManager, onGoToReader, onGoToMyLibrary, onGoToRecentBooks,
                                     onGoToSettings, onGoToFileTransfer, onGoToBrowser));
 }
 
@@ -682,8 +684,8 @@ void setup() {
     LOG_ERR("MAIN", "SD card initialization failed");
     setupDisplayAndFonts();
     exitActivity();
-    enterNewActivity(
-        new (std::nothrow) FullScreenMessageActivity(renderer, mappedInputManager, "SD card error", EpdFontFamily::REGULAR));
+    enterNewActivity(new (std::nothrow) FullScreenMessageActivity(renderer, mappedInputManager, "SD card error",
+                                                                  EpdFontFamily::REGULAR));
     return;
   }
 
@@ -961,8 +963,8 @@ void loop() {
     // loop task has ever had. A small/shrinking value warns of a stack-overflow
     // reset before it happens; logged alongside heap so both are visible.
     const unsigned loopStackFreeBytes = uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t);
-    LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes, Loop stack free: %u bytes",
-            ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMinFreeHeap(), loopStackFreeBytes);
+    LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes, Loop stack free: %u bytes", ESP.getFreeHeap(),
+            ESP.getHeapSize(), ESP.getMinFreeHeap(), loopStackFreeBytes);
     lastMemPrint = millis();
   }
 

@@ -271,15 +271,15 @@ void TxtReaderActivity::drawFlowLine(const FlowLine& line, const int x, const in
 void TxtReaderActivity::openReadingThemes() {
   flushProgressIfNeeded(true);
   exitActivity();
-  enterNewActivity(new (std::nothrow) ReadingThemesActivity(renderer, mappedInput, txt ? txt->getCachePath() : std::string(),
-                                             [this](const bool changed) {
-                                               pendingSubactivityExit = true;
-                                               if (changed) {
-                                                 reloadCurrentLayoutForDisplaySettings();
-                                               } else {
-                                                 requestUpdate();
-                                               }
-                                             }));
+  enterNewActivity(new (std::nothrow) ReadingThemesActivity(
+      renderer, mappedInput, txt ? txt->getCachePath() : std::string(), [this](const bool changed) {
+        pendingSubactivityExit = true;
+        if (changed) {
+          reloadCurrentLayoutForDisplaySettings();
+        } else {
+          requestUpdate();
+        }
+      }));
 }
 
 void TxtReaderActivity::reloadCurrentLayoutForDisplaySettings() {

@@ -19,7 +19,7 @@ Pressing **OK** while reading opens the menu. Items adapt to context — footnot
 
 | Item | What it does |
 |------|--------------|
-| Select Chapter | Jump to any chapter |
+| Select Chapter | Jump to any chapter; each row shows the chapter's estimated page length (e.g. `12p`) for the current font/settings |
 | Highlight Mode | Enter quote selection |
 | View Quotes | Open saved quotes for this book |
 | Bookmark (Add / Remove) | Toggle bookmark on the current page |

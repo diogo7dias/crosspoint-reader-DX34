@@ -184,7 +184,7 @@ enum class RecoveryRun : uint8_t {
 // the first probe). Mirrors the fields the old hand-rolled ctx set up.
 struct RecoverySeed {
   bool anchorHeld = false;
-  bool bookOpen = false;     // silent-restart-to-reader needs an open EPUB
+  bool bookOpen = false;      // silent-restart-to-reader needs an open EPUB
   uint8_t restartBudget = 0;  // remainingAutoSilentRestarts() (0..2)
 };
 

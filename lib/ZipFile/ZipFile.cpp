@@ -261,8 +261,8 @@ bool ZipFile::loadZipDetails() {
   // We scan the last 1KB (or the whole file if smaller) for the EOCD signature
   // 0x06054b50 is stored as 0x50, 0x4b, 0x05, 0x06 in little-endian
   const int scanRange = fileSize > 1024 ? 1024 : fileSize;
-  const auto buffer = crosspoint::mem::CMallocPtr<uint8_t>(
-      static_cast<uint8_t*>(crosspoint::mem::tryMalloc(scanRange)));
+  const auto buffer =
+      crosspoint::mem::CMallocPtr<uint8_t>(static_cast<uint8_t*>(crosspoint::mem::tryMalloc(scanRange)));
   if (!buffer) {
     LOG_ERR("ZIP", "Failed to allocate memory for EOCD scan buffer");
     if (!wasOpen) {
@@ -466,8 +466,8 @@ uint8_t* ZipFile::readFileToMemory(const char* filename, size_t* size, const boo
   } else if (fileStat.method == MZ_DEFLATED) {
     // Read out deflated content from file. Scope-local: RAII frees it on every
     // exit path, so a future edit cannot orphan the decompression buffer.
-    auto deflatedData = crosspoint::mem::CMallocPtr<uint8_t>(
-        static_cast<uint8_t*>(crosspoint::mem::tryMalloc(deflatedDataSize)));
+    auto deflatedData =
+        crosspoint::mem::CMallocPtr<uint8_t>(static_cast<uint8_t*>(crosspoint::mem::tryMalloc(deflatedDataSize)));
     if (deflatedData == nullptr) {
       LOG_ERR("ZIP", "Failed to allocate memory for decompression buffer");
       free(data);

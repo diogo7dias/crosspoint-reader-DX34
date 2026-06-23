@@ -198,8 +198,8 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
 
   if (isQuotesFile(bookPath)) {
     exitActivity();
-    enterNewActivity(
-        new (std::nothrow) QuotesViewerActivity(renderer, mappedInput, bookPath, [this, bookPath] { goToLibrary(bookPath); }));
+    enterNewActivity(new (std::nothrow) QuotesViewerActivity(renderer, mappedInput, bookPath,
+                                                             [this, bookPath] { goToLibrary(bookPath); }));
     return;
   }
 

@@ -1,8 +1,8 @@
 #include "PngToBmpConverter.h"
-#include <Memory.h>
 
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <miniz.h>
 
 #include <cstdio>
@@ -201,8 +201,8 @@ struct PngDecodeContext {
   // File read buffer for feeding zlib + palette for indexed color (type 3).
   // Heap-backed (not inline arrays) to keep the struct off the stack — see the
   // allocation in pngFileToBmpStreamInternal.
-  std::unique_ptr<uint8_t[]> readBuf;   // kReadBufSize bytes
-  std::unique_ptr<uint8_t[]> palette;   // kPaletteBytes bytes
+  std::unique_ptr<uint8_t[]> readBuf;  // kReadBufSize bytes
+  std::unique_ptr<uint8_t[]> palette;  // kPaletteBytes bytes
   int paletteSize;
 };
 
@@ -554,7 +554,7 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
   }
 
   // Allocate scanline buffers
-  ctx.currentRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(rawRowBytes));  // alloc-ok
+  ctx.currentRow = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(rawRowBytes));      // alloc-ok
   ctx.previousRow = static_cast<uint8_t*>(crosspoint::mem::tryCalloc(rawRowBytes, 1));  // alloc-ok
   if (!ctx.currentRow || !ctx.previousRow) {
     LOG_ERR("PNG", "Failed to allocate scanline buffers (%u bytes each)", rawRowBytes);

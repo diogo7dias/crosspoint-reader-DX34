@@ -10,11 +10,11 @@
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "Paths.h"
-#include "network/WifiTeardown.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "network/HttpDownloader.h"
+#include "network/WifiTeardown.h"
 #include "util/StringUtils.h"
 #include "util/UrlUtils.h"
 
@@ -371,8 +371,8 @@ void OpdsBookBrowserActivity::launchWifiSelection() {
   state = BrowserState::WIFI_SELECTION;
   requestUpdate();
 
-  enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
-                                             [this](const bool connected) { onWifiSelectionComplete(connected); }));
+  enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+      renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
 }
 
 void OpdsBookBrowserActivity::onWifiSelectionComplete(const bool connected) {

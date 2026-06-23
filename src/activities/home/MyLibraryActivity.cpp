@@ -240,8 +240,7 @@ void MyLibraryActivity::loadFilesWithLimit() {
       // Check if there are more relevant files in the directory
       for (auto next = root.openNextFile(); next; next = root.openNextFile()) {
         next.getName(name, sizeof(name));
-        const bool skip =
-            (!env_.showHiddenFiles() && name[0] == '.') || strcmp(name, "System Volume Information") == 0;
+        const bool skip = (!env_.showHiddenFiles() && name[0] == '.') || strcmp(name, "System Volume Information") == 0;
         const bool relevant = !skip && (next.isDirectory() || isManagedFile(std::string(name)));
         next.close();
         esp_task_wdt_reset();

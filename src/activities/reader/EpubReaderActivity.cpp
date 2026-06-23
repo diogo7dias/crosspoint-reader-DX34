@@ -432,7 +432,7 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
     LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
     self->persistProgressBeforeRestart();
     silentRestartToReader("reader-preflight-frag-recovery");  // does not return
-    return true;  // unreachable
+    return true;                                              // unreachable
   };
 
   return mem::layoutHeapRecovered(seed, acts);
@@ -1131,7 +1131,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       }
       exitActivity();
       enterNewActivity(new (std::nothrow) QuotesViewerActivity(this->renderer, this->mappedInput, quotesPath,
-                                                [this] { pendingSubactivityExit = true; }));
+                                                               [this] { pendingSubactivityExit = true; }));
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER: {
@@ -1139,6 +1139,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       const int spineIdx = currentSpineIndex;
       const int currentTocIndex = section ? section->getTocIndexForPage(section->currentPage)
                                           : resolveCurrentTocIndex(epub, section.get(), currentSpineIndex);
+      // Exact page count of the chapter being read, used to estimate every chapter's length.
+      const int currentSectionPageCount = section ? section->pageCount : 0;
       const std::string path = epub->getPath();
 
       // 1. Close the menu
@@ -1146,7 +1148,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
 
       // 2. Open the Chapter Selector
       enterNewActivity(new (std::nothrow) EpubReaderChapterSelectionActivity(
-          this->renderer, this->mappedInput, epub, path, spineIdx, currentTocIndex,
+          this->renderer, this->mappedInput, epub, path, spineIdx, currentTocIndex, currentSectionPageCount,
           [this] {
             exitActivity();
             requestUpdate();
