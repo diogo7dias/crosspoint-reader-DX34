@@ -13,8 +13,13 @@ class EpubReaderChapterSelectionActivity final : public ActivityWithSubactivity 
   ButtonNavigator buttonNavigator;
   int currentSpineIndex = 0;
   int currentTocIndex = 0;
+  int currentSectionPageCount = 0;  // Exact page count of the chapter currently being read (0 if unknown)
   int selectorIndex = 0;
   int resolvedCurrentTocIndex = 0;  // Resolved reading position in TOC, preserved during navigation
+
+  // Pages-per-byte ratio derived from the current chapter's layout, used to estimate the
+  // page length of every chapter at the active font/settings. <= 0 means "cannot estimate".
+  float pagesPerByte = 0.0f;
 
   // Double-tap Up/Down detection (jump to current chapter)
   unsigned long lastNavReleaseMs = 0;
@@ -26,6 +31,13 @@ class EpubReaderChapterSelectionActivity final : public ActivityWithSubactivity 
 
   static constexpr int kLineHeight = 30;
   static constexpr unsigned long kDoubleTapMs = 350;
+  // Width reserved on the right of each row for the chapter page-count badge.
+  static constexpr int kPageCountReserve = 52;
+
+  // Estimate the page length of the chapter at `tocIndex` for the active font/settings.
+  // Returns the exact count for the chapter currently being read, an extrapolated estimate
+  // for the others, or 0 when no estimate is possible.
+  int estimateChapterPages(int tocIndex) const;
 
   // Compute wrapped line count for a single TOC item given available width.
   int getItemLineCount(int itemIndex, int maxTextWidth) const;
@@ -41,6 +53,7 @@ class EpubReaderChapterSelectionActivity final : public ActivityWithSubactivity 
   explicit EpubReaderChapterSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                               const std::shared_ptr<Epub>& epub, const std::string& epubPath,
                                               const int currentSpineIndex, const int currentTocIndex,
+                                              const int currentSectionPageCount,
                                               const std::function<void()>& onGoBack,
                                               const std::function<void(int tocIndex)>& onSelectTocIndex,
                                               const std::function<void(int newSpineIndex, int newPage)>& onSyncPosition)
@@ -49,6 +62,7 @@ class EpubReaderChapterSelectionActivity final : public ActivityWithSubactivity 
         epubPath(epubPath),
         currentSpineIndex(currentSpineIndex),
         currentTocIndex(currentTocIndex),
+        currentSectionPageCount(currentSectionPageCount),
         onGoBack(onGoBack),
         onSelectTocIndex(onSelectTocIndex),
         onSyncPosition(onSyncPosition) {}

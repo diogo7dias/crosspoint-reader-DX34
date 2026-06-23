@@ -16,10 +16,31 @@ constexpr int kButtonHintsReserve = 50;
 
 int EpubReaderChapterSelectionActivity::getTotalItems() const { return epub->getTocItemsCount(); }
 
+int EpubReaderChapterSelectionActivity::estimateChapterPages(int tocIndex) const {
+  if (!epub) return 0;
+  const int spineIndex = epub->getTocItem(tocIndex).spineIndex;
+  if (spineIndex < 0) return 0;
+
+  // The chapter currently being read has an exact, already-paginated count — use it directly.
+  if (spineIndex == currentSpineIndex && currentSectionPageCount > 0) {
+    return currentSectionPageCount;
+  }
+
+  // Otherwise extrapolate from the current chapter's pages-per-byte ratio. This mirrors the
+  // status bar's book-page-counter estimate: approximate by design (image/code-heavy chapters
+  // have a different density than prose) but avoids laying out every chapter on open.
+  if (pagesPerByte <= 0.0f) return 0;
+  const size_t prevSize = (spineIndex >= 1) ? epub->getCumulativeSpineItemSize(spineIndex - 1) : 0;
+  const size_t chapterSize = epub->getCumulativeSpineItemSize(spineIndex) - prevSize;
+  if (chapterSize == 0) return 0;
+  return std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(chapterSize) + 0.5f));
+}
+
 int EpubReaderChapterSelectionActivity::getItemLineCount(int itemIndex, int maxTextWidth) const {
   const auto item = epub->getTocItem(itemIndex);
   const int indentSize = 20 + (item.level - 1) * 15;
-  const int textWidth = maxTextWidth - 40 - indentSize;
+  const int countReserve = (pagesPerByte > 0.0f) ? kPageCountReserve : 0;
+  const int textWidth = maxTextWidth - 40 - indentSize - countReserve;
   if (textWidth <= 0) return 1;
   const auto lines = ReaderLayoutSafety::wrapText(renderer, UI_10_FONT_ID, item.title, textWidth);
   return std::max(1, static_cast<int>(lines.size()));
@@ -62,6 +83,18 @@ void EpubReaderChapterSelectionActivity::onEnter() {
     selectorIndex = 0;
   }
   resolvedCurrentTocIndex = selectorIndex;
+
+  // Derive the pages-per-byte ratio from the chapter currently being read so we can estimate
+  // the page length of the other chapters at the active font/settings.
+  pagesPerByte = 0.0f;
+  if (currentSectionPageCount > 0) {
+    const size_t prevSize =
+        (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+    const size_t curSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevSize;
+    if (curSize > 0) {
+      pagesPerByte = static_cast<float>(currentSectionPageCount) / static_cast<float>(curSize);
+    }
+  }
 
   lastNavReleaseMs = 0;
   lastNavDirection = 0;
@@ -184,7 +217,8 @@ void EpubReaderChapterSelectionActivity::render(Activity::RenderLock&&) {
   for (int itemIndex = pageStartIndex; itemIndex < totalItems; itemIndex++) {
     const auto item = epub->getTocItem(itemIndex);
     const int indentSize = contentX + 20 + (item.level - 1) * 15;
-    const int textWidth = maxTextWidth - 40 - indentSize;
+    const int countReserve = (pagesPerByte > 0.0f) ? kPageCountReserve : 0;
+    const int textWidth = maxTextWidth - 40 - indentSize - countReserve;
 
     std::vector<std::string> lines;
     if (textWidth > 0) {
@@ -229,6 +263,22 @@ void EpubReaderChapterSelectionActivity::render(Activity::RenderLock&&) {
     } else {
       for (int l = 0; l < static_cast<int>(lines.size()); l++) {
         renderer.drawText(UI_10_FONT_ID, indentSize, currentY + l * kLineHeight, lines[l].c_str(), !isSelected);
+      }
+    }
+
+    // Right-aligned chapter length badge (estimated pages at the active font/settings).
+    if (countReserve > 0) {
+      const int pages = estimateChapterPages(itemIndex);
+      if (pages > 0) {
+        const std::string badge = std::to_string(pages) + "p";
+        const int badgeWidth = renderer.getTextWidth(UI_10_FONT_ID, badge.c_str());
+        const int badgeX = contentX + contentWidth - 6 - badgeWidth;
+        // Match the title: dark text normally, light when the row is selected (inverted),
+        // and bold (double-draw) for the current chapter to mirror its emphasized title.
+        renderer.drawText(UI_10_FONT_ID, badgeX, currentY, badge.c_str(), !isSelected);
+        if (isCurrent && !isSelected) {
+          renderer.drawText(UI_10_FONT_ID, badgeX + 1, currentY, badge.c_str(), true);
+        }
       }
     }
 
