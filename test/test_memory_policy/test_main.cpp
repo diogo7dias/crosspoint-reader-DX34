@@ -150,8 +150,8 @@ struct LoopFake {
   int anchorCalls = 0;
   int maxCalls = 0;
   int restartCalls = 0;
-  size_t afterAnchor = 0;  // largest the heap "reveals" after releaseAnchor
-  size_t afterMax = 0;     // largest after releaseMaxResources
+  size_t afterAnchor = 0;        // largest the heap "reveals" after releaseAnchor
+  size_t afterMax = 0;           // largest after releaseMaxResources
   bool restartTriggers = false;  // trySilentRestart return (false = budget lost)
 };
 size_t loopFakeAnchor(void* p) {

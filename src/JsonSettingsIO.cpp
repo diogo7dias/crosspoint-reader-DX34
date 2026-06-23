@@ -892,24 +892,24 @@ bool JsonSettingsIO::saveWifi(const WifiCredentialStore& store, const char* path
 // widely-included store header, which leaks `using namespace ArduinoJson` and
 // breaks unqualified `detail::` references across the tree). Both friended
 // entry points below expand it.
-#define CROSSPOINT_POPULATE_WIFI(store, doc, needsResave)                                    \
-  do {                                                                                       \
-    (store).lastConnectedSsid = (doc)["lastConnectedSsid"] | std::string("");                \
-    (store).credentials.clear();                                                             \
-    JsonArray arr = (doc)["credentials"].as<JsonArray>();                                    \
-    for (JsonObject obj : arr) {                                                             \
-      if ((store).credentials.size() >= (store).MAX_NETWORKS) break;                         \
-      WifiCredential cred;                                                                   \
-      cred.ssid = obj["ssid"] | std::string("");                                             \
-      bool ok = false;                                                                       \
-      cred.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &ok);     \
-      if (!ok || cred.password.empty()) {                                                    \
-        cred.password = obj["password"] | std::string("");                                   \
-        if (!cred.password.empty() && (needsResave)) *(needsResave) = true;                  \
-      }                                                                                       \
-      (store).credentials.push_back(cred);                                                   \
-    }                                                                                         \
-    LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", (store).credentials.size());     \
+#define CROSSPOINT_POPULATE_WIFI(store, doc, needsResave)                                \
+  do {                                                                                   \
+    (store).lastConnectedSsid = (doc)["lastConnectedSsid"] | std::string("");            \
+    (store).credentials.clear();                                                         \
+    JsonArray arr = (doc)["credentials"].as<JsonArray>();                                \
+    for (JsonObject obj : arr) {                                                         \
+      if ((store).credentials.size() >= (store).MAX_NETWORKS) break;                     \
+      WifiCredential cred;                                                               \
+      cred.ssid = obj["ssid"] | std::string("");                                         \
+      bool ok = false;                                                                   \
+      cred.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &ok); \
+      if (!ok || cred.password.empty()) {                                                \
+        cred.password = obj["password"] | std::string("");                               \
+        if (!cred.password.empty() && (needsResave)) *(needsResave) = true;              \
+      }                                                                                  \
+      (store).credentials.push_back(cred);                                               \
+    }                                                                                    \
+    LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", (store).credentials.size()); \
   } while (0)
 
 bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool* needsResave) {
@@ -976,22 +976,22 @@ bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* 
 
 // Populate from an already-parsed document. Macro, not a shared function, for
 // the same friendship/header reason as the Wifi loader above.
-#define CROSSPOINT_POPULATE_RECENT_BOOKS(store, doc)                                    \
-  do {                                                                                  \
-    (store).recentBooks.clear();                                                        \
-    JsonArray arr = (doc)["books"].as<JsonArray>();                                     \
-    for (JsonObject obj : arr) {                                                        \
-      if ((store).getCount() >= RecentBooksStore::MAX_RECENT_BOOKS) break;              \
-      RecentBook book;                                                                  \
-      book.path = obj["path"] | std::string("");                                        \
-      book.title = obj["title"] | std::string("");                                      \
-      book.author = obj["author"] | std::string("");                                    \
-      book.coverBmpPath = obj["coverBmpPath"] | std::string("");                        \
-      book.boldSwap = (obj["boldSwap"] | (uint8_t)0) != 0 ? 1 : 0;                      \
-      book.percent = static_cast<int8_t>(obj["percent"] | -1);                          \
-      (store).recentBooks.push_back(book);                                              \
-    }                                                                                   \
-    LOG_DBG("RBS", "Recent books loaded from file (%d entries)", (store).getCount());   \
+#define CROSSPOINT_POPULATE_RECENT_BOOKS(store, doc)                                  \
+  do {                                                                                \
+    (store).recentBooks.clear();                                                      \
+    JsonArray arr = (doc)["books"].as<JsonArray>();                                   \
+    for (JsonObject obj : arr) {                                                      \
+      if ((store).getCount() >= RecentBooksStore::MAX_RECENT_BOOKS) break;            \
+      RecentBook book;                                                                \
+      book.path = obj["path"] | std::string("");                                      \
+      book.title = obj["title"] | std::string("");                                    \
+      book.author = obj["author"] | std::string("");                                  \
+      book.coverBmpPath = obj["coverBmpPath"] | std::string("");                      \
+      book.boldSwap = (obj["boldSwap"] | (uint8_t)0) != 0 ? 1 : 0;                    \
+      book.percent = static_cast<int8_t>(obj["percent"] | -1);                        \
+      (store).recentBooks.push_back(book);                                            \
+    }                                                                                 \
+    LOG_DBG("RBS", "Recent books loaded from file (%d entries)", (store).getCount()); \
   } while (0)
 
 bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) {
@@ -1072,29 +1072,27 @@ bool JsonSettingsIO::saveReadingThemes(const ReadingThemeStore& store, const cha
 // the same friendship/header reason as the loaders above. Note: it can `return
 // false` from the enclosing function on the corruption-guard path (parsed 0
 // themes while some are held in memory), which both entry points below want.
-#define CROSSPOINT_POPULATE_READING_THEMES(store, doc)                                       \
-  do {                                                                                       \
-    /* Parse into a temporary list first — never clear in-memory themes until we know the */ \
-    /* file actually contained data, so a valid-but-empty JSON can't wipe the user's set. */ \
-    std::vector<ReadingTheme> parsed;                                                        \
-    JsonArray arr = (doc)["themes"].as<JsonArray>();                                         \
-    for (JsonObject obj : arr) {                                                             \
-      if (parsed.size() >= ReadingThemeStore::MAX_THEMES) break;                             \
-      ReadingTheme theme;                                                                    \
-      readReadingThemeObject(obj, theme);                                                    \
-      parsed.push_back(theme);                                                               \
-    }                                                                                        \
-    if (parsed.empty() && !(store).themes.empty()) {                                         \
-      LOG_ERR("RTH", "Parsed 0 themes from JSON but %u in memory — rejecting load",          \
-              (unsigned)(store).themes.size());                                              \
-      return false;                                                                          \
-    }                                                                                        \
-    (store).themes = std::move(parsed);                                                      \
-    (store).lastEditedThemeIndex = (doc)["lastEditedThemeIndex"] | -1;                       \
-    if ((store).lastEditedThemeIndex < 0 ||                                                  \
-        (store).lastEditedThemeIndex >= static_cast<int>((store).themes.size())) {           \
-      (store).lastEditedThemeIndex = -1;                                                     \
-    }                                                                                        \
+#define CROSSPOINT_POPULATE_READING_THEMES(store, doc)                                                                 \
+  do {                                                                                                                 \
+    /* Parse into a temporary list first — never clear in-memory themes until we know the */                           \
+    /* file actually contained data, so a valid-but-empty JSON can't wipe the user's set. */                           \
+    std::vector<ReadingTheme> parsed;                                                                                  \
+    JsonArray arr = (doc)["themes"].as<JsonArray>();                                                                   \
+    for (JsonObject obj : arr) {                                                                                       \
+      if (parsed.size() >= ReadingThemeStore::MAX_THEMES) break;                                                       \
+      ReadingTheme theme;                                                                                              \
+      readReadingThemeObject(obj, theme);                                                                              \
+      parsed.push_back(theme);                                                                                         \
+    }                                                                                                                  \
+    if (parsed.empty() && !(store).themes.empty()) {                                                                   \
+      LOG_ERR("RTH", "Parsed 0 themes from JSON but %u in memory — rejecting load", (unsigned)(store).themes.size());  \
+      return false;                                                                                                    \
+    }                                                                                                                  \
+    (store).themes = std::move(parsed);                                                                                \
+    (store).lastEditedThemeIndex = (doc)["lastEditedThemeIndex"] | -1;                                                 \
+    if ((store).lastEditedThemeIndex < 0 || (store).lastEditedThemeIndex >= static_cast<int>((store).themes.size())) { \
+      (store).lastEditedThemeIndex = -1;                                                                               \
+    }                                                                                                                  \
   } while (0)
 
 bool JsonSettingsIO::loadReadingThemes(ReadingThemeStore& store, const char* json) {

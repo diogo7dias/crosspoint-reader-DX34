@@ -14,11 +14,11 @@
 
 #include "MappedInputManager.h"
 #include "NetworkModeSelectionActivity.h"
-#include "network/WifiTeardown.h"
 #include "WifiSelectionActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiTeardown.h"
 
 namespace {
 // AP Mode configuration
@@ -125,8 +125,8 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
 
     state = WebServerActivityState::WIFI_SELECTION;
     LOG_DBG("WEBACT", "Launching WifiSelectionActivity...");
-    enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
-                                               [this](const bool connected) { onWifiSelectionComplete(connected); }));
+    enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+        renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
   } else {
     // AP mode - start access point
     state = WebServerActivityState::AP_STARTING;

@@ -7,10 +7,10 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncClient.h"
 #include "MappedInputManager.h"
-#include "network/WifiTeardown.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiTeardown.h"
 
 void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
   exitActivity();
@@ -80,8 +80,8 @@ void KOReaderAuthActivity::onEnter() {
   }
 
   // Launch WiFi selection
-  enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
-                                             [this](const bool connected) { onWifiSelectionComplete(connected); }));
+  enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+      renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
 }
 
 void KOReaderAuthActivity::onExit() {

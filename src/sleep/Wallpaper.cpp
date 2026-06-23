@@ -152,8 +152,7 @@ bool sequentialPlaylistAffordable() {
   // std::string copy (~3x buffer) plus the entry vector and its per-name strings.
   const size_t totalNeed = bufferBytes * 3 + entryVecBytes * 2 + kSeqGateHeadroom;
 
-  return crosspoint::heap::largestFreeBlockBytes() >= contigNeed &&
-         crosspoint::mem::totalFreeBytes() >= totalNeed;
+  return crosspoint::heap::largestFreeBlockBytes() >= contigNeed && crosspoint::mem::totalFreeBytes() >= totalNeed;
 }
 
 // Streaming fragment-safe pick — touches O(1) heap beyond the returned

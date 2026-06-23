@@ -6,10 +6,10 @@
  */
 
 #include "Xtc.h"
-#include <Memory.h>
 
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 
 #include <new>
 

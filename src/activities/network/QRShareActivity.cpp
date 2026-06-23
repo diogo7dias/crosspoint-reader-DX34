@@ -8,10 +8,10 @@
 #include <esp_task_wdt.h>
 #include <qrcode.h>
 
-#include "network/WifiTeardown.h"
 #include "WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiTeardown.h"
 
 namespace {
 
@@ -64,8 +64,8 @@ void QRShareActivity::onEnter() {
     LOG_INF("QRSHARE", "WiFi not connected, launching WiFi selection...");
     WiFi.mode(WIFI_STA);
     state = QRShareState::WIFI_SELECTION;
-    enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
-                                               [this](const bool connected) { onWifiSelectionComplete(connected); }));
+    enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+        renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
   }
 }
 

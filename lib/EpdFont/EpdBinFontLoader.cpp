@@ -1,9 +1,9 @@
 #include "EpdBinFontLoader.h"
-#include <Memory.h>
 
 #include <HalStorage.h>
 #include <InflateReader.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <esp_task_wdt.h>
 
 #include <cstdlib>
@@ -178,7 +178,7 @@ bool EpdBinFontLoader::openFromFileExternalBuf(const std::string& path, uint8_t*
   const auto& g0 = groupsPtr[0];
   if (g0.compressedSize > 0 && g0.uncompressedSize > 0 && g0.compressedSize <= hdr.bitmapBlobSize) {
     auto* compressed = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(g0.compressedSize));  // alloc-ok
-    auto* probe = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(g0.uncompressedSize));  // alloc-ok
+    auto* probe = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(g0.uncompressedSize));     // alloc-ok
     if (!compressed || !probe) {
       free(compressed);
       free(probe);

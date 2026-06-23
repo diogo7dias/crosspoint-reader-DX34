@@ -432,7 +432,7 @@ bool EpubReaderActivity::heapHeadroomOkForLayout() {
     LOG_DIAG("ERS", "pre-flight gate: triggering silent restart to clear fragmentation");
     self->persistProgressBeforeRestart();
     silentRestartToReader("reader-preflight-frag-recovery");  // does not return
-    return true;  // unreachable
+    return true;                                              // unreachable
   };
 
   return mem::layoutHeapRecovered(seed, acts);
@@ -1131,7 +1131,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       }
       exitActivity();
       enterNewActivity(new (std::nothrow) QuotesViewerActivity(this->renderer, this->mappedInput, quotesPath,
-                                                [this] { pendingSubactivityExit = true; }));
+                                                               [this] { pendingSubactivityExit = true; }));
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER: {

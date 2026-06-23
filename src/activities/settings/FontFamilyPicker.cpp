@@ -69,10 +69,10 @@ void FontFamilyPicker::render(GfxRenderer& renderer, int pageWidth, int pageHeig
   const int rowFont = UI_10_FONT_ID;
   const char* title = tr(STR_FONT_FAMILY);
 
-  constexpr int kPad = 16;       // padding inside the popup frame
-  constexpr int kRowPadV = 4;    // vertical padding inside each row
-  constexpr int kTitleH = 18;    // reserved height for the title line
-  constexpr int kTitleGap = 8;   // gap between title and first row
+  constexpr int kPad = 16;      // padding inside the popup frame
+  constexpr int kRowPadV = 4;   // vertical padding inside each row
+  constexpr int kTitleH = 18;   // reserved height for the title line
+  constexpr int kTitleGap = 8;  // gap between title and first row
   constexpr int kScreenInset = 20;
   constexpr int kVerticalInset = 40;
 

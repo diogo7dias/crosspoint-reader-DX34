@@ -28,8 +28,7 @@
 
 // SFINAE (not a C++20 `requires` clause) so this header compiles on the
 // framework's GCC 8 toolchain, which only partially supports C++20 concepts.
-template <typename T, typename... Args,
-          typename std::enable_if<!std::is_array<T>::value, int>::type = 0>
+template <typename T, typename... Args, typename std::enable_if<!std::is_array<T>::value, int>::type = 0>
 std::unique_ptr<T> makeUniqueNoThrow(Args&&... args) {
   return std::unique_ptr<T>(new (std::nothrow) T(std::forward<Args>(args)...));
 }

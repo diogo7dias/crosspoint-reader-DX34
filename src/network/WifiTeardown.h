@@ -31,9 +31,7 @@ enum class WifiRestartTarget {
 // non-coalescing LWIP/netif scatter (see SilentRestart.h).
 //
 // Does NOT return when `wifiWasUp` is true.
-void teardownAndReclaim(bool wifiWasUp,
-                        WifiRestartTarget target = WifiRestartTarget::Home,
-                        const char* reason = "wifi-exit",
-                        bool apMode = false);
+void teardownAndReclaim(bool wifiWasUp, WifiRestartTarget target = WifiRestartTarget::Home,
+                        const char* reason = "wifi-exit", bool apMode = false);
 
 }  // namespace net

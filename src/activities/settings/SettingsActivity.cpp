@@ -14,11 +14,11 @@
 #include "CrossPointState.h"
 #include "CustomFontsSettingsActivity.h"
 #include "FontFamilyApply.h"
-#include "ValueEditStep.h"
 #include "KOReaderSettingsActivity.h"
 #include "MappedInputManager.h"
 #include "OtaUpdateActivity.h"
 #include "SettingsList.h"
+#include "ValueEditStep.h"
 #include "activities/boot_sleep/SleepActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
@@ -983,7 +983,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   }
 
   // Draw help text
-  const char* confirmLabel = fontPicker.isOpen() ? tr(STR_SELECT)
+  const char* confirmLabel = fontPicker.isOpen()                   ? tr(STR_SELECT)
                              : (fontSizeEditMode || valueEditMode) ? tr(STR_CONFIRM)
                                                                    : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));

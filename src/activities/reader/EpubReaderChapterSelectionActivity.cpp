@@ -88,8 +88,7 @@ void EpubReaderChapterSelectionActivity::onEnter() {
   // the page length of the other chapters at the active font/settings.
   pagesPerByte = 0.0f;
   if (currentSectionPageCount > 0) {
-    const size_t prevSize =
-        (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+    const size_t prevSize = (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
     const size_t curSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevSize;
     if (curSize > 0) {
       pagesPerByte = static_cast<float>(currentSectionPageCount) / static_cast<float>(curSize);

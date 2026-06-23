@@ -9,10 +9,10 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
 #include "MappedInputManager.h"
-#include "network/WifiTeardown.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiTeardown.h"
 
 namespace {
 void syncTimeWithNTP() {
@@ -221,8 +221,8 @@ void KOReaderSyncActivity::onEnter() {
 
   // Launch WiFi selection subactivity
   LOG_DBG("KOSync", "Launching WifiSelectionActivity...");
-  enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
-                                             [this](const bool connected) { onWifiSelectionComplete(connected); }));
+  enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+      renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
 }
 
 void KOReaderSyncActivity::onExit() {

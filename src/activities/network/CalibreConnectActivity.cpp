@@ -10,9 +10,9 @@
 
 #include "MappedInputManager.h"
 #include "WifiSelectionActivity.h"
-#include "network/WifiTeardown.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "network/WifiTeardown.h"
 
 namespace {
 constexpr const char* HOSTNAME = "crosspoint-mod-dx34";
@@ -35,8 +35,8 @@ void CalibreConnectActivity::onEnter() {
   exitRequested = false;
 
   if (WiFi.status() != WL_CONNECTED) {
-    enterNewActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput,
-                                               [this](const bool connected) { onWifiSelectionComplete(connected); }));
+    enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+        renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
   } else {
     connectedIP = WiFi.localIP().toString().c_str();
     connectedSSID = WiFi.SSID().c_str();

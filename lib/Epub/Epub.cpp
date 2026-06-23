@@ -1,11 +1,11 @@
 #include "Epub.h"
-#include <Memory.h>
 
 #include <Arduino.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JpegToBmpConverter.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <PngToBmpConverter.h>
 #include <ZipFile.h>
 #include <esp_heap_caps.h>
