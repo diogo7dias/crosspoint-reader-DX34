@@ -133,8 +133,10 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
     const bool showBandBookPageCounter =
         !statusBarLayout.bookPageCounterText.empty() &&
         (statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition) == renderTopBand);
-    const bool showBandProgressText =
-        showBandPageCounter || showBandBookPercentage || showBandChapterPercentage || showBandBookPageCounter;
+    const bool showBandPagesLeft = !statusBarLayout.pagesLeftText.empty() &&
+                                   (statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition) == renderTopBand);
+    const bool showBandProgressText = showBandPageCounter || showBandBookPercentage || showBandChapterPercentage ||
+                                      showBandBookPageCounter || showBandPagesLeft;
     const bool showBandTitle = SETTINGS.statusBarShowChapterTitle && !statusBarLayout.titleLines.empty() &&
                                (statusBarItemIsTop(SETTINGS.statusBarTitlePosition) == renderTopBand);
     const bool showBandBookBar =
@@ -243,6 +245,8 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
               statusBarLayout.chapterPercentageTextWidth, SETTINGS.statusBarChapterPercentagePosition);
       addItem(showBandBookPageCounter, &statusBarLayout.bookPageCounterText, statusBarLayout.bookPageCounterTextWidth,
               SETTINGS.statusBarBookPageCounterPosition);
+      addItem(showBandPagesLeft, &statusBarLayout.pagesLeftText, statusBarLayout.pagesLeftTextWidth,
+              SETTINGS.statusBarPagesLeftPosition);
 
       const auto drawGroup = [&](const std::vector<TextEntry>& items, const int startX) {
         int x = startX;

@@ -143,6 +143,8 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name, const Cros
   theme.statusBarBarThickness = settings.statusBarBarThickness;
   theme.statusBarShowBookPageCounter = settings.statusBarShowBookPageCounter;
   theme.statusBarBookPageCounterPosition = settings.statusBarBookPageCounterPosition;
+  theme.statusBarShowPagesLeft = settings.statusBarShowPagesLeft;
+  theme.statusBarPagesLeftPosition = settings.statusBarPagesLeftPosition;
   return theme;
 }
 
@@ -226,6 +228,10 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
   settings.statusBarBookPageCounterPosition =
       clampRange(theme.statusBarBookPageCounterPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
                  CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER);
+  settings.statusBarShowPagesLeft = theme.statusBarShowPagesLeft ? 1 : 0;
+  settings.statusBarPagesLeftPosition =
+      clampRange(theme.statusBarPagesLeftPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT);
 }
 
 bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
@@ -263,7 +269,9 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.statusBarProgressStyle == theme.statusBarProgressStyle &&
          current.statusBarBarThickness == theme.statusBarBarThickness &&
          current.statusBarShowBookPageCounter == theme.statusBarShowBookPageCounter &&
-         current.statusBarBookPageCounterPosition == theme.statusBarBookPageCounterPosition;
+         current.statusBarBookPageCounterPosition == theme.statusBarBookPageCounterPosition &&
+         current.statusBarShowPagesLeft == theme.statusBarShowPagesLeft &&
+         current.statusBarPagesLeftPosition == theme.statusBarPagesLeftPosition;
 }
 
 int ReadingThemeStore::findMatchingTheme() const {
@@ -568,5 +576,9 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.statusBarBookPageCounterPosition =
       clampRange(theme.statusBarBookPageCounterPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
                  CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER);
+  normalized.statusBarShowPagesLeft = theme.statusBarShowPagesLeft ? 1 : 0;
+  normalized.statusBarPagesLeftPosition =
+      clampRange(theme.statusBarPagesLeftPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT);
   return normalized;
 }

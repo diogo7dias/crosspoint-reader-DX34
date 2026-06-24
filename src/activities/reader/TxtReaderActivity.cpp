@@ -183,6 +183,15 @@ TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(const
     layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
   }
 
+  if (SETTINGS.statusBarShowPagesLeft && totalPages > 0) {
+    // TXT has no chapters, so "pages left in chapter" == pages to end of file.
+    const int remaining = std::max(0, totalPages - (currentPage + 1));
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%d %s", remaining, tr(STR_STATUS_PAGES_LEFT_LABEL));
+    layout.pagesLeftText = buf;
+    layout.pagesLeftTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  }
+
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
@@ -506,14 +515,16 @@ void TxtReaderActivity::initializeReader() {
         (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowPagesLeft && statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const bool showBottomStatusTextRow =
         (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
         (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
             ? (SETTINGS.statusBarNoTitleTruncation
@@ -959,14 +970,16 @@ bool TxtReaderActivity::renderPage() {
         (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowPagesLeft && statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const bool showBottomStatusTextRow =
         (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
         (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
             ? (SETTINGS.statusBarNoTitleTruncation

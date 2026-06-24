@@ -275,6 +275,9 @@ class CrossPointSettings {
   uint8_t statusBarBarThickness = STATUS_BAR_THICKNESS_NORMAL;
   uint8_t statusBarShowBookPageCounter = 0;
   uint8_t statusBarBookPageCounterPosition = STATUS_TEXT_BOTTOM_CENTER;
+  // Pages remaining to the end of the current chapter (whole file for TXT).
+  uint8_t statusBarShowPagesLeft = 0;
+  uint8_t statusBarPagesLeftPosition = STATUS_TEXT_BOTTOM_RIGHT;
   // Text rendering settings
   uint8_t extraParagraphSpacingLevel = EXTRA_SPACING_M;
   // Legacy field name retained for storage compatibility; value stores a

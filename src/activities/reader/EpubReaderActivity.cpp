@@ -671,6 +671,16 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
 
   populateBookPageCounterText(layout);
 
+  if (SETTINGS.statusBarShowPagesLeft && section->pageCount > 0) {
+    // Pages remaining to the end of the current chapter. currentPage is 0-based,
+    // so the last page yields 0 left.
+    const int remaining = std::max(0, section->pageCount - (section->currentPage + 1));
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%d %s", remaining, tr(STR_STATUS_PAGES_LEFT_LABEL));
+    layout.pagesLeftText = buf;
+    layout.pagesLeftTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  }
+
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
@@ -1818,14 +1828,16 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
         (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowPagesLeft && statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const bool showBottomStatusTextRow =
         (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
         (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition));
+        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     int titleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
     if (SETTINGS.statusBarShowChapterTitle && SETTINGS.statusBarNoTitleTruncation) {
       constexpr int titlePadding = 4;

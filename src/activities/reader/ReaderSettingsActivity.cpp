@@ -370,6 +370,12 @@ void ReaderSettingsActivity::buildSettingsList() {
       StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT,
+                                                        &CrossPointSettings::statusBarShowPagesLeft));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_CHAPTER_PAGES_LEFT_POSITION, &CrossPointSettings::statusBarPagesLeftPosition,
+      {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+       StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
 
   // --- Build flat row index ---
   flatRows.reserve(2 + readerSettings.size() + statusBarSettings.size());

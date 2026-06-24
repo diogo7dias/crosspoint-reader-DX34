@@ -52,6 +52,8 @@ struct ReadingTheme {
   uint8_t statusBarBarThickness = CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
   uint8_t statusBarShowBookPageCounter = 0;
   uint8_t statusBarBookPageCounterPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
+  uint8_t statusBarShowPagesLeft = 0;
+  uint8_t statusBarPagesLeftPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT;
 };
 
 class ReadingThemeStore;

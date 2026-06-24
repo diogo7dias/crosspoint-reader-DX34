@@ -188,6 +188,14 @@ inline const std::vector<SettingInfo>& getSettingsList() {
         {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
          StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
         "statusBarBookPageCounterPosition", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT,
+                                    &CrossPointSettings::statusBarShowPagesLeft, "statusBarShowPagesLeft",
+                                    StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Enum(
+        StrId::STR_STATUS_CHAPTER_PAGES_LEFT_POSITION, &CrossPointSettings::statusBarPagesLeftPosition,
+        {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+         StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
+        "statusBarPagesLeftPosition", StrId::STR_STATUS_BAR));
 
     // --- Controls ---
     s.push_back(SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
