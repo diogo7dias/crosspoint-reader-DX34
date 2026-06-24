@@ -3,6 +3,7 @@
 #include <EpdFontFamily.h>
 #include <Epub/layout/DegradeLevel.h>
 #include <FontCacheManager.h>
+#include <FontDecompressor.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <HeapGuard.h>
@@ -26,6 +27,7 @@
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
 #include "RecentBooksStore.h"
+#include "SilentRestart.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
@@ -843,7 +845,45 @@ void TxtReaderActivity::render(Activity::RenderLock&&) {
   }
 
   renderer.clearScreen();
-  renderPage();
+  if (!renderPage()) {
+    // Render-time glyph allocations failed on a fragmented heap: the frame was
+    // NOT displayed (it would be scattered-glyph garbage). Recover like the
+    // EPUB reader (EpubReaderActivity::renderContents caller).
+    //
+    // Tier 1: if not already on the smallest built-in font, latch the transient
+    // emergency downgrade to CHAREINK 12 and re-paginate + re-render in place.
+    // getReaderFontId() resolves to CHAREINK 12 while the flag is set, so the
+    // re-layout on the next render uses glyph groups small enough to fit the
+    // largest free block that defeated the user's heavier font. The latch is
+    // never persisted and clears on book exit, so the real font returns next
+    // open and only re-degrades if it OOMs again.
+    if (!SETTINGS.emergencyRenderFontDowngrade && SETTINGS.getReaderFontId() != CHAREINK_12_FONT_ID) {
+      LOG_DIAG("TRS", "render-oom: latching emergency font downgrade -> CHAREINK 12, re-laying out");
+      SETTINGS.emergencyRenderFontDowngrade = true;
+      renderer.clearScreen();
+      renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
+      renderer.displayBuffer();
+      // initialized=false + cleared offsets; next render() re-paginates at the
+      // smaller font via initializeReader() and re-renders the same page.
+      reloadCurrentLayoutForDisplaySettings();
+      requestUpdate();
+      return;
+    }
+    // Tier 2: already at the smallest font (or it still cannot fit) — mirror the
+    // pre-flight gate's recovery: bounded silent-restart to a fresh heap where
+    // the page can decompress. Once the auto-restart budget is exhausted, show a
+    // clean low-memory notice instead of reboot-looping.
+    if (tryReserveAutoSilentRestart()) {
+      LOG_DIAG("TRS", "render-oom: triggering silent restart to clear fragmentation");
+      flushProgressIfNeeded(true);
+      silentRestartToReader("txt-render-oom");  // does not return
+    }
+    LOG_DIAG("TRS", "render-oom: auto-restart budget exhausted, showing notice");
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
+    renderer.displayBuffer();
+    return;
+  }
 
   // observe(current page) + debounced flush — folded into flushProgressIfNeeded.
   flushProgressIfNeeded(false);
@@ -893,7 +933,7 @@ void TxtReaderActivity::renderRecentSwitcher() {
   renderer.displayBuffer();
 }
 
-void TxtReaderActivity::renderPage() {
+bool TxtReaderActivity::renderPage() {
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
                                    &orientedMarginLeft);
@@ -1036,6 +1076,7 @@ void TxtReaderActivity::renderPage() {
 
   // Two-pass font prewarm: scan pass collects text, then decompress needed glyphs.
   // The actual render must happen inside the scope so page buffers stay alive.
+  uint32_t glyphOom = 0;
   auto* fcm = renderer.getFontCacheManager();
   if (fcm) {
     auto scope = fcm->createPrewarmScope();
@@ -1048,11 +1089,26 @@ void TxtReaderActivity::renderPage() {
                                     crosspoint::layout::kStyleAll)
                                     .prewarmStyleMask;
     scope.endScanAndPrewarm(prewarmMask);
+    auto* fd = fcm->getDecompressor();
+    if (fd) fd->resetBitmapAllocFailures();
     renderLines();  // actual render (BW)
+    if (fd) glyphOom = fd->bitmapAllocFailures();
   } else {
+    // No decompressor: built-in font glyph bitmaps point straight into flash,
+    // so there is no allocation to fail here.
     renderLines();
   }
   renderStatusBar(statusBarLayout, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
+
+  // Render-time glyph OOM: the frame is incomplete (scattered-glyph garbage).
+  // Bail BEFORE displayBuffer() so the broken frame never reaches the panel;
+  // the caller routes to emergency font downgrade / silent-restart. Mirrors
+  // EpubReaderActivity::renderContents.
+  if (glyphOom > 0) {
+    LOG_ERR("TRS", "render-time glyph OOM (%u alloc failures) — discarding partial frame", (unsigned)glyphOom);
+    renderer.setTextRenderStyle(0);
+    return false;
+  }
 
   if (pagesUntilFullRefresh <= 1) {
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
@@ -1063,6 +1119,7 @@ void TxtReaderActivity::renderPage() {
   }
 
   renderer.setTextRenderStyle(0);
+  return true;
 }
 
 void TxtReaderActivity::renderStatusBar(const StatusBarLayout& statusBarLayout, const int orientedMarginRight,

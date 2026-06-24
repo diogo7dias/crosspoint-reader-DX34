@@ -89,7 +89,10 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   int cachedTitleMaxLines = -1;
   std::vector<std::string> cachedTitleLines;
 
-  void renderPage();
+  // Returns false when render-time glyph allocation failed (fragmented heap):
+  // the partial/garbage frame was NOT displayed and the caller must recover.
+  // Mirrors EpubReaderActivity::renderContents.
+  bool renderPage();
   void renderStatusBar(const StatusBarLayout& statusBarLayout, int orientedMarginRight, int orientedMarginBottom,
                        int orientedMarginLeft);
   void renderRecentSwitcher();
