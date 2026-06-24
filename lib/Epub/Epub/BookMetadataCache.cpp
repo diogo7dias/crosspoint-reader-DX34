@@ -26,6 +26,31 @@ void reportProgress(const std::function<void(int)>& callback, const int value) {
     callback(value);
   }
 }
+
+// RAII guard that makes a seek+read sequence on the shared `bookFile` cursor
+// atomic. See BookMetadataCache::fileMutex_ for why this is required. On the
+// host test build there is no concurrency and no FreeRTOS, so it is a no-op.
+#ifndef UNIT_TEST_HOST
+struct BookFileLock {
+  SemaphoreHandle_t m_;
+  explicit BookFileLock(SemaphoreHandle_t m) : m_(m) {
+    if (m_) {
+      xSemaphoreTake(m_, portMAX_DELAY);
+    }
+  }
+  ~BookFileLock() {
+    if (m_) {
+      xSemaphoreGive(m_);
+    }
+  }
+  BookFileLock(const BookFileLock&) = delete;
+  BookFileLock& operator=(const BookFileLock&) = delete;
+};
+#else
+struct BookFileLock {
+  explicit BookFileLock(void*) {}
+};
+#endif
 }  // namespace
 
 /* ============= WRITING / BUILDING FUNCTIONS ================ */
@@ -388,6 +413,7 @@ void BookMetadataCache::createTocEntry(const std::string& title, const std::stri
 /* ============= READING / LOADING FUNCTIONS ================ */
 
 bool BookMetadataCache::load(const std::function<void(int)>& progressCallback) {
+  BookFileLock guard(fileMutex_);
   if (!Storage.openFileForRead("BMC", cachePath + bookBinFile, bookFile)) {
     return false;
   }
@@ -423,6 +449,7 @@ bool BookMetadataCache::load(const std::function<void(int)>& progressCallback) {
 }
 
 BookMetadataCache::SpineEntry BookMetadataCache::getSpineEntry(const int index) {
+  BookFileLock guard(fileMutex_);
   if (!loaded) {
     LOG_ERR("BMC", "getSpineEntry called but cache not loaded");
     return {};
@@ -442,6 +469,7 @@ BookMetadataCache::SpineEntry BookMetadataCache::getSpineEntry(const int index) 
 }
 
 BookMetadataCache::TocEntry BookMetadataCache::getTocEntry(const int index) {
+  BookFileLock guard(fileMutex_);
   if (!loaded) {
     LOG_ERR("BMC", "getTocEntry called but cache not loaded");
     return {};

@@ -30,7 +30,18 @@ namespace {
 // are never trusted on load — they re-layout on every open so the section
 // snaps back to Full once the heap recovers. Bumping invalidates v22 caches so
 // the new byte is present from the first open after flash.
-constexpr uint8_t SECTION_FILE_VERSION = 23;
+//
+// v24 (2026-06-24): the pageTocLut baked into a section file could be poisoned
+// at build time by a data race on BookMetadataCache's shared bookFile cursor.
+// buildPageTocLut() reads TOC/spine records (getTocEntry/getSpineEntry) on the
+// render task while, at book open, the loop task resolves the text-reference
+// spine index on the SAME file handle — interleaved seeks made a TOC read land
+// on another record, so a valid chapter's pages were cached with tocIndex -1 (or
+// a wrong index). That persisted as a chapter title rendering "Unnamed" until
+// the section was rebuilt. The cursor is now serialised (BookMetadataCache::
+// fileMutex_), so fresh builds are correct; this bump discards any already-
+// poisoned v23 caches so they re-layout once, race-free, after flash.
+constexpr uint8_t SECTION_FILE_VERSION = 24;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint8_t) +
                                  sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) +

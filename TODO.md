@@ -30,6 +30,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v5.6.0 release notes 2026-06-24: memory-safe "View sleep wallpapers" list screen; chapter selector page counts limited to current + next 3 with a sanity clamp (no more absurd numbers); home over-limit warning card → numeric keypad to bulk-move random wallpapers from /sleep to /sleep pause; per-folder file counter in the library header.)*
 
+- **Status-bar chapter title corruption fix (PENDING next tag).** Fixed a data race on `BookMetadataCache`'s shared `bookFile` cursor that, at book open, let the status-bar title render a spine href (`OEBPS/partNNNN.xhtml`) or a sticky "Unnamed" on a real, named chapter. The render task read a TOC record while the loop task read a spine record on the same file handle; interleaved seeks corrupted the read, and when it happened during a section build the bad chapter mapping was baked into the section cache (hence "Unnamed" stuck until rebuilt). Fix: serialise the seek+read pair (`BookMetadataCache::fileMutex_`) + bump `SECTION_FILE_VERSION` 23→24 to discard already-poisoned caches (one-time race-free re-layout of each book on first open after flash). Device-validated 2026-06-24.
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 

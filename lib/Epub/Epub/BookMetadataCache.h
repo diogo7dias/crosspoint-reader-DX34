@@ -7,6 +7,11 @@
 #include <functional>
 #include <string>
 
+#ifndef UNIT_TEST_HOST
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#endif
+
 class BookMetadataCache {
  public:
   struct BookMetadata {
@@ -56,6 +61,21 @@ class BookMetadataCache {
   FsFile spineFile;
   FsFile tocFile;
 
+  // Serialises the seek+read sequence on the single shared `bookFile` cursor.
+  // load()/getSpineEntry()/getTocEntry() all move one shared file position. The
+  // HAL makes each individual seek and each individual read atomic, but NOT the
+  // seek->read PAIR, so without this lock a concurrent reader can land its read
+  // on another caller's seek offset and return the wrong record. At book open
+  // the render task builds the status-bar title (getTocEntry) while the loop
+  // task resolves the text-reference spine index (getSpineEntry) on the same
+  // handle; the corrupted read surfaced as a chapter title showing a spine href
+  // ("OEBPS/partNNNN.xhtml") or an empty title falling back to "Unnamed".
+#ifndef UNIT_TEST_HOST
+  SemaphoreHandle_t fileMutex_ = nullptr;
+#else
+  void* fileMutex_ = nullptr;  // host build is single-threaded; lock is a no-op
+#endif
+
   // Index for fast href→spineIndex lookup (used only for large EPUBs)
   struct SpineHrefIndexEntry {
     uint64_t hrefHash;  // FNV-1a 64-bit hash
@@ -86,8 +106,18 @@ class BookMetadataCache {
   BookMetadata coreMetadata;
 
   explicit BookMetadataCache(std::string cachePath)
-      : cachePath(std::move(cachePath)), lutOffset(0), spineCount(0), tocCount(0), loaded(false), buildMode(false) {}
-  ~BookMetadataCache() = default;
+      : cachePath(std::move(cachePath)), lutOffset(0), spineCount(0), tocCount(0), loaded(false), buildMode(false) {
+#ifndef UNIT_TEST_HOST
+    fileMutex_ = xSemaphoreCreateMutex();
+#endif
+  }
+  ~BookMetadataCache() {
+#ifndef UNIT_TEST_HOST
+    if (fileMutex_) {
+      vSemaphoreDelete(fileMutex_);
+    }
+#endif
+  }
 
   // Building phase (stream to disk immediately)
   bool beginWrite();
