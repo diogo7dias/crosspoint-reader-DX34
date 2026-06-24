@@ -198,6 +198,23 @@ void MyLibraryActivity::loadMoreFiles() {
   clampSelectorIndex();
 }
 
+size_t MyLibraryActivity::countFolderFiles() const {
+  const bool booksFolder = (basepath == "/books");
+  const bool sleepFolder = (basepath == "/sleep" || basepath == "/sleep pause" || basepath == "/sleep library");
+  size_t n = 0;
+  for (const auto& f : files) {
+    if (!f.empty() && f.back() == '/') continue;  // skip directories
+    if (booksFolder) {
+      if (StringUtils::checkFileExtension(f, ".epub")) ++n;
+    } else if (sleepFolder) {
+      if (isImageFile(f)) ++n;
+    } else if (isManagedFile(f)) {
+      ++n;
+    }
+  }
+  return n;
+}
+
 void MyLibraryActivity::loadFilesWithLimit() {
   files.clear();
   hasMoreFiles = false;
@@ -1407,6 +1424,15 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   const int pathWidth = pageWidth - metrics.contentSidePadding * 2;
   const std::string pathLabel = renderer.truncatedText(SMALL_FONT_ID, basepath.c_str(), pathWidth);
   renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, pathY, pathLabel.c_str());
+
+  // Folder file count, right-aligned on the path line: epubs in /books, images
+  // in the sleep folders, otherwise managed files. "+" when the listing capped.
+  {
+    std::string countText = std::to_string(countFolderFiles());
+    if (hasMoreFiles) countText += "+";
+    const int countW = renderer.getTextWidth(SMALL_FONT_ID, countText.c_str());
+    renderer.drawText(SMALL_FONT_ID, pageWidth - metrics.contentSidePadding - countW, pathY, countText.c_str());
+  }
 
   const int listTop = pathY + renderer.getLineHeight(SMALL_FONT_ID) + 2;
   const int listHeight = pageHeight - listTop - metrics.buttonHintsHeight - metrics.verticalSpacing;

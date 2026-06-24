@@ -16,6 +16,11 @@ constexpr int kButtonHintsReserve = 50;
 
 int EpubReaderChapterSelectionActivity::getTotalItems() const { return epub->getTocItemsCount(); }
 
+bool EpubReaderChapterSelectionActivity::rowShowsPageCount(int tocIndex) const {
+  if (pagesPerByte <= 0.0f) return false;
+  return tocIndex >= resolvedCurrentTocIndex && tocIndex <= resolvedCurrentTocIndex + kPageCountLookahead;
+}
+
 int EpubReaderChapterSelectionActivity::estimateChapterPages(int tocIndex) const {
   if (!epub) return 0;
   const int spineIndex = epub->getTocItem(tocIndex).spineIndex;
@@ -33,13 +38,29 @@ int EpubReaderChapterSelectionActivity::estimateChapterPages(int tocIndex) const
   const size_t prevSize = (spineIndex >= 1) ? epub->getCumulativeSpineItemSize(spineIndex - 1) : 0;
   const size_t chapterSize = epub->getCumulativeSpineItemSize(spineIndex) - prevSize;
   if (chapterSize == 0) return 0;
-  return std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(chapterSize) + 0.5f));
+
+  int pages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(chapterSize) + 0.5f));
+
+  // A chapter cannot be longer than the whole book — clamp to the book-wide
+  // estimate. This is the principled bound; it catches a single chapter whose
+  // byte size is anomalously large (e.g. an embedded full-page image) producing
+  // a page count far beyond anything real.
+  const size_t bookSize = epub->getBookSize();
+  if (bookSize > 0) {
+    const int bookPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
+    if (pages > bookPages) pages = bookPages;
+  }
+
+  // Backstop: if the estimate is still implausibly large the inputs can't be
+  // trusted, so hide the badge entirely rather than render a nonsense number.
+  if (pages > kMaxPlausibleChapterPages) return 0;
+  return pages;
 }
 
 int EpubReaderChapterSelectionActivity::getItemLineCount(int itemIndex, int maxTextWidth) const {
   const auto item = epub->getTocItem(itemIndex);
   const int indentSize = 20 + (item.level - 1) * 15;
-  const int countReserve = (pagesPerByte > 0.0f) ? kPageCountReserve : 0;
+  const int countReserve = rowShowsPageCount(itemIndex) ? kPageCountReserve : 0;
   const int textWidth = maxTextWidth - 40 - indentSize - countReserve;
   if (textWidth <= 0) return 1;
   const auto lines = ReaderLayoutSafety::wrapText(renderer, UI_10_FONT_ID, item.title, textWidth);
@@ -216,7 +237,7 @@ void EpubReaderChapterSelectionActivity::render(Activity::RenderLock&&) {
   for (int itemIndex = pageStartIndex; itemIndex < totalItems; itemIndex++) {
     const auto item = epub->getTocItem(itemIndex);
     const int indentSize = contentX + 20 + (item.level - 1) * 15;
-    const int countReserve = (pagesPerByte > 0.0f) ? kPageCountReserve : 0;
+    const int countReserve = rowShowsPageCount(itemIndex) ? kPageCountReserve : 0;
     const int textWidth = maxTextWidth - 40 - indentSize - countReserve;
 
     std::vector<std::string> lines;

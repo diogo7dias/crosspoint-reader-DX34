@@ -87,6 +87,16 @@ void rememberRendered(const std::string& fullPath, const std::string& filename =
 // (e.g. fragment-safe direct pick). Never null after first lazy init.
 ISleepFs* fs();
 
+// Count images currently in /sleep, bounded by `scanCap` (worst-case time).
+// Used by the home over-limit indicator. Returns 0 if fs is unavailable.
+size_t countImages(size_t scanCap);
+
+// Move up to `n` randomly-chosen images from /sleep to "/sleep pause". Streams
+// the folder via reservoir sampling (O(n) heap), so it stays memory-safe on a
+// folder of 1000+ images. Favorites are included. Marks the rotation dirty so it
+// rebuilds on the next sleep. Returns the number of files actually moved.
+size_t moveRandomToPause(size_t n);
+
 // No-op in the V2 default path — reconcile is heap-gated and runs from
 // inside advance(). Kept so the boot-route hook + ActivityRouter signature
 // stay valid without conditional plumbing at the call site.

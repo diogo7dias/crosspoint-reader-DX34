@@ -31,6 +31,7 @@
 #include "MemoryPolicy.h"
 #include "QuotesViewerActivity.h"
 #include "ReaderCommon.h"
+#include "ReaderInkCentering.h"
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
@@ -2534,11 +2535,9 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
         int inkTop;
         int inkBottom;
         if (page.getInkBounds(renderer, fontId, &inkTop, &inkBottom)) {
-          const int inkHeight = inkBottom - inkTop;
-          if (inkHeight > 0 && inkHeight <= viewportHeight) {
-            // Land the ink box centered: its top sits at margin + (slack)/2.
-            contentY = orientedMarginTop + (viewportHeight - inkHeight) / 2 - inkTop;
-          }
+          // Shared centering kernel (see ReaderInkCentering.h). Returns 0 for an
+          // out-of-range ink box, leaving contentY at the top margin as before.
+          contentY = orientedMarginTop + crosspoint::reader::inkCenterOffset(inkTop, inkBottom, viewportHeight);
         }
       }
     }

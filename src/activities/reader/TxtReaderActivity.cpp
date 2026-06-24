@@ -21,6 +21,7 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "ReaderCommon.h"
+#include "ReaderInkCentering.h"
 #include "ReaderLayoutSafety.h"
 #include "ReadingThemeStore.h"
 #include "ReadingThemesActivity.h"
@@ -1009,10 +1010,9 @@ void TxtReaderActivity::renderPage() {
       }
     }
     if (haveTop && haveBottom) {
-      const int inkHeight = inkBottom - inkTop;
-      if (inkHeight > 0 && inkHeight <= vpHeight) {
-        verticalCenterOffset = (vpHeight - inkHeight) / 2 - inkTop;
-      }
+      // Shared centering kernel (see ReaderInkCentering.h) — identical policy to
+      // EpubReaderActivity::renderContents. Returns 0 for an out-of-range box.
+      verticalCenterOffset = crosspoint::reader::inkCenterOffset(inkTop, inkBottom, vpHeight);
     } else {
       // No measurable ink (blank page) — fall back to nominal box centering.
       const int usedHeight = linesPerPage * lineHeight;

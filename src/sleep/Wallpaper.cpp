@@ -14,6 +14,7 @@
 #include "HeapGuard.h"
 #include "MemoryPolicy.h"
 #include "SdFatSleepFs.h"
+#include "SleepMoveSelection.h"
 #include "WallpaperPlaylistV2.h"
 
 namespace crosspoint {
@@ -134,7 +135,8 @@ constexpr size_t kSeqGateHeadroom = 12 * 1024;
 // Conservative on purpose: under-gating only costs a direct pick; over-gating
 // costs a brick.
 bool sequentialPlaylistAffordable() {
-  auto* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
+  const auto& deps = v2::WallpaperPlaylistV2::instance().deps();
+  auto* sfs = deps.fs;
   if (!sfs) return false;
   size_t count = 0;
   size_t bufferBytes = 0;  // == order-buffer size: sum of (filename length + 1)
@@ -152,21 +154,36 @@ bool sequentialPlaylistAffordable() {
   // std::string copy (~3x buffer) plus the entry vector and its per-name strings.
   const size_t totalNeed = bufferBytes * 3 + entryVecBytes * 2 + kSeqGateHeadroom;
 
-  return crosspoint::heap::largestFreeBlockBytes() >= contigNeed && crosspoint::mem::totalFreeBytes() >= totalNeed;
+  // Consolidated heap probe (RFC: sleep heap-gate unification): read the SAME
+  // largest-free-block source the V2 playlist's inner gates use
+  // (deps.largestFreeBlockFn) instead of calling the global util directly. The
+  // two gates previously consulted two different injection points, so a host
+  // test scripting heap fragmentation moved one but not the other and the outer
+  // gate silently saw the real device heap. Routing both through one injected
+  // probe makes the whole sequential-vs-direct decision drivable from a single
+  // fake. When the probe is unset (older Configure path) fall back to the global
+  // util, which carries its own host override. Total-free keeps its own util
+  // (it has a separate host override and no per-alloc equivalent in V2).
+  const size_t largestFree =
+      deps.largestFreeBlockFn ? deps.largestFreeBlockFn() : crosspoint::heap::largestFreeBlockBytes();
+
+  return largestFree >= contigNeed && crosspoint::mem::totalFreeBytes() >= totalNeed;
 }
 
-// Streaming fragment-safe pick — touches O(1) heap beyond the returned
-// basename. Empty if /sleep is empty or fs not wired.
+// Streaming fragment-safe pick — O(1) heap beyond the returned basename.
+// Empty if /sleep is empty or fs not wired.
 //
-// Sequential, NOT random: returns the lexicographically next .bmp/.pxc after
-// `after`, wrapping to the lex-min file at the end of the folder. This mirrors
-// the buffer playlist's strict no-repeat rotation. The previous implementation
-// rolled a random index with only single-file anti-repeat, which — on the small
-// libraries common in /sleep, and on the C3 where tight sleep-entry heap routes
-// here often — produced the "same wallpapers too frequently / no order" symptom:
-// a random pick that merely dodges the one last-shown file still revisits the
-// rest constantly and follows no order at all. nextSleepBmpAfter is a streaming
-// directory scan (no list materialized), so it stays safe at any folder size.
+// DETERMINISTIC SEQUENTIAL: returns the lexicographically next .bmp/.pxc
+// strictly after `after`, wrapping to the lex-first at the end of the lap.
+// `after` is the just-shown basename (lastShownSleepFilename), persisted across
+// deep sleep, so successive wakes walk the folder one file at a time in a fixed
+// order — never random, never repeating mid-lap. This is the low-heap fallback
+// for when the mtime-ordered buffer playlist can't be materialized; it trades
+// new-on-top ordering (which needs a heap-resident sorted buffer) for a stable
+// alphabetical march that holds at any folder size and any fragmentation level.
+// Earlier builds rolled ::random() here, which is exactly what produced the
+// "random wallpapers + same one too often" the user reported whenever the heap
+// gate sent rotation down this path.
 std::string pickDirectBasename(const std::string& after) {
   auto* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
   if (!sfs) return {};
@@ -215,17 +232,16 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
   // entry at a time and never builds a list, so it is safe at any folder size.
   const bool useDirectPick = !sequentialPlaylistAffordable();
 
-  // Direct-pick walks the folder sequentially from the last-shown file. Track a
-  // local cursor so that if a candidate fails to render, the next retry advances
-  // PAST it (mirroring the buffer playlist's advanceCursor-on-reject) instead of
-  // re-picking the same broken file every attempt.
-  std::string directCursor = APP_STATE.lastShownSleepFilename;
+  // Sequential cursor for the direct-pick path: starts at the just-shown file
+  // so the first pick is the one after it, and advances past any candidate the
+  // probe rejects so a bad/corrupt file doesn't get re-picked every retry
+  // (pickDirectBasename is deterministic — same `after` returns the same file).
+  std::string directAfter = APP_STATE.lastShownSleepFilename;
 
   for (int attempt = 0; attempt < kNextSleepFileRetries; ++attempt) {
     std::string basename;
     if (useDirectPick) {
-      basename = pickDirectBasename(directCursor);
-      directCursor = basename;
+      basename = pickDirectBasename(directAfter);
     } else {
       // Buffer-backed playlist advance via the facade entry point, so the
       // RFC #145 reconcile notice is drained + persisted here too (a direct
@@ -233,8 +249,7 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
       // empty under its internal heap probes — fall through to the direct pick.
       basename = advance();
       if (basename.empty()) {
-        basename = pickDirectBasename(directCursor);
-        directCursor = basename;
+        basename = pickDirectBasename(directAfter);
       }
     }
     if (basename.empty()) {
@@ -245,8 +260,10 @@ SleepPick nextSleepFile(const RenderProbe& probe) {
       v2::WallpaperPlaylistV2::instance().rememberRendered(pick.fullPath, pick.basename);
       return pick;
     }
-    // Probe rejected this candidate. Loop around — advance() will pick
-    // a different file on its next call; direct-pick will re-roll.
+    // Probe rejected this candidate. advance() picks a different file on its
+    // next call; for direct-pick, step the cursor past the rejected basename so
+    // the next retry returns the following file in sequence, not the same one.
+    directAfter = basename;
   }
 
   // Root-level fallback ladder: /sleep is empty or every candidate failed to
@@ -286,6 +303,46 @@ void rememberRendered(const std::string& fullPath, const std::string& filename) 
 ISleepFs* fs() {
   ensureConfigured();
   return v2::WallpaperPlaylistV2::instance().deps().fs;
+}
+
+size_t countImages(size_t scanCap) {
+  ensureConfigured();
+  ISleepFs* sfs = v2::WallpaperPlaylistV2::instance().deps().fs;
+  return sfs ? sfs->countSleepBmps(scanCap) : 0;
+}
+
+size_t moveRandomToPause(size_t n) {
+  ensureConfigured();
+  if (n == 0) return 0;
+  const auto& deps = v2::WallpaperPlaylistV2::instance().deps();
+  ISleepFs* sfs = deps.fs;
+  if (!sfs) return 0;
+
+  // No usable randomness → fall back to a deterministic "keep first n" pick so
+  // the action still works (production always wires deps.randomFn).
+  RandomFn rnd = deps.randomFn ? deps.randomFn : [](long) -> long { return 0; };
+
+  // Stream /sleep once, reservoir-sampling n names — never materializes the
+  // whole folder. `name` points at the SD layer's stack buffer; copy it in.
+  Reservoir reservoir(n, rnd);
+  sfs->walkSleepBmps(
+      [&reservoir](const char* name, size_t len, uint32_t /*mtime*/) { reservoir.offer(std::string(name, len)); });
+
+  const std::vector<std::string>& picks = reservoir.take();
+  if (picks.empty()) return 0;
+
+  sfs->mkdir("/sleep pause");
+  size_t moved = 0;
+  for (const auto& nm : picks) {
+    const std::string from = "/sleep/" + nm;
+    const std::string to = "/sleep pause/" + nm;
+    if (sfs->rename(from, to)) {
+      if (deps.onPathRenamed) deps.onPathRenamed(from, to);
+      ++moved;
+    }
+  }
+  if (moved > 0) v2::WallpaperPlaylistV2::instance().markFolderDirty();
+  return moved;
 }
 
 void reconcileIfDirty() {

@@ -6,12 +6,14 @@
 #include <cstdint>
 #include <string>
 
+#include "../../src/activities/reader/ReaderInkCentering.h"
 #include "layout/DegradeLevel.h"
 #include "layout/LayoutArena.h"
 
 using crosspoint::layout::DegradeLevel;
 using crosspoint::layout::DegradePlan;
 using crosspoint::layout::LayoutArena;
+using crosspoint::reader::inkCenterOffset;
 namespace L = crosspoint::layout;
 
 void setUp() {}
@@ -218,8 +220,39 @@ void test_arena_bounded_peak_invariant() {
   TEST_ASSERT_TRUE(a.highWater() < 256);
 }
 
+// ── Shared reader ink-centering kernel (Epub + Txt) ──────────────────────────
+
+// Centered: ink box of height 100 in a 300px viewport, ink starting at y=0 →
+// (300-100)/2 - 0 = 100px down.
+void test_ink_center_basic_centered() { TEST_ASSERT_EQUAL_INT(100, inkCenterOffset(0, 100, 300)); }
+
+// The inkTop offset is subtracted: the same 100px ink box whose first-line ink
+// starts 20px below the content top shifts up by 20 → 100 - 20 = 80.
+void test_ink_center_compensates_ascender_band() { TEST_ASSERT_EQUAL_INT(80, inkCenterOffset(20, 120, 300)); }
+
+// Degenerate: zero or negative ink height → no shift (top-aligned).
+void test_ink_center_empty_box_is_top_aligned() {
+  TEST_ASSERT_EQUAL_INT(0, inkCenterOffset(50, 50, 300));
+  TEST_ASSERT_EQUAL_INT(0, inkCenterOffset(80, 40, 300));
+}
+
+// Degenerate: ink taller than the viewport → no shift (avoid pushing content
+// off-screen), matching both readers' pre-extraction guards.
+void test_ink_center_overflowing_box_is_top_aligned() { TEST_ASSERT_EQUAL_INT(0, inkCenterOffset(0, 400, 300)); }
+
+// Exactly viewport-height ink → in range, offset collapses to -inkTop.
+void test_ink_center_exact_fit() {
+  TEST_ASSERT_EQUAL_INT(0, inkCenterOffset(0, 300, 300));
+  TEST_ASSERT_EQUAL_INT(-10, inkCenterOffset(10, 310, 300));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
+  RUN_TEST(test_ink_center_basic_centered);
+  RUN_TEST(test_ink_center_compensates_ascender_band);
+  RUN_TEST(test_ink_center_empty_box_is_top_aligned);
+  RUN_TEST(test_ink_center_overflowing_box_is_top_aligned);
+  RUN_TEST(test_ink_center_exact_fit);
   RUN_TEST(test_degrade_full_keeps_everything);
   RUN_TEST(test_degrade_levels_shed_in_order);
   RUN_TEST(test_degrade_is_monotone);

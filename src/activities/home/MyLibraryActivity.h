@@ -84,6 +84,10 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   void loadFiles();
   void loadFilesWithLimit();
   void loadMoreFiles();
+  // Count of the current folder's primary file type for the header badge:
+  // epubs in /books, images in the sleep folders, otherwise any managed file.
+  // Directories excluded. Counts the loaded listing (exact unless capped).
+  size_t countFolderFiles() const;
   void openSearchActivity();
   void clearSearch();
   void setSearchQuery(const std::string& query);

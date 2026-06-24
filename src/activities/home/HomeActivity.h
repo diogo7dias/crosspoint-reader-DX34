@@ -26,6 +26,17 @@ class HomeActivity final : public ActivityWithSubactivity {
   bool hasOpdsUrl = false;
   bool sleepFavoritesFull = false;
   size_t protectedSleepFavoriteCount = 0;
+  // Over-limit warning card: shown as the first selectable item in the recents
+  // area when /sleep holds more images than the rotation cap. Selecting it opens
+  // the numeric keypad to bulk-move random images to /sleep pause.
+  bool sleepOverLimit = false;
+  long sleepImageCount = 0;
+  std::string moveToast;  // transient result popup after a bulk move
+
+  // Cached /sleep image count, shared across HomeActivity recreations so a home
+  // re-entry doesn't rescan the (potentially large) folder on the snappy path.
+  static long cachedSleepImageCount;
+  static bool sleepImageCountKnown;
   // Static so the list survives HomeActivity destruction/recreation (each
   // home entry constructs a fresh instance). Lets re-entries render the
   // last-known recents immediately while the background rescan runs.
@@ -42,6 +53,13 @@ class HomeActivity final : public ActivityWithSubactivity {
   void refreshSleepFavoriteWarning();
   void maybeShowWallpaperPauseToast();
   void loadRecentBooks(int maxBooks);
+
+  // Selector-model helpers. The warning card, when present, occupies
+  // selectorIndex 1 (right after the pages-read tile), shifting books down.
+  int warnSlots() const { return sleepOverLimit ? 1 : 0; }
+  int firstBookSelector() const { return 1 + warnSlots(); }
+  void refreshSleepOverLimit();
+  void openSleepMoveKeypad();
 
  public:
   explicit HomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,

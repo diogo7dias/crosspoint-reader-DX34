@@ -28,6 +28,8 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v5.5.10 release notes 2026-06-15: reading-theme cap raised 16 → 30; full reading pages now center text by the real glyph ink box instead of nominal line boxes, so the top and bottom margins look even (the font ascender reserves space above caps that the first line never fills, and line-spacing leading sits below the last line — both readers, EPUB + TXT).)*
 
+*(Drained into v5.6.0 release notes 2026-06-24: memory-safe "View sleep wallpapers" list screen; chapter selector page counts limited to current + next 3 with a sanity clamp (no more absurd numbers); home over-limit warning card → numeric keypad to bulk-move random wallpapers from /sleep to /sleep pause; per-folder file counter in the library header.)*
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 
@@ -185,6 +187,13 @@ cutting the v3.0.0 tag.
 ## Active
 
 _Status 2026-06-06: backlog audited end-to-end against code + git. No open actionable items — every prior `[ ]` is now resolved (`[x]`), mitigated (`[~]`), or moved to **Parked / blocked** below. The only residual engineering work (streaming-layout parser) is deferred design, captured under the section-cache item. Completed entries kept below for history._
+
+- [~] **DONE-pending-flash 2026-06-20: architecture deepening (improve-codebase-architecture skill), two slices — build clean, host tests green, NOT yet flashed.**
+  - **#1 reader ink-centering kernel.** Extracted the duplicated vertical ink-centering arithmetic from `EpubReaderActivity::renderContents` and `TxtReaderActivity::renderPage` into a pure, zero-dep header `src/activities/reader/ReaderInkCentering.h` (`crosspoint::reader::inkCenterOffset(inkTop, inkBottom, vpHeight)`). Behavior-preserving (RAM/Flash byte-identical), kills the documented EPUB⇄TXT mirror-fix hazard. 5 new host tests in `test/test_layout_primitives` (`pio test -e test_layout -f test_layout_primitives`, 19/19 pass).
+  - **#2 sleep heap-gate unification.** `Wallpaper.cpp::sequentialPlaylistAffordable()` now reads the SAME injected probe (`deps.largestFreeBlockFn`) the V2 playlist's inner gates use, instead of calling the global util directly. One fake now drives both the outer sequential-vs-direct gate and the inner per-alloc probes; previously a scripted heap moved only one. Falls back to the global util when the probe is unset. 17/17 wallpaper host tests pass.
+  - Smoke-test on device before shipping: open an EPUB + a TXT, page through full + last pages, confirm even top/bottom margins (centering unchanged); enter sleep, confirm wallpaper rotation still advances.
+
+- [ ] **TXT render-OOM: mirror EPUB's discard-partial-frame + recovery (follow-up to #1 deepening above).** `EpubReaderActivity::renderContents` counts `getDecompressor()->bitmapAllocFailures()` after the actual render pass and, if non-zero, bails BEFORE `displayBuffer()` (the frame is scattered-glyph garbage) → caller routes to silent-restart / `LayoutRecoveryState` recovery. `TxtReaderActivity::renderPage` does the two-pass prewarm but **never checks `bitmapAllocFailures()`** and is `void` with no recovery infra, so on a fragmented heap a TXT page displays corrupted glyphs instead of recovering. Not a one-liner: TXT has no `silentRestart`/`LayoutRecoveryState` machine, so doing this right means porting (or sharing) a render-OOM recovery path into the TXT activity. Scoped OUT of the 2026-06-20 deepening slice to keep the daily-driver render path safe; pick up as its own commit.
 
 - [x] **DONE 2026-06-05 (commit 6e53e53f, device-validated, on main): WiFi exit heap leak: QRShare + KOReaderAuth now silent-restart on exit (salvaged from closed RFC #169).** Capture wifiWasUp before teardown, silentRestart() when set, guarded against no-join backout. Mirrors CrossPointWebServerActivity/CalibreConnectActivity. Both activities bring the radio up but skipped the silent-restart-on-exit that every other WiFi activity does, so ~50 KB of LWIP scatter was held until the next reboot. Verified in code:
     - `QRShareActivity.cpp`: `WiFi.mode(WIFI_STA)` at :63, `onExit` does `WIFI_OFF` at :104 but no `silentRestart`.
