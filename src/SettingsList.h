@@ -56,6 +56,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Enum(StrId::STR_HOME_LAYOUT, &CrossPointSettings::homeLayout,
                                   {StrId::STR_HOME_LAYOUT_CLASSIC, StrId::STR_HOME_LAYOUT_SINGLE_COVER}, "homeLayout",
                                   StrId::STR_CAT_DISPLAY));
+    s.push_back(SettingInfo::Enum(StrId::STR_QUOTE_SCREEN_STYLE, &CrossPointSettings::quoteScreenStyle,
+                                  {StrId::STR_QUOTE_STYLE_CLASSIC, StrId::STR_QUOTE_STYLE_TERMINAL,
+                                   StrId::STR_QUOTE_STYLE_INDEX_CARD, StrId::STR_QUOTE_STYLE_MANUSCRIPT},
+                                  "quoteScreenStyle", StrId::STR_CAT_DISPLAY));
     // UI language. Labels are rendered literally from LANGUAGE_NAMES[] (native
     // forms like "Español"/"Slovenščina"), so enumValues is left empty and the
     // cycle/render paths in SettingsActivity special-case this entry.

@@ -80,6 +80,14 @@ class CrossPointSettings {
   };
   // Home screen layout modes
   enum HOME_LAYOUT { HOME_LAYOUT_CLASSIC = 0, HOME_LAYOUT_SINGLE_COVER = 1, HOME_LAYOUT_COUNT };
+  // Visual style of the quotes viewer screen
+  enum QUOTE_SCREEN_STYLE {
+    QUOTE_STYLE_CLASSIC = 0,
+    QUOTE_STYLE_TERMINAL = 1,
+    QUOTE_STYLE_INDEX_CARD = 2,
+    QUOTE_STYLE_MANUSCRIPT = 3,
+    QUOTE_STYLE_COUNT
+  };
 
   enum STATUS_BAR_ITEM_POSITION { STATUS_AT_TOP = 0, STATUS_AT_BOTTOM = 1, STATUS_BAR_ITEM_POSITION_COUNT };
   enum STATUS_BAR_TEXT_POSITION {
@@ -278,6 +286,8 @@ class CrossPointSettings {
   // Pages remaining to the end of the current chapter (whole file for TXT).
   uint8_t statusBarShowPagesLeft = 0;
   uint8_t statusBarPagesLeftPosition = STATUS_TEXT_BOTTOM_RIGHT;
+  // Visual style of the quotes viewer (Classic / Terminal / Index-card / Manuscript)
+  uint8_t quoteScreenStyle = QUOTE_STYLE_CLASSIC;
   // Text rendering settings
   uint8_t extraParagraphSpacingLevel = EXTRA_SPACING_M;
   // Legacy field name retained for storage compatibility; value stores a

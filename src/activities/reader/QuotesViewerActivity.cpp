@@ -7,12 +7,14 @@
 
 #include <algorithm>
 
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
+#include "util/DrawUtils.h"
 
 namespace {
 constexpr unsigned long kHoldDeleteMs = 2000;
@@ -295,17 +297,49 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
 
   const int pageWidth = renderer.getScreenWidth();
   const int screenHeight = renderer.getScreenHeight();
+  const uint8_t style = SETTINGS.quoteScreenStyle;
   auto metrics = BaseMetrics::values;
 
-  // Header — book title
-  const int titleX = (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
-  renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), metrics.topPadding + 5, bookTitle.c_str(), true,
-                    EpdFontFamily::REGULAR);
-
-  // Count indicator
-  const int countY = metrics.topPadding + 5 + 30;
+  const int titleY = metrics.topPadding + 5;
+  const int countY = titleY + 30;
   const std::string countStr = std::to_string(quotes.size()) + " quotes";
-  renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
+
+  // ── Header chrome (per style) ──────────────────────────────────────────────
+  const auto drawCenteredTitle = [&](const bool black) {
+    const int titleX =
+        (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
+    renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), titleY, bookTitle.c_str(), black, EpdFontFamily::REGULAR);
+  };
+  switch (style) {
+    case CrossPointSettings::QUOTE_STYLE_TERMINAL: {
+      // Inverted title bar: black band, white title + count.
+      renderer.fillRect(0, 0, pageWidth, countY + 14, true);
+      drawCenteredTitle(false);
+      renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str(), false);
+      break;
+    }
+    case CrossPointSettings::QUOTE_STYLE_INDEX_CARD: {
+      drawCenteredTitle(true);
+      // Dotted catalog divider under the title.
+      const int divY = titleY + 22;
+      for (int px = 30; px < pageWidth - 30; px += 4) {
+        renderer.drawPixel(px, divY);
+      }
+      renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
+      break;
+    }
+    case CrossPointSettings::QUOTE_STYLE_MANUSCRIPT: {
+      drawCenteredTitle(true);
+      renderer.drawCenteredText(UI_10_FONT_ID, titleY + 20, "*  .  *");
+      renderer.drawCenteredText(UI_10_FONT_ID, countY + 6, countStr.c_str());
+      break;
+    }
+    case CrossPointSettings::QUOTE_STYLE_CLASSIC:
+    default:
+      drawCenteredTitle(true);
+      renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
+      break;
+  }
 
   const int totalItems = static_cast<int>(quotes.size());
 
@@ -320,6 +354,15 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   const int listStartY = countY + 25;
   const int listEndY = screenHeight - kButtonHintsReserve;
   const int textMaxWidth = pageWidth - 40;  // 20px padding each side
+
+  // ── Outer frame (per style) — drawn outside the x=20 text column so the
+  // shared list metrics below stay identical across every style. ──
+  if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
+    renderer.drawRect(6, listStartY - 6, pageWidth - 12, listEndY - listStartY + 8, true);
+  } else if (style == CrossPointSettings::QUOTE_STYLE_MANUSCRIPT) {
+    renderer.drawRect(6, listStartY - 6, pageWidth - 12, listEndY - listStartY + 8, true);
+    renderer.drawRect(9, listStartY - 3, pageWidth - 18, listEndY - listStartY + 2, true);
+  }
 
   // Ensure scrollTopIndex keeps selectorIndex visible.
   if (selectorIndex < scrollTopIndex) {
@@ -347,6 +390,11 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
     if (!selectorVisible) scrollTopIndex++;
   }
 
+  // Styles that mark the selection by inverting a full-width fill (text drawn
+  // white). The other styles outline/accent the selection and keep text black.
+  const bool selectionInverts =
+      (style == CrossPointSettings::QUOTE_STYLE_CLASSIC || style == CrossPointSettings::QUOTE_STYLE_TERMINAL);
+
   // Render visible quotes
   int currentY = listStartY;
   for (int i = scrollTopIndex; i < totalItems && currentY < listEndY; i++) {
@@ -358,12 +406,36 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
     // Don't start a quote if not even the first line fits
     if (currentY + kLineHeight > listEndY) break;
 
+    const int selHeight = std::min(textHeight + 4, listEndY - currentY + 2);
     if (isSelected) {
-      renderer.fillRect(0, currentY - 2, pageWidth - 1, std::min(textHeight + 4, listEndY - currentY + 2));
+      switch (style) {
+        case CrossPointSettings::QUOTE_STYLE_INDEX_CARD:
+          // Outlined catalog card + caret, text stays black.
+          renderer.drawRect(12, currentY - 3, pageWidth - 24, selHeight + 2, true);
+          renderer.drawText(UI_10_FONT_ID, 4, currentY, ">", true);
+          break;
+        case CrossPointSettings::QUOTE_STYLE_MANUSCRIPT:
+          // Left margin rule, text stays black (and is bolded below).
+          renderer.fillRect(10, currentY - 2, 4, selHeight, true);
+          break;
+        case CrossPointSettings::QUOTE_STYLE_TERMINAL:
+          renderer.fillRect(0, currentY - 2, pageWidth - 1, selHeight);
+          renderer.drawText(UI_10_FONT_ID, 6, currentY, ">", false);
+          break;
+        case CrossPointSettings::QUOTE_STYLE_CLASSIC:
+        default:
+          renderer.fillRect(0, currentY - 2, pageWidth - 1, selHeight);
+          break;
+      }
     }
 
+    const bool textBlack = selectionInverts ? !isSelected : true;
+    const bool bold = isSelected && style == CrossPointSettings::QUOTE_STYLE_MANUSCRIPT;
     for (size_t ln = 0; ln < lines.size() && currentY < listEndY; ln++) {
-      renderer.drawText(UI_10_FONT_ID, 20, currentY, lines[ln].c_str(), !isSelected);
+      renderer.drawText(UI_10_FONT_ID, 20, currentY, lines[ln].c_str(), textBlack);
+      if (bold) {
+        renderer.drawText(UI_10_FONT_ID, 21, currentY, lines[ln].c_str(), textBlack);
+      }
       currentY += kLineHeight;
     }
     currentY += kQuoteGap;
