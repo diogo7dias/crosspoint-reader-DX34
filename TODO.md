@@ -32,6 +32,14 @@ Items already merged to `main` that should be called out in the release notes fo
 
 - **Status-bar chapter title corruption fix (PENDING next tag).** Fixed a data race on `BookMetadataCache`'s shared `bookFile` cursor that, at book open, let the status-bar title render a spine href (`OEBPS/partNNNN.xhtml`) or a sticky "Unnamed" on a real, named chapter. The render task read a TOC record while the loop task read a spine record on the same file handle; interleaved seeks corrupted the read, and when it happened during a section build the bad chapter mapping was baked into the section cache (hence "Unnamed" stuck until rebuilt). Fix: serialise the seek+read pair (`BookMetadataCache::fileMutex_`) + bump `SECTION_FILE_VERSION` 23→24 to discard already-poisoned caches (one-time race-free re-layout of each book on first open after flash). Device-validated 2026-06-24.
 
+- **TXT render-OOM recovery (PENDING next tag).** The TXT reader's `renderPage()` ran the same two-pass glyph prewarm as the EPUB reader but never checked the decompressor's `bitmapAllocFailures()`, so on a fragmented heap a TXT page drew scattered-glyph garbage straight to the panel with no recovery. Now mirrors `EpubReaderActivity::renderContents`: `renderPage()` returns bool, discards the partial frame before `displayBuffer()` on glyph OOM, and the caller recovers via the emergency CHAREINK-12 font downgrade (re-paginate in place) then a bounded silent-restart. Built clean; device smoke-test pending. (commit `551169e8`)
+
+- **Pages-left status-bar item (PENDING next tag).** New opt-in status-bar item "N left" = pages remaining to the end of the current chapter (whole file for TXT). Reuses existing page counts + the book-page-counter plumbing (settings, layout, render, band budget, reading-theme snapshot, JSON). Off by default. (commit `8cb02316`)
+
+- **List-picker for multi-option settings (PENDING next tag).** Settings with >2 options (e.g. status-item positions, orientation, refresh frequency) now open a modal list picker (same one-shot UX as the font-family picker) instead of click-to-cycle. Toggles and 2-option enums keep single-click; numeric values keep their stepper. New reusable `EnumOptionPicker` overlay wired into both `SettingsActivity` and `ReaderSettingsActivity`; fontSize/fontFamily/uiLanguage keep their existing handling. (commit `fc543e3a`)
+
+- **Quote-screen styles (PENDING next tag).** New "Quote Screen Style" setting (Display) with four looks for the quotes viewer: Classic (default), Terminal, Index Card, Manuscript. Shared scroll/selection metrics; only header/frame/selection chrome differs, all primitives, no new fonts. (commit `39ea860f`)
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 
