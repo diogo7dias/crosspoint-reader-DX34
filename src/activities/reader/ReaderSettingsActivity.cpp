@@ -438,6 +438,12 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
       fontPicker.open();
       requestUpdate();
       return;
+    } else if (setting.totalOptionCount() > 2) {
+      // More than two options: pick from a list instead of cycling through every
+      // value. Applied in loop() on confirm; opening changes nothing. Two-option
+      // enums fall through and keep single-click cycling.
+      openEnumPicker(setting, row.categoryIndex, row.settingIndex);
+      return;
     } else {
       const int currentValue = SETTINGS.*(setting.valuePtr);
       SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
@@ -462,6 +468,42 @@ void ReaderSettingsActivity::toggleCurrentSetting() {
   }
 
   persistSettings("reader settings toggle");
+}
+
+void ReaderSettingsActivity::openEnumPicker(const ReaderSettingInfo& setting, const int categoryIndex,
+                                            const int settingIndex) {
+  std::vector<std::string> labels;
+  labels.reserve(setting.totalOptionCount());
+  for (const StrId id : setting.enumValues) {
+    labels.emplace_back(I18N.get(id));
+  }
+  for (const auto& label : setting.dynamicLabels) {
+    labels.push_back(label);
+  }
+  const int current = setting.valuePtr != nullptr ? static_cast<int>(SETTINGS.*(setting.valuePtr)) : 0;
+  enumPickerCategoryIndex = categoryIndex;
+  enumPickerSettingIndex = settingIndex;
+  enumPicker.open(setting.nameId, std::move(labels), current);
+  requestUpdate();
+}
+
+void ReaderSettingsActivity::applyEnumPickerSelection() {
+  // Re-fetch by stored index — the list may have been rebuilt since open().
+  const auto* settings = settingsForCategory(enumPickerCategoryIndex);
+  if (settings && enumPickerSettingIndex >= 0 && enumPickerSettingIndex < static_cast<int>(settings->size())) {
+    const auto& setting = (*settings)[enumPickerSettingIndex];
+    const int idx = enumPicker.selectedIndex();
+    if (setting.valuePtr != nullptr && idx >= 0 && idx < static_cast<int>(setting.totalOptionCount())) {
+      SETTINGS.*(setting.valuePtr) = static_cast<uint8_t>(idx);
+    }
+  }
+  enumPicker.close();
+  enumPickerCategoryIndex = -1;
+  enumPickerSettingIndex = -1;
+  buildSettingsList();
+  selectedRowIndex = std::min(selectedRowIndex, static_cast<int>(flatRows.size()) - 1);
+  persistSettings("reader settings enum picker");
+  requestUpdate();
 }
 
 void ReaderSettingsActivity::loop() {
@@ -500,6 +542,37 @@ void ReaderSettingsActivity::loop() {
     });
     buttonNavigator.onPreviousContinuous([this] {
       fontPicker.moveUp();
+      requestUpdate();
+    });
+    return;
+  }
+
+  if (enumPicker.isOpen()) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      enumPicker.close();  // cancel: keep the previous value
+      enumPickerCategoryIndex = -1;
+      enumPickerSettingIndex = -1;
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      applyEnumPickerSelection();
+      return;
+    }
+    buttonNavigator.onNextRelease([this] {
+      enumPicker.moveDown();
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousRelease([this] {
+      enumPicker.moveUp();
+      requestUpdate();
+    });
+    buttonNavigator.onNextContinuous([this] {
+      enumPicker.moveDown();
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousContinuous([this] {
+      enumPicker.moveUp();
       requestUpdate();
     });
     return;
@@ -860,9 +933,9 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
     rowYOffset += thisRowHeight;
   }
 
-  const char* confirmLabel = fontPicker.isOpen()                   ? tr(STR_SELECT)
-                             : (valueEditMode || fontSizeEditMode) ? tr(STR_CONFIRM)
-                                                                   : tr(STR_TOGGLE);
+  const char* confirmLabel = (fontPicker.isOpen() || enumPicker.isOpen()) ? tr(STR_SELECT)
+                             : (valueEditMode || fontSizeEditMode)         ? tr(STR_CONFIRM)
+                                                                           : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
@@ -1006,6 +1079,9 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
 
   if (fontPicker.isOpen()) {
     fontPicker.render(renderer, pageWidth, pageHeight);
+  }
+  if (enumPicker.isOpen()) {
+    enumPicker.render(renderer, pageWidth, pageHeight);
   }
 
   renderer.displayBuffer();

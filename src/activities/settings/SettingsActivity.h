@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "activities/ActivityWithSubactivity.h"
+#include "activities/settings/EnumOptionPicker.h"
 #include "activities/settings/FontFamilyPicker.h"
 #include "util/ButtonNavigator.h"
 
@@ -180,6 +181,12 @@ class SettingsActivity final : public ActivityWithSubactivity {
   // Modal font-family picker overlay (opened from the Font Family row).
   crosspoint::settings::FontFamilyPicker fontPicker;
 
+  // Generic modal picker for any other ENUM setting with > 2 options (e.g.
+  // status-item positions). Opened from toggleCurrentSetting, applied in loop().
+  crosspoint::settings::EnumOptionPicker enumPicker;
+  int enumPickerCategoryIndex = -1;
+  int enumPickerSettingIndex = -1;
+
   // Per-category settings derived from shared list + device-only actions
   std::vector<SettingInfo> displaySettings;
   std::vector<SettingInfo> readerSettings;
@@ -208,6 +215,10 @@ class SettingsActivity final : public ActivityWithSubactivity {
   void cancelValueEdit();
   std::string currentValueEditText() const;
   void toggleCurrentSetting();
+  // Open the generic option picker for an ENUM setting with > 2 options.
+  void openEnumPicker(const SettingInfo& setting, int categoryIndex, int settingIndex);
+  // Apply the option picked in enumPicker to the setting it was opened for.
+  void applyEnumPickerSelection();
 
  public:
   explicit SettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,

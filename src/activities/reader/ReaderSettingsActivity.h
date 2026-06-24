@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "activities/Activity.h"
+#include "activities/settings/EnumOptionPicker.h"
 #include "activities/settings/FontFamilyPicker.h"
 #include "activities/settings/SettingsActivity.h"
 #include "util/ButtonNavigator.h"
@@ -104,6 +105,12 @@ class ReaderSettingsActivity final : public Activity {
   // Modal font-family picker overlay (opened from the Font Family row).
   crosspoint::settings::FontFamilyPicker fontPicker;
 
+  // Generic modal picker for any other ENUM setting with > 2 options (e.g.
+  // status-item positions). Opened from toggleCurrentSetting, applied in loop().
+  crosspoint::settings::EnumOptionPicker enumPicker;
+  int enumPickerCategoryIndex = -1;
+  int enumPickerSettingIndex = -1;
+
   std::string bookCachePath;
   const std::function<void(bool)> onClose;
 
@@ -119,6 +126,8 @@ class ReaderSettingsActivity final : public Activity {
   void adjustValueEdit(int delta);
   void applyValueEdit();
   void toggleCurrentSetting();
+  void openEnumPicker(const ReaderSettingInfo& setting, int categoryIndex, int settingIndex);
+  void applyEnumPickerSelection();
   std::string currentValueEditText() const;
   void persistSettings(const char* context);
 };
