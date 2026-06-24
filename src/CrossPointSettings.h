@@ -80,14 +80,8 @@ class CrossPointSettings {
   };
   // Home screen layout modes
   enum HOME_LAYOUT { HOME_LAYOUT_CLASSIC = 0, HOME_LAYOUT_SINGLE_COVER = 1, HOME_LAYOUT_COUNT };
-  // Visual style of the quotes viewer screen
-  enum QUOTE_SCREEN_STYLE {
-    QUOTE_STYLE_CLASSIC = 0,
-    QUOTE_STYLE_TERMINAL = 1,
-    QUOTE_STYLE_INDEX_CARD = 2,
-    QUOTE_STYLE_MANUSCRIPT = 3,
-    QUOTE_STYLE_COUNT
-  };
+  // Visual style of the quotes viewer + in-book quote-selection frame
+  enum QUOTE_SCREEN_STYLE { QUOTE_STYLE_CLASSIC = 0, QUOTE_STYLE_TERMINAL = 1, QUOTE_STYLE_COUNT };
 
   enum STATUS_BAR_ITEM_POSITION { STATUS_AT_TOP = 0, STATUS_AT_BOTTOM = 1, STATUS_BAR_ITEM_POSITION_COUNT };
   enum STATUS_BAR_TEXT_POSITION {

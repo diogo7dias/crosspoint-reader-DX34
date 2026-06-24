@@ -310,35 +310,14 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
         (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
     renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), titleY, bookTitle.c_str(), black, EpdFontFamily::REGULAR);
   };
-  switch (style) {
-    case CrossPointSettings::QUOTE_STYLE_TERMINAL: {
-      // Inverted title bar: black band, white title + count.
-      renderer.fillRect(0, 0, pageWidth, countY + 14, true);
-      drawCenteredTitle(false);
-      renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str(), false);
-      break;
-    }
-    case CrossPointSettings::QUOTE_STYLE_INDEX_CARD: {
-      drawCenteredTitle(true);
-      // Dotted catalog divider under the title.
-      const int divY = titleY + 22;
-      for (int px = 30; px < pageWidth - 30; px += 4) {
-        renderer.drawPixel(px, divY);
-      }
-      renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
-      break;
-    }
-    case CrossPointSettings::QUOTE_STYLE_MANUSCRIPT: {
-      drawCenteredTitle(true);
-      renderer.drawCenteredText(UI_10_FONT_ID, titleY + 20, "*  .  *");
-      renderer.drawCenteredText(UI_10_FONT_ID, countY + 6, countStr.c_str());
-      break;
-    }
-    case CrossPointSettings::QUOTE_STYLE_CLASSIC:
-    default:
-      drawCenteredTitle(true);
-      renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
-      break;
+  if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
+    // Inverted title bar: black band, white title + count.
+    renderer.fillRect(0, 0, pageWidth, countY + 14, true);
+    drawCenteredTitle(false);
+    renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str(), false);
+  } else {
+    drawCenteredTitle(true);
+    renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
   }
 
   const int totalItems = static_cast<int>(quotes.size());
@@ -355,13 +334,10 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   const int listEndY = screenHeight - kButtonHintsReserve;
   const int textMaxWidth = pageWidth - 40;  // 20px padding each side
 
-  // ── Outer frame (per style) — drawn outside the x=20 text column so the
-  // shared list metrics below stay identical across every style. ──
+  // ── Outer frame (Terminal only) — drawn outside the x=20 text column so the
+  // shared list metrics below stay identical across styles. ──
   if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
     renderer.drawRect(6, listStartY - 6, pageWidth - 12, listEndY - listStartY + 8, true);
-  } else if (style == CrossPointSettings::QUOTE_STYLE_MANUSCRIPT) {
-    renderer.drawRect(6, listStartY - 6, pageWidth - 12, listEndY - listStartY + 8, true);
-    renderer.drawRect(9, listStartY - 3, pageWidth - 18, listEndY - listStartY + 2, true);
   }
 
   // Ensure scrollTopIndex keeps selectorIndex visible.
@@ -390,12 +366,8 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
     if (!selectorVisible) scrollTopIndex++;
   }
 
-  // Styles that mark the selection by inverting a full-width fill (text drawn
-  // white). The other styles outline/accent the selection and keep text black.
-  const bool selectionInverts =
-      (style == CrossPointSettings::QUOTE_STYLE_CLASSIC || style == CrossPointSettings::QUOTE_STYLE_TERMINAL);
-
-  // Render visible quotes
+  // Render visible quotes. Both styles mark the selection with a full-width
+  // inverted fill; Terminal adds a ">" caret.
   int currentY = listStartY;
   for (int i = scrollTopIndex; i < totalItems && currentY < listEndY; i++) {
     const auto text = buildQuoteText(quotes[i]);
@@ -408,34 +380,14 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
 
     const int selHeight = std::min(textHeight + 4, listEndY - currentY + 2);
     if (isSelected) {
-      switch (style) {
-        case CrossPointSettings::QUOTE_STYLE_INDEX_CARD:
-          // Outlined catalog card + caret, text stays black.
-          renderer.drawRect(12, currentY - 3, pageWidth - 24, selHeight + 2, true);
-          renderer.drawText(UI_10_FONT_ID, 4, currentY, ">", true);
-          break;
-        case CrossPointSettings::QUOTE_STYLE_MANUSCRIPT:
-          // Left margin rule, text stays black (and is bolded below).
-          renderer.fillRect(10, currentY - 2, 4, selHeight, true);
-          break;
-        case CrossPointSettings::QUOTE_STYLE_TERMINAL:
-          renderer.fillRect(0, currentY - 2, pageWidth - 1, selHeight);
-          renderer.drawText(UI_10_FONT_ID, 6, currentY, ">", false);
-          break;
-        case CrossPointSettings::QUOTE_STYLE_CLASSIC:
-        default:
-          renderer.fillRect(0, currentY - 2, pageWidth - 1, selHeight);
-          break;
+      renderer.fillRect(0, currentY - 2, pageWidth - 1, selHeight);
+      if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
+        renderer.drawText(UI_10_FONT_ID, 6, currentY, ">", false);
       }
     }
 
-    const bool textBlack = selectionInverts ? !isSelected : true;
-    const bool bold = isSelected && style == CrossPointSettings::QUOTE_STYLE_MANUSCRIPT;
     for (size_t ln = 0; ln < lines.size() && currentY < listEndY; ln++) {
-      renderer.drawText(UI_10_FONT_ID, 20, currentY, lines[ln].c_str(), textBlack);
-      if (bold) {
-        renderer.drawText(UI_10_FONT_ID, 21, currentY, lines[ln].c_str(), textBlack);
-      }
+      renderer.drawText(UI_10_FONT_ID, 20, currentY, lines[ln].c_str(), !isSelected);
       currentY += kLineHeight;
     }
     currentY += kQuoteGap;
