@@ -434,6 +434,7 @@ DeserializationError JsonSettingsIO::safeDeserializeFile(const char* path, JsonD
 
 void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocument& doc) {
   doc["homeLayout"] = s.homeLayout;
+  doc["quoteScreenStyle"] = s.quoteScreenStyle;
   doc["sleepScreen"] = s.sleepScreen;
   doc["sleepScreenCoverMode"] = s.sleepScreenCoverMode;
   doc["sleepScreenCoverFilter"] = s.sleepScreenCoverFilter;
@@ -542,6 +543,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   s.homeLayout =
       clampEnum(doc["homeLayout"] | (uint8_t)S::HOME_LAYOUT_CLASSIC, S::HOME_LAYOUT_COUNT, S::HOME_LAYOUT_CLASSIC);
+  s.quoteScreenStyle = clampEnum(doc["quoteScreenStyle"] | (uint8_t)S::QUOTE_STYLE_CLASSIC, S::QUOTE_STYLE_COUNT,
+                                 S::QUOTE_STYLE_CLASSIC);
   s.sleepScreen = clampEnum(doc["sleepScreen"] | (uint8_t)S::DARK, S::SLEEP_SCREEN_MODE_COUNT, S::DARK);
   s.sleepScreenCoverMode =
       clampEnum(doc["sleepScreenCoverMode"] | (uint8_t)S::FIT, S::SLEEP_SCREEN_COVER_MODE_COUNT, S::FIT);
