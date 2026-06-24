@@ -2598,14 +2598,35 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // Render highlight overlay and border if in highlight/quote selection mode
   if (highlights_.state() != HighlightState::NONE) {
     renderHighlights(page, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
-    // Draw dashed border around text area to indicate highlight mode.
+    // Frame around the text area marks quote-selection mode. Its look follows the
+    // Quote Screen Style setting so the in-book selection matches the saved-quotes
+    // viewer (Classic dashed, Terminal solid, Index-card dotted, Manuscript double).
     constexpr int frameOffset = 6;     // padding from text area to the frame
     constexpr int frameThickness = 5;  // thicker frame for visibility
     const int bx = orientedMarginLeft - frameOffset;
     const int by = contentY - frameOffset;
     const int bw = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight + 2 * frameOffset;
     const int bh = viewportHeight + 2 * frameOffset;
-    drawDashedRect(renderer, bx, by, bw, bh, frameThickness);
+    switch (SETTINGS.quoteScreenStyle) {
+      case CrossPointSettings::QUOTE_STYLE_TERMINAL:
+        for (int t = 0; t < frameThickness; ++t) {
+          renderer.drawRect(bx + t, by + t, bw - 2 * t, bh - 2 * t, true);
+        }
+        break;
+      case CrossPointSettings::QUOTE_STYLE_INDEX_CARD:
+        DrawUtils::drawDottedRectThick(renderer, bx, by, bw, bh, frameThickness);
+        break;
+      case CrossPointSettings::QUOTE_STYLE_MANUSCRIPT:
+        renderer.drawRect(bx, by, bw, bh, true);
+        renderer.drawRect(bx + 1, by + 1, bw - 2, bh - 2, true);
+        renderer.drawRect(bx + 4, by + 4, bw - 8, bh - 8, true);
+        renderer.drawRect(bx + 5, by + 5, bw - 10, bh - 10, true);
+        break;
+      case CrossPointSettings::QUOTE_STYLE_CLASSIC:
+      default:
+        drawDashedRect(renderer, bx, by, bw, bh, frameThickness);
+        break;
+    }
   }
 
   if (SETTINGS.debugBorders) {
