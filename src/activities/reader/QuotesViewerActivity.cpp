@@ -7,14 +7,12 @@
 
 #include <algorithm>
 
-#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "ReaderLayoutSafety.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
-#include "util/DrawUtils.h"
 
 namespace {
 constexpr unsigned long kHoldDeleteMs = 2000;
@@ -297,28 +295,19 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
 
   const int pageWidth = renderer.getScreenWidth();
   const int screenHeight = renderer.getScreenHeight();
-  const uint8_t style = SETTINGS.quoteScreenStyle;
   auto metrics = BaseMetrics::values;
 
   const int titleY = metrics.topPadding + 5;
   const int countY = titleY + 30;
   const std::string countStr = std::to_string(quotes.size()) + " quotes";
 
-  // ── Header chrome (per style) ──────────────────────────────────────────────
-  const auto drawCenteredTitle = [&](const bool black) {
-    const int titleX =
-        (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
-    renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), titleY, bookTitle.c_str(), black, EpdFontFamily::REGULAR);
-  };
-  if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
-    // Inverted title bar: black band, white title + count.
-    renderer.fillRect(0, 0, pageWidth, countY + 14, true);
-    drawCenteredTitle(false);
-    renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str(), false);
-  } else {
-    drawCenteredTitle(true);
-    renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
-  }
+  // Header — book title + count. The saved-quotes viewer is always the plain
+  // Classic look; the Quote Screen Style setting only restyles the in-book
+  // quote-selection frame (EpubReaderActivity), not this list.
+  const int titleX =
+      (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
+  renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), titleY, bookTitle.c_str(), true, EpdFontFamily::REGULAR);
+  renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
 
   const int totalItems = static_cast<int>(quotes.size());
 
@@ -333,12 +322,6 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   const int listStartY = countY + 25;
   const int listEndY = screenHeight - kButtonHintsReserve;
   const int textMaxWidth = pageWidth - 40;  // 20px padding each side
-
-  // ── Outer frame (Terminal only) — drawn outside the x=20 text column so the
-  // shared list metrics below stay identical across styles. ──
-  if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
-    renderer.drawRect(6, listStartY - 6, pageWidth - 12, listEndY - listStartY + 8, true);
-  }
 
   // Ensure scrollTopIndex keeps selectorIndex visible.
   if (selectorIndex < scrollTopIndex) {
@@ -366,8 +349,8 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
     if (!selectorVisible) scrollTopIndex++;
   }
 
-  // Render visible quotes. Both styles mark the selection with a full-width
-  // inverted fill; Terminal adds a ">" caret.
+  // Render visible quotes. The selected quote is marked with a full-width
+  // inverted fill (text drawn white).
   int currentY = listStartY;
   for (int i = scrollTopIndex; i < totalItems && currentY < listEndY; i++) {
     const auto text = buildQuoteText(quotes[i]);
@@ -378,12 +361,8 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
     // Don't start a quote if not even the first line fits
     if (currentY + kLineHeight > listEndY) break;
 
-    const int selHeight = std::min(textHeight + 4, listEndY - currentY + 2);
     if (isSelected) {
-      renderer.fillRect(0, currentY - 2, pageWidth - 1, selHeight);
-      if (style == CrossPointSettings::QUOTE_STYLE_TERMINAL) {
-        renderer.drawText(UI_10_FONT_ID, 6, currentY, ">", false);
-      }
+      renderer.fillRect(0, currentY - 2, pageWidth - 1, std::min(textHeight + 4, listEndY - currentY + 2));
     }
 
     for (size_t ln = 0; ln < lines.size() && currentY < listEndY; ln++) {
