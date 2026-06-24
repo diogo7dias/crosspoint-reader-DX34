@@ -1369,42 +1369,6 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       requestUpdate();
       break;
     }
-    case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
-      exitActivity();
-      enterNewActivity(new (std::nothrow) ConfirmDialogActivity(
-          renderer, mappedInput, tr(STR_CLEAR_CACHE_CONFIRM),
-          [this]() {
-            // Confirmed — clear cache and reset progress.
-            exitActivity();
-            StatusPopup::showBlocking(renderer, tr(STR_CLEARING_BOOK_CACHE));
-            {
-              RenderLock lock(*this);
-              if (epub) {
-                const uint16_t resetSpine = 0;
-                const uint16_t resetPage = 0;
-                const uint16_t resetPageCount = 1;
-
-                section.reset();
-                clearPageCache();
-                epub->clearCache();
-                epub->setupCacheDir();
-                saveProgress(resetSpine, resetPage, resetPageCount);
-
-                currentSpineIndex = resetSpine;
-                nextPageNumber = resetPage;
-                cachedSpineIndex = resetSpine;
-                cachedChapterTotalPageCount = resetPageCount;
-              }
-            }
-            pendingGoHome = true;
-          },
-          [this]() {
-            // Cancelled — return to reader.
-            exitActivity();
-            requestUpdate();
-          }));
-      break;
-    }
     case EpubReaderMenuActivity::MenuAction::SYNC: {
       if (KOREADER_STORE.hasCredentials()) {
         const int currentPage = section ? section->currentPage : 0;

@@ -25,7 +25,6 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
     REVERT_THEME,
     GO_HOME,
     SYNC,
-    DELETE_CACHE,
     DELETE_BOOK,
     REMOVE_FROM_RECENT,
     TRIAGE_FAVORITE,
