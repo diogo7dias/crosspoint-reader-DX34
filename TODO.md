@@ -32,6 +32,12 @@ Items already merged to `main` that should be called out in the release notes fo
 
 *(Drained into v6.0.0 release notes 2026-06-24: status-bar chapter-title corruption fix (book.bin cursor race + SECTION_FILE_VERSION 23→24, one-time re-layout on first open); TXT render-OOM recovery mirroring the EPUB path; opt-in "pages left in chapter" status-bar item; list-picker for any setting with >2 options (status positions, orientation, refresh frequency, …) instead of click-to-cycle; Quote Screen Style setting (Classic / Terminal) restyling the in-book quote-selection frame, with a banner showing selection length + chapter (the saved-quotes list stays plain Classic); in-book menu reordered into reading-flow order and the rarely-used "Clean Cache + Progress" entry removed.)*
 
+**PENDING (shipped + device-validated 2026-06-25, NOT yet committed/released — drain into the next tag):** four upstream-steal batches off the `upstream/master` tree audit.
+- **EPUB image quality.** Floyd-Steinberg dither now the default (`imageDither` FAST→QUALITY, both `CrossPointSettings.h` member init and `JsonSettingsIO` absent-key fallback); progressive-JPEG covers re-enabled by completing our JPEGDEC patch — we shipped only patch 0001 (pMCU redirect, stops the store-fault crash) but not 0002 (the `if (iMCU >= 0)` guard on the two `pMCU[0]` DC writes in `JPEGDecodeMCU_P`), so progressive decode produced Y-DC-clobbered garbage and was skipped → blank covers; `scripts/patch_jpegdec.py` now applies all three guards inline (kept our `.git`-free patcher, more robust than upstream's git-apply); split the single fine-scale into X/Y (`fineScaleFPX/Y`, `invScaleFPX/Y`) so odd aspect ratios don't drop the wrong source rows.
+- **Tier 1 — stability + latency.** Recursive SD mutex + `HalFile::Impl::~Impl()` closes the `FsFile` under `StorageLock` (#2135 — our `asyncwriter` task closing a file off-lock raced `SdSpiCard::m_spiActive` → FreeRTOS priority-disinherit panic; plausibly behind real PANIC dumps); OTA TX buffer 8192→1024 + whole-percent progress throttle (#2074, kept RX at 8 KB for our redirecting URL); `GfxRenderer::isFontCacheScanning()` gate skips underline-width measure (#2237) and the whole image decode (#2230 sub-part) during the font-cache prewarm pass; footnote-origin-on-exit/deep-sleep saves `savedPositions[0]` so a book reopens at the link, not buried in endnotes (#2394).
+- **Tier 2 — text correctness (cache bump).** NFC-compose body words + book title + TOC titles (#2277, `lib/Utf8/Utf8ComposeTable.h` + `utf8ComposeNfc`); percent-decode internal EPUB asset/footnote/TOC paths (#2249/#2271, `FsHelpers::decodeUriEscapes` at 7 sites); span-id anchor flood cap (#2303, skip `<span>` ids + `MAX_ANCHORS_PER_CHAPTER=1024`); `SECTION_FILE_VERSION` 24→25 + `BOOK_CACHE_VERSION` 6→7 → every book re-indexes once on first open.
+- **Tier 4 — polish.** 12 missing HTML 4.01 named entities (#2352, incl. `&middot;`); `<hr>` scene-break rendering (#7accc607 — new `PageHorizontalRule` serialized element + `PageBuilder::addHorizontalRule` since our fork moved page assembly into PageBuilder; rides the Tier-2 cache bump). Bookmark page-indicator (#2372) deferred — see steal backlog.
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 
@@ -243,6 +249,30 @@ _Status 2026-06-06: backlog audited end-to-end against code + git. No open actio
 
 - [x] ~~**`PxcViewerActivity`** for full-screen PXC viewing from the file browser. Model on the `renderPxcSleepScreen` flow in [SleepActivity.cpp](src/activities/boot_sleep/SleepActivity.cpp). Pairs with the browser-visibility item above.~~
   *(Shipped on `feat/pxc-image-parity` as inline `renderPxcImageView` in MyLibraryActivity)*
+
+## Upstream steal backlog (audited 2026-06-25)
+
+Full tree-content audit of `upstream/master` vs this fork (we share no git history — squashed, so compared by file content). Four batches already landed this session (see the PENDING note under Next release inclusions). What's left to steal, prioritised:
+
+### Tier 3 — big OOM levers (large, risky, stage SOLO + device-validate hard)
+- [ ] **#2106 tiled grayscale rendering.** Render each grayscale plane band-by-band into ~8 KB scratch instead of cloning the full ~45-50 KB BW framebuffer in `storeBwBuffer()`/`restoreBwBuffer()` (`GfxRenderer.cpp`, used by the `EpubReaderActivity` image-page path). This is our single largest peak-contiguous consumer on image pages → the biggest memory payoff available. Large port (band state in GfxRenderer + DirectPixelWriter + renderCharImpl band-cull + the reader grayscale loop). Adds a little per-page render cost → device-validate page-turn latency (Snappy LAW). Overlaps the "EPUB factory LUT for image pages" Parked item — both target image-page memory.
+- [ ] **#2230 streaming band PixelCache for EPUB inline images.** Stream the inline-image cache to disk in a ~24 KB MCU-row band instead of our full-image buffer (`PixelCache.h`, `MAX_CACHE_BYTES = 256 KB`); lets the cache succeed on a fragmented heap so the image decodes ONCE instead of failing + re-decoding (multi-second freeze). Adapt, don't cherry-pick — our converters diverged (own dithering rework + `DirectCacheWriter`). The cheap sub-part (scan-pass `isScanning()` early-out in `ImageBlock::render`) already shipped in Tier 1.
+
+### Deferred Tier 4
+- [ ] **#2372 bookmark page-indicator.** A visible "this page is bookmarked" marker. Deferred because our bookmark model is spine/page (`BookmarkStore`) vs upstream's xpath/percentage — divergent — and `ReaderStatusBar` has zero bookmark-draw code, so adding it means threading a flag through the status-bar layout struct + a glyph asset + a placement decision. Cosmetic, lowest value. Pick up as its own small UI task.
+
+### Tier 5 — maybe (need a decision, or conditional on demand)
+- [ ] **#2206 custom sleep-timer picker + "Never".** Replaces the fixed `SLEEP_1/5/10/15/30_MIN` enum with 1-min granularity + Never; real settings-schema migration (`sleepTimeout`→`sleepTimeoutMinutes`) → daily-driver guardrail gate before flashing.
+- [ ] **#1658 power-button short-press → footnotes.** Adds a 5th value to the short-power-press enum (slot mechanism already exists, `CrossPointSettings.h`). ⚠ touches power-button tap/hold timing → Snappy-LAW device review.
+- [ ] **#2308 element-XPath KOReader progress resolver** (+#2245 chapter-start drift). 900-line paragraph-level resolver vs our DocFragment+percentage `ProgressMapper`. Only worth it if cross-device KOReader sync accuracy matters — our own device round-trips fine today.
+- [ ] **NTP reader clock** (#cfd3a381, which gates #2359 statusbar-clock-on-left + #2379 auto-wifi-for-clock-sync). No clock subsystem today; C3 has no RTC so it drifts across deep-sleep. Only if you want a clock on the reader — the DS3231 half is X3 hardware (skip), the NTP-over-WiFi + statusbar-draw half is hardware-agnostic.
+- [ ] **#2035 Home cover-cache shrink** (~48 KB → ~16 KB region snapshot) — frees ~36 KB contiguous on the Home screen, exactly where HTTPS (sync / OTA-check) needs it. Medium refactor (new GfxRenderer region helpers). Real headroom win, less acute than the reader-path levers.
+- [ ] **#2263 minimize CSS string allocations** — string_view + transparent case-insensitive hash on the hot CSS parse path; eliminates ~12k tiny short-lived allocs per page render. Genuine anti-fragmentation/latency win but ~740 lines on the render hot path → land in isolation, device-validate hard.
+- [ ] **#2040 close leaked decoder / mDNS handles** — unique_ptr + ScopedCleanup so failed JPEG/PNG decodes and mDNS/DNS teardown don't leak (compounds over a session). Small, low-risk.
+
+### Excluded by the audit (verified, not worth listing as work)
+- **feat-bluetooth BLE page-turner remote** — out of scope per "Not pursuing" below (BLE stack was removed from this fork; reintroduction needs a per-tick polling rewrite + ~50-100 KB RAM + a submodule swap to freeink-sdk).
+- Hardware-specific upstream branches (feat-m5-paper-color, feat-support-for-m3, feat-touch, feat-sd-themes / feat-freeink-ui), pure i18n translation PRs, and fixes we already carry in equivalent (often stronger) form — progress.bin corruption guard (we have tmp+`.bak`+mirror), JPEGDEC MCU_SKIP, paragraph-indent / justify-nbsp / hanging-indent / grayscale-ghosting (immune by our overlay architecture or already fixed), OpdsParser right-size, non-throwing alloc. All confirmed during the audit.
 
 ## Parked / blocked (not actionable now — revisit on trigger)
 
