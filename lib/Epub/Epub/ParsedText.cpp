@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <HeapGuard.h>
 #include <Logging.h>
+#include <Utf8.h>
 
 #include <algorithm>
 #include <cmath>
@@ -100,6 +101,13 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
                          const bool attachToPrevious) {
   if (word.empty()) return;
   if (oom_) return;  // Already failed this block; skip the rest cheaply.
+
+  // Precompose NFD diacritics to NFC so accented text renders with attached
+  // accents — device fonts have no combining-mark positioning. This is the
+  // single funnel for all body words (LayoutEngine::addWord forwards here);
+  // chapter/book titles are composed at their own sites. utf8ComposeNfc
+  // fast-path-returns mark-free words untouched. (#2277)
+  word = utf8ComposeNfc(word);
 
   EpdFontFamily::Style combinedStyle = fontStyle;
   if (underline) {

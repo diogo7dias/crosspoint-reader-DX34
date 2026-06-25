@@ -2,6 +2,7 @@
 
 #include <Logging.h>
 #include <Serialization.h>
+#include <Utf8.h>
 #include <ZipFile.h>
 
 #include <deque>
@@ -16,7 +17,10 @@ namespace {
 // those are keyed by spine index and become invalid if spine layout shifts.
 //   v6 (2026-05-02): force rebuild after upstream parser picks (#128/#129)
 //                    that left some users with "Unnamed" chapter titles.
-constexpr uint8_t BOOK_CACHE_VERSION = 6;
+//   v7 (2026-06-25): titles now NFC-composed (#2277) and internal asset/href
+//                    paths percent-decoded (#2249/#2271) — both bake into
+//                    book.bin/toc.bin, so old caches must rebuild once.
+constexpr uint8_t BOOK_CACHE_VERSION = 7;
 constexpr char bookBinFile[] = "/book.bin";
 constexpr char tmpSpineBinFile[] = "/spine.bin.tmp";
 constexpr char tmpTocBinFile[] = "/toc.bin.tmp";
@@ -405,7 +409,9 @@ void BookMetadataCache::createTocEntry(const std::string& title, const std::stri
     }
   }
 
-  const TocEntry entry(title, href, anchor, level, spineIndex);
+  // Compose NFD diacritics to NFC so accented chapter titles render correctly;
+  // baked into the cache here so reads are already composed. (#2277)
+  const TocEntry entry(utf8ComposeNfc(title), href, anchor, level, spineIndex);
   writeTocEntry(tocFile, entry);
   tocCount++;
 }

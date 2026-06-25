@@ -110,5 +110,30 @@ PageStatus PageBuilder::addImage(const std::shared_ptr<ImageBlock>& image, const
   return PageStatus::Ok;
 }
 
+PageStatus PageBuilder::addHorizontalRule(const int16_t width, const uint8_t thickness, const int16_t xPos,
+                                          const int topSpacing, const int bottomSpacing) {
+  const int totalHeight = topSpacing + thickness + bottomSpacing;
+  // Same placement rule as addImage: only break to a new page when the current
+  // one already has content and the rule + its spacing won't fit.
+  if (currentPage_ && !currentPage_->elements.empty() && (currentPageNextY_ + totalHeight > cfg_.viewportHeight)) {
+    completePage();
+    if (const PageStatus s = ensurePage(); s != PageStatus::Ok) return s;
+  } else if (!currentPage_) {
+    if (const PageStatus s = ensurePage(); s != PageStatus::Ok) return s;
+  }
+
+  if (const PageStatus s = bindPendingAnchors(); s != PageStatus::Ok) return s;
+
+  currentPageNextY_ = static_cast<int16_t>(currentPageNextY_ + topSpacing);
+  auto* rawRule = new (std::nothrow) PageHorizontalRule(width, thickness, xPos, currentPageNextY_);
+  if (!rawRule) {
+    LOG_DIAG("PB", "OOM new PageHorizontalRule largest=%u", (unsigned)crosspoint::heap::largestFreeBlockBytes());
+    return PageStatus::Oom;
+  }
+  currentPage_->elements.push_back(std::shared_ptr<PageHorizontalRule>(rawRule));
+  currentPageNextY_ = static_cast<int16_t>(currentPageNextY_ + thickness + bottomSpacing);
+  return PageStatus::Ok;
+}
+
 }  // namespace page
 }  // namespace crosspoint

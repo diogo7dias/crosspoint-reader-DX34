@@ -41,7 +41,10 @@ namespace {
 // the section was rebuilt. The cursor is now serialised (BookMetadataCache::
 // fileMutex_), so fresh builds are correct; this bump discards any already-
 // poisoned v23 caches so they re-layout once, race-free, after flash.
-constexpr uint8_t SECTION_FILE_VERSION = 24;
+//   v25 (2026-06-25): body words now NFC-composed (#2277) and span IDs no longer
+//   recorded as anchors / capped per chapter (#2303) — both bake into the section
+//   .bin (laid-out words + anchorLut), so old caches must re-layout once.
+constexpr uint8_t SECTION_FILE_VERSION = 25;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(uint8_t) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(uint8_t) +
                                  sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(bool) +

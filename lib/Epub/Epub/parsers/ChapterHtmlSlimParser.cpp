@@ -43,6 +43,19 @@ constexpr int NUM_IMAGE_TAGS = sizeof(IMAGE_TAGS) / sizeof(IMAGE_TAGS[0]);
 const char* SKIP_TAGS[] = {"head"};
 constexpr int NUM_SKIP_TAGS = sizeof(SKIP_TAGS) / sizeof(SKIP_TAGS[0]);
 
+// Hard cap on anchor IDs recorded per chapter. Real navigation anchors (TOC
+// targets, footnotes, cross-refs) rarely exceed a few hundred per chapter; a
+// runaway count means a converter injected machine IDs on every text fragment
+// (e.g. Kobo KePub spans). Unbounded, these flood pendingAnchors_ and bloat the
+// section .bin anchorLut → heap exhaustion on the ~380KB C3. (#2303)
+constexpr size_t MAX_ANCHORS_PER_CHAPTER = 1024;
+
+// span IDs are the KePub/Calibre machine-ID flood source and are virtually never
+// navigation targets. (Unlike upstream we don't thread a tocAnchors bypass — our
+// parser doesn't track TOC anchors; a TOC target on a bare <span> is vanishingly
+// rare, and upstream already drops footnote-on-span the same way.) (#2303)
+bool isNonNavigableInlineElement(const char* name) { return strcmp(name, "span") == 0; }
+
 bool isWhitespace(const char c) { return c == ' ' || c == '\r' || c == '\n' || c == '\t'; }
 
 // given the start and end of a tag, check to see if it matches a known tag
@@ -129,6 +142,34 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
   footnotePlacer_.onNewBlock();
 }
 
+void ChapterHtmlSlimParser::emitHorizontalRule(const BlockStyle& blockStyle) {
+  // Flush any pending word + close the open text block so its lines land on the
+  // page before the rule. (Mirrors upstream #7accc607, routed through PageBuilder
+  // since our fork moved page assembly out of the parser, RFC #171.)
+  if (partWordBufferIndex > 0) {
+    flushPartWordBuffer();
+  }
+  if (currentTextBlock) {
+    startNewTextBlock(currentTextBlock->blockStyle());
+  }
+
+  const int lineHeight = static_cast<int>(renderer.getLineHeight(fontId) * lineCompression + 0.5f);
+  const int defaultVerticalSpacing = lineHeight / 2;
+  const int topSpacing = (blockStyle.marginTop > 0 ? blockStyle.marginTop : defaultVerticalSpacing) +
+                         (blockStyle.paddingTop > 0 ? blockStyle.paddingTop : 0);
+  const int bottomSpacing = (blockStyle.marginBottom > 0 ? blockStyle.marginBottom : defaultVerticalSpacing) +
+                            (blockStyle.paddingBottom > 0 ? blockStyle.paddingBottom : 0);
+  constexpr uint8_t ruleThickness = 2;
+  const int16_t inset = blockStyle.totalHorizontalInset();
+  const int16_t availableWidth = (viewportWidth > inset) ? static_cast<int16_t>(viewportWidth - inset) : 1;
+  const int16_t width = (availableWidth / 4 > 0) ? static_cast<int16_t>(availableWidth / 4) : 1;
+  const int16_t xPos = static_cast<int16_t>(blockStyle.leftInset() + ((availableWidth - width) / 2));
+
+  if (!crosspoint::page::ok(pageBuilder_->addHorizontalRule(width, ruleThickness, xPos, topSpacing, bottomSpacing))) {
+    parseFailed = true;
+  }
+}
+
 void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
 
@@ -153,7 +194,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       } else if ((strcmp(atts[i], "id") == 0 || strcmp(atts[i], "xml:id") == 0 ||
                   (strcmp(atts[i], "name") == 0 && strcmp(name, "a") == 0)) &&
                  atts[i + 1] != nullptr && atts[i + 1][0] != '\0') {
-        self->pageBuilder_->queueAnchor(atts[i + 1]);
+        // Skip span IDs and hard-cap the rest so a KePub/Calibre machine-ID flood
+        // can't grow pendingAnchors_ / the section anchorLut unbounded. (#2303)
+        if (!isNonNavigableInlineElement(name) && self->anchorCount_ < MAX_ANCHORS_PER_CHAPTER) {
+          self->pageBuilder_->queueAnchor(atts[i + 1]);
+          self->anchorCount_++;
+        }
       }
     }
   }
@@ -214,8 +260,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         LOG_DBG("EHP", "Found image: src=%s", src.c_str());
 
         {
-          // Resolve the image path relative to the HTML file
-          std::string resolvedPath = FsHelpers::normalisePath(self->contentBase + src);
+          // Resolve the image path relative to the HTML file. decodeUriEscapes
+          // first so a %20-encoded src matches the real zip entry name. (#2249)
+          std::string resolvedPath = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(self->contentBase + src));
 
           // Create a unique filename for the cached image
           std::string ext;
@@ -394,6 +441,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
     }
     self->startNewTextBlock(headerBlockStyle);
     self->styleResolver_.setBoldFrom(self->depth);
+  } else if (strcmp(name, "hr") == 0) {
+    self->emitHorizontalRule(userAlignmentBlockStyle);
   } else if (matches(name, BLOCK_TAGS, NUM_BLOCK_TAGS)) {
     if (strcmp(name, "br") == 0) {
       if (self->partWordBufferIndex > 0) {

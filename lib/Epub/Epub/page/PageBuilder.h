@@ -80,6 +80,12 @@ class PageBuilder {
   // page is non-empty). The caller owns extraction + the ImageBlock alloc.
   [[nodiscard]] PageStatus addImage(const std::shared_ptr<ImageBlock>& image, int displayWidth, int displayHeight);
 
+  // Place a horizontal rule (<hr>). topSpacing/bottomSpacing are the vertical
+  // margins around the rule; page-breaks if the rule + spacing won't fit the
+  // remaining space (same non-empty-page rule as addImage). (#7accc607)
+  [[nodiscard]] PageStatus addHorizontalRule(int16_t width, uint8_t thickness, int16_t xPos, int topSpacing,
+                                             int bottomSpacing);
+
   // Ensure an in-flight page exists (lazily allocating one, cursor reset to 0)
   // WITHOUT placing content. The parser calls this at paragraph start so a
   // fresh page's cursor is 0 BEFORE top margin/padding is applied via advanceY

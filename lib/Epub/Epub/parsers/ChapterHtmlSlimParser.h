@@ -59,6 +59,9 @@ class ChapterHtmlSlimParser {
   std::function<void(int)> progressFn;  // Progress callback
   int depth = 0;
   int skipUntilDepth = INT_MAX;
+  // Per-chapter navigation-anchor counter for the MAX_ANCHORS_PER_CHAPTER cap
+  // (#2303). Resets naturally — the parser is a per-section stack instance.
+  size_t anchorCount_ = 0;
   // buffer for building up words from characters, will auto break if longer than this
   // leave one char at end for null pointer
   char partWordBuffer[MAX_WORD_SIZE + 1] = {};
@@ -123,6 +126,7 @@ class ChapterHtmlSlimParser {
   FootnotePlacer footnotePlacer_;
 
   void startNewTextBlock(const BlockStyle& blockStyle);
+  void emitHorizontalRule(const BlockStyle& blockStyle);
   void flushPartWordBuffer();
   void makePages();
   // XML callbacks
