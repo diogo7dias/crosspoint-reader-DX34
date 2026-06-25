@@ -383,7 +383,7 @@ class CrossPointSettings {
   // Books folder display order: 0 = alphabetical (default), 1 = random
   uint8_t booksFolderOrder = 0;
   // Image dithering algorithm: 0=fast (Bayer), 1=quality (Floyd-Steinberg)
-  uint8_t imageDither = IMAGE_DITHER_FAST;
+  uint8_t imageDither = IMAGE_DITHER_QUALITY;
 
   ~CrossPointSettings() = default;
 
