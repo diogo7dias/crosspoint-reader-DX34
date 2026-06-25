@@ -249,7 +249,10 @@ InstallOutcome OtaUpdater::installUpdate(ProgressFn onProgress) {
 
   // No CA bundle attached: same stance as checkForUpdate above. The OTA
   // download URL redirects (releases/download → objects.githubusercontent.com)
-  // so RX buffer stays at 8 KB to fit redirect headers cleanly.
+  // so RX buffer stays at 8 KB to fit redirect headers cleanly. (Upstream #2074
+  // also drops RX to 4 KB, but our redirecting URL needs that headroom — we
+  // adopt only its TX trim, which recovers most of the heap floor since the
+  // request side never needs 8 KB.)
   esp_http_client_config_t client_config = {
       .url = pending_.url.c_str(),
       .timeout_ms = 15000,
@@ -258,7 +261,7 @@ InstallOutcome OtaUpdater::installUpdate(ProgressFn onProgress) {
        * parsing of large HTTP headers.
        */
       .buffer_size = 8192,
-      .buffer_size_tx = 8192,
+      .buffer_size_tx = 1024,  // request headers are tiny; frees ~7 KB heap during the TLS stream
       .skip_cert_common_name_check = true,
       .keep_alive_enable = true,
   };
@@ -281,10 +284,25 @@ InstallOutcome OtaUpdater::installUpdate(ProgressFn onProgress) {
     return out;
   }
 
+  int lastPercent = -1;
   do {
     esp_err = esp_https_ota_perform(ota_handle);
     out.bytesProcessed = esp_https_ota_get_image_len_read(ota_handle);
-    if (onProgress) onProgress(InstallProgress{out.bytesProcessed, out.bytesExpected});
+    // Fire the callback only on whole-percent change. Without this it fired
+    // every perform-loop iteration, churning the render loop / heap; the UI
+    // can't show sub-percent progress anyway. (Upstream #2074.) Fall back to
+    // firing each iteration only when the total size is unknown.
+    if (onProgress) {
+      if (out.bytesExpected > 0) {
+        int percent = (int)((int64_t)out.bytesProcessed * 100 / out.bytesExpected);
+        if (percent != lastPercent) {
+          lastPercent = percent;
+          onProgress(InstallProgress{out.bytesProcessed, out.bytesExpected});
+        }
+      } else {
+        onProgress(InstallProgress{out.bytesProcessed, out.bytesExpected});
+      }
+    }
     delay(100);  // Yield time for the UI render loop between OTA chunks
   } while (esp_err == ESP_ERR_HTTPS_OTA_IN_PROGRESS);
 

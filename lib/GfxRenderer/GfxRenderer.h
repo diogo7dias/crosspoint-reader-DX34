@@ -205,6 +205,11 @@ class GfxRenderer {
   // Font cache manager
   void setFontCacheManager(FontCacheManager* m) { fontCacheManager_ = m; }
   FontCacheManager* getFontCacheManager() const { return fontCacheManager_; }
+  // True during the font-cache prewarm pass, when the framebuffer is discarded.
+  // Callers skip work whose only output is pixels (underline measure, image
+  // decode) to avoid glyph-miss SD thrash / wasted decodes. Out-of-line: the
+  // FontCacheManager type is only forward-declared here.
+  bool isFontCacheScanning() const;
   const std::map<int, EpdFontFamily>& getFontMap() const { return fontMap; }
 
   // Font helpers

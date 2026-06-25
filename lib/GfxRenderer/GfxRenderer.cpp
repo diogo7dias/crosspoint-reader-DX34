@@ -24,6 +24,8 @@ void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) {
 
 void GfxRenderer::removeFont(const int fontId) { fontMap.erase(fontId); }
 
+bool GfxRenderer::isFontCacheScanning() const { return fontCacheManager_ && fontCacheManager_->isScanning(); }
+
 // Translate logical (x,y) coordinates to physical panel coordinates based on
 // current orientation This should always be inlined for better performance
 static inline void rotateCoordinates(const GfxRenderer::Orientation orientation, const int x, const int y, int* phyX,

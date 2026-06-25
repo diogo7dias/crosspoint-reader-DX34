@@ -120,7 +120,10 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
       renderer.drawTextSpaced(fontId, wordX, y, words[i].c_str(), blockStyle.letterSpacing, true, currentStyle);
     }
 
-    if ((currentStyle & EpdFontFamily::UNDERLINE) != 0) {
+    // Skip during the font-cache scan pass: getTextWidthSpaced below forces
+    // glyph lookups that miss the warming cache and thrash the SD card, and the
+    // underline is never drawn on a discarded scan-pass framebuffer. (Upstream #2237.)
+    if (!renderer.isFontCacheScanning() && (currentStyle & EpdFontFamily::UNDERLINE) != 0) {
       const std::string& w = words[i];
       const int fullWordWidth = renderer.getTextWidthSpaced(fontId, w.c_str(), blockStyle.letterSpacing, currentStyle);
       // y is the top of the text line; add ascender to reach baseline, then offset 2px below

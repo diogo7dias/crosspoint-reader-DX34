@@ -103,6 +103,12 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 }  // namespace
 
 void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
+  // During the font-cache prewarm pass the framebuffer is discarded, so decoding
+  // and drawing the image is pure waste — and an uncached image would do a full
+  // (slow, heap-heavy) decode on every scan-pass view, looking like a multi-second
+  // hang. Images contribute no glyphs to warm, so skip entirely. (Upstream #2230.)
+  if (renderer.isFontCacheScanning()) return;
+
   LOG_DBG("IMG", "Rendering image at %d,%d: %s (%dx%d)", x, y, imagePath.c_str(), width, height);
 
   const int screenWidth = renderer.getScreenWidth();

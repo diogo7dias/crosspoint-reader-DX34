@@ -301,6 +301,18 @@ void EpubReaderActivity::onEnter() {
 
 void EpubReaderActivity::onExit() {
   flushProgressIfNeeded(true);
+  // If we're leaving mid-footnote, the in-RAM return stack (savedPositions[])
+  // dies on exit/deep-sleep. flushProgressIfNeeded above just persisted the
+  // current endnote page; overwrite it with the pre-footnote ORIGIN
+  // (savedPositions[0], the outermost link the reader followed from) so the book
+  // reopens at the link, not buried in the notes. (Upstream #2394.) saveProgress
+  // enqueues an async sink write, so drain it here before the later epub.reset()
+  // closes the SD handles — see the AsyncWriter-race note in flushProgressIfNeeded.
+  if (footnoteDepth > 0 && epub) {
+    const auto& origin = savedPositions[0];
+    saveProgress(origin.spineIndex, origin.pageNumber, 0);
+    ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
+  }
   inputDispatcher_.clearPendingTap();
   highlights_.exit();
   EpdFontFamily::setReaderBoldSwapEnabled(false);
