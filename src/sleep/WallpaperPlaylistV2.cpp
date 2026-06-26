@@ -285,6 +285,39 @@ bool WallpaperPlaylistV2::nameIsInBuffer(const std::string& name) const {
   return nameIsInBuffer(name.data(), name.size());
 }
 
+bool WallpaperPlaylistV2::renameInBuffer(const std::string& oldName, const std::string& newName) {
+  if (oldName.empty() || newName.empty() || buffer_.empty()) return false;
+  const char* data = buffer_.data();
+  const size_t bsize = buffer_.size();
+  size_t start = 0;
+  while (start < bsize) {
+    size_t nl = buffer_.find('\n', start);
+    const size_t lineEnd = (nl == std::string::npos) ? bsize : nl;
+    if (lineEnd - start == oldName.size() && std::memcmp(data + start, oldName.data(), oldName.size()) == 0) {
+      const long delta = static_cast<long>(newName.size()) - static_cast<long>(oldName.size());
+      // Build is -fno-exceptions: a grow that reallocates could bad_alloc-abort.
+      // Probe before replacing; bail (no change) if the heap can't carry it so
+      // the caller falls back to treating the file as new.
+      if (delta > 0 && !heapHasContiguous(buffer_.size() + static_cast<size_t>(delta))) {
+        return false;
+      }
+      // Replace just the name chars (the trailing '\n' stays put). `data` is
+      // invalidated by any reallocation here, but we return immediately after.
+      buffer_.replace(start, oldName.size(), newName);
+      // cursor_ is always a line boundary (advanceCursor lands on nl+1 or
+      // buffer end), so the matched line is either wholly before the cursor or
+      // at/after it. Only a wholly-before line shifts the cursor's byte offset.
+      if (delta != 0 && start < cursor_) {
+        cursor_ = static_cast<size_t>(static_cast<long>(cursor_) + delta);
+      }
+      return true;
+    }
+    if (nl == std::string::npos) break;
+    start = nl + 1;
+  }
+  return false;
+}
+
 void WallpaperPlaylistV2::reconcile() {
   if (!deps_.fs) return;
   if (!ensureLoaded()) return;
@@ -365,9 +398,35 @@ void WallpaperPlaylistV2::reconcile() {
     }
   }
 
+  // Fold favorite/unfavorite renames back into place. A "new" file whose
+  // favorite-counterpart (x.bmp <-> x_F.bmp) is already a rotation entry is the
+  // SAME image the user just (un)favorited, not a fresh upload. Splicing it to
+  // the front (new-on-top) would re-show it on the very next lock instead of
+  // advancing — the reported "favoriting re-shows the wallpaper" bug. Replace
+  // the old name in place so the image keeps its slot, and drop it from the
+  // front-splice batch. Genuinely-new files (no counterpart in the buffer) fall
+  // through to the splice below unchanged.
+  bool renamedAny = false;
+  if (deps_.favoriteCounterpartFn && !newFiles.empty()) {
+    std::vector<SleepBmpEntry> genuinelyNew;
+    genuinelyNew.reserve(newFiles.size());
+    for (auto& nf : newFiles) {
+      const std::string counterpart = deps_.favoriteCounterpartFn(nf.name);
+      if (!counterpart.empty() && counterpart != nf.name && nameIsInBuffer(counterpart) &&
+          renameInBuffer(counterpart, nf.name)) {
+        renamedAny = true;
+      } else {
+        genuinelyNew.push_back(std::move(nf));
+      }
+    }
+    newFiles = std::move(genuinelyNew);
+  }
+  if (renamedAny) saveToDisk();
+
   if (newFiles.empty()) {
-    // Truncation with an empty batch (heap too tight to retain even one
-    // entry): keep dirty_ so the next sleep retries.
+    // Either nothing new this pass, or every "new" file was an in-place rename.
+    // Truncation with an empty batch (heap too tight to retain even one entry):
+    // keep dirty_ so the next sleep retries.
     dirty_ = newFilesTruncated;
     return;
   }

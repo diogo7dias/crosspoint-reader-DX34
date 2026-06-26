@@ -64,6 +64,13 @@ void ensureConfigured() {
   d.onPathRenamed = [](const std::string& from, const std::string& to) {
     FavoriteImage::replacePathReferences(from, to);
   };
+  // Lets reconcile fold a favorite/unfavorite rename (x.bmp <-> x_F.bmp) back
+  // into its rotation slot instead of treating the renamed file as a fresh
+  // upload and re-showing it on the next lock.
+  d.favoriteCounterpartFn = [](const std::string& name) -> std::string {
+    return FavoriteImage::hasFavoriteSuffix(name) ? FavoriteImage::stripFavoriteSuffix(name)
+                                                  : FavoriteImage::addFavoriteSuffix(name);
+  };
   // Heap probe (RFC #156 C2): inject the device's contiguous-block query
   // through the playlist so the same code path runs under host tests with
   // a scripted heap. UNIT_TEST_HOST builds don't link esp_heap_caps; the
@@ -364,6 +371,7 @@ void Configure(const Config& c) {
   d.isFavorite = c.isFavorite;
   d.onPathRenamed = c.onPathRenamed;
   d.largestFreeBlockFn = c.largestFreeBlockFn;
+  d.favoriteCounterpartFn = c.favoriteCounterpartFn;
 
   v2::WallpaperPlaylistV2::instance().setDeps(d);
 }

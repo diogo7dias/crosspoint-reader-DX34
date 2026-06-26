@@ -22,7 +22,10 @@
  *     is NEVER auto-shuffled; only the user-initiated reshuffle() (settings
  *     "shuffle now") randomizes.
  *   - New files added to /sleep get spliced at the FRONT of the buffer and
- *     cursor resets to 0, so freshly uploaded wallpapers show next.
+ *     cursor resets to 0, so freshly uploaded wallpapers show next. A
+ *     favorite/unfavorite RENAME (same image, toggled _F suffix) is NOT a new
+ *     file: reconcile() replaces the old name in place so the image keeps its
+ *     rotation slot instead of jumping to the front and re-showing.
  *   - Strict cap at 500: on overflow, oldest-mtime non-favorites are pushed to
  *     /sleep pause. If favorites alone fill the cap, new uploads land in
  *     /sleep pause and a notification flag fires.
@@ -67,6 +70,14 @@ class WallpaperPlaylistV2 {
     // assumes unlimited heap (treats every reserve as safe) — matches the
     // pre-RFC #156 host behaviour where the heap probe was ifdef'd out.
     std::function<size_t()> largestFreeBlockFn;
+    // Maps a /sleep basename to its favorite-toggle counterpart: "x.bmp" ->
+    // "x_F.bmp" and "x_F.bmp" -> "x.bmp". Lets reconcile() recognize a
+    // favorite/unfavorite RENAME (same image, toggled _F suffix) as distinct
+    // from a fresh upload, so it replaces the name in place and keeps the
+    // image's rotation slot instead of splicing it to the front. Returns the
+    // input unchanged for non-images. If unset, reconcile skips rename
+    // detection and treats a renamed file as new (pre-fix behaviour).
+    std::function<std::string(const std::string&)> favoriteCounterpartFn;
   };
 
   // Outcome of the most recent reconcile, surfaced as data (RFC #145).
@@ -129,6 +140,14 @@ class WallpaperPlaylistV2 {
   // std::string overload forwards to it.
   bool nameIsInBuffer(const char* name, size_t len) const;
   bool nameIsInBuffer(const std::string& name) const;
+
+  // Replace a whole-line entry `oldName` with `newName` in place, preserving
+  // its rotation slot and adjusting cursor_ for the length change if the entry
+  // sits before the cursor. Used by reconcile() to fold a favorite/unfavorite
+  // rename into the existing order rather than re-adding it at the front.
+  // Returns false (no change) if `oldName` is absent or the heap can't afford
+  // the (tiny) growth — the caller then treats the file as new, as before.
+  bool renameInBuffer(const std::string& oldName, const std::string& newName);
 
   // Probe the heap for a contiguous block large enough for `needBytes`
   // plus the standard 4 KB transient-growth headroom. Consults

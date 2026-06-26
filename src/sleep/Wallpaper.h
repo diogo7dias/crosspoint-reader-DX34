@@ -123,6 +123,11 @@ struct Config {
   // fragmentation cliffs. If left unset, the playlist treats the heap as
   // unlimited — matches the pre-RFC #156 host behaviour.
   std::function<size_t()> largestFreeBlockFn;
+  // Maps a /sleep basename to its favorite-toggle counterpart (x.bmp <->
+  // x_F.bmp). Lets reconcile recognize a favorite rename as an in-place name
+  // change rather than a fresh upload. Production lazy init wires the
+  // FavoriteImage suffix helpers automatically; unset disables rename folding.
+  std::function<std::string(const std::string&)> favoriteCounterpartFn;
 };
 
 void Configure(const Config&);

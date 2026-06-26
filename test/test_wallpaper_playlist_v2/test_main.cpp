@@ -96,6 +96,7 @@ struct Fixture {
   std::string lastRenderedPath;
   std::vector<std::string> savedAppStateLog;
   std::function<bool(const std::string&)> isFavoriteFn;
+  std::function<std::string(const std::string&)> favoriteCounterpartFn;
   long fakeRandomSeed = 0;
   // RFC #156 C2: scripted heap probe. Default unlimited. Tests set this to
   // simulate fragmentation and verify the playlist's heap-gated bail paths.
@@ -123,6 +124,7 @@ struct Fixture {
     };
     d.onPathRenamed = [](const std::string&, const std::string&) {};
     d.largestFreeBlockFn = largestFreeBlockFn;  // empty std::function → unlimited
+    d.favoriteCounterpartFn = favoriteCounterpartFn;  // empty → rename detection off
     wp.setDeps(d);
   }
 };
@@ -508,6 +510,69 @@ void test_trim_branch_rederive_capped_per_pass() {
   TEST_ASSERT_EQUAL(501u, wp.entryCountForTest());
 }
 
+// Toggles the favorite "_F" suffix before the 4-char extension, mirroring
+// FavoriteImage::add/stripFavoriteSuffix. "x.bmp" <-> "x_F.bmp".
+std::string toggleFavoriteSuffix(const std::string& n) {
+  if (n.size() < 5) return n;
+  const std::string ext = n.substr(n.size() - 4);
+  const std::string stem = n.substr(0, n.size() - 4);
+  if (stem.size() >= 2 && stem.compare(stem.size() - 2, 2, "_F") == 0) {
+    return stem.substr(0, stem.size() - 2) + ext;
+  }
+  return stem + "_F" + ext;
+}
+
+// Favoriting a /sleep image renames it (img_b.bmp -> img_b_F.bmp). Pre-fix,
+// reconcile saw the renamed file as a brand-new upload and spliced it to the
+// FRONT (cursor=0), re-showing the just-favorited image on the very next lock
+// instead of advancing to the next wallpaper in the rotation array. With
+// favoriteCounterpartFn wired, reconcile recognizes the rename and replaces the
+// name in place, so the image keeps its rotation slot and the next lock
+// advances normally.
+void test_favorite_rename_keeps_rotation_position_not_front() {
+  Fixture fx;
+  // Identical mtime so the sequential build order is the stable insertion order
+  // img_a..img_f, which also matches lexicographic order.
+  for (int i = 0; i < 6; ++i) fx.fs.seed(std::string("img_") + char('a' + i) + ".bmp", 100);
+  fx.favoriteCounterpartFn = &toggleFavoriteSuffix;
+
+  auto& wp = crosspoint::sleep::v2::WallpaperPlaylistV2::instance();
+  wp.resetForTest();
+  fx.wire(wp);
+  wp.markFolderDirty();
+  wp.reconcile();
+
+  const auto first = wp.advance();   // img_a.bmp
+  const auto second = wp.advance();  // img_b.bmp — the one the user is about to favorite
+  TEST_ASSERT_EQUAL_STRING("img_a.bmp", first.c_str());
+  TEST_ASSERT_EQUAL_STRING("img_b.bmp", second.c_str());
+
+  // Device-side favorite: rename on disk; lastShownSleepFilename would also be
+  // updated by FavoriteImage, but the rotation buffer still holds the old name.
+  const std::string favName = toggleFavoriteSuffix(second);  // img_b_F.bmp
+  fx.fs.rename("/sleep/" + second, "/sleep/" + favName);
+  fx.fs.seed(favName, 100);
+
+  // Wake-to-home marks the folder dirty; the next lock reconciles.
+  wp.markFolderDirty();
+  wp.reconcile();
+
+  const auto third = wp.advance();
+  TEST_ASSERT_TRUE_MESSAGE(third != favName, "favorited image must not jump to the front and re-show");
+  TEST_ASSERT_TRUE_MESSAGE(third != second, "rotation must advance past the favorited image");
+  TEST_ASSERT_EQUAL_STRING("img_c.bmp", third.c_str());
+
+  // The favorite is still in rotation (replaced in place, not dropped): a full
+  // lap from here reaches img_b_F.bmp exactly once and never the stale
+  // img_b.bmp. Collect a fresh post-favorite lap (6 advances covers all files).
+  std::unordered_set<std::string> seen;
+  seen.insert(third);
+  for (int i = 0; i < 6; ++i) seen.insert(wp.advance());
+  TEST_ASSERT_EQUAL_MESSAGE(6u, seen.size(), "lap must show all six current files exactly once");
+  TEST_ASSERT_TRUE_MESSAGE(seen.count(favName) == 1, "favorited image must remain in rotation under its new name");
+  TEST_ASSERT_TRUE_MESSAGE(seen.count("img_b.bmp") == 0, "stale pre-favorite name must not be shown");
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -529,5 +594,6 @@ int main(int, char**) {
   RUN_TEST(test_truncated_reconcile_stays_dirty_and_converges);
   RUN_TEST(test_reshuffle_bails_before_listing_on_fragmented_heap);
   RUN_TEST(test_trim_branch_rederive_capped_per_pass);
+  RUN_TEST(test_favorite_rename_keeps_rotation_position_not_front);
   return UNITY_END();
 }
