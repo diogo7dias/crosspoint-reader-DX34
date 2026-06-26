@@ -16,11 +16,13 @@
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <HalDisplay.h>
 #include <HalGPIO.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <HalSystem.h>
+#include <HalTiltSensor.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <MemoryPolicy.h>
@@ -54,8 +56,6 @@
 #include "boot/BootSequenceOrchestrator.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomBinFontIds.h"
-#include "fonts/CustomBinFontManager.h"
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -131,71 +131,89 @@ EpdFont bookerly17RegularFont(&bookerly_17_regular);
 EpdFont bookerly17BoldFont(&bookerly_17_bold);
 EpdFont bookerly17ItalicFont(&bookerly_17_italic);
 EpdFontFamily bookerly17FontFamily(&bookerly17RegularFont, &bookerly17BoldFont, &bookerly17ItalicFont, nullptr);
-EpdFont vollkorn10RegularFont(&vollkorn_10_regular);
-EpdFont vollkorn10BoldFont(&vollkorn_10_bold);
-EpdFont vollkorn10ItalicFont(&vollkorn_10_italic);
-EpdFontFamily vollkorn10FontFamily(&vollkorn10RegularFont, &vollkorn10BoldFont, &vollkorn10ItalicFont, nullptr);
-EpdFont vollkorn12RegularFont(&vollkorn_12_regular);
-EpdFont vollkorn12BoldFont(&vollkorn_12_bold);
-EpdFont vollkorn12ItalicFont(&vollkorn_12_italic);
-EpdFontFamily vollkorn12FontFamily(&vollkorn12RegularFont, &vollkorn12BoldFont, &vollkorn12ItalicFont, nullptr);
-EpdFont vollkorn13RegularFont(&vollkorn_13_regular);
-EpdFont vollkorn13BoldFont(&vollkorn_13_bold);
-EpdFont vollkorn13ItalicFont(&vollkorn_13_italic);
-EpdFontFamily vollkorn13FontFamily(&vollkorn13RegularFont, &vollkorn13BoldFont, &vollkorn13ItalicFont, nullptr);
-EpdFont vollkorn14RegularFont(&vollkorn_14_regular);
-EpdFont vollkorn14BoldFont(&vollkorn_14_bold);
-EpdFont vollkorn14ItalicFont(&vollkorn_14_italic);
-EpdFontFamily vollkorn14FontFamily(&vollkorn14RegularFont, &vollkorn14BoldFont, &vollkorn14ItalicFont, nullptr);
-EpdFont vollkorn15RegularFont(&vollkorn_15_regular);
-EpdFont vollkorn15BoldFont(&vollkorn_15_bold);
-EpdFont vollkorn15ItalicFont(&vollkorn_15_italic);
-EpdFontFamily vollkorn15FontFamily(&vollkorn15RegularFont, &vollkorn15BoldFont, &vollkorn15ItalicFont, nullptr);
-EpdFont vollkorn16RegularFont(&vollkorn_16_regular);
-EpdFont vollkorn16BoldFont(&vollkorn_16_bold);
-EpdFont vollkorn16ItalicFont(&vollkorn_16_italic);
-EpdFontFamily vollkorn16FontFamily(&vollkorn16RegularFont, &vollkorn16BoldFont, &vollkorn16ItalicFont, nullptr);
-EpdFont vollkorn17RegularFont(&vollkorn_17_regular);
-EpdFont vollkorn17BoldFont(&vollkorn_17_bold);
-EpdFont vollkorn17ItalicFont(&vollkorn_17_italic);
-EpdFontFamily vollkorn17FontFamily(&vollkorn17RegularFont, &vollkorn17BoldFont, &vollkorn17ItalicFont, nullptr);
+// Georgia: serif reader font. Regular, Bold, Italic (no BoldItalic source --
+// slot nullptr, renderer synthesises bold-italic). Sizes 12, 14, 16. Ships full
+// prose punctuation, so no source patching needed (unlike F25).
+EpdFont georgia_10RegularFont(&georgia_10_regular);
+EpdFont georgia_10BoldFont(&georgia_10_bold);
+EpdFont georgia_10ItalicFont(&georgia_10_italic);
+EpdFontFamily georgia_10FontFamily(&georgia_10RegularFont, &georgia_10BoldFont, &georgia_10ItalicFont, nullptr);
+EpdFont georgia_12RegularFont(&georgia_12_regular);
+EpdFont georgia_12BoldFont(&georgia_12_bold);
+EpdFont georgia_12ItalicFont(&georgia_12_italic);
+EpdFontFamily georgia_12FontFamily(&georgia_12RegularFont, &georgia_12BoldFont, &georgia_12ItalicFont, nullptr);
+EpdFont georgia_13RegularFont(&georgia_13_regular);
+EpdFont georgia_13BoldFont(&georgia_13_bold);
+EpdFont georgia_13ItalicFont(&georgia_13_italic);
+EpdFontFamily georgia_13FontFamily(&georgia_13RegularFont, &georgia_13BoldFont, &georgia_13ItalicFont, nullptr);
+EpdFont georgia_14RegularFont(&georgia_14_regular);
+EpdFont georgia_14BoldFont(&georgia_14_bold);
+EpdFont georgia_14ItalicFont(&georgia_14_italic);
+EpdFontFamily georgia_14FontFamily(&georgia_14RegularFont, &georgia_14BoldFont, &georgia_14ItalicFont, nullptr);
+EpdFont georgia_15RegularFont(&georgia_15_regular);
+EpdFont georgia_15BoldFont(&georgia_15_bold);
+EpdFont georgia_15ItalicFont(&georgia_15_italic);
+EpdFontFamily georgia_15FontFamily(&georgia_15RegularFont, &georgia_15BoldFont, &georgia_15ItalicFont, nullptr);
+EpdFont georgia_16RegularFont(&georgia_16_regular);
+EpdFont georgia_16BoldFont(&georgia_16_bold);
+EpdFont georgia_16ItalicFont(&georgia_16_italic);
+EpdFontFamily georgia_16FontFamily(&georgia_16RegularFont, &georgia_16BoldFont, &georgia_16ItalicFont, nullptr);
+EpdFont georgia_17RegularFont(&georgia_17_regular);
+EpdFont georgia_17BoldFont(&georgia_17_bold);
+EpdFont georgia_17ItalicFont(&georgia_17_italic);
+EpdFontFamily georgia_17FontFamily(&georgia_17RegularFont, &georgia_17BoldFont, &georgia_17ItalicFont, nullptr);
 
-EpdFont unifont14RegularFont(&unifont_14_regular);
-EpdFontFamily unifont14FontFamily(&unifont14RegularFont, nullptr, nullptr, nullptr, 1, 0, false);
-EpdFont unifont18RegularFont(&unifont_18_regular);
-EpdFontFamily unifont18FontFamily(&unifont18RegularFont, nullptr, nullptr, nullptr, 1, 0, false);
+// Pixel32 (Pix32): pixel display reader font. Regular, Bold, Italic (no
+// BoldItalic source -- slot nullptr, renderer synthesises it). Sizes 12, 14, 16.
+// Ships full prose punctuation incl. pipe, so no source patching needed.
+EpdFont pixel32_12RegularFont(&pixel32_12_regular);
+EpdFont pixel32_12BoldFont(&pixel32_12_bold);
+EpdFont pixel32_12ItalicFont(&pixel32_12_italic);
+EpdFontFamily pixel32_12FontFamily(&pixel32_12RegularFont, &pixel32_12BoldFont, &pixel32_12ItalicFont, nullptr);
+EpdFont pixel32_14RegularFont(&pixel32_14_regular);
+EpdFont pixel32_14BoldFont(&pixel32_14_bold);
+EpdFont pixel32_14ItalicFont(&pixel32_14_italic);
+EpdFontFamily pixel32_14FontFamily(&pixel32_14RegularFont, &pixel32_14BoldFont, &pixel32_14ItalicFont, nullptr);
+EpdFont pixel32_16RegularFont(&pixel32_16_regular);
+EpdFont pixel32_16BoldFont(&pixel32_16_bold);
+EpdFont pixel32_16ItalicFont(&pixel32_16_italic);
+EpdFontFamily pixel32_16FontFamily(&pixel32_16RegularFont, &pixel32_16BoldFont, &pixel32_16ItalicFont, nullptr);
 
-// Bitter: slab-serif reader font. Regular, Bold, Italic (no BoldItalic
-// source TTF -- slot nullptr, Vollkorn pattern). Exposed at sizes 12, 14,
-// 16 only (odd sizes and 17 dropped to save flash).
-EpdFont bitter10RegularFont(&bitter_10_regular);
-EpdFont bitter10BoldFont(&bitter_10_bold);
-EpdFont bitter10ItalicFont(&bitter_10_italic);
-EpdFontFamily bitter10FontFamily(&bitter10RegularFont, &bitter10BoldFont, &bitter10ItalicFont, nullptr);
-EpdFont bitter12RegularFont(&bitter_12_regular);
-EpdFont bitter12BoldFont(&bitter_12_bold);
-EpdFont bitter12ItalicFont(&bitter_12_italic);
-EpdFontFamily bitter12FontFamily(&bitter12RegularFont, &bitter12BoldFont, &bitter12ItalicFont, nullptr);
-EpdFont bitter14RegularFont(&bitter_14_regular);
-EpdFont bitter14BoldFont(&bitter_14_bold);
-EpdFont bitter14ItalicFont(&bitter_14_italic);
-EpdFontFamily bitter14FontFamily(&bitter14RegularFont, &bitter14BoldFont, &bitter14ItalicFont, nullptr);
-EpdFont bitter16RegularFont(&bitter_16_regular);
-EpdFont bitter16BoldFont(&bitter_16_bold);
-EpdFont bitter16ItalicFont(&bitter_16_italic);
-EpdFontFamily bitter16FontFamily(&bitter16RegularFont, &bitter16BoldFont, &bitter16ItalicFont, nullptr);
-
-// Galmuri: Korean pixel font. Regular-only headers -- italic synthesized
-// via slant, bold via multi-pass redraw (1 base + 2 extra for visible
-// weight). Sizes 11, 12, 14. Size 10 dropped (too small on screen).
-EpdFont galmuri10RegularFont(&galmuri_10_regular);
-EpdFontFamily galmuri10FontFamily(&galmuri10RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
-EpdFont galmuri11RegularFont(&galmuri_11_regular);
-EpdFontFamily galmuri11FontFamily(&galmuri11RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
-EpdFont galmuri12RegularFont(&galmuri_12_regular);
-EpdFontFamily galmuri12FontFamily(&galmuri12RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
-EpdFont galmuri14RegularFont(&galmuri_14_regular);
-EpdFontFamily galmuri14FontFamily(&galmuri14RegularFont, nullptr, nullptr, nullptr, 1, 2, true);
+// F25 Bank Printer: stylised display reader font. Regular, Bold, Italic (the
+// BoldItalic source is not baked -- slot nullptr, renderer synthesises it,
+// Vollkorn/Bitter pattern). Sizes 10,11,12,13,14,16,17. The source TTFs were
+// patched (scripts/patch_f25.py) to add em/en dash, ellipsis, bullet, nbsp,
+// middot and pipe, which the stock font lacks, so prose renders without dropped
+// punctuation. NOTE: F25 has no Cyrillic/Greek and a small glyph set; missing
+// glyphs render as gaps (the renderer has no fallback chain).
+EpdFont f25_10RegularFont(&f25_10_regular);
+EpdFont f25_10BoldFont(&f25_10_bold);
+EpdFont f25_10ItalicFont(&f25_10_italic);
+EpdFontFamily f25_10FontFamily(&f25_10RegularFont, &f25_10BoldFont, &f25_10ItalicFont, nullptr);
+EpdFont f25_11RegularFont(&f25_11_regular);
+EpdFont f25_11BoldFont(&f25_11_bold);
+EpdFont f25_11ItalicFont(&f25_11_italic);
+EpdFontFamily f25_11FontFamily(&f25_11RegularFont, &f25_11BoldFont, &f25_11ItalicFont, nullptr);
+EpdFont f25_12RegularFont(&f25_12_regular);
+EpdFont f25_12BoldFont(&f25_12_bold);
+EpdFont f25_12ItalicFont(&f25_12_italic);
+EpdFontFamily f25_12FontFamily(&f25_12RegularFont, &f25_12BoldFont, &f25_12ItalicFont, nullptr);
+EpdFont f25_13RegularFont(&f25_13_regular);
+EpdFont f25_13BoldFont(&f25_13_bold);
+EpdFont f25_13ItalicFont(&f25_13_italic);
+EpdFontFamily f25_13FontFamily(&f25_13RegularFont, &f25_13BoldFont, &f25_13ItalicFont, nullptr);
+EpdFont f25_14RegularFont(&f25_14_regular);
+EpdFont f25_14BoldFont(&f25_14_bold);
+EpdFont f25_14ItalicFont(&f25_14_italic);
+EpdFontFamily f25_14FontFamily(&f25_14RegularFont, &f25_14BoldFont, &f25_14ItalicFont, nullptr);
+EpdFont f25_16RegularFont(&f25_16_regular);
+EpdFont f25_16BoldFont(&f25_16_bold);
+EpdFont f25_16ItalicFont(&f25_16_italic);
+EpdFontFamily f25_16FontFamily(&f25_16RegularFont, &f25_16BoldFont, &f25_16ItalicFont, nullptr);
+EpdFont f25_17RegularFont(&f25_17_regular);
+EpdFont f25_17BoldFont(&f25_17_bold);
+EpdFont f25_17ItalicFont(&f25_17_italic);
+EpdFontFamily f25_17FontFamily(&f25_17RegularFont, &f25_17BoldFont, &f25_17ItalicFont, nullptr);
 
 EpdFont smallFont(&ui_8_regular);
 EpdFontFamily smallFontFamily(&smallFont, nullptr, nullptr, nullptr, 0, 0, false);
@@ -458,6 +476,7 @@ static void wireActivityRouter() {
   deps.trimSleepFolderIfDirty = &::trimSleepFolderIfDirty;
   deps.onBeforeDeepSleep = [](bool fromReader) { APP_STATE.lastSleepFromReader = fromReader; };
   deps.onAfterDeepSleep = []() {
+    halTiltSensor.deepSleep();  // park the QMI8658 IMU (no-op on X4)
     display.deepSleep();
     LOG_DBG("MAIN", "Power button press calibration value: %lu ms", t2 - t1);
     LOG_DBG("MAIN", "Entering deep sleep");
@@ -538,23 +557,23 @@ void setupDisplayAndFonts() {
   renderer.insertFont(BOOKERLY_15_FONT_ID, bookerly15FontFamily);
   renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
   renderer.insertFont(BOOKERLY_17_FONT_ID, bookerly17FontFamily);
-  renderer.insertFont(VOLLKORN_10_FONT_ID, vollkorn10FontFamily);
-  renderer.insertFont(VOLLKORN_12_FONT_ID, vollkorn12FontFamily);
-  renderer.insertFont(VOLLKORN_13_FONT_ID, vollkorn13FontFamily);
-  renderer.insertFont(VOLLKORN_14_FONT_ID, vollkorn14FontFamily);
-  renderer.insertFont(VOLLKORN_15_FONT_ID, vollkorn15FontFamily);
-  renderer.insertFont(VOLLKORN_16_FONT_ID, vollkorn16FontFamily);
-  renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn17FontFamily);
-  renderer.insertFont(UNIFONT_14_FONT_ID, unifont14FontFamily);
-  renderer.insertFont(UNIFONT_18_FONT_ID, unifont18FontFamily);
-  renderer.insertFont(BITTER_10_FONT_ID, bitter10FontFamily);
-  renderer.insertFont(BITTER_12_FONT_ID, bitter12FontFamily);
-  renderer.insertFont(BITTER_14_FONT_ID, bitter14FontFamily);
-  renderer.insertFont(BITTER_16_FONT_ID, bitter16FontFamily);
-  renderer.insertFont(GALMURI_10_FONT_ID, galmuri10FontFamily);
-  renderer.insertFont(GALMURI_11_FONT_ID, galmuri11FontFamily);
-  renderer.insertFont(GALMURI_12_FONT_ID, galmuri12FontFamily);
-  renderer.insertFont(GALMURI_14_FONT_ID, galmuri14FontFamily);
+  renderer.insertFont(GEORGIA_10_FONT_ID, georgia_10FontFamily);
+  renderer.insertFont(GEORGIA_12_FONT_ID, georgia_12FontFamily);
+  renderer.insertFont(GEORGIA_13_FONT_ID, georgia_13FontFamily);
+  renderer.insertFont(GEORGIA_14_FONT_ID, georgia_14FontFamily);
+  renderer.insertFont(GEORGIA_15_FONT_ID, georgia_15FontFamily);
+  renderer.insertFont(GEORGIA_16_FONT_ID, georgia_16FontFamily);
+  renderer.insertFont(GEORGIA_17_FONT_ID, georgia_17FontFamily);
+  renderer.insertFont(PIXEL32_12_FONT_ID, pixel32_12FontFamily);
+  renderer.insertFont(PIXEL32_14_FONT_ID, pixel32_14FontFamily);
+  renderer.insertFont(PIXEL32_16_FONT_ID, pixel32_16FontFamily);
+  renderer.insertFont(F25_10_FONT_ID, f25_10FontFamily);
+  renderer.insertFont(F25_11_FONT_ID, f25_11FontFamily);
+  renderer.insertFont(F25_12_FONT_ID, f25_12FontFamily);
+  renderer.insertFont(F25_13_FONT_ID, f25_13FontFamily);
+  renderer.insertFont(F25_14_FONT_ID, f25_14FontFamily);
+  renderer.insertFont(F25_16_FONT_ID, f25_16FontFamily);
+  renderer.insertFont(F25_17_FONT_ID, f25_17FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
@@ -652,8 +671,15 @@ void setup() {
   t1 = millis();
 
   gpio.begin();
+  LOG_INF("MAIN", "Hardware detect: %s", gpio.deviceIsX3() ? "X3" : "X4");
   powerManager.begin();
   HalSystem::begin();
+
+  // X3-only peripherals. Both self-gate on gpio.deviceIsX3() and share the I2C
+  // bus HalPowerManager::begin() just opened, so on an X4 these leave the HALs
+  // unavailable and every clock/tilt code path downstream is inert.
+  halClock.begin();
+  halTiltSensor.begin();
 
   // Silent-reboot detection (PR upstream #1908). Run-and-clear right after
   // HalSystem::begin so a panic later in setup() can't loop us back into a
@@ -891,10 +917,6 @@ void setup() {
 
   if (bootActivity) bootActivity->setProgress(100, goHome ? "Opening home" : "Opening book");
 
-  // Phase 1 BDF custom-font scan. Runs after APP_STATE is loaded so the
-  // seen/skipped vectors are populated. If any new BDF is queued, the popup
-  // replaces BootActivity; the final dismiss callback transitions to the
-  // boot destination via ActivityRouter::begin (synchronous dispatch).
   auto launchBootDestination = [goHome, readerPath]() {
     if (goHome) {
       lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Home, ""});
@@ -902,22 +924,6 @@ void setup() {
       lifecycle::ActivityRouter::instance().begin({lifecycle::RouteId::Reader, readerPath});
     }
   };
-
-  // Ensure /custom-font/ exists so the web UI can drop freshly-baked
-  // .bin files there without first creating the directory by hand.
-  // mkdir is idempotent; harmless when the dir already exists.
-  Storage.mkdir("/custom-font");
-
-  // One-shot: on the first boot after updating to the .bin pipeline, wipe
-  // any leftover .bdf / .idx files from the previous BDF pipeline. A flag
-  // in state.json keeps this from re-running every boot.
-  crosspoint::fonts::cleanupLegacyBdfFiles();
-
-  // Stash renderer, scan /custom-font/, and revert SETTINGS to the
-  // built-in default if the active custom font is missing on disk or its
-  // CPBN header is malformed. Single call replaces the boot fallback
-  // orchestration that lived inline here.
-  crosspoint::fonts::bootInitializeCustomFonts(renderer, SETTINGS);
 
   launchBootDestination();
 
@@ -931,6 +937,13 @@ void loop() {
   static unsigned long lastMemPrint = 0;
 
   gpio.update();
+
+  // X3 gyro tilt page-turn. On an X4 the sensor is unavailable so this returns
+  // on the first branch (no I2C, negligible cost). On an X3 it only polls the
+  // IMU while in the reader with tilt enabled; events are consumed by the
+  // reader's input snapshot. Placed AFTER gpio.update() so it never delays input.
+  halTiltSensor.update(SETTINGS.tiltPageTurn, SETTINGS.orientation,
+                       currentActivity && currentActivity->isReaderActivity());
 
   // Re-arm the OOM new-handler net and reset its per-episode shed budget, so a
   // memory-pressure episode in one tick gets a fresh shed-and-retry next tick.
@@ -990,7 +1003,11 @@ void loop() {
   // idle power-saving throttle never engages mid-press and makes navigation
   // feel sluggish.
   static unsigned long lastActivityTime = millis();
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.isAnyPressed() ||
+  // A tilt-page-turn flick counts as activity so reading by tilt alone does not
+  // auto-sleep. hadActivity() is consuming + always false on X4, so it is
+  // evaluated unconditionally (not short-circuited) to keep the consume stable.
+  const bool tiltActivity = halTiltSensor.hadActivity();
+  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.isAnyPressed() || tiltActivity ||
       (currentActivity && currentActivity->preventAutoSleep())) {
     lastActivityTime = millis();         // Reset inactivity timer
     powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity

@@ -29,8 +29,6 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["name"] = theme.name;
   obj["fontFamily"] = theme.fontFamily;
   obj["fontSize"] = theme.fontSize;
-  obj["customFontName"] = theme.customFontName;
-  obj["customFontSizePt"] = theme.customFontSizePt;
   obj["lineSpacingPercent"] = theme.lineSpacingPercent;
   obj["uniformMargins"] = theme.uniformMargins;
   obj["dynamicMargins"] = theme.dynamicMargins;
@@ -73,6 +71,13 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["statusBarBookPageCounterPosition"] = theme.statusBarBookPageCounterPosition;
   obj["statusBarShowPagesLeft"] = theme.statusBarShowPagesLeft;
   obj["statusBarPagesLeftPosition"] = theme.statusBarPagesLeftPosition;
+  obj["statusBarTitleContent"] = theme.statusBarTitleContent;
+  obj["statusBarShowChapterNumber"] = theme.statusBarShowChapterNumber;
+  obj["statusBarChapterNumberPosition"] = theme.statusBarChapterNumberPosition;
+  obj["statusBarShowQuoteCount"] = theme.statusBarShowQuoteCount;
+  obj["statusBarQuoteCountPosition"] = theme.statusBarQuoteCountPosition;
+  obj["statusBarShowFreeHeap"] = theme.statusBarShowFreeHeap;
+  obj["statusBarFreeHeapPosition"] = theme.statusBarFreeHeapPosition;
 }
 
 void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
@@ -81,8 +86,6 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
                                CrossPointSettings::FONT_FAMILY_COUNT, CrossPointSettings::CHAREINK);
   theme.fontSize = clampEnum(obj["fontSize"] | (uint8_t)CrossPointSettings::SIZE_16,
                              CrossPointSettings::FONT_SIZE_COUNT, CrossPointSettings::SIZE_16);
-  theme.customFontName = std::string(obj["customFontName"] | "");
-  theme.customFontSizePt = obj["customFontSizePt"] | (uint8_t)0;
   theme.lineSpacingPercent = obj["lineSpacingPercent"] | (uint8_t)110;
   theme.uniformMargins = obj["uniformMargins"] | (uint8_t)0;
   if (theme.uniformMargins > 1) theme.uniformMargins = 0;
@@ -171,6 +174,16 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.statusBarShowPagesLeft = obj["statusBarShowPagesLeft"] | (uint8_t)0;
   theme.statusBarPagesLeftPosition =
       obj["statusBarPagesLeftPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT;
+  theme.statusBarTitleContent = obj["statusBarTitleContent"] | (uint8_t)CrossPointSettings::STATUS_TITLE_CHAPTER;
+  theme.statusBarShowChapterNumber = obj["statusBarShowChapterNumber"] | (uint8_t)0;
+  theme.statusBarChapterNumberPosition =
+      obj["statusBarChapterNumberPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
+  theme.statusBarShowQuoteCount = obj["statusBarShowQuoteCount"] | (uint8_t)0;
+  theme.statusBarQuoteCountPosition =
+      obj["statusBarQuoteCountPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT;
+  theme.statusBarShowFreeHeap = obj["statusBarShowFreeHeap"] | (uint8_t)0;
+  theme.statusBarFreeHeapPosition =
+      obj["statusBarFreeHeapPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_TOP_RIGHT;
   theme = ReadingThemeStore::normalizeTheme(theme);
 }
 }  // namespace
@@ -475,6 +488,11 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["useFactoryLUT"] = s.useFactoryLUT;
   doc["shortPwrBtn"] = s.shortPwrBtn;
   doc["orientation"] = s.orientation;
+  doc["tiltPageTurn"] = s.tiltPageTurn;
+  doc["statusBarClock"] = s.statusBarClock;
+  doc["clockUtcOffsetQ"] = s.clockUtcOffsetQ;
+  doc["clockFormat"] = s.clockFormat;
+  doc["clockHasBeenSynced"] = s.clockHasBeenSynced;
   doc["sideButtonLayout"] = s.sideButtonLayout;
   doc["frontButtonBack"] = s.frontButtonBack;
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
@@ -482,8 +500,6 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["frontButtonRight"] = s.frontButtonRight;
   doc["fontFamily"] = s.fontFamily;
   doc["fontSize"] = s.fontSize;
-  doc["customFontName"] = s.customFontName;
-  doc["customFontSizePt"] = s.customFontSizePt;
   doc["lineSpacing"] = s.lineSpacing;
   doc["lineSpacingPercent"] = s.lineSpacingPercent;
   doc["paragraphAlignment"] = s.paragraphAlignment;
@@ -516,9 +532,8 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
 }
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
-  LOG_DIAG("CPS", "saveSettings: enter ff=%u fs=%u lsp=%u customFont='%s' cfsPt=%u path=%s", (unsigned)s.fontFamily,
-           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, s.customFontName.c_str(), (unsigned)s.customFontSizePt,
-           path);
+  LOG_DIAG("CPS", "saveSettings: enter ff=%u fs=%u lsp=%u path=%s", (unsigned)s.fontFamily, (unsigned)s.fontSize,
+           (unsigned)s.lineSpacingPercent, path);
   JsonDocument doc;
   populateSettingsDoc(s, doc);
 
@@ -726,6 +741,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.useFactoryLUT = (doc["useFactoryLUT"] | 0) ? 1 : 0;
   setBitmapHelpersUseFactoryLUT(s.useFactoryLUT != 0);
   s.shortPwrBtn = clampEnum(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
+  s.tiltPageTurn = clampEnum(doc["tiltPageTurn"] | (uint8_t)S::TILT_OFF, S::TILT_PAGE_TURN_COUNT, S::TILT_OFF);
+  s.statusBarClock = (doc["statusBarClock"] | 0) ? 1 : 0;
+  // Biased quarter-hour UTC offset, clamped to [-12:00 .. +14:00] (0..104).
+  s.clockUtcOffsetQ = clampEnum(doc["clockUtcOffsetQ"] | (uint8_t)48, (uint8_t)105, (uint8_t)48);
+  s.clockFormat = (doc["clockFormat"] | 0) ? 1 : 0;
+  s.clockHasBeenSynced = (doc["clockHasBeenSynced"] | 0) ? 1 : 0;
   s.orientation = clampEnum(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
   s.sideButtonLayout =
       clampEnum(doc["sideButtonLayout"] | (uint8_t)S::PREV_NEXT, S::SIDE_BUTTON_LAYOUT_COUNT, S::PREV_NEXT);
@@ -747,11 +768,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
            (unsigned)ffClamped, (unsigned)s.fontFamily);
   s.fontSize = clampEnum(doc["fontSize"] | (uint8_t)S::SIZE_16, S::FONT_SIZE_COUNT, S::SIZE_16);
   s.fontSize = S::normalizeFontSizeForFamily(s.fontFamily, s.fontSize);
-  // customFontName is optional; absent → empty (old settings.json migrates
-  // cleanly). No clamp/validation here — ReaderSettingsActivity and
-  // getReaderFontId deal with stale/missing names at use time.
-  s.customFontName = std::string(doc["customFontName"] | "");
-  s.customFontSizePt = doc["customFontSizePt"] | (uint8_t)0;
   s.lineSpacing = clampEnum(doc["lineSpacing"] | (uint8_t)S::NORMAL, S::LINE_COMPRESSION_COUNT, S::NORMAL);
   if (!doc["lineSpacingPercent"].isNull()) {
     const uint8_t parsed = doc["lineSpacingPercent"] | (uint8_t)110;
@@ -832,9 +848,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     if (!pass.empty() && needsResave) *needsResave = true;
   }
   StringUtils::safeStrncpy(s.opdsPassword, pass.c_str());
-  LOG_DIAG("CPS", "loadSettings: ff=%u fs=%u lsp=%u customFont='%s' cfsPt=%u", (unsigned)s.fontFamily,
-           (unsigned)s.fontSize, (unsigned)s.lineSpacingPercent, s.customFontName.c_str(),
-           (unsigned)s.customFontSizePt);
+  LOG_DIAG("CPS", "loadSettings: ff=%u fs=%u lsp=%u", (unsigned)s.fontFamily, (unsigned)s.fontSize,
+           (unsigned)s.lineSpacingPercent);
   return true;
 }
 

@@ -32,43 +32,29 @@ echo "#define BOOKERLY_15_FONT_ID ($(font_id ./bookerly_15_regular.h ./bookerly_
 echo "#define BOOKERLY_16_FONT_ID ($(font_id ./bookerly_16_regular.h ./bookerly_16_bold.h ./bookerly_16_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_17_FONT_ID ($(font_id ./bookerly_17_regular.h ./bookerly_17_bold.h ./bookerly_17_italic.h $(reader_shared bookerly)))"
 echo ""
-echo "#define VOLLKORN_10_FONT_ID ($(font_id ./vollkorn_10_regular.h ./vollkorn_10_bold.h ./vollkorn_10_italic.h))"
-echo "#define VOLLKORN_12_FONT_ID ($(font_id ./vollkorn_12_regular.h ./vollkorn_12_bold.h ./vollkorn_12_italic.h $(reader_shared vollkorn)))"
-echo "#define VOLLKORN_13_FONT_ID ($(font_id ./vollkorn_13_regular.h ./vollkorn_13_bold.h ./vollkorn_13_italic.h $(reader_shared vollkorn)))"
-echo "#define VOLLKORN_14_FONT_ID ($(font_id ./vollkorn_14_regular.h ./vollkorn_14_bold.h ./vollkorn_14_italic.h $(reader_shared vollkorn)))"
-echo "#define VOLLKORN_15_FONT_ID ($(font_id ./vollkorn_15_regular.h ./vollkorn_15_bold.h ./vollkorn_15_italic.h $(reader_shared vollkorn)))"
-echo "#define VOLLKORN_16_FONT_ID ($(font_id ./vollkorn_16_regular.h ./vollkorn_16_bold.h ./vollkorn_16_italic.h $(reader_shared vollkorn)))"
-echo "#define VOLLKORN_17_FONT_ID ($(font_id ./vollkorn_17_regular.h ./vollkorn_17_bold.h ./vollkorn_17_italic.h $(reader_shared vollkorn)))"
-echo ""
-# Bitter: experimental slab-serif reader font (debug env only). Three
-# weight-specific shared-tables headers like the other reader families.
+# Georgia: serif reader font. Sizes 10,12,13,14,15,16,17, three faces
+# (Regular/Bold/Italic). No shared tables (dedup-shared-tables.py does not
+# process Georgia), so each ID hashes just the three per-size headers.
 for size in 10 12 13 14 15 16 17; do
-  if [[ -f "./bitter_${size}_regular.h" ]]; then
-    if [[ "$size" == "10" ]]; then
-      echo "#define BITTER_${size}_FONT_ID ($(font_id ./bitter_${size}_regular.h ./bitter_${size}_bold.h ./bitter_${size}_italic.h))"
-    else
-      echo "#define BITTER_${size}_FONT_ID ($(font_id ./bitter_${size}_regular.h ./bitter_${size}_bold.h ./bitter_${size}_italic.h $(reader_shared bitter)))"
-    fi
+  if [[ -f "./georgia_${size}_regular.h" ]]; then
+    echo "#define GEORGIA_${size}_FONT_ID ($(font_id ./georgia_${size}_regular.h ./georgia_${size}_bold.h ./georgia_${size}_italic.h))"
   fi
 done
 echo ""
-echo "#define UNIFONT_14_FONT_ID ($(font_id ./unifont_14_regular.h))"
-echo "#define UNIFONT_18_FONT_ID ($(font_id ./unifont_18_regular.h))"
+# Pixel32 (Pix32): pixel display reader font. Sizes 12,14,16, three faces. No
+# shared tables (dedup does not process it), so each ID hashes the per-size headers.
+for size in 12 14 16; do
+  if [[ -f "./pixel32_${size}_regular.h" ]]; then
+    echo "#define PIXEL32_${size}_FONT_ID ($(font_id ./pixel32_${size}_regular.h ./pixel32_${size}_bold.h ./pixel32_${size}_italic.h))"
+  fi
+done
 echo ""
-# Galmuri: experimental Korean pixel font (debug env only). Regular-only
-# headers; italic/bold are synthesized at draw time by EpdFontFamily. Hash
-# includes the shared tables header so any Intervals / kerning change
-# invalidates the on-SD font cache.
-galmuri_shared() {
-  echo "./shared/galmuri_regular_tables.h"
-}
-for size in 10 11 12 13 14 15 16 17; do
-  if [[ -f "./galmuri_${size}_regular.h" ]]; then
-    if [[ "$size" == "10" ]]; then
-      echo "#define GALMURI_${size}_FONT_ID ($(font_id ./galmuri_${size}_regular.h))"
-    else
-      echo "#define GALMURI_${size}_FONT_ID ($(font_id ./galmuri_${size}_regular.h $(galmuri_shared)))"
-    fi
+# F25 Bank Printer: stylised display reader font. Sizes 10,11,12,13,14,16,17,
+# three faces (Regular/Bold/Italic). No shared tables (dedup-shared-tables.py
+# does not process F25), so each ID hashes just the three per-size headers.
+for size in 10 11 12 13 14 16 17; do
+  if [[ -f "./f25_${size}_regular.h" ]]; then
+    echo "#define F25_${size}_FONT_ID ($(font_id ./f25_${size}_regular.h ./f25_${size}_bold.h ./f25_${size}_italic.h))"
   fi
 done
 echo ""

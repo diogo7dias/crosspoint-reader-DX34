@@ -1,5 +1,7 @@
 #pragma once
 
+#include <HalClock.h>
+#include <HalTiltSensor.h>
 #include <I18n.h>
 
 #include <vector>
@@ -68,7 +70,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     // --- Reader ---
     s.push_back(SettingInfo::Enum(
         StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-        {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN, StrId::STR_GALMURI, StrId::STR_BITTER},
+        {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_F25_BANK_PRINTER,
+         StrId::STR_PIXEL32},
         "fontFamily", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                   {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}, "fontSize",
@@ -117,7 +120,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                    StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50},
                                   "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                  {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC},
+                                  {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC,
+                                   StrId::STR_RENDER_THIN},
                                   "textRenderMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled,
                                     "hyphenationEnabled", StrId::STR_CAT_READER));
@@ -173,6 +177,9 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
                                   {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM},
                                   "statusBarTitlePosition", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Enum(StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
+                                  {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR},
+                                  "statusBarTitleContent", StrId::STR_STATUS_BAR));
     s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
                                     &CrossPointSettings::statusBarNoTitleTruncation, "statusBarNoTitleTruncation",
                                     StrId::STR_STATUS_BAR));
@@ -199,6 +206,27 @@ inline const std::vector<SettingInfo>& getSettingsList() {
         {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
          StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
         "statusBarPagesLeftPosition", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_NUMBER, &CrossPointSettings::statusBarShowChapterNumber,
+                                    "statusBarShowChapterNumber", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Enum(
+        StrId::STR_STATUS_CHAPTER_NUMBER_POSITION, &CrossPointSettings::statusBarChapterNumberPosition,
+        {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+         StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
+        "statusBarChapterNumberPosition", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_QUOTE_COUNT, &CrossPointSettings::statusBarShowQuoteCount,
+                                    "statusBarShowQuoteCount", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Enum(
+        StrId::STR_STATUS_QUOTE_COUNT_POSITION, &CrossPointSettings::statusBarQuoteCountPosition,
+        {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+         StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
+        "statusBarQuoteCountPosition", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_FREE_HEAP, &CrossPointSettings::statusBarShowFreeHeap,
+                                    "statusBarShowFreeHeap", StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Enum(
+        StrId::STR_STATUS_FREE_HEAP_POSITION, &CrossPointSettings::statusBarFreeHeapPosition,
+        {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+         StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
+        "statusBarFreeHeapPosition", StrId::STR_STATUS_BAR));
 
     // --- Controls ---
     s.push_back(SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
@@ -209,6 +237,27 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
                                   {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH},
                                   "shortPwrBtn", StrId::STR_CAT_CONTROLS));
+
+    // X3-only: gyro tilt page-turn. The list is built once on first call, after
+    // boot detection, so isAvailable() is already resolved; absent on the X4.
+    if (halTiltSensor.isAvailable()) {
+      s.push_back(SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
+                                    {StrId::STR_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED}, "tiltPageTurn",
+                                    StrId::STR_CAT_CONTROLS));
+    }
+
+    // X3-only: DS3231 status-bar clock. statusBarClock + UTC offset + 12/24h
+    // format are exposed here. The offset is a VALUE picker over the biased
+    // quarter-hour range (48 = UTC+0); SettingsActivity renders it as UTC+H:MM.
+    if (halClock.isAvailable()) {
+      s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BAR_CLOCK, &CrossPointSettings::statusBarClock,
+                                      "statusBarClock", StrId::STR_CAT_CONTROLS));
+      s.push_back(SettingInfo::Value(StrId::STR_CLOCK_UTC_OFFSET, &CrossPointSettings::clockUtcOffsetQ, {0, 104, 1},
+                                     "clockUtcOffsetQ", StrId::STR_CAT_CONTROLS));
+      s.push_back(SettingInfo::Enum(StrId::STR_CLOCK_FORMAT, &CrossPointSettings::clockFormat,
+                                    {StrId::STR_CLOCK_24H, StrId::STR_CLOCK_12H}, "clockFormat",
+                                    StrId::STR_CAT_CONTROLS));
+    }
 
     // --- System ---
     s.push_back(

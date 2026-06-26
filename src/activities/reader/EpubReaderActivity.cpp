@@ -10,6 +10,7 @@
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
+#include <HalTiltSensor.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <esp_heap_caps.h>
@@ -41,7 +42,6 @@
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomBinFontManager.h"
 #include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
 #include "util/FavoriteImage.h"
@@ -121,6 +121,10 @@ constexpr size_t kAnchorReacquireHeadroom = 8 * 1024;
 void EpubReaderActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
+  // Recompute the saved-quote count lazily on next status render — picks up
+  // quotes deleted in the viewer subactivity since we last entered.
+  cachedQuoteCount_ = -1;
+
   if (!epub) {
     return;
   }
@@ -188,28 +192,6 @@ void EpubReaderActivity::onEnter() {
   ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
   ImageBlock::setDitherMode(SETTINGS.imageDither);
-
-  // Activate the custom font before the first drawText — chrome (page
-  // counter, header) draws in onEnter, which would otherwise log
-  // "Font not found" with a broken glyph on the first paint. If the
-  // font is corrupt or unloadable, fall back to the default built-in
-  // and persist so the next boot doesn't repeat the OOM dance that
-  // bricked the device on broken-DEFLATE fonts.
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
-    const bool ok = crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName,
-                                                                                 SETTINGS.customFontSizePt);
-    if (!ok) {
-      LOG_ERR("ERS", "custom font '%s' failed to activate; reverting to CHAREINK 12", SETTINGS.customFontName.c_str());
-      SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
-      SETTINGS.fontSize = CrossPointSettings::SIZE_12;
-      SETTINGS.customFontName.clear();
-      SETTINGS.customFontSizePt = 0;
-      // Persist into the active context: per-book file when this revert
-      // happens inside an open book, never the global file (otherwise the
-      // per-book theme already applied to SETTINGS would leak into globals).
-      ReadingThemeStore::persistContextual(epub ? epub->getCachePath() : std::string());
-    }
-  }
 
   epub->setupCacheDir();
 
@@ -566,6 +548,14 @@ int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidt
   if (!epub || usableWidth <= 0) {
     return 1;
   }
+  // Book+author title is a single fixed string per book — wrap it directly
+  // rather than going through the per-chapter TOC measurement + cache.
+  if (SETTINGS.statusBarShowChapterTitle &&
+      SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
+    const int lines = static_cast<int>(
+        wrapStatusText(renderer, SETTINGS.getStatusBarFontId(), buildBookAuthorTitleText(), usableWidth).size());
+    return std::max(1, lines);
+  }
   // Composite cache key: (spineIndex, usableWidth, noTitleTruncation). All three must match for
   // the cached reserve-line count to be valid.
   //   spineIndex          — the TOC title set changes per chapter.
@@ -693,12 +683,45 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
     layout.pagesLeftTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
   }
 
+  if (SETTINGS.statusBarShowChapterNumber) {
+    const int total = epub->getTocItemsCount();
+    const int tocIndex = section->getTocIndexForPage(section->currentPage);
+    if (total > 0 && tocIndex >= 0) {
+      const int chapterNum = std::min(tocIndex + 1, total);
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%s %d/%d", tr(STR_STATUS_CHAPTER_NUMBER_LABEL), chapterNum, total);
+      layout.chapterNumberText = buf;
+      layout.chapterNumberTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+    }
+  }
+
+  if (SETTINGS.statusBarShowQuoteCount) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%d %s", getQuoteCountCached(), tr(STR_STATUS_QUOTE_LABEL));
+    layout.quoteCountText = buf;
+    layout.quoteCountTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  }
+
+  if (SETTINGS.statusBarShowFreeHeap) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "RAM %uK", static_cast<unsigned>(ESP.getFreeHeap() / 1024));
+    layout.freeHeapText = buf;
+    layout.freeHeapTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  }
+
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
-    const int tocIndex = section->getTocIndexForPage(section->currentPage);
-    layout.titleLines =
-        getStatusBarTitleLines(tocIndex, titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
+    if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
+      // Constant per book, so it's cheap to wrap inline each page turn (no cache).
+      layout.titleLines = ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(),
+                                                              buildBookAuthorTitleText(), titleWrapWidth,
+                                                              SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
+    } else {
+      const int tocIndex = section->getTocIndexForPage(section->currentPage);
+      layout.titleLines =
+          getStatusBarTitleLines(tocIndex, titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
+    }
     layout.titleLineWidths.reserve(layout.titleLines.size());
     for (const auto& line : layout.titleLines) {
       layout.titleLineWidths.push_back(renderer.getTextWidth(SETTINGS.getStatusBarFontId(), line.c_str()));
@@ -867,6 +890,16 @@ crosspoint::reader::ReaderInput EpubReaderActivity::snapshotInput() {
   in.anyReleased = mappedInput.wasAnyReleased();
   in.heldTimeMs = mappedInput.getHeldTime();
   in.nowMs = millis();
+
+  // X3 tilt page-turn: fold a flick gesture into the PageForward / PageBack
+  // pressed bits so the existing dispatcher turns the page exactly as a side
+  // button would. On the X4 halTiltSensor is unavailable so wasTilted*() always
+  // return false; the setting gate keeps it inert when the user disables it.
+  if (SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF) {
+    using RB = crosspoint::reader::ReaderButton;
+    if (halTiltSensor.wasTiltedForward()) in.pressed[static_cast<int>(RB::PageForward)] = true;
+    if (halTiltSensor.wasTiltedBack()) in.pressed[static_cast<int>(RB::PageBack)] = true;
+  }
   return in;
 }
 
@@ -1570,14 +1603,6 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   const uint8_t sectionTextRenderMode = SETTINGS.textRenderMode;
   const bool boldSwapEnabled = RECENT_BOOKS.getBoldSwap(epub->getPath());
 
-  // Per-book ReadingThemes can change SETTINGS.customFontName, so
-  // re-activate before layout reads the font id.
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY && !SETTINGS.customFontName.empty()) {
-    crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, SETTINGS.customFontSizePt);
-  }
-  LOG_DBG("HEAP", "ERS ensureSection:after-activate free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
-          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
-
   if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                 SETTINGS.extraParagraphSpacingLevel, SETTINGS.paragraphAlignment, viewportWidth,
                                 viewportHeight, SETTINGS.hyphenationEnabled != 0, SETTINGS.wordSpacingPercent,
@@ -1639,48 +1664,23 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
       // before re-attempting stream extraction (Section.cpp:312-314).
       // Most fragmentation-driven failures recover on this retry; only
       // genuine over-budget cases fall through to the auto-revert below.
-      LOG_DIAG(
-          "ERS",
-          "createSectionFile fail (1st) spine=%d fontId=%d family=%d sizePt=%u customFont=%s "
-          "free=%u largest=%u min=%u",
-          currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)SETTINGS.customFontSizePt,
-          SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(), (unsigned)ESP.getFreeHeap(),
-          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+      LOG_DIAG("ERS", "createSectionFile fail (1st) spine=%d fontId=%d family=%d free=%u largest=%u min=%u",
+               currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
       releaseMaxResources();
       LOG_DIAG("ERS", "retrying layout after defrag: largest=%u",
                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
       sectionOk = runLayout();
     }
     if (!sectionOk) {
-      LOG_DIAG(
-          "ERS",
-          "createSectionFile fail (2nd, terminal) spine=%d fontId=%d family=%d sizePt=%u "
-          "customFont=%s free=%u largest=%u min=%u",
-          currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)SETTINGS.customFontSizePt,
-          SETTINGS.customFontName.empty() ? "(none)" : SETTINGS.customFontName.c_str(), (unsigned)ESP.getFreeHeap(),
-          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
-      // Boot-loop safety net: when section layout fails twice AND a custom
-      // font is the active family, the user is heading toward a
-      // crash-on-every-page-turn pattern (custom font heap + ZIP inflator
-      // can't both fit). Revert to the default built-in font and persist
-      // so the retry below — and the next reopen — have the heap headroom
-      // they need to lay out the chapter.
-      if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-        LOG_ERR("ERS", "section layout failed under custom font; reverting to CHAREINK 12");
-        crosspoint::fonts::CustomBinFontManager::instance().deactivate();
-        SETTINGS.fontFamily = CrossPointSettings::CHAREINK;
-        SETTINGS.fontSize = CrossPointSettings::SIZE_12;
-        SETTINGS.customFontName.clear();
-        SETTINGS.customFontSizePt = 0;
-        ReadingThemeStore::persistContextual(epub ? epub->getCachePath() : std::string());
-      }
+      LOG_DIAG("ERS", "createSectionFile fail (2nd, terminal) spine=%d fontId=%d family=%d free=%u largest=%u min=%u",
+               currentSpineIndex, SETTINGS.getReaderFontId(), (int)SETTINGS.fontFamily, (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
       clearPageCache();
       section.reset();
-      // The font has already been reverted (if it was custom). The next
-      // ensureSectionLoaded — triggered by the user tapping any key per
-      // showLayoutRecoveryScreen — will use getReaderFontId() returning
-      // the built-in CHAREINK 12 id, which has full heap headroom and
-      // succeeds without further intervention.
+      // Layout failed twice even after a defrag retry. Paint the recoverable
+      // low-memory screen; tapping any key (per showLayoutRecoveryScreen)
+      // re-enters ensureSectionLoaded once the heap has more headroom.
       showLayoutRecoveryScreen(LayoutRecoveryState::AwaitingRetryAfterRevert);
       return false;
     }
@@ -2406,6 +2406,61 @@ std::string EpubReaderActivity::getChapterTitle() const {
   return "Chapter " + std::to_string(currentSpineIndex + 1);
 }
 
+std::string EpubReaderActivity::buildBookAuthorTitleText() const {
+  std::string text = epub ? epub->getTitle() : "";
+  const std::string author = epub ? epub->getAuthor() : "";
+  if (!author.empty()) {
+    if (!text.empty()) {
+      text += " - ";
+    }
+    text += author;
+  }
+  if (text.empty()) {
+    text = tr(STR_UNNAMED);
+  }
+  return text;
+}
+
+int EpubReaderActivity::getQuoteCountCached() {
+  if (cachedQuoteCount_ >= 0) {
+    return cachedQuoteCount_;
+  }
+  cachedQuoteCount_ = 0;
+  const std::string path = getQuotesFilePath();
+  if (path.empty() || !Storage.exists(path.c_str())) {
+    return 0;
+  }
+  HalFile f;
+  if (!Storage.openFileForRead("HLT", path, f)) {
+    return 0;
+  }
+  // Count "\n---\n" separators — one per saved quote. Chunked read with a small
+  // carry so a separator straddling a chunk boundary is still counted exactly once.
+  static constexpr char kSep[] = "\n---\n";
+  static constexpr int kSepLen = 5;
+  std::string window;
+  uint8_t buf[256];
+  int count = 0;
+  while (f.available()) {
+    const int rd = f.read(buf, sizeof(buf));
+    if (rd <= 0) {
+      break;
+    }
+    window.append(reinterpret_cast<const char*>(buf), static_cast<size_t>(rd));
+    size_t pos = 0;
+    while ((pos = window.find(kSep, pos)) != std::string::npos) {
+      count++;
+      pos += kSepLen;
+    }
+    if (window.size() > static_cast<size_t>(kSepLen - 1)) {
+      window.erase(0, window.size() - static_cast<size_t>(kSepLen - 1));
+    }
+  }
+  f.close();
+  cachedQuoteCount_ = count;
+  return count;
+}
+
 std::string EpubReaderActivity::getQuotesFilePath() const {
   if (!epub) return "";
   const std::string bookPath = epub->getPath();
@@ -2490,6 +2545,10 @@ void EpubReaderActivity::saveQuoteToFile(const std::string& quote) {
   }
 
   LOG_DBG("HLT", "Quote saved to %s", quotesPath.c_str());
+  // Keep the status-bar quote counter in sync without re-reading the file.
+  if (cachedQuoteCount_ >= 0) {
+    cachedQuoteCount_++;
+  }
 }
 
 // ── End Highlight / Quote selection mode ─────────────────────────────────────

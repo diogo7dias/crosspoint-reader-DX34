@@ -8,6 +8,7 @@ class FontCacheManager;
 #include <functional>
 #include <map>
 #include <memory>
+#include <vector>
 
 #include "Bitmap.h"
 
@@ -44,9 +45,15 @@ class GfxRenderer {
 
  private:
   static constexpr size_t BW_BUFFER_CHUNK_SIZE = 8000;  // 8KB chunks to allow for non-contiguous memory
-  static constexpr size_t BW_BUFFER_NUM_CHUNKS = HalDisplay::BUFFER_SIZE / BW_BUFFER_CHUNK_SIZE;
-  static_assert(BW_BUFFER_CHUNK_SIZE * BW_BUFFER_NUM_CHUNKS == HalDisplay::BUFFER_SIZE,
-                "BW buffer chunking does not line up with display buffer size");
+
+  // Runtime panel geometry, cached in begin() from the display driver. Defaults
+  // are the X4 panel; on the X3 they become 792x528 after setDisplayX3(). All
+  // render math reads these members so a single binary renders correctly on both
+  // panels. The chunk store below is sized from frameBufferSize at begin().
+  uint16_t panelWidth = HalDisplay::DISPLAY_WIDTH;
+  uint16_t panelHeight = HalDisplay::DISPLAY_HEIGHT;
+  uint16_t panelWidthBytes = HalDisplay::DISPLAY_WIDTH_BYTES;
+  uint32_t frameBufferSize = HalDisplay::BUFFER_SIZE;
 
   HalDisplay& display;
   RenderMode renderMode;
@@ -57,7 +64,10 @@ class GfxRenderer {
   bool pendingHalfRefresh;
   uint8_t textRenderStyle;  // 0=crisp, 1=dark
   uint8_t* frameBuffer = nullptr;
-  uint8_t* bwBufferChunks[BW_BUFFER_NUM_CHUNKS] = {nullptr};
+  // Chunked copy of the BW framebuffer during a grayscale render. Sized in
+  // begin() to ceil(frameBufferSize / BW_BUFFER_CHUNK_SIZE): X4 48000 -> 6
+  // chunks, X3 52272 -> 7 chunks (last chunk partial, clamped on copy).
+  std::vector<uint8_t*> bwBufferChunks;
   // Built-in fonts and user-installed .bin (CPBN) fonts share this map:
   // the CPBN loader hands an EpdFontFamily backed by SD-resident data to
   // insertFont() just like the built-ins do, so the text-dispatch paths
@@ -97,8 +107,6 @@ class GfxRenderer {
   void begin();  // must be called right after display.begin()
   void insertFont(int fontId, EpdFontFamily font);
   // Drops the font registered under `fontId`, if any. No-op when absent.
-  // Used by CustomBinFontManager when the active custom family changes
-  // so the old SD-backed EpdFontData buffers can be freed.
   void removeFont(int fontId);
 
   // Orientation control (affects logical width/height and coordinate
@@ -217,5 +225,5 @@ class GfxRenderer {
 
   // Low level functions
   uint8_t* getFrameBuffer() const;
-  static size_t getBufferSize();
+  size_t getBufferSize() const;
 };

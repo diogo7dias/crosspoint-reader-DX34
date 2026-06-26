@@ -2,6 +2,7 @@
 
 #include <Bitmap.h>
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <HalGPIO.h>
 #include <HalStorage.h>
 #include <Logging.h>
@@ -454,16 +455,30 @@ uint64_t BaseTheme::homeInfoStatsSignature() {
          stats.freeBytes;
 }
 
-void BaseTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
-  // Reader/status usage is text-only for a cleaner, more compact layout.
+int BaseTheme::batteryLeftWidth(const GfxRenderer& renderer, const bool showPercentage, const int textFont,
+                                const int iconWidth) const {
   if (!showPercentage) {
-    return;
+    return iconWidth;
   }
+  return iconWidth + batteryPercentSpacing + renderer.getTextWidth(textFont, "100%");
+}
+
+void BaseTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage, const int textFont,
+                                const int iconWidth, const int iconHeight) const {
+  // Reader status bar: battery icon on the left, "NN%" to its right. The icon is
+  // vertically centered within rect.height (the status-text line height) and the
+  // percentage uses the status-bar font so it matches the size of the adjacent
+  // status items instead of a smaller fixed font.
   const uint16_t percentage = battery.readPercentage();
-  const auto percentageText = std::to_string(percentage) + "%";
-  const int textHeight = renderer.getTextHeight(SMALL_FONT_ID);
-  const int textY = rect.y + std::max(0, (rect.height - textHeight) / 2);
-  renderer.drawText(SMALL_FONT_ID, rect.x, textY, percentageText.c_str());
+  const int iconY = rect.y + std::max(0, (rect.height - iconHeight) / 2);
+  drawBatteryIcon(renderer, rect.x, iconY, iconWidth, iconHeight, percentage);
+  if (showPercentage) {
+    const auto percentageText = std::to_string(percentage) + "%";
+    const int textHeight = renderer.getTextHeight(textFont);
+    const int textX = rect.x + iconWidth + batteryPercentSpacing;
+    const int textY = rect.y + std::max(0, (rect.height - textHeight) / 2);
+    renderer.drawText(textFont, textX, textY, percentageText.c_str());
+  }
 }
 
 void BaseTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const bool showPercentage, const int textFont,
@@ -741,6 +756,19 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   const int batteryX = rect.x + rect.width - 12 - (showBatteryIcon ? batteryIconWidth : 0);
   drawBatteryRight(renderer, Rect{batteryX, rect.y + 5, batteryIconWidth, batteryIconHeight}, showBatteryPercentage,
                    batteryTextFont, batteryIconWidth, batteryIconHeight, showBatteryIcon);
+
+  // X3 DS3231 status-bar clock, drawn just left of the battery. Gated on the
+  // setting AND RTC availability, so it is never drawn on an X4 (isAvailable is
+  // false there) and costs that path nothing.
+  if (SETTINGS.statusBarClock && halClock.isAvailable()) {
+    char timeBuf[10];
+    if (halClock.formatTime(timeBuf, sizeof(timeBuf), SETTINGS.clockUtcOffsetQ, SETTINGS.clockFormat != 0)) {
+      const int battTextW = showBatteryPercentage ? renderer.getTextWidth(batteryTextFont, "100%") : 0;
+      const int clockW = renderer.getTextWidth(batteryTextFont, timeBuf);
+      const int clockX = batteryX - battTextW - 8 - clockW;
+      renderer.drawText(batteryTextFont, clockX, rect.y + 5, timeBuf, true);
+    }
+  }
 
   if (title) {
     const int padding = 12 + (showBatteryPercentage ? renderer.getTextWidth(batteryTextFont, "100%") : 0);

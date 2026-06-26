@@ -93,6 +93,13 @@ class CrossPointSettings {
     STATUS_TEXT_BOTTOM_RIGHT = 5,
     STATUS_BAR_TEXT_POSITION_COUNT
   };
+  // What the status-bar title row renders: the current chapter title (default)
+  // or the book title + author. EPUB-only; TXT always shows the file name.
+  enum STATUS_BAR_TITLE_CONTENT {
+    STATUS_TITLE_CHAPTER = 0,
+    STATUS_TITLE_BOOK_AUTHOR = 1,
+    STATUS_BAR_TITLE_CONTENT_COUNT
+  };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -101,6 +108,10 @@ class CrossPointSettings {
     LANDSCAPE_CCW = 3,  // 800x480 logical coordinates, native panel orientation
     ORIENTATION_COUNT
   };
+
+  // X3-only gyro tilt page-turn. Values MUST match HalTiltSensor's
+  // CrossPointTiltPageTurn (TILT_OFF=0, TILT_NORMAL=1, TILT_INVERTED=2).
+  enum TILT_PAGE_TURN { TILT_OFF = 0, TILT_NORMAL = 1, TILT_INVERTED = 2, TILT_PAGE_TURN_COUNT };
 
   // Front button layout options (legacy)
   // Default: Back, Confirm, Left, Right
@@ -127,23 +138,21 @@ class CrossPointSettings {
   // Swapped: Next, Previous
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
 
-  // Font family options. Values 3-8 are legacy (removed families) and
-  // normalize to CHAREINK via normalizeFontFamily(). GALMURI uses value 9
-  // (first slot after the legacy-removed range).
+  // Font family options. Several values are legacy gaps left intentionally so a
+  // persisted selection on a removed family normalizes to CHAREINK via
+  // normalizeFontFamily() instead of aliasing to a different family:
+  //   2    VOLLKORN (removed 2026-06)
+  //   3-8  legacy removed families
+  //   9    GALMURI  (removed 2026-06)
+  //   10   TT2020   (removed 2026-04)
+  //   11   BITTER   (removed 2026-06)
+  //   12   CUSTOM   (user-uploaded .bin custom-font feature removed 2026-06)
   enum FONT_FAMILY {
     CHAREINK = 0,
     BOOKERLY = 1,
-    VOLLKORN = 2,
-    GALMURI = 9,
-    // TT2020 (was 10) removed in 2026-04 to reclaim flash. Legacy value 10
-    // normalizes to CHAREINK via normalizeFontFamily().
-    BITTER = 11,
-    // Phase 2b: single custom-font slot bound to unifont_16. When no custom
-    // font is registered at runtime the reader falls back to CHAREINK.
-    // Named CUSTOM_FAMILY (not CUSTOM) because the SLEEP_SCREEN_MODE enum
-    // in this same class already uses CUSTOM — C++ unscoped enums share
-    // a single name space per containing class.
-    CUSTOM_FAMILY = 12,
+    F25_BANK_PRINTER = 13,  // stylised display reader font
+    GEORGIA = 14,           // serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
+    PIXEL32 = 15,           // pixel display reader font (sizes 12, 14, 16)
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
@@ -183,7 +192,16 @@ class CrossPointSettings {
     FIRST_LINE_INDENT_MODE_COUNT
   };
   enum READER_STYLE_MODE { READER_STYLE_USER = 0, READER_STYLE_HYBRID = 1, READER_STYLE_MODE_COUNT };
-  enum TEXT_RENDER_MODE { TEXT_RENDER_CRISP = 0, TEXT_RENDER_DARK = 1, TEXT_RENDER_BIONIC = 2, TEXT_RENDER_MODE_COUNT };
+  enum TEXT_RENDER_MODE {
+    TEXT_RENDER_CRISP = 0,
+    TEXT_RENDER_DARK = 1,
+    TEXT_RENDER_BIONIC = 2,
+    // Thin: in the 1-bit reading blit, drop the lightest anti-alias edge ring
+    // (light-grey shade) instead of promoting every non-white shade to black.
+    // Yields crisper, less-blobby small text. Handled in GfxRenderer renderChar.
+    TEXT_RENDER_THIN = 3,
+    TEXT_RENDER_MODE_COUNT
+  };
   enum EXTRA_PARAGRAPH_SPACING_LEVEL {
     EXTRA_SPACING_OFF = 0,
     EXTRA_SPACING_S = 1,
@@ -280,6 +298,17 @@ class CrossPointSettings {
   // Pages remaining to the end of the current chapter (whole file for TXT).
   uint8_t statusBarShowPagesLeft = 0;
   uint8_t statusBarPagesLeftPosition = STATUS_TEXT_BOTTOM_RIGHT;
+  // Title row content: chapter title vs book title + author (EPUB only).
+  uint8_t statusBarTitleContent = STATUS_TITLE_CHAPTER;
+  // "Ch N/M" chapter-index readout (EPUB only; blank for TXT).
+  uint8_t statusBarShowChapterNumber = 0;
+  uint8_t statusBarChapterNumberPosition = STATUS_TEXT_BOTTOM_LEFT;
+  // "N quotes" saved-quote counter for the current book (EPUB only).
+  uint8_t statusBarShowQuoteCount = 0;
+  uint8_t statusBarQuoteCountPosition = STATUS_TEXT_BOTTOM_RIGHT;
+  // "RAM NNNK" free-heap debug readout.
+  uint8_t statusBarShowFreeHeap = 0;
+  uint8_t statusBarFreeHeapPosition = STATUS_TEXT_TOP_RIGHT;
   // Visual style of the quotes viewer (Classic / Terminal / Index-card / Manuscript)
   uint8_t quoteScreenStyle = QUOTE_STYLE_CLASSIC;
   // Text rendering settings
@@ -304,6 +333,14 @@ class CrossPointSettings {
   // 0 = portrait (default), 1 = landscape clockwise, 2 = inverted, 3 =
   // landscape counter-clockwise
   uint8_t orientation = PORTRAIT;
+  // X3-only gyro tilt page-turn (TILT_OFF default; no-op on X4). Gated in the
+  // settings UI on halTiltSensor.isAvailable().
+  uint8_t tiltPageTurn = TILT_OFF;
+  // X3-only DS3231 clock UI (all gated on halClock.isAvailable(), so inert on X4).
+  uint8_t statusBarClock = 0;       // show clock in the reader status bar
+  uint8_t clockUtcOffsetQ = 48;     // biased quarter-hour UTC offset (48 = UTC+0)
+  uint8_t clockFormat = 0;          // 0 = 24-hour, 1 = 12-hour AM/PM
+  uint8_t clockHasBeenSynced = 0;   // set once after the first successful NTP sync
   // Button layouts (front layout retained for migration only)
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;
@@ -325,16 +362,6 @@ class CrossPointSettings {
   // is restored on the next book open (the reader also clears it on exit). See
   // EpubReaderActivity render-OOM recovery.
   bool emergencyRenderFontDowngrade = false;
-  // When fontFamily == CUSTOM_FAMILY, this names the user-dropped family
-  // to dispatch to (filename stem, e.g. "unifont"). Empty string falls
-  // back to CHAREINK at reader-font-id resolution time.
-  std::string customFontName;
-  // Selected pixel size for the active custom family. Paired with
-  // customFontName so a family dropped at multiple sizes (e.g.
-  // fontA_17.bdf + fontA_20.bdf) can be switched via the reader Font
-  // Size picker. 0 = "not yet picked"; picker first-opens defaults to
-  // the smallest available size.
-  uint8_t customFontSizePt = 0;
   // Legacy line spacing setting (kept for migration from old settings files)
   uint8_t lineSpacing = NORMAL;
   // Reader line spacing percentage (35..150)

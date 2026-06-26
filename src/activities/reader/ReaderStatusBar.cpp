@@ -120,8 +120,10 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
       return;
     }
 
-    const bool showBandBattery = showBattery && showBatteryPercentage &&
-                                 (statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition) == renderTopBand);
+    // Battery shows whenever enabled — the icon renders regardless of the
+    // percentage toggle; showBatteryPercentage only gates the "NN%" text.
+    const bool showBandBattery =
+        showBattery && (statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition) == renderTopBand);
     const bool showBandPageCounter = !statusBarLayout.pageCounterText.empty() &&
                                      (statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition) == renderTopBand);
     const bool showBandBookPercentage =
@@ -135,8 +137,16 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
         (statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition) == renderTopBand);
     const bool showBandPagesLeft = !statusBarLayout.pagesLeftText.empty() &&
                                    (statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition) == renderTopBand);
+    const bool showBandChapterNumber =
+        !statusBarLayout.chapterNumberText.empty() &&
+        (statusTextPositionIsTop(SETTINGS.statusBarChapterNumberPosition) == renderTopBand);
+    const bool showBandQuoteCount = !statusBarLayout.quoteCountText.empty() &&
+                                    (statusTextPositionIsTop(SETTINGS.statusBarQuoteCountPosition) == renderTopBand);
+    const bool showBandFreeHeap = !statusBarLayout.freeHeapText.empty() &&
+                                  (statusTextPositionIsTop(SETTINGS.statusBarFreeHeapPosition) == renderTopBand);
     const bool showBandProgressText = showBandPageCounter || showBandBookPercentage || showBandChapterPercentage ||
-                                      showBandBookPageCounter || showBandPagesLeft;
+                                      showBandBookPageCounter || showBandPagesLeft || showBandChapterNumber ||
+                                      showBandQuoteCount || showBandFreeHeap;
     const bool showBandTitle = SETTINGS.statusBarShowChapterTitle && !statusBarLayout.titleLines.empty() &&
                                (statusBarItemIsTop(SETTINGS.statusBarTitlePosition) == renderTopBand);
     const bool showBandBookBar =
@@ -208,7 +218,10 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
       drawTitle();
     }
 
-    const int batteryWidth = showBandBattery ? renderer.getTextWidth(statusFontId, "100%") : 0;
+    const int batteryIconWidth = metrics.batteryWidth;
+    const int batteryIconHeight = metrics.batteryHeight;
+    const int batteryWidth =
+        showBandBattery ? GUI.batteryLeftWidth(renderer, showBatteryPercentage, statusFontId, batteryIconWidth) : 0;
 
     if (showBandBattery || showBandProgressText) {
       struct TextEntry {
@@ -247,6 +260,12 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
               SETTINGS.statusBarBookPageCounterPosition);
       addItem(showBandPagesLeft, &statusBarLayout.pagesLeftText, statusBarLayout.pagesLeftTextWidth,
               SETTINGS.statusBarPagesLeftPosition);
+      addItem(showBandChapterNumber, &statusBarLayout.chapterNumberText, statusBarLayout.chapterNumberTextWidth,
+              SETTINGS.statusBarChapterNumberPosition);
+      addItem(showBandQuoteCount, &statusBarLayout.quoteCountText, statusBarLayout.quoteCountTextWidth,
+              SETTINGS.statusBarQuoteCountPosition);
+      addItem(showBandFreeHeap, &statusBarLayout.freeHeapText, statusBarLayout.freeHeapTextWidth,
+              SETTINGS.statusBarFreeHeapPosition);
 
       const auto drawGroup = [&](const std::vector<TextEntry>& items, const int startX) {
         int x = startX;
@@ -255,8 +274,11 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
             x += kStatusItemGap;
           }
           if (items[i].text == nullptr) {
-            GUI.drawBatteryLeft(renderer, Rect{x, statusTextY, metrics.batteryWidth, metrics.batteryHeight},
-                                showBatteryPercentage);
+            // Pass the text-line height as the rect height so the icon centers
+            // against the status font, and the font id so the "NN%" matches the
+            // size of the neighbouring status items.
+            GUI.drawBatteryLeft(renderer, Rect{x, statusTextY, batteryIconWidth, textHeight}, showBatteryPercentage,
+                                statusFontId, batteryIconWidth, batteryIconHeight);
           } else {
             renderer.drawText(statusFontId, x, statusTextY, items[i].text->c_str());
           }

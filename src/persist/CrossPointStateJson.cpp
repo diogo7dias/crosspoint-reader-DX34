@@ -25,7 +25,6 @@ void populateDoc(const CrossPointState& s, JsonDocument& doc) {
   doc["pendingSleepWallpapersMovedToPause"] = s.pendingSleepWallpapersMovedToPause;
   JsonArray favs = doc["favoriteBmpPaths"].to<JsonArray>();
   for (const auto& entry : s.favoriteBmpPaths) favs.add(entry);
-  doc["customFontLegacyCleanupDone"] = s.customFontLegacyCleanupDone;
 }
 }  // namespace
 
@@ -72,7 +71,6 @@ bool deserializeCrossPointState(const std::string& json, CrossPointState& s) {
     }
   }
 
-  s.customFontLegacyCleanupDone = doc["customFontLegacyCleanupDone"] | (uint8_t)0;
   return true;
 }
 

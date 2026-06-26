@@ -13,8 +13,6 @@
 
 #include "Paths.h"
 #include "fontIds.h"
-#include "fonts/CustomBinFontIds.h"
-#include "fonts/CustomBinFontManager.h"
 #include "persist/CrossPointSettingsJson.h"
 #include "persist/PersistManager.h"
 #include "persist/SettingsStore.h"
@@ -496,16 +494,15 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
   switch (family) {
     case BOOKERLY:
       return BOOKERLY;
-    case VOLLKORN:
-      return VOLLKORN;
-    case GALMURI:
-      return GALMURI;
-    case BITTER:
-      return BITTER;
-    case CUSTOM_FAMILY:
-      return CUSTOM_FAMILY;
-    // Legacy TT2020 (value 10) collapses to CHAREINK so old settings.json
-    // migrates cleanly after the font was removed.
+    case F25_BANK_PRINTER:
+      return F25_BANK_PRINTER;
+    case GEORGIA:
+      return GEORGIA;
+    case PIXEL32:
+      return PIXEL32;
+    // Removed families (VOLLKORN 2, GALMURI 9, TT2020 10, BITTER 11, CUSTOM 12)
+    // and any other legacy value collapse to CHAREINK so old settings.json
+    // migrates. A user who had a custom font selected lands on ChareInk.
     case CHAREINK:
     default:
       return CHAREINK;
@@ -516,14 +513,12 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
   switch (normalizeFontFamily(family)) {
     case BOOKERLY:
       return 1;
-    case VOLLKORN:
+    case GEORGIA:
       return 2;
-    case GALMURI:
+    case F25_BANK_PRINTER:
       return 3;
-    case BITTER:
+    case PIXEL32:
       return 4;
-    case CUSTOM_FAMILY:
-      return 5;
     case CHAREINK:
     default:
       return 0;
@@ -535,13 +530,11 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
     case 1:
       return BOOKERLY;
     case 2:
-      return VOLLKORN;
+      return GEORGIA;
     case 3:
-      return GALMURI;
+      return F25_BANK_PRINTER;
     case 4:
-      return BITTER;
-    case 5:
-      return CUSTOM_FAMILY;
+      return PIXEL32;
     case 0:
     default:
       return CHAREINK;
@@ -549,47 +542,57 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
-  // Custom .bin: the source-of-truth size is customFontSizePt (9..16),
-  // not the fontSize enum. Enum value is unused by the reader path for
-  // custom families; return a stable enum so callers that compare/round
-  // it stay deterministic.
-  if (family == CUSTOM_FAMILY) {
-    (void)fontSize;
-    return SIZE_16;
-  }
-  // Galmuri is a pixel font exposed at sizes 10, 11, 12, 14.
-  if (family == GALMURI) {
+  // F25 Bank Printer ships sizes 10, 11, 12, 13, 14, 16, 17 (no 15).
+  if (family == F25_BANK_PRINTER) {
     switch (fontSize) {
       case SIZE_10:
         return SIZE_10;
       case SIZE_11:
         return SIZE_11;
-      case SIZE_14:
-        return SIZE_14;
-      case SIZE_12:
-      default:
-        return SIZE_12;
-    }
-  }
-  // Bitter ships sizes 10, 12, 14, 16. Nearest-fallback mapping: 13->14,
-  // 15->14, 17->16.
-  if (family == BITTER) {
-    switch (fontSize) {
-      case SIZE_10:
-        return SIZE_10;
       case SIZE_12:
         return SIZE_12;
       case SIZE_13:
+        return SIZE_13;
+      case SIZE_15:  // F25 has no 15 -> nearest 14
+      case MEDIUM:   // legacy 15pt MEDIUM -> 14
       case SIZE_14:
-      case SIZE_15:
         return SIZE_14;
       case SIZE_16:
-      case LARGE:
-      default:
         return SIZE_16;
+      case LARGE:
+      case SIZE_18:
+      case X_LARGE:
+        return LARGE;  // 17
+      default:
+        return SIZE_14;
     }
   }
-  // Non-Galmuri families: shared active set 10, 12, 13, 14, 15, 16, 17 (LARGE).
+  // Pixel32 ships sizes 12, 14, 16. Nearest-fallback: 10/11 -> 12, 13/15 -> 14, 17 -> 16.
+  // (Georgia now ships the full ChareInk/Bookerly set and falls through to the default switch.)
+  if (family == PIXEL32) {
+    switch (fontSize) {
+      case SIZE_12:
+        return SIZE_12;
+      case SIZE_14:
+        return SIZE_14;
+      case SIZE_16:
+        return SIZE_16;
+      case SIZE_10:
+      case SIZE_11:
+        return SIZE_12;
+      case SIZE_13:
+      case SIZE_15:
+      case MEDIUM:
+        return SIZE_14;
+      case LARGE:
+      case SIZE_18:
+      case X_LARGE:
+        return SIZE_16;
+      default:
+        return SIZE_14;
+    }
+  }
+  // Default families (ChareInk/Bookerly): full set 10, 12, 13, 14, 15, 16, 17 (LARGE).
   switch (fontSize) {
     case SIZE_10:
       return SIZE_10;
@@ -645,24 +648,17 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 }
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
-  if (family == CUSTOM_FAMILY) {
-    return 1;  // native size of the installed BDF
+  if (family == F25_BANK_PRINTER) {
+    return 7;  // 10, 11, 12, 13, 14, 16, 17
   }
-  if (family == GALMURI) {
-    return 4;  // 10, 11, 12, 14
-  }
-  if (family == BITTER) {
-    return 4;  // 10, 12, 14, 16
+  if (family == PIXEL32) {
+    return 3;  // 12, 14, 16
   }
   return 7;  // 10, 12, 13, 14, 15, 16, 17
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
-  if (family == CUSTOM_FAMILY) {
-    (void)fontSize;
-    return 0;  // single option
-  }
-  if (family == GALMURI) {
+  if (family == F25_BANK_PRINTER) {
     switch (normalizeFontSizeForFamily(family, fontSize)) {
       case SIZE_10:
         return 0;
@@ -670,22 +666,26 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
         return 1;
       case SIZE_12:
         return 2;
-      case SIZE_14:
-      default:
+      case SIZE_13:
         return 3;
+      case SIZE_14:
+        return 4;
+      case SIZE_16:
+        return 5;
+      case LARGE:
+      default:
+        return 6;
     }
   }
-  if (family == BITTER) {
+  if (family == PIXEL32) {
     switch (normalizeFontSizeForFamily(family, fontSize)) {
-      case SIZE_10:
-        return 0;
       case SIZE_12:
-        return 1;
+        return 0;
       case SIZE_14:
-        return 2;
+        return 1;
       case SIZE_16:
       default:
-        return 3;
+        return 2;
     }
   }
   switch (normalizeFontSizeForFamily(family, fontSize)) {
@@ -708,11 +708,7 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
 }
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
-  if (family == CUSTOM_FAMILY) {
-    (void)displayIndex;
-    return SIZE_16;  // only option
-  }
-  if (family == GALMURI) {
+  if (family == F25_BANK_PRINTER) {
     switch (displayIndex) {
       case 0:
         return SIZE_10;
@@ -721,19 +717,23 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
       case 2:
         return SIZE_12;
       case 3:
-      default:
+        return SIZE_13;
+      case 4:
         return SIZE_14;
+      case 5:
+        return SIZE_16;
+      case 6:
+      default:
+        return LARGE;  // 17
     }
   }
-  if (family == BITTER) {
+  if (family == PIXEL32) {
     switch (displayIndex) {
       case 0:
-        return SIZE_10;
-      case 1:
         return SIZE_12;
-      case 2:
+      case 1:
         return SIZE_14;
-      case 3:
+      case 2:
       default:
         return SIZE_16;
     }
@@ -784,27 +784,6 @@ int CrossPointSettings::getReaderFontId() const {
   }
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
-  if (normalizedFamily == CUSTOM_FAMILY) {
-    // Custom family resolves to the family the user has selected by name.
-    // If the stored (name, sizePt) pair is not currently installed (file
-    // deleted, SD pulled, or an in-app delete happened mid-session), fall
-    // through to the CHAREINK switch below so the reader stays legible
-    // instead of rendering blank pages. The boot-time safety net in
-    // main.cpp persists a real reset on next reboot; this path is the
-    // runtime guard.
-    if (!customFontName.empty()) {
-      const auto& families = crosspoint::fonts::CustomBinFontManager::instance().families();
-      for (const auto& fam : families) {
-        if (fam.name != customFontName) continue;
-        for (const auto& sz : fam.sizes) {
-          if (sz.hasRegular && sz.sizePt == customFontSizePt) {
-            return crosspoint::fonts::idForFamily(customFontName, customFontSizePt);
-          }
-        }
-      }
-    }
-    // Named family missing (or never set) — fall through to CHAREINK switch.
-  }
   if (normalizedFamily == BOOKERLY) {
     switch (normalizedFontSize) {
       case SIZE_10:
@@ -824,49 +803,53 @@ int CrossPointSettings::getReaderFontId() const {
         return BOOKERLY_17_FONT_ID;
     }
   }
-  if (normalizedFamily == VOLLKORN) {
+  if (normalizedFamily == GEORGIA) {
     switch (normalizedFontSize) {
       case SIZE_10:
-        return VOLLKORN_10_FONT_ID;
+        return GEORGIA_10_FONT_ID;
       case SIZE_12:
-        return VOLLKORN_12_FONT_ID;
+        return GEORGIA_12_FONT_ID;
       case SIZE_13:
-        return VOLLKORN_13_FONT_ID;
+        return GEORGIA_13_FONT_ID;
       case SIZE_14:
-        return VOLLKORN_14_FONT_ID;
+        return GEORGIA_14_FONT_ID;
       case SIZE_15:
-        return VOLLKORN_15_FONT_ID;
+        return GEORGIA_15_FONT_ID;
       case SIZE_16:
-        return VOLLKORN_16_FONT_ID;
+        return GEORGIA_16_FONT_ID;
       case LARGE:
       default:
-        return VOLLKORN_17_FONT_ID;
+        return GEORGIA_17_FONT_ID;
     }
   }
-  if (normalizedFamily == GALMURI) {
+  if (normalizedFamily == PIXEL32) {
     switch (normalizedFontSize) {
-      case SIZE_10:
-        return GALMURI_10_FONT_ID;
-      case SIZE_11:
-        return GALMURI_11_FONT_ID;
-      case SIZE_14:
-        return GALMURI_14_FONT_ID;
       case SIZE_12:
-      default:
-        return GALMURI_12_FONT_ID;
-    }
-  }
-  if (normalizedFamily == BITTER) {
-    switch (normalizedFontSize) {
-      case SIZE_10:
-        return BITTER_10_FONT_ID;
-      case SIZE_12:
-        return BITTER_12_FONT_ID;
+        return PIXEL32_12_FONT_ID;
       case SIZE_14:
-        return BITTER_14_FONT_ID;
+        return PIXEL32_14_FONT_ID;
       case SIZE_16:
       default:
-        return BITTER_16_FONT_ID;
+        return PIXEL32_16_FONT_ID;
+    }
+  }
+  if (normalizedFamily == F25_BANK_PRINTER) {
+    switch (normalizedFontSize) {
+      case SIZE_10:
+        return F25_10_FONT_ID;
+      case SIZE_11:
+        return F25_11_FONT_ID;
+      case SIZE_12:
+        return F25_12_FONT_ID;
+      case SIZE_13:
+        return F25_13_FONT_ID;
+      case SIZE_14:
+        return F25_14_FONT_ID;
+      case SIZE_16:
+        return F25_16_FONT_ID;
+      case LARGE:
+      default:
+        return F25_17_FONT_ID;
     }
   }
   switch (normalizedFontSize) {

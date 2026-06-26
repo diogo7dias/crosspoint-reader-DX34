@@ -60,6 +60,13 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   void saveQuoteToFile(const std::string& quote);
   std::string getQuotesFilePath() const;
   std::string getChapterTitle() const;
+  // Cached count of saved quotes for the current book (status-bar readout).
+  // -1 = unknown; recomputed lazily from the _QUOTES.txt sidecar, refreshed on
+  // book (re)entry and bumped on each successful save.
+  int getQuoteCountCached();
+  int cachedQuoteCount_ = -1;
+  // "Book title - author" string for the status-bar title-content option.
+  std::string buildBookAuthorTitleText() const;
   using StatusBarLayout = ReaderStatusBar::StatusBarLayout;
 
   crosspoint::reader::SectionPageCache<Page> cache_;

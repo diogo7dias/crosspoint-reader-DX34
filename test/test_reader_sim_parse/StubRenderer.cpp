@@ -3,12 +3,12 @@
 #include <EpdFont.h>
 #include <EpdFontFamily.h>
 #include <GfxRenderer.h>
-#include <unifont_14_regular.h>
+#include <ui_10_regular.h>
 
 #include <cstdint>
 
 namespace {
-const EpdFont g_regular(&unifont_14_regular);
+const EpdFont g_regular(&ui_10_regular);
 const EpdFontFamily g_family(&g_regular);
 size_t cpCount(const char* s) {
   size_t n = 0;

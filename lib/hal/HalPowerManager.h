@@ -23,6 +23,13 @@ class HalPowerManager {
   // EMA-smoothed battery percent, scaled x10 (0 = uninitialised)
   mutable int _batteryCachedPercent = 0;
 
+  // X3 reads battery from the BQ27220 fuel gauge over I2C instead of the X4's
+  // analog ADC. Set in begin() when an X3 is detected. The X3 read is cached
+  // for BATTERY_POLL_MS so the status bar does not hammer the I2C bus.
+  bool _batteryUseI2C = false;
+  mutable unsigned long _batteryLastPollMs = 0;
+  static constexpr unsigned long BATTERY_POLL_MS = 1500;  // ms
+
  public:
   // 80 MHz (was 10): at 10 MHz the first button press after the 3s idle window
   // crawled — ADC sampling + the idle-loop tick both ran at 1/24th clock, so a

@@ -1,12 +1,14 @@
 #include "WifiSelectionActivity.h"
 
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
 
 #include <map>
 
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "WifiCredentialStore.h"
 #include "activities/util/KeyboardEntryActivity.h"
@@ -291,6 +293,18 @@ void WifiSelectionActivity::checkConnectionStatus() {
     {
       RenderLock lock(*this);
       WIFI_STORE.setLastConnectedSsid(selectedSSID);
+    }
+
+    // X3: opportunistically sync the DS3231 RTC from NTP the first time WiFi
+    // connects this boot. No-op on X4 (RTC unavailable -> isAvailable false).
+    // syncFromNTP blocks up to ~5s; a once-per-boot static keeps later connects
+    // fast. The persisted flag is best-effort and saved on the next settings write.
+    if (halClock.isAvailable()) {
+      static bool ntpSyncedThisBoot = false;
+      if (!ntpSyncedThisBoot && halClock.syncFromNTP()) {
+        ntpSyncedThisBoot = true;
+        SETTINGS.clockHasBeenSynced = 1;
+      }
     }
 
     // If we entered a new password, ask if user wants to save it

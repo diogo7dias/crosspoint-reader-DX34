@@ -192,6 +192,13 @@ TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(const
     layout.pagesLeftTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
   }
 
+  if (SETTINGS.statusBarShowFreeHeap) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "RAM %uK", static_cast<unsigned>(esp_get_free_heap_size() / 1024));
+    layout.freeHeapText = buf;
+    layout.freeHeapTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  }
+
   if (SETTINGS.statusBarShowChapterTitle) {
     constexpr int titlePadding = 4;
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;

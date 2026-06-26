@@ -11,10 +11,6 @@ struct ReadingTheme {
   std::string name;
   uint8_t fontFamily = CrossPointSettings::CHAREINK;
   uint8_t fontSize = CrossPointSettings::SIZE_16;
-  // Paired with fontFamily == CUSTOM_FAMILY. Empty string when theme
-  // uses a built-in family (equivalent to omitting the JSON field).
-  std::string customFontName;
-  uint8_t customFontSizePt = 0;  // 0 = unspecified; reader picks smallest available
   uint8_t lineSpacingPercent = 110;
   uint8_t uniformMargins = 0;
   uint8_t dynamicMargins = 0;
@@ -54,6 +50,13 @@ struct ReadingTheme {
   uint8_t statusBarBookPageCounterPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
   uint8_t statusBarShowPagesLeft = 0;
   uint8_t statusBarPagesLeftPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT;
+  uint8_t statusBarTitleContent = CrossPointSettings::STATUS_TITLE_CHAPTER;
+  uint8_t statusBarShowChapterNumber = 0;
+  uint8_t statusBarChapterNumberPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT;
+  uint8_t statusBarShowQuoteCount = 0;
+  uint8_t statusBarQuoteCountPosition = CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT;
+  uint8_t statusBarShowFreeHeap = 0;
+  uint8_t statusBarFreeHeapPosition = CrossPointSettings::STATUS_TEXT_TOP_RIGHT;
 };
 
 class ReadingThemeStore;

@@ -49,6 +49,8 @@ done
 # was established when the UI first shipped — the device UI is tuned to these
 # exact pixel metrics. Do not "fix" the mismatch by passing $size directly; doing
 # so shrinks every UI element and regresses status bar, menus, and settings.
+# (A 2026-06 round of UI-font experiments — Cairopixel/Pixel32/Ubuntu/Silkscreen/
+# VT323/Inter — was reverted; Cozette covers the UI glyphs directly, no graft.)
 UI_FONT_NAMES=(8 10 12)
 UI_FONT_RENDER_SIZES=(10 12 14)
 for i in "${!UI_FONT_NAMES[@]}"; do

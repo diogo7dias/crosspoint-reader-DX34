@@ -20,11 +20,20 @@ class HalDisplay {
   // Initialize the display hardware and driver
   void begin();
 
-  // Display dimensions
+  // Compile-time dimensions kept for static array sizing and back-compat. These
+  // are the X4 panel geometry. Use the runtime getters below for code that must
+  // also work on the X3 panel (792x528) once setDisplayX3() has been called.
   static constexpr uint16_t DISPLAY_WIDTH = EInkDisplay::DISPLAY_WIDTH;
   static constexpr uint16_t DISPLAY_HEIGHT = EInkDisplay::DISPLAY_HEIGHT;
   static constexpr uint16_t DISPLAY_WIDTH_BYTES = DISPLAY_WIDTH / 8;
   static constexpr uint32_t BUFFER_SIZE = DISPLAY_WIDTH_BYTES * DISPLAY_HEIGHT;
+
+  // Runtime geometry passthrough (forwards to the EInkDisplay driver). On the X4
+  // these equal the constants above; on the X3 they reflect the 792x528 panel.
+  uint16_t getDisplayWidth() const;
+  uint16_t getDisplayHeight() const;
+  uint16_t getDisplayWidthBytes() const;
+  uint32_t getBufferSize() const;
 
   // Frame buffer operations
   void clearScreen(uint8_t color = 0xFF) const;

@@ -104,8 +104,6 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name, const Cros
   theme.name = sanitizeName(name);
   theme.fontFamily = settings.fontFamily;
   theme.fontSize = settings.fontSize;
-  theme.customFontName = settings.customFontName;
-  theme.customFontSizePt = settings.customFontSizePt;
   theme.lineSpacingPercent = settings.lineSpacingPercent;
   theme.uniformMargins = settings.uniformMargins;
   theme.dynamicMargins = settings.dynamicMargins;
@@ -145,6 +143,13 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name, const Cros
   theme.statusBarBookPageCounterPosition = settings.statusBarBookPageCounterPosition;
   theme.statusBarShowPagesLeft = settings.statusBarShowPagesLeft;
   theme.statusBarPagesLeftPosition = settings.statusBarPagesLeftPosition;
+  theme.statusBarTitleContent = settings.statusBarTitleContent;
+  theme.statusBarShowChapterNumber = settings.statusBarShowChapterNumber;
+  theme.statusBarChapterNumberPosition = settings.statusBarChapterNumberPosition;
+  theme.statusBarShowQuoteCount = settings.statusBarShowQuoteCount;
+  theme.statusBarQuoteCountPosition = settings.statusBarQuoteCountPosition;
+  theme.statusBarShowFreeHeap = settings.statusBarShowFreeHeap;
+  theme.statusBarFreeHeapPosition = settings.statusBarFreeHeapPosition;
   return theme;
 }
 
@@ -153,8 +158,6 @@ ReadingTheme ReadingThemeStore::captureCurrent(const std::string& name) const { 
 void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPointSettings& settings) {
   settings.fontFamily = CrossPointSettings::normalizeFontFamily(theme.fontFamily);
   settings.fontSize = CrossPointSettings::normalizeFontSizeForFamily(settings.fontFamily, theme.fontSize);
-  settings.customFontName = theme.customFontName;
-  settings.customFontSizePt = theme.customFontSizePt;
   settings.lineSpacingPercent = clampRange(theme.lineSpacingPercent, 35, 150, 110);
   settings.uniformMargins = theme.uniformMargins ? 1 : 0;
   settings.dynamicMargins = (theme.dynamicMargins > 2) ? 0 : theme.dynamicMargins;
@@ -232,12 +235,26 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
   settings.statusBarPagesLeftPosition =
       clampRange(theme.statusBarPagesLeftPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
                  CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT);
+  settings.statusBarTitleContent =
+      clampRange(theme.statusBarTitleContent, 0, CrossPointSettings::STATUS_BAR_TITLE_CONTENT_COUNT - 1,
+                 CrossPointSettings::STATUS_TITLE_CHAPTER);
+  settings.statusBarShowChapterNumber = theme.statusBarShowChapterNumber ? 1 : 0;
+  settings.statusBarChapterNumberPosition =
+      clampRange(theme.statusBarChapterNumberPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT);
+  settings.statusBarShowQuoteCount = theme.statusBarShowQuoteCount ? 1 : 0;
+  settings.statusBarQuoteCountPosition =
+      clampRange(theme.statusBarQuoteCountPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT);
+  settings.statusBarShowFreeHeap = theme.statusBarShowFreeHeap ? 1 : 0;
+  settings.statusBarFreeHeapPosition =
+      clampRange(theme.statusBarFreeHeapPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_TOP_RIGHT);
 }
 
 bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
   ReadingTheme current = fromSettings("", SETTINGS);
   return current.fontFamily == theme.fontFamily && current.fontSize == theme.fontSize &&
-         current.customFontName == theme.customFontName && current.customFontSizePt == theme.customFontSizePt &&
          current.lineSpacingPercent == theme.lineSpacingPercent && current.uniformMargins == theme.uniformMargins &&
          current.dynamicMargins == theme.dynamicMargins &&
          current.screenMarginHorizontal == theme.screenMarginHorizontal &&
@@ -271,7 +288,14 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.statusBarShowBookPageCounter == theme.statusBarShowBookPageCounter &&
          current.statusBarBookPageCounterPosition == theme.statusBarBookPageCounterPosition &&
          current.statusBarShowPagesLeft == theme.statusBarShowPagesLeft &&
-         current.statusBarPagesLeftPosition == theme.statusBarPagesLeftPosition;
+         current.statusBarPagesLeftPosition == theme.statusBarPagesLeftPosition &&
+         current.statusBarTitleContent == theme.statusBarTitleContent &&
+         current.statusBarShowChapterNumber == theme.statusBarShowChapterNumber &&
+         current.statusBarChapterNumberPosition == theme.statusBarChapterNumberPosition &&
+         current.statusBarShowQuoteCount == theme.statusBarShowQuoteCount &&
+         current.statusBarQuoteCountPosition == theme.statusBarQuoteCountPosition &&
+         current.statusBarShowFreeHeap == theme.statusBarShowFreeHeap &&
+         current.statusBarFreeHeapPosition == theme.statusBarFreeHeapPosition;
 }
 
 int ReadingThemeStore::findMatchingTheme() const {
@@ -580,5 +604,20 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.statusBarPagesLeftPosition =
       clampRange(theme.statusBarPagesLeftPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
                  CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT);
+  normalized.statusBarTitleContent =
+      clampRange(theme.statusBarTitleContent, 0, CrossPointSettings::STATUS_BAR_TITLE_CONTENT_COUNT - 1,
+                 CrossPointSettings::STATUS_TITLE_CHAPTER);
+  normalized.statusBarShowChapterNumber = theme.statusBarShowChapterNumber ? 1 : 0;
+  normalized.statusBarChapterNumberPosition =
+      clampRange(theme.statusBarChapterNumberPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_BOTTOM_LEFT);
+  normalized.statusBarShowQuoteCount = theme.statusBarShowQuoteCount ? 1 : 0;
+  normalized.statusBarQuoteCountPosition =
+      clampRange(theme.statusBarQuoteCountPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT);
+  normalized.statusBarShowFreeHeap = theme.statusBarShowFreeHeap ? 1 : 0;
+  normalized.statusBarFreeHeapPosition =
+      clampRange(theme.statusBarFreeHeapPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
+                 CrossPointSettings::STATUS_TEXT_TOP_RIGHT);
   return normalized;
 }

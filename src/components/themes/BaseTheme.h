@@ -106,7 +106,13 @@ class BaseTheme {
 
   // Component drawing methods
   void drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current, size_t total) const;
-  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect, bool showPercentage = true) const;
+  // Reader status-bar battery: icon on the left, "NN%" to its right in `textFont`
+  // (the status-bar font, so it matches the neighbouring items). Icon is vertically
+  // centered within rect.height.
+  void drawBatteryLeft(const GfxRenderer& renderer, Rect rect, bool showPercentage, int textFont, int iconWidth,
+                       int iconHeight) const;
+  // Total advance width drawBatteryLeft will occupy, so the layout can reserve the slot.
+  int batteryLeftWidth(const GfxRenderer& renderer, bool showPercentage, int textFont, int iconWidth) const;
   void drawBatteryRight(const GfxRenderer& renderer, Rect rect, bool showPercentage = true,
                         int textFont = SMALL_FONT_ID, int iconWidth = BaseMetrics::values.batteryWidth,
                         int iconHeight = BaseMetrics::values.batteryHeight, bool showIcon = true) const;

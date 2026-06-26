@@ -30,6 +30,12 @@ struct StatusBarLayout {
   int bookPageCounterTextWidth = 0;
   std::string pagesLeftText;
   int pagesLeftTextWidth = 0;
+  std::string chapterNumberText;
+  int chapterNumberTextWidth = 0;
+  std::string quoteCountText;
+  int quoteCountTextWidth = 0;
+  std::string freeHeapText;
+  int freeHeapTextWidth = 0;
   std::vector<std::string> titleLines;
   std::vector<int> titleLineWidths;
   float bookProgress = 0.0f;

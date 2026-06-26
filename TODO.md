@@ -38,6 +38,25 @@ Items already merged to `main` that should be called out in the release notes fo
 - **Tier 2 — text correctness (cache bump).** NFC-compose body words + book title + TOC titles (#2277, `lib/Utf8/Utf8ComposeTable.h` + `utf8ComposeNfc`); percent-decode internal EPUB asset/footnote/TOC paths (#2249/#2271, `FsHelpers::decodeUriEscapes` at 7 sites); span-id anchor flood cap (#2303, skip `<span>` ids + `MAX_ANCHORS_PER_CHAPTER=1024`); `SECTION_FILE_VERSION` 24→25 + `BOOK_CACHE_VERSION` 6→7 → every book re-indexes once on first open.
 - **Tier 4 — polish.** 12 missing HTML 4.01 named entities (#2352, incl. `&middot;`); `<hr>` scene-break rendering (#7accc607 — new `PageHorizontalRule` serialized element + `PageBuilder::addHorizontalRule` since our fork moved page assembly into PageBuilder; rides the Tier-2 cache bump). Bookmark page-indicator (#2372) deferred — see steal backlog.
 
+**STAGED (built + X4-safe-reviewed 2026-06-25, NOT yet flashed/committed — flash on the daily-driver X4, run the regression checklist, then commit per-phase; full X3 behaviour validates when the X3 hardware arrives):** WiFi/hotspot stability + Xteink X3 hardware support.
+
+WiFi / hotspot:
+- **WS upload backpressure.** The client now paces itself to the device's SD-confirmed `PROGRESS` (128 KiB unacked window) instead of streaming at WiFi speed with no app-level flow control — that mismatch let the device's lwIP pbufs / heap exhaust during slow-SD writes and the socket reset mid-transfer (the cause of large-book upload drops). Client-only change in `FilesPage.html`; no device concurrency, no snappy-input risk.
+- **Hotspot captive portal.** In AP mode `handleNotFound` now 302-redirects every unknown URI to the AP root. The hotspot's wildcard DNS sends the phone's OS connectivity probes (iOS hotspot-detect, Android generate_204) to the device, which used to 404 them → phone declares "no internet" and never opens a browser → "page won't load at all". Sleep-image + EPUB upload already worked over AP; this makes the page actually reach the user.
+- **Fonts over hotspot.** Un-stubbed `/fonts` in AP and now serve `opentype.js` + `pako.js` over AP, loaded SEQUENTIALLY on the page (`window.fontLibsReady`) so the two big gzip payloads are never in flight at once — that parallel fetch was the heap deadlock the AP stub guarded against. `jszip` stays AP-pinned (raw EPUB upload doesn't need it).
+- **Web status JSON** now reports `device: X3/X4`.
+
+Xteink X3 support (port of upstream's single-binary runtime-detection design into our diverged tree):
+- **SDK (`open-x4-sdk` submodule).** Merged upstream's X3-capable `EInkDisplay` (runtime 792×528 / 800×480 via `setDisplayX3()`, `MAX_BUFFER_SIZE` framebuffers, UC81xx X3 waveforms) into our fork, preserving our factory-LUT grayscale. Pushed as `diogo7dias/community-sdk` branch `x3-merge` (`04e773b`); the firmware submodule-pointer bump is still to commit.
+- **Phase 1 — runtime resolution.** `HalDisplay` runtime getters; `GfxRenderer` caches panel dims and replaces the `static_assert` fixed-array BW chunk store with a ceil-div `std::vector` (52272 no longer fails to compile); every `DISPLAY_*` ref now reads runtime. X4 byte-identical (800×480, 6×8000 chunks).
+- **Phase 2 — detection.** `HalGPIO` I2C fingerprint probe (BQ27220 / DS3231 / QMI8658, value-validated signatures) + NVS cache + override escape-hatch; runs once at boot, restores the X4's GPIO0/20; X4 fallback default.
+- **Phase 3 — display.** `setDisplayX3()` gated on `deviceIsX3()`. (X3 grayscale ghosting-resync deferred — our `HalDisplay` lacks the `displayGrayscaleBase` seam.)
+- **Phase 4 — battery.** BQ27220 fuel-gauge SOC read on X3 (+ `Current()`-sign USB/charging detect); X4 ADC path untouched.
+- **Phase 5 — clock.** `HalClock` (DS3231) + status-bar clock draw + UTC-offset `VALUE` picker (rendered `UTC+H:MM`) + 12/24h format + once-per-boot NTP sync on WiFi connect; all gated on `halClock.isAvailable()`.
+- **Phase 6 — tilt page-turn.** `HalTiltSensor` (QMI8658 gyro flick) folded into the reader input snapshot; `tiltPageTurn` setting (Off/Normal/Inverted); the loop `update()` early-returns on X4, preserving the snappy-input baseline.
+
+Deferred until the X3 is in hand: Phase 7 button-hint pixel geometry for the 528-wide portrait + side buttons; X3 grayscale ghosting-resync; full X3 device validation (resolution, detection, clock, tilt, fuel gauge, hotspot uploads). Possible future guard: key the section/book cache on resolution if an SD card is ever moved between an X4 and an X3 (page breaks differ by viewport).
+
 <!-- DRAINED v3.0.1
 ### Pending for next release (v3.0.1 hotfix)
 

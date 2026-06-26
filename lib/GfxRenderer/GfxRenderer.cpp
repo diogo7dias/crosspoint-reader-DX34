@@ -14,6 +14,14 @@ void GfxRenderer::begin() {
     LOG_ERR("GFX", "!! No framebuffer");
     assert(false);
   }
+  // Cache the runtime panel geometry once the driver knows its panel (X4 800x480
+  // or X3 792x528). All render math reads these members. Size the chunk store to
+  // ceil(frameBufferSize / BW_BUFFER_CHUNK_SIZE) so it fits either buffer.
+  panelWidth = display.getDisplayWidth();
+  panelHeight = display.getDisplayHeight();
+  panelWidthBytes = display.getDisplayWidthBytes();
+  frameBufferSize = display.getBufferSize();
+  bwBufferChunks.assign((frameBufferSize + BW_BUFFER_CHUNK_SIZE - 1) / BW_BUFFER_CHUNK_SIZE, nullptr);
 }
 
 void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) {
@@ -29,26 +37,26 @@ bool GfxRenderer::isFontCacheScanning() const { return fontCacheManager_ && font
 // Translate logical (x,y) coordinates to physical panel coordinates based on
 // current orientation This should always be inlined for better performance
 static inline void rotateCoordinates(const GfxRenderer::Orientation orientation, const int x, const int y, int* phyX,
-                                     int* phyY) {
+                                     int* phyY, const uint16_t panelWidth, const uint16_t panelHeight) {
   switch (orientation) {
     case GfxRenderer::Portrait: {
       // Logical portrait (480x800) → panel (800x480)
       // Rotation: 90 degrees clockwise
       *phyX = y;
-      *phyY = HalDisplay::DISPLAY_HEIGHT - 1 - x;
+      *phyY = panelHeight - 1 - x;
       break;
     }
     case GfxRenderer::LandscapeClockwise: {
       // Logical landscape (800x480) rotated 180 degrees (swap top/bottom and
       // left/right)
-      *phyX = HalDisplay::DISPLAY_WIDTH - 1 - x;
-      *phyY = HalDisplay::DISPLAY_HEIGHT - 1 - y;
+      *phyX = panelWidth - 1 - x;
+      *phyY = panelHeight - 1 - y;
       break;
     }
     case GfxRenderer::PortraitInverted: {
       // Logical portrait (480x800) → panel (800x480)
       // Rotation: 90 degrees counter-clockwise
-      *phyX = HalDisplay::DISPLAY_WIDTH - 1 - y;
+      *phyX = panelWidth - 1 - y;
       *phyY = x;
       break;
     }
@@ -82,8 +90,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
 
   const EpdFontData* fontData = fontFamily.getData(style);
   const bool is2Bit = fontData->is2Bit;
-  // textRenderStyle: 0=crisp, 1=dark
+  // textRenderStyle: 0=crisp, 1=dark, 2=bionic, 3=thin
   const uint8_t textStyle = renderMode == GfxRenderer::BW ? renderer.getTextRenderStyle() : 0;
+  // Thin (3) drops the lightest AA edge: only black(0)+dark-grey(1) become ink,
+  // light-grey(2) stays white. Every other style promotes all non-white to black
+  // (threshold 3). bmpVal: 0=black 1=dark-grey 2=light-grey 3=white.
+  const uint8_t bwShadeThreshold = (textStyle == 3) ? 2 : 3;
   const uint8_t extraBoldPasses = renderMode == GfxRenderer::BW ? fontFamily.getSyntheticBoldPasses(style) : 0;
   const uint8_t width = glyph->width;
   const uint8_t height = glyph->height;
@@ -135,7 +147,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
           // light grey, 3 -> white
           const uint8_t bmpVal = 3 - ((byte >> bit_index) & 0x3);
 
-          if (renderMode == GfxRenderer::BW && bmpVal < 3) {
+          if (renderMode == GfxRenderer::BW && bmpVal < bwShadeThreshold) {
             renderer.drawPixel(screenX, screenY, pixelState);
             for (uint8_t pass = 1; pass <= extraBoldPasses; ++pass) {
               renderer.drawPixel(screenX + pass, screenY, pixelState);
@@ -213,16 +225,16 @@ void GfxRenderer::drawPixel(const int x, const int y, const bool state) const {
   int phyY = 0;
 
   // Note: this call should be inlined for better performance
-  rotateCoordinates(orientation, x, y, &phyX, &phyY);
+  rotateCoordinates(orientation, x, y, &phyX, &phyY, panelWidth, panelHeight);
 
   // Bounds checking against physical panel dimensions
-  if (phyX < 0 || phyX >= HalDisplay::DISPLAY_WIDTH || phyY < 0 || phyY >= HalDisplay::DISPLAY_HEIGHT) {
+  if (phyX < 0 || phyX >= panelWidth || phyY < 0 || phyY >= panelHeight) {
     LOG_ERR("GFX", "!! Outside range (%d, %d) -> (%d, %d)", x, y, phyX, phyY);
     return;
   }
 
   // Calculate byte position and bit position
-  const uint16_t byteIndex = phyY * HalDisplay::DISPLAY_WIDTH_BYTES + (phyX / 8);
+  const uint32_t byteIndex = phyY * panelWidthBytes + (phyX / 8);
   const uint8_t bitPosition = 7 - (phyX % 8);  // MSB first
 
   if (state) {
@@ -593,7 +605,7 @@ void GfxRenderer::fillRoundedRect(const int x, const int y, const int width, con
 void GfxRenderer::drawImage(const uint8_t bitmap[], const int x, const int y, const int width, const int height) const {
   int rotatedX = 0;
   int rotatedY = 0;
-  rotateCoordinates(orientation, x, y, &rotatedX, &rotatedY);
+  rotateCoordinates(orientation, x, y, &rotatedX, &rotatedY, panelWidth, panelHeight);
   // Rotate origin corner
   switch (orientation) {
     case Portrait:
@@ -868,7 +880,7 @@ void GfxRenderer::clearScreen(const uint8_t color) const {
 }
 
 void GfxRenderer::invertScreen() const {
-  for (int i = 0; i < HalDisplay::BUFFER_SIZE; i++) {
+  for (uint32_t i = 0; i < frameBufferSize; i++) {
     frameBuffer[i] = ~frameBuffer[i];
   }
 }
@@ -916,28 +928,28 @@ int GfxRenderer::getScreenWidth() const {
   switch (orientation) {
     case Portrait:
     case PortraitInverted:
-      // 480px wide in portrait logical coordinates
-      return HalDisplay::DISPLAY_HEIGHT;
+      // Short panel edge in portrait logical coordinates (X4 480, X3 528)
+      return panelHeight;
     case LandscapeClockwise:
     case LandscapeCounterClockwise:
-      // 800px wide in landscape logical coordinates
-      return HalDisplay::DISPLAY_WIDTH;
+      // Long panel edge in landscape logical coordinates (X4 800, X3 792)
+      return panelWidth;
   }
-  return HalDisplay::DISPLAY_HEIGHT;
+  return panelHeight;
 }
 
 int GfxRenderer::getScreenHeight() const {
   switch (orientation) {
     case Portrait:
     case PortraitInverted:
-      // 800px tall in portrait logical coordinates
-      return HalDisplay::DISPLAY_WIDTH;
+      // Long panel edge in portrait logical coordinates (X4 800, X3 792)
+      return panelWidth;
     case LandscapeClockwise:
     case LandscapeCounterClockwise:
-      // 480px tall in landscape logical coordinates
-      return HalDisplay::DISPLAY_HEIGHT;
+      // Short panel edge in landscape logical coordinates (X4 480, X3 528)
+      return panelHeight;
   }
-  return HalDisplay::DISPLAY_WIDTH;
+  return panelWidth;
 }
 
 int GfxRenderer::getSpaceWidth(const int fontId, const EpdFontFamily::Style style) const {
@@ -1079,7 +1091,7 @@ void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y
 
 uint8_t* GfxRenderer::getFrameBuffer() const { return frameBuffer; }
 
-size_t GfxRenderer::getBufferSize() { return HalDisplay::BUFFER_SIZE; }
+size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 
 // unused
 // void GfxRenderer::grayscaleRevert() const { display.grayscaleRevert(); }
@@ -1147,8 +1159,11 @@ void GfxRenderer::freeBwBufferChunks() {
  * allocation failed.
  */
 bool GfxRenderer::storeBwBuffer() {
-  // Allocate and copy each chunk
-  for (size_t i = 0; i < BW_BUFFER_NUM_CHUNKS; i++) {
+  // Allocate and copy each chunk. The chunk count is sized in begin() to the
+  // runtime buffer, and the final chunk is clamped to the remaining bytes (the
+  // X3 buffer 52272 leaves a 4272-byte tail in chunk 7).
+  const size_t numChunks = bwBufferChunks.size();
+  for (size_t i = 0; i < numChunks; i++) {
     // Check if any chunks are already allocated
     if (bwBufferChunks[i]) {
       LOG_ERR("GFX",
@@ -1160,19 +1175,21 @@ bool GfxRenderer::storeBwBuffer() {
     }
 
     const size_t offset = i * BW_BUFFER_CHUNK_SIZE;
-    bwBufferChunks[i] = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(BW_BUFFER_CHUNK_SIZE));  // alloc-ok
+    const size_t chunkSize =
+        (frameBufferSize - offset) < BW_BUFFER_CHUNK_SIZE ? (frameBufferSize - offset) : BW_BUFFER_CHUNK_SIZE;
+    bwBufferChunks[i] = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(chunkSize));  // alloc-ok
 
     if (!bwBufferChunks[i]) {
-      LOG_ERR("GFX", "!! Failed to allocate BW buffer chunk %zu (%zu bytes)", i, BW_BUFFER_CHUNK_SIZE);
+      LOG_ERR("GFX", "!! Failed to allocate BW buffer chunk %zu (%zu bytes)", i, chunkSize);
       // Free previously allocated chunks
       freeBwBufferChunks();
       return false;
     }
 
-    memcpy(bwBufferChunks[i], frameBuffer + offset, BW_BUFFER_CHUNK_SIZE);
+    memcpy(bwBufferChunks[i], frameBuffer + offset, chunkSize);
   }
 
-  LOG_DBG("GFX", "Stored BW buffer in %zu chunks (%zu bytes each)", BW_BUFFER_NUM_CHUNKS, BW_BUFFER_CHUNK_SIZE);
+  LOG_DBG("GFX", "Stored BW buffer in %zu chunks", numChunks);
   return true;
 }
 
@@ -1196,9 +1213,12 @@ void GfxRenderer::restoreBwBuffer() {
     return;
   }
 
-  for (size_t i = 0; i < BW_BUFFER_NUM_CHUNKS; i++) {
+  const size_t numChunks = bwBufferChunks.size();
+  for (size_t i = 0; i < numChunks; i++) {
     const size_t offset = i * BW_BUFFER_CHUNK_SIZE;
-    memcpy(frameBuffer + offset, bwBufferChunks[i], BW_BUFFER_CHUNK_SIZE);
+    const size_t chunkSize =
+        (frameBufferSize - offset) < BW_BUFFER_CHUNK_SIZE ? (frameBufferSize - offset) : BW_BUFFER_CHUNK_SIZE;
+    memcpy(frameBuffer + offset, bwBufferChunks[i], chunkSize);
   }
 
   display.cleanupGrayscaleBuffers(frameBuffer);

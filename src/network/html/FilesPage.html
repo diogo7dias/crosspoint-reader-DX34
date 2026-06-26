@@ -2193,8 +2193,7 @@
 <nav class="nav-links" aria-label="Primary">
   <a href="/"><span class="k">[1]</span><span data-i18n="STR_WEB_HOME">HOME</span></a>
   <a href="/files" class="on"><span class="k">[2]</span><span data-i18n="STR_WEB_FILES">FILES</span></a>
-  <a href="/fonts"><span class="k">[3]</span><span data-i18n="STR_WEB_FONTS">FONTS</span></a>
-  <a href="/sleep-converter"><span class="k">[4]</span><span>SLEEP</span></a>
+  <a href="/sleep-converter"><span class="k">[3]</span><span>SLEEP</span></a>
 </nav>
 
 <div class="page-header">
@@ -3197,6 +3196,14 @@ let currentUploadWs = null;
 let currentUploadXhr = null;
 const WS_PORT = 81;
 const WS_CHUNK_SIZE = 4096; // 4KB chunks - smaller for ESP32 stability
+// Application-level flow control: cap how far the client may run AHEAD of the
+// bytes the device has actually written to SD (server PROGRESS = SD-confirmed).
+// Without this the client streams at WiFi speed while the device persists at
+// (much slower, spiky) SD speed; the unprocessed backlog grows until the
+// device's lwIP pbufs / heap exhaust and the socket is reset mid-transfer.
+// 128 KiB = 2x the server's 64 KiB PROGRESS interval, so the pipeline stays
+// full (no per-window stall) while unacked in-flight is bounded.
+const WS_ACK_WINDOW = 131072; // 128 KiB
 
 // ============================================================================
 // EPUB Image Conversion Functions
@@ -4239,6 +4246,7 @@ function uploadFileWebSocket(file, onProgress, onComplete, onError) {
     let uploadStarted = false;
     let sendingChunks = false;
     let uploadComplete = false;
+    let ackedBytes = 0; // bytes the device has confirmed written to SD (server PROGRESS)
 
     ws.binaryType = 'arraybuffer';
 
@@ -4262,7 +4270,15 @@ function uploadFileWebSocket(file, onProgress, onComplete, onError) {
             const chunkSize = Math.min(WS_CHUNK_SIZE, totalSize - offset);
             const chunk = file.slice(offset, offset + chunkSize);
             const buffer = await chunk.arrayBuffer();
+            // Local TCP send-buffer throttle (bounds the browser's own queue)...
             while (ws.bufferedAmount > WS_CHUNK_SIZE * 2 && ws.readyState === WebSocket.OPEN) {
+              await new Promise(r => setTimeout(r, 5));
+            }
+            // ...and device-rate backpressure: never run more than WS_ACK_WINDOW
+            // ahead of what the device has confirmed written to SD. This is the
+            // real flow control — it paces the client to the device's SD-drain
+            // rate so a slow-write stall can't pile up and drop the socket.
+            while (offset - ackedBytes >= WS_ACK_WINDOW && ws.readyState === WebSocket.OPEN) {
               await new Promise(r => setTimeout(r, 5));
             }
             if (ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket closed during upload');
@@ -4279,7 +4295,11 @@ function uploadFileWebSocket(file, onProgress, onComplete, onError) {
           reject(err);
         }
       } else if (msg.startsWith('PROGRESS:')) {
-        console.log('[WS] Server progress:', msg);
+        // PROGRESS:<received>:<size> — <received> is SD-confirmed bytes. Advance
+        // the ack watermark so the send loop's backpressure window can release.
+        const parts = msg.split(':');
+        const recv = parseInt(parts[1], 10);
+        if (!isNaN(recv) && recv > ackedBytes) ackedBytes = recv;
       } else if (msg === 'DONE') {
         if (onProgress) onProgress(file.size, file.size);
         uploadComplete = true;

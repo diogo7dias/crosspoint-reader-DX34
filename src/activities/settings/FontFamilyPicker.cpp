@@ -7,15 +7,14 @@
 
 #include "CrossPointSettings.h"
 #include "fontIds.h"
-#include "fonts/CustomBinFontManager.h"
 
 namespace crosspoint::settings {
 
 namespace {
 // Built-in families in display-index order (matches displayIndexToFontFamily and
 // the enumValues used by both settings menus).
-constexpr StrId kBuiltinFamilyLabels[] = {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_VOLLKORN,
-                                          StrId::STR_GALMURI, StrId::STR_BITTER};
+constexpr StrId kBuiltinFamilyLabels[] = {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA,
+                                          StrId::STR_F25_BANK_PRINTER, StrId::STR_PIXEL32};
 }  // namespace
 
 void FontFamilyPicker::open() {
@@ -25,23 +24,8 @@ void FontFamilyPicker::open() {
     labels_.emplace_back(I18N.get(id));
   }
 
-  const std::vector<std::string> names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
-  const std::string prefix = I18N.get(StrId::STR_CUSTOM_PREFIX);
-  for (const auto& name : names) {
-    labels_.push_back(prefix + name);
-  }
-
   // Place the cursor on the family currently in SETTINGS.
-  std::size_t cur = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    cur = builtinCount_;  // default to first custom if the name is not found
-    for (std::size_t i = 0; i < names.size(); ++i) {
-      if (names[i] == SETTINGS.customFontName) {
-        cur = builtinCount_ + i;
-        break;
-      }
-    }
-  }
+  const std::size_t cur = CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily);
   selected_ = labels_.empty() ? 0 : static_cast<int>(std::min(cur, labels_.size() - 1));
   open_ = true;
 }

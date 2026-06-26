@@ -2,12 +2,11 @@
 
 #include <ArduinoJson.h>
 #include <BookFingerprint.h>
-#include <EpdBinFontLoader.h>
-#include <EpdBinFormat.h>
 #include <Epub.h>
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <MemoryPolicy.h>
@@ -33,21 +32,21 @@
 #include "Paths.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
-#include "fonts/CustomBinFontManager.h"
 #if __has_include("WebDAVHandler.h")
 #include "WebDAVHandler.h"
 #define CROSSPOINT_HAS_WEBDAV 1
 #endif
+
+// Global HAL device handle (defined in main.cpp) — used to report X3 vs X4 in
+// the status JSON so a client / support can confirm which panel is running.
+extern HalGPIO gpio;
 #include "I18n.h"
 #include "WebI18nDict.generated.h"
 #include "html/FilesPageHtml.generated.h"
-#include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SleepConverterPageHtml.generated.h"
 #include "html/brutalistCss.generated.h"
 #include "html/js/jszip_minJs.generated.h"
-#include "html/js/opentype_minJs.generated.h"
-#include "html/js/pako_minJs.generated.h"
 #include "network/ws/WsUploadSession.h"
 #include "util/StringUtils.h"
 
@@ -290,27 +289,12 @@ void CrossPointWebServer::begin() {
   // JSZip library for EPUB optimizer
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
 
-  // opentype.js + pako for the in-browser font baker on /fonts. Bundled in
-  // PROGMEM so the page works in AP mode where the phone has no internet.
-  server->on("/js/opentype.min.js", HTTP_GET, [this] { handleOpentypeJs(); });
-  server->on("/js/pako.min.js", HTTP_GET, [this] { handlePakoJs(); });
-
   server->on("/css/brutalist.css", HTTP_GET, [this] { handleBrutalistCss(); });
 
   // Web UI translation dict — picks language from SETTINGS.uiLanguage at request time.
   server->on("/api/i18n.json", HTTP_GET, [this] { handleI18nDict(); });
 
-  // Custom-font endpoints.
-  // /upload takes the file body via multipart; the family / variant /
-  // size tuple rides in query params because form fields aren't
-  // parsed until after the upload callback finishes.
-  server->on("/fonts", HTTP_GET, [this] { handleFontsPage(); });
   server->on("/sleep-converter", HTTP_GET, [this] { handleSleepConverterPage(); });
-  server->on("/api/fonts", HTTP_GET, [this] { handleGetFonts(); });
-  server->on(
-      "/api/fonts/upload", HTTP_POST, [this] { handleUploadFontPost(fontUpload); },
-      [this] { handleUploadFont(fontUpload); });
-  server->on("/api/fonts/delete", HTTP_POST, [this] { handleDeleteFont(); });
 
   // Firmware install. Browser POSTs raw firmware.bin bytes (no multipart);
   // ESP32 streams them straight to the inactive OTA partition. On success
@@ -481,9 +465,13 @@ void CrossPointWebServer::pumpWsDownload() {
   }
 }
 
-// The three large JS bundles are pinned to STA mode. In AP mode their parallel
-// fetch wedges the heap (see comment on kFontsPageApStub above). Returning
-// 503 immediately frees the socket without committing tx buffers to the gzip
+// jszip stays pinned to STA mode. It backs the EPUB client-side image-conversion
+// feature on the Files page (raw EPUB upload works without it, and the page
+// guards `typeof JSZip === 'undefined'`), so keeping it 503'd in AP costs no
+// hotspot ability while avoiding an extra big-asset fetch on the heap-tight AP
+// path. (opentype.js + pako.js, by contrast, ARE now served in AP — the fonts
+// page loads them sequentially so they can't deadlock the heap.) Returning 503
+// immediately frees the socket without committing tx buffers to the gzip
 // payload, so a stale browser cache cannot resurrect the wedge.
 void CrossPointWebServer::handleJszip() const {
   if (apMode) {
@@ -494,28 +482,6 @@ void CrossPointWebServer::handleJszip() const {
   server->sendHeader("Cache-Control", "public, max-age=86400");
   server->send_P(200, "application/javascript", jszip_minJs, jszip_minJsCompressedSize);
   LOG_DBG("WEB", "Served jszip.min.js");
-}
-
-void CrossPointWebServer::handleOpentypeJs() const {
-  if (apMode) {
-    server->send(503, "text/plain", "Asset disabled in hotspot mode");
-    return;
-  }
-  server->sendHeader("Content-Encoding", "gzip");
-  server->sendHeader("Cache-Control", "public, max-age=86400");
-  server->send_P(200, "application/javascript", opentype_minJs, opentype_minJsCompressedSize);
-  LOG_DBG("WEB", "Served opentype.min.js");
-}
-
-void CrossPointWebServer::handlePakoJs() const {
-  if (apMode) {
-    server->send(503, "text/plain", "Asset disabled in hotspot mode");
-    return;
-  }
-  server->sendHeader("Content-Encoding", "gzip");
-  server->sendHeader("Cache-Control", "public, max-age=86400");
-  server->send_P(200, "application/javascript", pako_minJs, pako_minJsCompressedSize);
-  LOG_DBG("WEB", "Served pako.min.js");
 }
 
 void CrossPointWebServer::handleBrutalistCss() const {
@@ -746,6 +712,22 @@ void CrossPointWebServer::handleSleepConverterPage() const {
 }
 
 void CrossPointWebServer::handleNotFound() const {
+  // Captive-portal redirect (AP mode only). The hotspot's wildcard DNS points
+  // EVERY hostname at the device, so the phone's connectivity probes — iOS
+  // captive.apple.com hotspot-detect, Android connectivitycheck generate_204,
+  // Windows ncsi.txt — all land here on unknown URIs. A bare 404 makes the
+  // phone declare no-internet, show no usable browser path, and (on Android)
+  // often drop back to mobile data: the user sees the page never loading.
+  // Redirecting every unknown URI to the AP root makes the OS captive sheet
+  // open straight onto the Files UI, and a manually-typed URL lands there too.
+  // Real registered routes (home, files, the js and api endpoints) never reach
+  // here, and the heap-pinned assets return 503 (not 404), so this cannot loop.
+  // STA mode keeps the plain 404.
+  if (apMode) {
+    server->sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
+    server->send(302, "text/plain", "");
+    return;
+  }
   String message = "404 Not Found\n\n";
   message += "URI: " + server->uri() + "\n";
   server->send(404, "text/plain", message);
@@ -759,6 +741,7 @@ void CrossPointWebServer::handleStatus() const {
   doc["version"] = CROSSPOINT_VERSION;
   doc["ip"] = ipAddr;
   doc["mode"] = apMode ? "AP" : "STA";
+  doc["device"] = gpio.deviceIsX3() ? "X3" : "X4";
   doc["rssi"] = apMode ? 0 : WiFi.RSSI();
   doc["freeHeap"] = ESP.getFreeHeap();
   doc["uptime"] = millis() / 1000;
@@ -1695,336 +1678,6 @@ void CrossPointWebServer::handleDelete() const {
     server->send(200, "text/plain", "All items deleted successfully");
   } else {
     server->send(500, "text/plain", "Failed to delete some items: " + failedItems);
-  }
-}
-
-namespace {
-
-// Accept "R" / "B" / "I" / "Z" as browser-side variant tags and map
-// them to the enum the manager uses. Returns UINT8_MAX on mismatch.
-uint8_t parseVariantTag(const String& v) {
-  if (v.equalsIgnoreCase("R") || v.equalsIgnoreCase("regular")) return 0;
-  if (v.equalsIgnoreCase("B") || v.equalsIgnoreCase("bold")) return 1;
-  if (v.equalsIgnoreCase("I") || v.equalsIgnoreCase("italic")) return 2;
-  if (v.equalsIgnoreCase("Z") || v.equalsIgnoreCase("bolditalic")) return 3;
-  return 0xFFu;
-}
-
-const char* variantTagFor(uint8_t v) {
-  switch (v) {
-    case 0:
-      return "regular";
-    case 1:
-      return "bold";
-    case 2:
-      return "italic";
-    case 3:
-      return "bolditalic";
-  }
-  return "regular";
-}
-
-}  // namespace
-
-// Self-contained no-asset stub for /fonts in AP mode. The full font
-// management UI pulls opentype.min.js (~49 KB gzip) + pako.min.js (~15 KB
-// gzip) + brutalist.css in parallel; that quadruples concurrent TCP sockets
-// against a precompiled lwIP whose per-socket tx buffer commit (5744 B)
-// collapses the heap pool to <3 KB and triggers a pbuf alloc-fail storm
-// inside server->handleClient(). The stub fits in one TCP segment and has
-// zero external references, so the phone makes exactly one request.
-static constexpr char kFontsPageApStub[] =
-    "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-    "<title>CrossPoint - Fonts</title>"
-    "<style>body{font-family:system-ui,sans-serif;max-width:38em;margin:2em auto;"
-    "padding:0 1em;line-height:1.5;color:#111;background:#fafafa}"
-    "h1{margin-top:0}code{background:#eee;padding:0 .3em;border-radius:3px}"
-    "a{color:#06c}</style></head><body>"
-    "<h1>Font management unavailable in hotspot mode</h1>"
-    "<p>The font upload page bundles ~70&nbsp;KB of JavaScript that the device "
-    "cannot serve over its own access point without exhausting RAM.</p>"
-    "<p><strong>To manage fonts:</strong> exit this screen, choose "
-    "<em>Join Network</em>, connect to your home Wi-Fi, then re-open the web "
-    "server and visit <code>/fonts</code> from a desktop browser.</p>"
-    "<p><a href=\"/\">&larr; Back to home</a> &nbsp;&middot;&nbsp; "
-    "<a href=\"/files\">Open file browser</a></p>"
-    "</body></html>";
-
-void CrossPointWebServer::handleFontsPage() const {
-  if (apMode) {
-    server->send(200, "text/html", kFontsPageApStub);
-    LOG_DBG("WEB", "Served fonts page (AP stub)");
-    return;
-  }
-  sendHtmlContent(server.get(), FontsPageHtml, sizeof(FontsPageHtml));
-  LOG_DBG("WEB", "Served fonts page");
-}
-
-void CrossPointWebServer::handleGetFonts() const {
-  LOG_DIAG("WEB", "/api/fonts entry, free=%u min=%u", ESP.getFreeHeap(), ESP.getMinFreeHeap());
-  const auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
-  // Stream chunked instead of building one big buffer. Under heap pressure
-  // (AP mode + parallel asset fetches) a contiguous multi-KB allocation for
-  // the full body throws bad_alloc and crashes the firmware. Per-family
-  // serialization fits in a few hundred bytes and survives a fragmented heap.
-  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server->send(200, "application/json", "");
-  server->sendContent("[");
-  bool firstFamily = true;
-  for (const auto& fam : mgr.families()) {
-    if (!firstFamily) server->sendContent(",");
-    firstFamily = false;
-    JsonDocument doc;
-    doc["name"] = fam.name;
-    JsonArray sizes = doc["sizes"].to<JsonArray>();
-    for (const auto& sz : fam.sizes) {
-      JsonObject o = sizes.add<JsonObject>();
-      o["size"] = sz.sizePt;
-      JsonArray variants = o["variants"].to<JsonArray>();
-      if (sz.hasRegular) variants.add("R");
-      if (sz.hasBold) variants.add("B");
-      if (sz.hasItalic) variants.add("I");
-      if (sz.hasBoldItalic) variants.add("Z");
-    }
-    std::string out;
-    serializeJson(doc, out);
-    server->sendContent(out.c_str());
-  }
-  server->sendContent("]");
-  server->sendContent("");  // flush
-}
-
-void CrossPointWebServer::handleUploadFont(FontUploadState& state) {
-  esp_task_wdt_reset();
-  if (!running || !server) return;
-
-  const HTTPUpload& upload = server->upload();
-
-  // Sink writer: watchdog-bracketed SD write, shared by WRITE auto-flush and
-  // END final flush. Buffering loop lives in HttpUploadSink.
-  const auto sdWriter = [&state](const uint8_t* d, size_t n) -> size_t {
-    esp_task_wdt_reset();
-    const size_t written = state.file.write(d, n);
-    esp_task_wdt_reset();
-    return written;
-  };
-
-  if (upload.status == UPLOAD_FILE_START) {
-    esp_task_wdt_reset();
-    state.size = 0;
-    state.success = false;
-    state.error = "";
-    state.family = "";
-    state.tmpPath = "";
-    state.finalPath = "";
-    // Pre-flight heap check (exceptions disabled — bad_alloc would abort).
-    // Phone-on-STA after fetching the 64 KB JS bundle hits this path; heap
-    // can fragment below the 4 KB buffer size. Before bailing, drop
-    // reclaimable caches and re-probe so a fragmented-but-recoverable heap
-    // doesn't force the user back to a desktop browser.
-    if (!state.sink.hasCapacity()) {
-      // Same probe-then-shed-then-reprobe as the file-upload path above.
-      if (!crosspoint::mem::roomToGrow(FontUploadState::UPLOAD_BUFFER_SIZE, 1024)) {
-        state.error = "out of memory (try again from desktop browser)";
-        LOG_ERR("WEB", "[FONT-UPLOAD] buffer alloc skipped: largest=%u free=%u min=%u",
-                static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)), ESP.getFreeHeap(),
-                ESP.getMinFreeHeap());
-        return;
-      }
-      state.sink.ensureCapacity();
-    }
-
-    // Extract (family, variant, size) from the query string — multipart
-    // form fields aren't parsed until after the upload callback runs.
-    const String family = server->hasArg("family") ? server->arg("family") : String();
-    const String variant = server->hasArg("variant") ? server->arg("variant") : String();
-    const String sizeStr = server->hasArg("size") ? server->arg("size") : String();
-
-    const std::string familyStd = std::string(family.c_str());
-    if (!crosspoint::fonts::isValidFamilyName(familyStd)) {
-      state.error = "invalid family name";
-      return;
-    }
-    const uint8_t v = parseVariantTag(variant);
-    if (v > 3) {
-      state.error = "invalid variant (want R/B/I/Z)";
-      return;
-    }
-    const long sz = sizeStr.toInt();
-    if (sz < 25 || sz > 40) {
-      state.error = "size must be 25..40";
-      return;
-    }
-    state.family = family;
-    state.variant = v;
-    state.sizePt = static_cast<uint16_t>(sz);
-
-    const String dir = "/custom-font/" + family;
-    Storage.mkdir(dir.c_str());  // idempotent
-    state.finalPath = dir + "/" + variantTagFor(v) + "_" + String(state.sizePt) + ".bin";
-    state.tmpPath = state.finalPath + ".tmp";
-
-    // Clean up any stale .tmp from a previous interrupted upload.
-    if (Storage.exists(state.tmpPath.c_str())) {
-      Storage.remove(state.tmpPath.c_str());
-    }
-    if (!Storage.openFileForWrite("FONTUP", state.tmpPath, state.file)) {
-      state.error = "failed to create temp file";
-      return;
-    }
-    LOG_DBG("FONTUP", "START %s variant=%u size=%u → %s", family.c_str(), v, static_cast<unsigned>(state.sizePt),
-            state.tmpPath.c_str());
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (!state.file || !state.error.isEmpty()) return;
-    if (!state.sink.append(upload.buf, upload.currentSize, sdWriter)) {
-      state.error = "write failed";
-      state.file.close();
-      return;
-    }
-    state.size += upload.currentSize;
-    // Reject oversized payloads mid-stream so we don't waste SD on garbage.
-    if (state.size > crosspoint::binfont::kMaxFileBytes) {
-      state.error = "file too large";
-      state.file.close();
-      Storage.remove(state.tmpPath.c_str());
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    if (state.file) {
-      if (state.error.isEmpty() && !state.sink.flush(sdWriter)) {
-        state.error = "final write failed";
-      }
-      state.file.close();
-    }
-    state.sink.reset();
-    if (!state.error.isEmpty()) return;
-
-    // Validate the CPBN header before committing with the rename.
-    std::string verr;
-    if (!crosspoint::binfont::EpdBinFontLoader::validateFile(std::string(state.tmpPath.c_str()), &verr)) {
-      state.error = String("invalid CPBN file: ") + verr.c_str();
-      Storage.remove(state.tmpPath.c_str());
-      return;
-    }
-
-    // Atomic publish: remove any existing same-name file, then rename.
-    if (Storage.exists(state.finalPath.c_str())) Storage.remove(state.finalPath.c_str());
-    if (!Storage.rename(state.tmpPath.c_str(), state.finalPath.c_str())) {
-      state.error = "rename failed";
-      Storage.remove(state.tmpPath.c_str());
-      return;
-    }
-    crosspoint::fonts::CustomBinFontManager::instance().scan();
-    state.success = true;
-    LOG_INF("FONTUP", "installed %s (%u bytes)", state.finalPath.c_str(), static_cast<unsigned>(state.size));
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    if (state.file) state.file.close();
-    if (!state.tmpPath.isEmpty()) Storage.remove(state.tmpPath.c_str());
-    state.error = "upload aborted";
-    state.sink.reset();
-    LOG_DBG("FONTUP", "aborted");
-  }
-}
-
-void CrossPointWebServer::handleUploadFontPost(FontUploadState& state) {
-  if (state.success) {
-    String body = "{\"ok\":true,\"family\":\"" + state.family + "\",\"variant\":\"" +
-                  String(variantTagFor(state.variant)) + "\",\"size\":" + String(state.sizePt) +
-                  ",\"bytes\":" + String((uint32_t)state.size) + "}";
-    server->send(201, "application/json", body);
-  } else {
-    const String err = state.error.isEmpty() ? "unknown error" : state.error;
-    String body = "{\"ok\":false,\"error\":\"";
-    // Escape quotes and backslashes for JSON.
-    for (size_t i = 0; i < err.length(); ++i) {
-      const char c = err[i];
-      if (c == '"' || c == '\\') body += '\\';
-      body += c;
-    }
-    body += "\"}";
-    server->send(400, "application/json", body);
-  }
-}
-
-void CrossPointWebServer::handleDeleteFont() {
-  const String family = server->hasArg("family") ? server->arg("family") : String();
-  const std::string familyStd = std::string(family.c_str());
-  if (!crosspoint::fonts::isValidFamilyName(familyStd)) {
-    server->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid family\"}");
-    return;
-  }
-
-  auto& mgr = crosspoint::fonts::CustomBinFontManager::instance();
-  size_t removed = 0;
-  if (server->hasArg("size")) {
-    const long sz = server->arg("size").toInt();
-    if (sz < 25 || sz > 40) {
-      server->send(400, "application/json", "{\"ok\":false,\"error\":\"size must be 25..40\"}");
-      return;
-    }
-    removed = mgr.deleteFamilySize(familyStd, static_cast<uint16_t>(sz));
-  } else {
-    removed = mgr.deleteFamily(familyStd);
-  }
-
-  String body = "{\"ok\":true,\"removed\":" + String((uint32_t)removed) + "}";
-  server->send(200, "application/json", body);
-}
-
-// WebSocket callback trampoline — check both pointer and running flag.
-// During shutdown, wsInstance is cleared after running is set to false.
-// Checking running prevents processing events in the teardown window.
-void CrossPointWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
-  // Local copy avoids TOCTOU if stop() nulls wsInstance between the check and the call.
-  auto* inst = wsInstance;
-  if (inst && inst->running) {
-    inst->onWebSocketEvent(num, type, payload, length);
-  }
-}
-
-// WebSocket event handler for fast binary uploads
-// Protocol:
-//   1. Client sends TEXT message: "START:<filename>:<size>:<path>"
-//   2. Client sends BINARY messages with file data chunks
-//   3. Server sends TEXT "PROGRESS:<received>:<total>" after each chunk
-//   4. Server sends TEXT "DONE" or "ERROR:<message>" when complete
-void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
-  switch (type) {
-    case WStype_DISCONNECTED:
-      LOG_DBG("WS", "Client %u disconnected", num);
-      if (g_wsUploadSession) g_wsUploadSession->onDisconnect(num);
-      // Clean up any in-progress download
-      if (wsDownloadInProgress && wsDownloadClientNum == num) {
-        wsDownloadFile.close();
-        wsDownloadInProgress = false;
-        LOG_DBG("WS", "Cancelled download due to disconnect");
-      }
-      break;
-
-    case WStype_CONNECTED: {
-      LOG_DBG("WS", "Client %u connected", num);
-      break;
-    }
-
-    case WStype_TEXT: {
-      String msg = String((char*)payload);
-      LOG_DBG("WS", "Text from client %u: %s", num, msg.c_str());
-
-      if (msg.startsWith("DOWNLOAD:")) {
-        handleWsDownloadRequest(num, msg);
-      } else if (msg.startsWith("START:")) {
-        if (g_wsUploadSession) g_wsUploadSession->onStart(num, std::string(msg.c_str()));
-      }
-      break;
-    }
-
-    case WStype_BIN: {
-      if (g_wsUploadSession) g_wsUploadSession->onBinary(num, payload, length);
-      break;
-    }
-
-    default:
-      break;
   }
 }
 

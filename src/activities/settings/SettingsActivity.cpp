@@ -12,7 +12,6 @@
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "CustomFontsSettingsActivity.h"
 #include "FontFamilyApply.h"
 #include "KOReaderSettingsActivity.h"
 #include "MappedInputManager.h"
@@ -25,7 +24,6 @@
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/CustomBinFontManager.h"
 #include "util/TransitionFeedback.h"
 
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
@@ -35,6 +33,24 @@ const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DIS
 namespace {
 constexpr unsigned long doubleTapMs = 350;
 
+// Render the X3 clock's biased quarter-hour UTC offset (48 = UTC+0, 0 = UTC-12,
+// 104 = UTC+14) as a human label like "UTC+1", "UTC-5:30". Used by the VALUE
+// renderer so the picker shows a timezone, not a raw 0..104 number.
+std::string formatUtcOffset(uint8_t biasedQuarterHours) {
+  const int totalMinutes = (static_cast<int>(biasedQuarterHours) - 48) * 15;
+  const int absMinutes = totalMinutes < 0 ? -totalMinutes : totalMinutes;
+  std::string out = "UTC";
+  out += (totalMinutes < 0) ? '-' : '+';
+  out += std::to_string(absMinutes / 60);
+  const int minutes = absMinutes % 60;
+  if (minutes != 0) {
+    out += ':';
+    if (minutes < 10) out += '0';
+    out += std::to_string(minutes);
+  }
+  return out;
+}
+
 void persistSettingsWithLog(const char* context) {
   if (!SETTINGS.saveToFile()) {
     LOG_ERR("SET", "Failed to save settings (%s)", context);
@@ -42,12 +58,6 @@ void persistSettingsWithLog(const char* context) {
 }
 
 std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
-  if (family == CrossPointSettings::CUSTOM_FAMILY) {
-    // Custom families don't use the small/medium/large enum — the
-    // pixel size lives in customFontSizePt. Caller passes that
-    // (or the live edit-draft value) via the fontSize argument.
-    return std::to_string(fontSize);
-  }
   return std::to_string(CrossPointSettings::fontSizeToPointSize(family, fontSize));
 }
 
@@ -114,61 +124,17 @@ bool SettingsActivity::isPopupValueSetting(const SettingInfo& setting) const {
 
 void SettingsActivity::startFontSizeEdit() {
   fontSizeEditMode = true;
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    // Custom families: draft index points into installedSizesFor; snap
-    // to whichever slot matches the persisted customFontSizePt, or 0
-    // when the family was rebuilt and the previous size disappeared.
-    const auto sizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
-    fontSizeEditDraftIndex = 0;
-    for (size_t i = 0; i < sizes.size(); ++i) {
-      if (sizes[i] == SETTINGS.customFontSizePt) {
-        fontSizeEditDraftIndex = static_cast<uint8_t>(i);
-        break;
-      }
-    }
-    return;
-  }
   fontSizeEditDraftIndex = CrossPointSettings::fontSizeToDisplayIndex(SETTINGS.fontFamily, SETTINGS.fontSize);
 }
 
 void SettingsActivity::adjustFontSizeEdit(const int delta) {
-  int optionCount = 0;
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    optionCount = static_cast<int>(
-        crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName).size());
-    if (optionCount == 0) optionCount = 1;
-  } else {
-    optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
-  }
+  const int optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
   const int next = static_cast<int>(fontSizeEditDraftIndex) + delta;
   fontSizeEditDraftIndex = static_cast<uint8_t>(std::clamp(next, 0, std::max(0, optionCount - 1)));
 }
 
 void SettingsActivity::applyFontSizeEdit() {
-  if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-    const auto sizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
-    if (!sizes.empty() && fontSizeEditDraftIndex < sizes.size()) {
-      const uint16_t trialSize = sizes[fontSizeEditDraftIndex];
-      const uint16_t prevSize = SETTINGS.customFontSizePt;
-      // activate() is atomic — on failure the previous active font
-      // stays registered in the renderer, so the only state to roll
-      // back is SETTINGS. Without this revert the persisted size moves
-      // to a font the renderer never accepted, every later
-      // ensureSectionLoaded re-attempts the failing activate, and
-      // fontId mismatches invalidate the section cache on each chapter.
-      if (!crosspoint::fonts::CustomBinFontManager::instance().activate(SETTINGS.customFontName, trialSize)) {
-        SETTINGS.customFontSizePt = prevSize;
-        messagePopupText = tr(STR_FONT_LOAD_FAILED);
-        messagePopupOpen = true;
-        fontSizeEditMode = false;
-        requestUpdate();
-        return;
-      }
-      SETTINGS.customFontSizePt = trialSize;
-    }
-  } else {
-    SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
-  }
+  SETTINGS.fontSize = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, fontSizeEditDraftIndex);
   fontSizeEditMode = false;
   persistSettingsWithLog("settings font size");
 }
@@ -232,6 +198,8 @@ std::string SettingsActivity::currentValueEditText() const {
   std::string v = std::to_string(valueEditDraft);
   if (setting.valuePtr == &CrossPointSettings::lineSpacingPercent) {
     v += "%";
+  } else if (setting.valuePtr == &CrossPointSettings::clockUtcOffsetQ) {
+    v = formatUtcOffset(valueEditDraft);
   }
   return v;
 }
@@ -263,22 +231,6 @@ void SettingsActivity::buildSettingsList() {
       systemSettings.push_back(setting);
     }
     // Web-only categories (KOReader Sync, OPDS Browser) are skipped for device UI
-  }
-
-  // Append every installed custom font family as a dynamic label on
-  // the fontFamily picker. The cycle handler maps display indices
-  // [enumValues.size(), enumValues.size()+dynamicLabels.size()) onto
-  // SETTINGS.customFontName so the global picker reaches the same
-  // families the in-book picker already does.
-  for (auto& s : readerSettings) {
-    if (s.valuePtr != &CrossPointSettings::fontFamily) continue;
-    s.dynamicLabels.clear();
-    const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
-    s.dynamicLabels.reserve(names.size());
-    for (const auto& name : names) {
-      s.dynamicLabels.push_back(std::string(I18N.get(StrId::STR_CUSTOM_PREFIX)) + name);
-    }
-    break;
   }
 
   // Filter margin entries based on dynamic/uniform/separate mode.
@@ -317,7 +269,6 @@ void SettingsActivity::buildSettingsList() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEANUP_STORAGE, SettingAction::CleanupStorage));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_MANAGE_CUSTOM_FONTS, SettingAction::ManageCustomFonts));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_REFRESH_HOME_STATS, SettingAction::RefreshHomeStats));
 
@@ -701,9 +652,6 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::CleanupStorage:
         enterSubActivity(new (std::nothrow) CleanupStorageActivity(renderer, mappedInput, onComplete));
         break;
-      case SettingAction::ManageCustomFonts:
-        enterSubActivity(new (std::nothrow) CustomFontsSettingsActivity(renderer, mappedInput, onComplete));
-        break;
       case SettingAction::CheckForUpdates:
         enterSubActivity(new (std::nothrow) OtaUpdateActivity(renderer, mappedInput, onComplete));
         break;
@@ -805,24 +753,9 @@ void SettingsActivity::render(Activity::RenderLock&&) {
     }
     if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
       if (setting.valuePtr == &CrossPointSettings::fontSize) {
-        const uint8_t size =
-            (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) ? SETTINGS.customFontSizePt : SETTINGS.fontSize;
-        return fontSizeValueLabel(SETTINGS.fontFamily, size);
+        return fontSizeValueLabel(SETTINGS.fontFamily, SETTINGS.fontSize);
       }
       if (setting.valuePtr == &CrossPointSettings::fontFamily) {
-        if (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY) {
-          const auto names = crosspoint::fonts::CustomBinFontManager::instance().familyNames();
-          for (size_t k = 0; k < names.size(); ++k) {
-            if (names[k] == SETTINGS.customFontName && k < setting.dynamicLabels.size()) {
-              return setting.dynamicLabels[k];
-            }
-          }
-          // Fallback when the configured custom name no longer exists
-          // (file deleted off SD): show the first installed family or
-          // ChareInk if none are installed.
-          if (!setting.dynamicLabels.empty()) return setting.dynamicLabels[0];
-          return I18N.get(setting.enumValues[0]);
-        }
         return I18N.get(setting.enumValues[CrossPointSettings::fontFamilyToDisplayIndex(SETTINGS.fontFamily)]);
       }
       if (setting.valuePtr == &CrossPointSettings::uiLanguage) {
@@ -842,6 +775,8 @@ void SettingsActivity::render(Activity::RenderLock&&) {
       std::string valueText = std::to_string(valueToShow);
       if (setting.valuePtr == &CrossPointSettings::lineSpacingPercent) {
         valueText += "%";
+      } else if (setting.valuePtr == &CrossPointSettings::clockUtcOffsetQ) {
+        valueText = formatUtcOffset(valueToShow);
       }
       return valueText;
     }
@@ -1088,18 +1023,7 @@ void SettingsActivity::render(Activity::RenderLock&&) {
   }
 
   if (fontSizeEditMode) {
-    // Build the option list once for both the layout pass and the
-    // draw pass — avoids walking installedSizesFor twice and keeps
-    // the built-in path identical to before.
-    const bool customFamily = (SETTINGS.fontFamily == CrossPointSettings::CUSTOM_FAMILY);
-    std::vector<uint8_t> customSizes;
-    int optionCount = 0;
-    if (customFamily) {
-      customSizes = crosspoint::fonts::CustomBinFontManager::instance().installedSizesFor(SETTINGS.customFontName);
-      optionCount = static_cast<int>(customSizes.size());
-    } else {
-      optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
-    }
+    const int optionCount = CrossPointSettings::fontSizeOptionCount(SETTINGS.fontFamily);
     const int textH = renderer.getTextHeight(UI_12_FONT_ID);
     constexpr int kItemPadH = 4;
     constexpr int kItemPadV = 3;
@@ -1107,9 +1031,6 @@ void SettingsActivity::render(Activity::RenderLock&&) {
     constexpr int kPopupPad = 16;
 
     auto labelAt = [&](int i) -> std::string {
-      if (customFamily) {
-        return std::to_string(customSizes[i]);
-      }
       const uint8_t fs = CrossPointSettings::displayIndexToFontSize(SETTINGS.fontFamily, i);
       return fontSizeValueLabel(SETTINGS.fontFamily, fs);
     };

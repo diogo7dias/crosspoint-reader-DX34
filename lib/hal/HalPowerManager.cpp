@@ -2,6 +2,7 @@
 
 #include <Logging.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <driver/gpio.h>
 #include <esp_sleep.h>
 
@@ -11,8 +12,41 @@
 
 HalPowerManager powerManager;  // Singleton instance
 
+// Global HalGPIO instance (defined in src/main.cpp) for the device-type gate.
+extern HalGPIO gpio;
+
+namespace {
+// Read a 16-bit little-endian register from a fuel-gauge / I2C device.
+bool readI2CReg16LE(uint8_t addr, uint8_t reg, uint16_t* outValue) {
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) {
+    return false;
+  }
+  if (Wire.requestFrom(addr, static_cast<uint8_t>(2), static_cast<uint8_t>(true)) < 2) {
+    while (Wire.available()) {
+      Wire.read();
+    }
+    return false;
+  }
+  const uint8_t lo = Wire.read();
+  const uint8_t hi = Wire.read();
+  *outValue = (static_cast<uint16_t>(hi) << 8) | lo;
+  return true;
+}
+}  // namespace
+
 void HalPowerManager::begin() {
-  pinMode(BAT_GPIO0, INPUT);
+  if (gpio.deviceIsX3()) {
+    // X3: the battery/clock/IMU share an I2C bus on GPIO20/0. Open it ONCE here
+    // (persistent for the device lifetime) so HalClock and HalTiltSensor can use
+    // it without re-init. The X3 reads battery from the BQ27220 fuel gauge.
+    Wire.begin(X3_I2C_SDA, X3_I2C_SCL, X3_I2C_FREQ);
+    Wire.setTimeOut(4);
+    _batteryUseI2C = true;
+  } else {
+    pinMode(BAT_GPIO0, INPUT);
+  }
   normalFreq = getCpuFrequencyMhz();
   modeMutex = xSemaphoreCreateMutex();
   assert(modeMutex != nullptr);
@@ -85,6 +119,25 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
 }
 
 int HalPowerManager::getBatteryPercentage() const {
+  if (_batteryUseI2C) {
+    // X3: BQ27220 StateOfCharge() returns the percentage directly (no ADC
+    // smoothing needed, the gauge already integrates). Cache for BATTERY_POLL_MS
+    // and keep the last good value on a transient I2C error.
+    const unsigned long now = millis();
+    if (_batteryCachedPercent != 0 && (now - _batteryLastPollMs) < BATTERY_POLL_MS) {
+      return _batteryCachedPercent / 10;
+    }
+    uint16_t soc = 0;
+    if (!readI2CReg16LE(I2C_ADDR_BQ27220, BQ27220_SOC_REG, &soc)) {
+      return _batteryCachedPercent / 10;  // keep last on error (0 -> 0 until first good read)
+    }
+    if (soc > 100) soc = 100;
+    _batteryCachedPercent = static_cast<int>(soc) * 10;
+    _batteryLastPollMs = now;
+    return _batteryCachedPercent / 10;
+  }
+
+  // X4: analog ADC via BatteryMonitor, EMA-smoothed (x10 fixed point).
   static const BatteryMonitor battery = BatteryMonitor(BAT_GPIO0);
 
   // smooth the battery %.
