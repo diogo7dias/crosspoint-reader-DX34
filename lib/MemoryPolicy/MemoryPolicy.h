@@ -21,6 +21,7 @@
 #include <new>
 
 #include "HeapGuard.h"
+#include "Memory.h"  // crosspoint::mem::tryMalloc — the sanctioned C-buffer seam
 
 // The recovery-ladder execution loop below (runRecoveryLadder) emits the same
 // LOG_DIAG("ERS", ...) trail the reader pre-flight gate has always written to
@@ -363,6 +364,41 @@ inline void oomNewHandler() {
 inline void installOomHandler() {
   detail::oomShedTried() = false;
   std::set_new_handler(&oomNewHandler);
+}
+
+// ── Shed-aware C-buffer allocation ──────────────────────────────────────────
+// The global oomNewHandler net only fires for the C++ throwing operator new
+// (STL grows, plain `new`). std::malloc — and therefore crosspoint::mem::
+// tryMalloc, the sanctioned seam for buffers handed to C decoders (miniz inflate,
+// PNG/JPEG) — does NOT invoke the C++ new-handler, so those allocations get no
+// shed-retry: a chapter-read or image-decode buffer gives up under transient
+// fragmentation that a single font-cache shed would have cleared.
+//
+// tryMallocShed closes that gap WITHOUT regressing the success path: it is
+// alloc-FIRST (never gates on headroom, so anything raw malloc would accept
+// still succeeds on the first try), and only on a null return does it shed the
+// throwaway caches once and retry. Returns nullptr exactly when the heap cannot
+// fit the buffer even after shedding; callers null-check as before.
+namespace detail {
+using TryMallocFn = void* (*)(size_t);
+// Test seam: lets host tests script allocation failure (std::malloc never fails
+// for small sizes on the host, so the shed-retry branch is otherwise untestable).
+// Unset in production → routes to crosspoint::mem::tryMalloc.
+inline TryMallocFn& tryMallocHook() {
+  static TryMallocFn fn = nullptr;
+  return fn;
+}
+}  // namespace detail
+
+inline void setTryMallocHookForTest(detail::TryMallocFn fn) { detail::tryMallocHook() = fn; }
+inline void clearTryMallocHookForTest() { detail::tryMallocHook() = nullptr; }
+
+[[nodiscard]] inline void* tryMallocShed(size_t bytes) {
+  detail::TryMallocFn hook = detail::tryMallocHook();
+  void* p = hook ? hook(bytes) : tryMalloc(bytes);
+  if (p != nullptr) return p;
+  shedUnderPressure();
+  return hook ? hook(bytes) : tryMalloc(bytes);
 }
 
 }  // namespace mem

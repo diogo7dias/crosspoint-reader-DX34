@@ -332,6 +332,68 @@ void test_oom_handler_sheds_once_then_steps_aside_then_rearms() {
   std::set_new_handler(nullptr);
 }
 
+// ── Shed-aware C-buffer allocation (tryMallocShed) ──────────────────────────
+// malloc bypasses the C++ new-handler, so tryMalloc gets no shed-retry. The
+// hook seam scripts allocation failure so the shed-retry branch is testable.
+
+namespace {
+int g_allocCalls;
+bool g_shedRan;
+// Returns null until a shed has run, then a real buffer — models the
+// "fragmented + caches pinned, one shed frees enough" recovery case.
+void* failUntilShed(size_t n) {
+  g_allocCalls++;
+  if (!g_shedRan) return nullptr;
+  return std::malloc(n);
+}
+void* alwaysFail(size_t) {
+  g_allocCalls++;
+  return nullptr;
+}
+void* alwaysSucceed(size_t n) {
+  g_allocCalls++;
+  return std::malloc(n);
+}
+}  // namespace
+
+void test_try_malloc_shed_succeeds_first_try_without_shedding() {
+  g_allocCalls = 0;
+  g_shedRan = false;
+  registerShedEvictor([]() { g_shedRan = true; });
+  crosspoint::mem::setTryMallocHookForTest(&alwaysSucceed);
+  void* p = crosspoint::mem::tryMallocShed(1024);
+  crosspoint::mem::clearTryMallocHookForTest();
+  TEST_ASSERT_NOT_NULL(p);
+  TEST_ASSERT_EQUAL_INT(1, g_allocCalls);   // no retry needed
+  TEST_ASSERT_FALSE(g_shedRan);             // ample → caches untouched
+  std::free(p);
+}
+
+void test_try_malloc_shed_sheds_once_then_retries_and_succeeds() {
+  g_allocCalls = 0;
+  g_shedRan = false;
+  registerShedEvictor([]() { g_shedRan = true; });
+  crosspoint::mem::setTryMallocHookForTest(&failUntilShed);
+  void* p = crosspoint::mem::tryMallocShed(1024);
+  crosspoint::mem::clearTryMallocHookForTest();
+  TEST_ASSERT_NOT_NULL(p);                  // recovered after shedding
+  TEST_ASSERT_EQUAL_INT(2, g_allocCalls);   // failed, shed, retried
+  TEST_ASSERT_TRUE(g_shedRan);
+  std::free(p);
+}
+
+void test_try_malloc_shed_returns_null_when_shed_cannot_help() {
+  g_allocCalls = 0;
+  g_shedRan = false;
+  registerShedEvictor([]() { g_shedRan = true; });
+  crosspoint::mem::setTryMallocHookForTest(&alwaysFail);
+  void* p = crosspoint::mem::tryMallocShed(1024);
+  crosspoint::mem::clearTryMallocHookForTest();
+  TEST_ASSERT_NULL(p);                      // genuinely exhausted
+  TEST_ASSERT_EQUAL_INT(2, g_allocCalls);   // tried, shed, tried again
+  TEST_ASSERT_TRUE(g_shedRan);              // shed was attempted
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_render_task_gate_boundary_at_12k);
@@ -356,5 +418,8 @@ int main(int, char**) {
   RUN_TEST(test_room_to_grow_fails_when_shed_cannot_free_enough);
   RUN_TEST(test_shed_under_pressure_runs_all_registered_evictors);
   RUN_TEST(test_oom_handler_sheds_once_then_steps_aside_then_rearms);
+  RUN_TEST(test_try_malloc_shed_succeeds_first_try_without_shedding);
+  RUN_TEST(test_try_malloc_shed_sheds_once_then_retries_and_succeeds);
+  RUN_TEST(test_try_malloc_shed_returns_null_when_shed_cannot_help);
   return UNITY_END();
 }

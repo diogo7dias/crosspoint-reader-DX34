@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Memory.h>
+#include <MemoryPolicy.h>  // tryMallocShed — shed-retry net for the C-buffer seam
 #include <miniz.h>
 
 #include <algorithm>
@@ -440,7 +441,10 @@ uint8_t* ZipFile::readFileToMemory(const char* filename, size_t* size, const boo
   const auto dataSize = trailingNullByte ? inflatedDataSize + 1 : inflatedDataSize;
   // Ownership of `data` transfers to the caller (C-style return), so it stays a
   // raw buffer rather than an RAII owner; the caller frees it.
-  const auto data = static_cast<uint8_t*>(crosspoint::mem::tryMalloc(dataSize));  // alloc-ok
+  // Untrusted, often large (a whole inflated chapter): route through the
+  // shed-aware seam so a transient fragmentation that one font-cache shed could
+  // clear recovers instead of failing the chapter open. Still null-checked.
+  const auto data = static_cast<uint8_t*>(crosspoint::mem::tryMallocShed(dataSize));  // alloc-ok
   if (data == nullptr) {
     LOG_ERR("ZIP", "Failed to allocate memory for output buffer (%zu bytes)", dataSize);
     if (!wasOpen) {
@@ -466,8 +470,8 @@ uint8_t* ZipFile::readFileToMemory(const char* filename, size_t* size, const boo
   } else if (fileStat.method == MZ_DEFLATED) {
     // Read out deflated content from file. Scope-local: RAII frees it on every
     // exit path, so a future edit cannot orphan the decompression buffer.
-    auto deflatedData =
-        crosspoint::mem::CMallocPtr<uint8_t>(static_cast<uint8_t*>(crosspoint::mem::tryMalloc(deflatedDataSize)));
+    auto deflatedData = crosspoint::mem::CMallocPtr<uint8_t>(
+        static_cast<uint8_t*>(crosspoint::mem::tryMallocShed(deflatedDataSize)));  // alloc-ok
     if (deflatedData == nullptr) {
       LOG_ERR("ZIP", "Failed to allocate memory for decompression buffer");
       free(data);
