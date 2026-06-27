@@ -367,18 +367,25 @@ inline void installOomHandler() {
 }
 
 // ── Shed-aware C-buffer allocation ──────────────────────────────────────────
-// The global oomNewHandler net only fires for the C++ throwing operator new
-// (STL grows, plain `new`). std::malloc — and therefore crosspoint::mem::
-// tryMalloc, the sanctioned seam for buffers handed to C decoders (miniz inflate,
-// PNG/JPEG) — does NOT invoke the C++ new-handler, so those allocations get no
-// shed-retry: a chapter-read or image-decode buffer gives up under transient
-// fragmentation that a single font-cache shed would have cleared.
+// Two separate nets shed the throwaway caches on an allocation failure, but
+// neither RETRIES the std::malloc that backs crosspoint::mem::tryMalloc (the
+// sanctioned seam for buffers handed to C decoders — miniz inflate, PNG/JPEG):
+//   - The C++ oomNewHandler net only fires for the throwing operator new (STL
+//     grows, plain `new`), which malloc never routes through.
+//   - On-device, ESP-IDF's heap_caps failed-alloc hook (onHeapAllocFailed in
+//     main.cpp) DOES fire on a malloc failure and calls shedUnderPressure() —
+//     but the hook is informational: heap_caps returns nullptr to the caller
+//     without re-attempting the allocation. So the font cache gets freed, yet
+//     THIS chapter-read / image-decode buffer still comes back null and the
+//     operation gives up; only the NEXT allocation benefits from the freed room.
 //
-// tryMallocShed closes that gap WITHOUT regressing the success path: it is
-// alloc-FIRST (never gates on headroom, so anything raw malloc would accept
-// still succeeds on the first try), and only on a null return does it shed the
-// throwaway caches once and retry. Returns nullptr exactly when the heap cannot
-// fit the buffer even after shedding; callers null-check as before.
+// tryMallocShed adds the missing RETRY (the load-bearing half): on a null
+// return it sheds once itself (a no-op on-device when the IDF hook already
+// shed; the real shed on host, which has no IDF hook) and re-attempts the
+// malloc — which now fits because a cache was dropped. It is alloc-FIRST (never
+// gates on headroom, so anything raw malloc would accept still succeeds on the
+// first try) and returns nullptr only when the heap cannot fit the buffer even
+// after shedding; callers null-check as before.
 namespace detail {
 using TryMallocFn = void* (*)(size_t);
 // Test seam: lets host tests script allocation failure (std::malloc never fails
