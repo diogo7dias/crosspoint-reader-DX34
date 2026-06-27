@@ -209,9 +209,9 @@ void ReaderSettingsActivity::buildSettingsList() {
   // --- Build reader settings directly (no intermediate vector) ---
   // 5 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
   // BOOKERLY, GEORGIA, F25_BANK_PRINTER, PIXEL32).
-  pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA,
-                                      StrId::STR_F25_BANK_PRINTER, StrId::STR_PIXEL32}));
+  pushReader(ReaderSettingInfo::Enum(
+      StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
+      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_F25_BANK_PRINTER, StrId::STR_PIXEL32}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));
@@ -245,9 +245,9 @@ void ReaderSettingsActivity::buildSettingsList() {
       ReaderSettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
                               {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
                                StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50}));
-  pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                     {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC,
-                                      StrId::STR_RENDER_THIN}));
+  pushReader(ReaderSettingInfo::Enum(
+      StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
+      {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC, StrId::STR_RENDER_THIN}));
   if (!txt) {
     readerSettings.push_back(
         ReaderSettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled));
@@ -300,9 +300,9 @@ void ReaderSettingsActivity::buildSettingsList() {
   statusBarSettings.push_back(
       ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
                               {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(
-      StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
-      {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
+                              {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR}));
   statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
                                                         &CrossPointSettings::statusBarNoTitleTruncation));
   statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER,
@@ -311,14 +311,14 @@ void ReaderSettingsActivity::buildSettingsList() {
       StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT,
-                                                        &CrossPointSettings::statusBarShowPagesLeft));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT, &CrossPointSettings::statusBarShowPagesLeft));
   statusBarSettings.push_back(ReaderSettingInfo::Enum(
       StrId::STR_STATUS_CHAPTER_PAGES_LEFT_POSITION, &CrossPointSettings::statusBarPagesLeftPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_NUMBER,
-                                                        &CrossPointSettings::statusBarShowChapterNumber));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_NUMBER, &CrossPointSettings::statusBarShowChapterNumber));
   statusBarSettings.push_back(ReaderSettingInfo::Enum(
       StrId::STR_STATUS_CHAPTER_NUMBER_POSITION, &CrossPointSettings::statusBarChapterNumberPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
@@ -875,8 +875,8 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
   }
 
   const char* confirmLabel = (fontPicker.isOpen() || enumPicker.isOpen()) ? tr(STR_SELECT)
-                             : (valueEditMode || fontSizeEditMode)         ? tr(STR_CONFIRM)
-                                                                           : tr(STR_TOGGLE);
+                             : (valueEditMode || fontSizeEditMode)        ? tr(STR_CONFIRM)
+                                                                          : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 

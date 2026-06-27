@@ -1000,8 +1000,8 @@ void SettingsActivity::render(Activity::RenderLock&&) {
 
   // Draw help text
   const char* confirmLabel = (fontPicker.isOpen() || enumPicker.isOpen()) ? tr(STR_SELECT)
-                             : (fontSizeEditMode || valueEditMode)         ? tr(STR_CONFIRM)
-                                                                           : tr(STR_TOGGLE);
+                             : (fontSizeEditMode || valueEditMode)        ? tr(STR_CONFIRM)
+                                                                          : tr(STR_TOGGLE);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 

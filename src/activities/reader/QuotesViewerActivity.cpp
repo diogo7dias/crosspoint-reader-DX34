@@ -304,8 +304,7 @@ void QuotesViewerActivity::render(Activity::RenderLock&&) {
   // Header — book title + count. The saved-quotes viewer is always the plain
   // Classic look; the Quote Screen Style setting only restyles the in-book
   // quote-selection frame (EpubReaderActivity), not this list.
-  const int titleX =
-      (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
+  const int titleX = (pageWidth - renderer.getTextWidth(UI_12_FONT_ID, bookTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
   renderer.drawText(UI_12_FONT_ID, std::max(4, titleX), titleY, bookTitle.c_str(), true, EpdFontFamily::REGULAR);
   renderer.drawCenteredText(UI_10_FONT_ID, countY, countStr.c_str());
 

@@ -143,7 +143,8 @@ void XMLCALL TocNavParser::endElement(void* userData, const XML_Char* name) {
     if (!self->currentLabel.empty() && !self->currentHref.empty()) {
       // decodeUriEscapes so a %20-encoded TOC href + its #anchor (extracted
       // below from this decoded string) match the real zip entry. (#2249)
-      std::string href = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(self->baseContentPath + self->currentHref));
+      std::string href =
+          FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(self->baseContentPath + self->currentHref));
       std::string anchor;
 
       const size_t pos = href.find('#');

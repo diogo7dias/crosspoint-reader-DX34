@@ -832,8 +832,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   if (s.darkMode > 1) s.darkMode = 0;
   s.booksFolderOrder = doc["booksFolderOrder"] | (uint8_t)0;
   if (s.booksFolderOrder > 1) s.booksFolderOrder = 0;
-  s.imageDither = clampEnum(doc["imageDither"] | (uint8_t)S::IMAGE_DITHER_QUALITY, S::IMAGE_DITHER_COUNT,
-                            S::IMAGE_DITHER_QUALITY);
+  s.imageDither =
+      clampEnum(doc["imageDither"] | (uint8_t)S::IMAGE_DITHER_QUALITY, S::IMAGE_DITHER_COUNT, S::IMAGE_DITHER_QUALITY);
 
   const char* url = doc["opdsServerUrl"] | "";
   StringUtils::safeStrncpy(s.opdsServerUrl, url);

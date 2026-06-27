@@ -714,9 +714,9 @@ EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(con
     const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
     if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
       // Constant per book, so it's cheap to wrap inline each page turn (no cache).
-      layout.titleLines = ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(),
-                                                              buildBookAuthorTitleText(), titleWrapWidth,
-                                                              SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
+      layout.titleLines =
+          ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(), buildBookAuthorTitleText(),
+                                              titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
     } else {
       const int tocIndex = section->getTocIndexForPage(section->currentPage);
       layout.titleLines =
@@ -1812,7 +1812,8 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
         (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     int titleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
     if (SETTINGS.statusBarShowChapterTitle && SETTINGS.statusBarNoTitleTruncation) {

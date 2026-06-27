@@ -530,7 +530,8 @@ void TxtReaderActivity::initializeReader() {
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
         (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle
@@ -985,7 +986,8 @@ bool TxtReaderActivity::renderPage() {
         (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
         (SETTINGS.statusBarShowChapterPercentage &&
          !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
+        (SETTINGS.statusBarShowBookPageCounter &&
+         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
         (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
     const int titleLineCount =
         SETTINGS.statusBarShowChapterTitle

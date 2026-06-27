@@ -337,10 +337,10 @@ class CrossPointSettings {
   // settings UI on halTiltSensor.isAvailable().
   uint8_t tiltPageTurn = TILT_OFF;
   // X3-only DS3231 clock UI (all gated on halClock.isAvailable(), so inert on X4).
-  uint8_t statusBarClock = 0;       // show clock in the reader status bar
-  uint8_t clockUtcOffsetQ = 48;     // biased quarter-hour UTC offset (48 = UTC+0)
-  uint8_t clockFormat = 0;          // 0 = 24-hour, 1 = 12-hour AM/PM
-  uint8_t clockHasBeenSynced = 0;   // set once after the first successful NTP sync
+  uint8_t statusBarClock = 0;      // show clock in the reader status bar
+  uint8_t clockUtcOffsetQ = 48;    // biased quarter-hour UTC offset (48 = UTC+0)
+  uint8_t clockFormat = 0;         // 0 = 24-hour, 1 = 12-hour AM/PM
+  uint8_t clockHasBeenSynced = 0;  // set once after the first successful NTP sync
   // Button layouts (front layout retained for migration only)
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;

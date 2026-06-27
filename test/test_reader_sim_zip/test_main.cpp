@@ -161,9 +161,9 @@ void test_read_to_memory_recovers_after_shed() {
   bool nonNull = false;
   const size_t sz = readChapterToMemory(&nonNull);
 
-  TEST_ASSERT_TRUE(g_shedRan);                  // the shed fired
+  TEST_ASSERT_TRUE(g_shedRan);                      // the shed fired
   TEST_ASSERT_GREATER_THAN_UINT(1, g_mallocCalls);  // failed, shed, retried
-  TEST_ASSERT_TRUE(nonNull);                    // recovered -> chapter loaded
+  TEST_ASSERT_TRUE(nonNull);                        // recovered -> chapter loaded
   TEST_ASSERT_GREATER_THAN_UINT(50000, sz);
 }
 

@@ -22,4 +22,8 @@ releases/
 .claude/scheduled_tasks.lock
 CLAUDE.md
 logs/
-test/test_reader_sim/fixtures/
+# Keep the host OOM-sim fixtures OUT of git EXCEPT the one EPUB the zip/parse
+# sims read — CI needs it on a fresh checkout (the sims' byte/page-count
+# assertions are coupled to this exact public-domain Gutenberg book).
+test/test_reader_sim/fixtures/*
+!test/test_reader_sim/fixtures/book.epub

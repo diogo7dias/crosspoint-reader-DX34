@@ -14,8 +14,8 @@ FontApplyResult applyFontFamilyByDisplayIndex(std::size_t displayIndex, std::siz
 
   const auto prevFamily = SETTINGS.fontFamily;
 
-  SETTINGS.fontFamily =
-      CrossPointSettings::normalizeFontFamily(CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(displayIndex)));
+  SETTINGS.fontFamily = CrossPointSettings::normalizeFontFamily(
+      CrossPointSettings::displayIndexToFontFamily(static_cast<uint8_t>(displayIndex)));
   SETTINGS.fontSize = CrossPointSettings::normalizeFontSizeForFamily(SETTINGS.fontFamily, SETTINGS.fontSize);
   // lineSpacingPercent deliberately left as-is (see header).
 

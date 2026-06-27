@@ -364,8 +364,8 @@ void test_try_malloc_shed_succeeds_first_try_without_shedding() {
   void* p = crosspoint::mem::tryMallocShed(1024);
   crosspoint::mem::clearTryMallocHookForTest();
   TEST_ASSERT_NOT_NULL(p);
-  TEST_ASSERT_EQUAL_INT(1, g_allocCalls);   // no retry needed
-  TEST_ASSERT_FALSE(g_shedRan);             // ample → caches untouched
+  TEST_ASSERT_EQUAL_INT(1, g_allocCalls);  // no retry needed
+  TEST_ASSERT_FALSE(g_shedRan);            // ample → caches untouched
   std::free(p);
 }
 
@@ -376,8 +376,8 @@ void test_try_malloc_shed_sheds_once_then_retries_and_succeeds() {
   crosspoint::mem::setTryMallocHookForTest(&failUntilShed);
   void* p = crosspoint::mem::tryMallocShed(1024);
   crosspoint::mem::clearTryMallocHookForTest();
-  TEST_ASSERT_NOT_NULL(p);                  // recovered after shedding
-  TEST_ASSERT_EQUAL_INT(2, g_allocCalls);   // failed, shed, retried
+  TEST_ASSERT_NOT_NULL(p);                 // recovered after shedding
+  TEST_ASSERT_EQUAL_INT(2, g_allocCalls);  // failed, shed, retried
   TEST_ASSERT_TRUE(g_shedRan);
   std::free(p);
 }
@@ -389,9 +389,9 @@ void test_try_malloc_shed_returns_null_when_shed_cannot_help() {
   crosspoint::mem::setTryMallocHookForTest(&alwaysFail);
   void* p = crosspoint::mem::tryMallocShed(1024);
   crosspoint::mem::clearTryMallocHookForTest();
-  TEST_ASSERT_NULL(p);                      // genuinely exhausted
-  TEST_ASSERT_EQUAL_INT(2, g_allocCalls);   // tried, shed, tried again
-  TEST_ASSERT_TRUE(g_shedRan);              // shed was attempted
+  TEST_ASSERT_NULL(p);                     // genuinely exhausted
+  TEST_ASSERT_EQUAL_INT(2, g_allocCalls);  // tried, shed, tried again
+  TEST_ASSERT_TRUE(g_shedRan);             // shed was attempted
 }
 
 int main(int, char**) {

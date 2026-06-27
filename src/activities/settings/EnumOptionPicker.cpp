@@ -12,8 +12,7 @@ namespace crosspoint::settings {
 void EnumOptionPicker::open(StrId title, std::vector<std::string> labels, int currentIndex) {
   title_ = title;
   labels_ = std::move(labels);
-  selected_ =
-      labels_.empty() ? 0 : std::max(0, std::min(currentIndex, static_cast<int>(labels_.size()) - 1));
+  selected_ = labels_.empty() ? 0 : std::max(0, std::min(currentIndex, static_cast<int>(labels_.size()) - 1));
   open_ = true;
 }
 

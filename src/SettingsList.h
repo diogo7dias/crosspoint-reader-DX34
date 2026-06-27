@@ -59,8 +59,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                   {StrId::STR_HOME_LAYOUT_CLASSIC, StrId::STR_HOME_LAYOUT_SINGLE_COVER}, "homeLayout",
                                   StrId::STR_CAT_DISPLAY));
     s.push_back(SettingInfo::Enum(StrId::STR_QUOTE_SCREEN_STYLE, &CrossPointSettings::quoteScreenStyle,
-                                  {StrId::STR_QUOTE_STYLE_CLASSIC, StrId::STR_QUOTE_STYLE_TERMINAL},
-                                  "quoteScreenStyle", StrId::STR_CAT_DISPLAY));
+                                  {StrId::STR_QUOTE_STYLE_CLASSIC, StrId::STR_QUOTE_STYLE_TERMINAL}, "quoteScreenStyle",
+                                  StrId::STR_CAT_DISPLAY));
     // UI language. Labels are rendered literally from LANGUAGE_NAMES[] (native
     // forms like "Español"/"Slovenščina"), so enumValues is left empty and the
     // cycle/render paths in SettingsActivity special-case this entry.
@@ -70,8 +70,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     // --- Reader ---
     s.push_back(SettingInfo::Enum(
         StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-        {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_F25_BANK_PRINTER,
-         StrId::STR_PIXEL32},
+        {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_F25_BANK_PRINTER, StrId::STR_PIXEL32},
         "fontFamily", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                   {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}, "fontSize",
@@ -119,10 +118,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                   {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
                                    StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50},
                                   "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
-    s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                  {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC,
-                                   StrId::STR_RENDER_THIN},
-                                  "textRenderMode", StrId::STR_CAT_READER));
+    s.push_back(SettingInfo::Enum(
+        StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
+        {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC, StrId::STR_RENDER_THIN},
+        "textRenderMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled,
                                     "hyphenationEnabled", StrId::STR_CAT_READER));
 
@@ -177,9 +176,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
                                   {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM},
                                   "statusBarTitlePosition", StrId::STR_STATUS_BAR));
-    s.push_back(SettingInfo::Enum(StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
-                                  {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR},
-                                  "statusBarTitleContent", StrId::STR_STATUS_BAR));
+    s.push_back(
+        SettingInfo::Enum(StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
+                          {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR},
+                          "statusBarTitleContent", StrId::STR_STATUS_BAR));
     s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
                                     &CrossPointSettings::statusBarNoTitleTruncation, "statusBarNoTitleTruncation",
                                     StrId::STR_STATUS_BAR));
@@ -198,9 +198,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
         {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
          StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
         "statusBarBookPageCounterPosition", StrId::STR_STATUS_BAR));
-    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT,
-                                    &CrossPointSettings::statusBarShowPagesLeft, "statusBarShowPagesLeft",
-                                    StrId::STR_STATUS_BAR));
+    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT, &CrossPointSettings::statusBarShowPagesLeft,
+                                    "statusBarShowPagesLeft", StrId::STR_STATUS_BAR));
     s.push_back(SettingInfo::Enum(
         StrId::STR_STATUS_CHAPTER_PAGES_LEFT_POSITION, &CrossPointSettings::statusBarPagesLeftPosition,
         {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,

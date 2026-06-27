@@ -3,7 +3,7 @@
 // ParsedText's line breaking sees realistic widths.
 #include <EpdFont.h>
 #include <EpdFontFamily.h>
-#include <GfxRenderer.h>         // the shadow (sim_shadows is first on the include path)
+#include <GfxRenderer.h>    // the shadow (sim_shadows is first on the include path)
 #include <ui_10_regular.h>  // -I lib/EpdFont/builtinFonts; defines static const EpdFontData
 
 #include <cstdint>

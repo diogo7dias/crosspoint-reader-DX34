@@ -123,7 +123,7 @@ struct Fixture {
       return false;
     };
     d.onPathRenamed = [](const std::string&, const std::string&) {};
-    d.largestFreeBlockFn = largestFreeBlockFn;  // empty std::function → unlimited
+    d.largestFreeBlockFn = largestFreeBlockFn;        // empty std::function → unlimited
     d.favoriteCounterpartFn = favoriteCounterpartFn;  // empty → rename detection off
     wp.setDeps(d);
   }
