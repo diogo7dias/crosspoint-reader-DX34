@@ -7,6 +7,7 @@
 #include <miniz.h>
 
 #include <algorithm>
+#include <cstring>  // memset/strcmp — explicit; not pulled in transitively under libstdc++
 #ifdef ESP_PLATFORM
 #include <Arduino.h>  // For ESP.getFreeHeap / getMinFreeHeap used in LOG_DIAG fingerprints.
 #include <esp_heap_caps.h>

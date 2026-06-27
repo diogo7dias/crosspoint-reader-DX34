@@ -9,6 +9,8 @@
 #include <esp_task_wdt.h>
 #include <expat.h>
 
+#include <cstring>  // strcmp — explicit; not pulled in transitively under libstdc++
+
 #include "../../Epub.h"
 #include "../Page.h"
 #include "../converters/ImageDecoderFactory.h"

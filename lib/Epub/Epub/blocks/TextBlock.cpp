@@ -5,6 +5,7 @@
 #include <Logging.h>
 #include <Serialization.h>
 
+#include <cstring>  // memcpy — explicit; libstdc++ does not include it transitively like libc++
 #include <new>
 
 #ifdef ESP_PLATFORM
