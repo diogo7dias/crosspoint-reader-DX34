@@ -30,6 +30,16 @@ class GfxRenderer {
   int getScreenHeight() const;
   uint8_t getTextRenderStyle() const;
 
+  // Render-path gates referenced by TextBlock/ImageBlock/Page::render. Linked via
+  // vtables but not exercised by the parse sim's assertions (which check parse
+  // correctness + allocation stability, not pixel placement), so inline no-ops:
+  // "not scanning" takes the normal path; "no ink" skips ink-box centring.
+  bool isFontCacheScanning() const { return false; }
+  bool measureTextInk(int /*fontId*/, const char* /*text*/, int* /*inkTop*/, int* /*inkBottom*/,
+                      EpdFontFamily::Style /*style*/ = EpdFontFamily::REGULAR) const {
+    return false;
+  }
+
   // --- render path (no-op in the sim; linked via vtables, never called) ---
   void drawLine(int x1, int y1, int x2, int y2, bool state = true) const;
   void drawLine(int x1, int y1, int x2, int y2, int lineWidth, bool state) const;

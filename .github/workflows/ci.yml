@@ -98,6 +98,36 @@ jobs:
           path: .pio/build/default/firmware.bin
           if-no-files-found: error
 
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+
+      - name: Install libexpat (test_sim_parse links system expat)
+        run: sudo apt-get update && sudo apt-get install -y libexpat1-dev
+
+      - name: Run host unit tests + OOM fragmentation sims
+        # test_host runs the whole host suite (its test_ignore excludes the
+        # dedicated-env dirs); the sim/layout envs are invoked one test at a time
+        # because, by default, an env builds every test/ dir and the unrelated
+        # ones cannot compile against its bespoke shadow include set.
+        run: |
+          set -euo pipefail
+          pio test -e test_host
+          pio test -e test_layout -f test_layout_primitives
+          pio test -e test_sim -f test_reader_sim
+          pio test -e test_sim_zip -f test_reader_sim_zip
+          pio test -e test_sim_parse -f test_reader_sim_parse
+
   # This job is used as the PR required actions check, allows for changes to other steps in the future without breaking
   # PR requirements.
   test-status:
@@ -106,6 +136,7 @@ jobs:
       - build
       - clang-format
       - cppcheck
+      - host-tests
     if: always()
     runs-on: ubuntu-latest
     steps:

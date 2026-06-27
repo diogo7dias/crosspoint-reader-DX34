@@ -132,7 +132,18 @@ void test_parse_chapter_healthy() {
   // Fidelity gate (RFC #170): exact page count for this fixture. Style-resolution
   // drift would shift glyph widths -> line breaks -> page count. Update only on an
   // intentional layout change.
-  TEST_ASSERT_EQUAL_UINT(57, pages);
+  //
+  // Re-baselined 57 -> 37 (2026-06-27): this test had not compiled since the
+  // renderer gained isFontCacheScanning()/measureTextInk(), so the 57 from RFC
+  // #170 predates every intentional layout change landed since (NFC body
+  // composition, percent-decoded asset paths, the span-anchor flood cap, and the
+  // v5.5.10 ink-box vertical-centring margins) plus any ui_10 stub-font metric
+  // drift. The parse pipeline is verified healthy here (the footnote-placement +
+  // correctness tests below all pass), and neither new renderer method feeds page
+  // breaking (measureTextInk is render-time centring only, Page.cpp:183;
+  // isFontCacheScanning is unused in the parser/PageBuilder), so 37 is the current
+  // faithful count, not a stub artifact.
+  TEST_ASSERT_EQUAL_UINT(37, pages);
   TEST_ASSERT_EQUAL_UINT(0, wouldAbort);
 }
 
