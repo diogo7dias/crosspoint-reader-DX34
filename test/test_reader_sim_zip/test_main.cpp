@@ -5,12 +5,14 @@
 //
 // Run via: pio test -e test_sim_zip -f test_reader_sim_zip
 #include <HalStorage.h>
+#include <MemoryPolicy.h>
 #include <Print.h>
 #include <ZipFile.h>
 #include <unity.h>
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 
 #include "../test_sim_heap/SimHeap.h"
@@ -47,10 +49,50 @@ size_t streamChapter() {
   zip.readFileToStream(kChapterEntry, sink, /*chunkSize=*/1024);
   return sink.bytes;
 }
+
+// Read the chapter via the whole-buffer path (ZipFile::readFileToMemory), which
+// allocates through the shed-aware C-seam (crosspoint::mem::tryMallocShed).
+// Returns the byte count; reports whether the buffer came back non-null.
+size_t readChapterToMemory(bool* outNonNull) {
+  std::string path = SIM_EPUB_PATH;
+  ZipFile zip(path);
+  size_t size = 0;
+  uint8_t* buf = zip.readFileToMemory(kChapterEntry, &size, /*trailingNullByte=*/false);
+  *outNonNull = (buf != nullptr);
+  if (buf != nullptr) std::free(buf);  // readFileToMemory hands ownership to caller
+  return size;
+}
+
+// ── tryMalloc failure-injection seam (SimHeap models operator new, NOT malloc;
+// the C-decoder seam uses std::malloc, so the shed-retry path is driven via the
+// MemoryPolicy hook instead). ───────────────────────────────────────────────
+int g_mallocCalls = 0;
+bool g_shedRan = false;
+// Null on the first request of an episode, then (after a shed has run) a real
+// buffer — models "fragmented + caches pinned, one shed frees enough".
+void* failMallocUntilShed(size_t n) {
+  ++g_mallocCalls;
+  if (!g_shedRan) return nullptr;
+  return std::malloc(n);
+}
+void* alwaysFailMalloc(size_t) {
+  ++g_mallocCalls;
+  return nullptr;
+}
 }  // namespace
 
-void setUp() { SimHeap::reset(); }
-void tearDown() { SimHeap::reset(); }
+void setUp() {
+  SimHeap::reset();
+  crosspoint::mem::clearTryMallocHookForTest();
+  crosspoint::mem::clearShedEvictors();
+  g_mallocCalls = 0;
+  g_shedRan = false;
+}
+void tearDown() {
+  SimHeap::reset();
+  crosspoint::mem::clearTryMallocHookForTest();
+  crosspoint::mem::clearShedEvictors();
+}
 
 // Healthy: the real chapter inflates correctly and we can time it.
 void test_inflate_chapter_healthy() {
@@ -98,9 +140,52 @@ void test_inflate_chapter_under_fragmentation() {
   TEST_ASSERT_TRUE(true);
 }
 
+// ── readFileToMemory + the shed-aware C-seam (step-1 hardening, end-to-end) ──
+
+// Healthy: the whole-buffer read returns the chapter, no injection.
+void test_read_to_memory_healthy_returns_chapter() {
+  bool nonNull = false;
+  const size_t sz = readChapterToMemory(&nonNull);
+  TEST_ASSERT_TRUE(nonNull);
+  TEST_ASSERT_GREATER_THAN_UINT(50000, sz);
+}
+
+// Transient malloc failure + a shed evictor that frees memory: tryMallocShed
+// must shed once and recover, so the chapter still loads. This is the on-device
+// "heap fragmented, font cache pinned" case that pre-step-1 gave up on (plain
+// tryMalloc never invokes the shed-retry net).
+void test_read_to_memory_recovers_after_shed() {
+  crosspoint::mem::registerShedEvictor([]() { g_shedRan = true; });
+  crosspoint::mem::setTryMallocHookForTest(&failMallocUntilShed);
+
+  bool nonNull = false;
+  const size_t sz = readChapterToMemory(&nonNull);
+
+  TEST_ASSERT_TRUE(g_shedRan);                  // the shed fired
+  TEST_ASSERT_GREATER_THAN_UINT(1, g_mallocCalls);  // failed, shed, retried
+  TEST_ASSERT_TRUE(nonNull);                    // recovered -> chapter loaded
+  TEST_ASSERT_GREATER_THAN_UINT(50000, sz);
+}
+
+// Persistent malloc failure (shedding frees nothing): readFileToMemory must
+// return nullptr gracefully — the device's null-check path. No crash, no abort.
+void test_read_to_memory_returns_null_when_exhausted() {
+  crosspoint::mem::registerShedEvictor([]() {});  // frees nothing
+  crosspoint::mem::setTryMallocHookForTest(&alwaysFailMalloc);
+
+  bool nonNull = true;
+  const size_t sz = readChapterToMemory(&nonNull);
+
+  TEST_ASSERT_FALSE(nonNull);  // graceful null, not a crash
+  (void)sz;
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_inflate_chapter_healthy);
   RUN_TEST(test_inflate_chapter_under_fragmentation);
+  RUN_TEST(test_read_to_memory_healthy_returns_chapter);
+  RUN_TEST(test_read_to_memory_recovers_after_shed);
+  RUN_TEST(test_read_to_memory_returns_null_when_exhausted);
   return UNITY_END();
 }
