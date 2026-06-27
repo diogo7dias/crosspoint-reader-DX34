@@ -14,7 +14,7 @@ namespace {
 // Built-in families in display-index order (matches displayIndexToFontFamily and
 // the enumValues used by both settings menus).
 constexpr StrId kBuiltinFamilyLabels[] = {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA,
-                                          StrId::STR_F25_BANK_PRINTER, StrId::STR_PIXEL32};
+                                          StrId::STR_ET_BOOK,  StrId::STR_ROSARIVO, StrId::STR_LATO};
 }  // namespace
 
 void FontFamilyPicker::open() {

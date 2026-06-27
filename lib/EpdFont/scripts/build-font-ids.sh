@@ -41,20 +41,30 @@ for size in 10 12 13 14 15 16 17; do
   fi
 done
 echo ""
-# Pixel32 (Pix32): pixel display reader font. Sizes 12,14,16, three faces. No
-# shared tables (dedup does not process it), so each ID hashes the per-size headers.
-for size in 12 14 16; do
-  if [[ -f "./pixel32_${size}_regular.h" ]]; then
-    echo "#define PIXEL32_${size}_FONT_ID ($(font_id ./pixel32_${size}_regular.h ./pixel32_${size}_bold.h ./pixel32_${size}_italic.h))"
+# ETbb (ET Book): serif reader font. Sizes 10,12,13,14,15,16,17, FOUR faces
+# (Regular/Bold/Italic/BoldItalic). No shared tables (dedup-shared-tables.py
+# does not process it), so each ID hashes the four per-size headers.
+for size in 10 12 13 14 15 16 17; do
+  if [[ -f "./etbb_${size}_regular.h" ]]; then
+    echo "#define ETBB_${size}_FONT_ID ($(font_id ./etbb_${size}_regular.h ./etbb_${size}_bold.h ./etbb_${size}_italic.h ./etbb_${size}_bolditalic.h))"
   fi
 done
 echo ""
-# F25 Bank Printer: stylised display reader font. Sizes 10,11,12,13,14,16,17,
-# three faces (Regular/Bold/Italic). No shared tables (dedup-shared-tables.py
-# does not process F25), so each ID hashes just the three per-size headers.
-for size in 10 11 12 13 14 16 17; do
-  if [[ -f "./f25_${size}_regular.h" ]]; then
-    echo "#define F25_${size}_FONT_ID ($(font_id ./f25_${size}_regular.h ./f25_${size}_bold.h ./f25_${size}_italic.h))"
+# Rosarivo: Renaissance serif reader font. Sizes 10,12,13,14,15,16,17, TWO faces
+# (Regular/Italic; no Bold/BoldItalic source). No shared tables, so each ID
+# hashes the two per-size headers.
+for size in 10 12 13 14 15 16 17; do
+  if [[ -f "./rosarivo_${size}_regular.h" ]]; then
+    echo "#define ROSARIVO_${size}_FONT_ID ($(font_id ./rosarivo_${size}_regular.h ./rosarivo_${size}_italic.h))"
+  fi
+done
+echo ""
+# Lato: humanist sans-serif reader font. Sizes 10,12,13,14,15,16,17, FOUR faces
+# (Regular/Bold/Italic/BoldItalic). No shared tables, so each ID hashes the four
+# per-size headers.
+for size in 10 12 13 14 15 16 17; do
+  if [[ -f "./lato_${size}_regular.h" ]]; then
+    echo "#define LATO_${size}_FONT_ID ($(font_id ./lato_${size}_regular.h ./lato_${size}_bold.h ./lato_${size}_italic.h ./lato_${size}_bolditalic.h))"
   fi
 done
 echo ""

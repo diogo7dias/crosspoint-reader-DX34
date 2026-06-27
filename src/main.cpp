@@ -163,57 +163,109 @@ EpdFont georgia_17BoldFont(&georgia_17_bold);
 EpdFont georgia_17ItalicFont(&georgia_17_italic);
 EpdFontFamily georgia_17FontFamily(&georgia_17RegularFont, &georgia_17BoldFont, &georgia_17ItalicFont, nullptr);
 
-// Pixel32 (Pix32): pixel display reader font. Regular, Bold, Italic (no
-// BoldItalic source -- slot nullptr, renderer synthesises it). Sizes 12, 14, 16.
-// Ships full prose punctuation incl. pipe, so no source patching needed.
-EpdFont pixel32_12RegularFont(&pixel32_12_regular);
-EpdFont pixel32_12BoldFont(&pixel32_12_bold);
-EpdFont pixel32_12ItalicFont(&pixel32_12_italic);
-EpdFontFamily pixel32_12FontFamily(&pixel32_12RegularFont, &pixel32_12BoldFont, &pixel32_12ItalicFont, nullptr);
-EpdFont pixel32_14RegularFont(&pixel32_14_regular);
-EpdFont pixel32_14BoldFont(&pixel32_14_bold);
-EpdFont pixel32_14ItalicFont(&pixel32_14_italic);
-EpdFontFamily pixel32_14FontFamily(&pixel32_14RegularFont, &pixel32_14BoldFont, &pixel32_14ItalicFont, nullptr);
-EpdFont pixel32_16RegularFont(&pixel32_16_regular);
-EpdFont pixel32_16BoldFont(&pixel32_16_bold);
-EpdFont pixel32_16ItalicFont(&pixel32_16_italic);
-EpdFontFamily pixel32_16FontFamily(&pixel32_16RegularFont, &pixel32_16BoldFont, &pixel32_16ItalicFont, nullptr);
+// ETbb (ET Book): serif reader font. Regular, Bold, Italic, BoldItalic -- all
+// four real faces baked (unlike Georgia's nullptr/synthesised bold-italic).
+// Sizes 10, 12, 13, 14, 15, 16, 17. Ships full prose punctuation incl. pipe.
+EpdFont etbb_10RegularFont(&etbb_10_regular);
+EpdFont etbb_10BoldFont(&etbb_10_bold);
+EpdFont etbb_10ItalicFont(&etbb_10_italic);
+EpdFont etbb_10BoldItalicFont(&etbb_10_bolditalic);
+EpdFontFamily etbb_10FontFamily(&etbb_10RegularFont, &etbb_10BoldFont, &etbb_10ItalicFont, &etbb_10BoldItalicFont);
+EpdFont etbb_12RegularFont(&etbb_12_regular);
+EpdFont etbb_12BoldFont(&etbb_12_bold);
+EpdFont etbb_12ItalicFont(&etbb_12_italic);
+EpdFont etbb_12BoldItalicFont(&etbb_12_bolditalic);
+EpdFontFamily etbb_12FontFamily(&etbb_12RegularFont, &etbb_12BoldFont, &etbb_12ItalicFont, &etbb_12BoldItalicFont);
+EpdFont etbb_13RegularFont(&etbb_13_regular);
+EpdFont etbb_13BoldFont(&etbb_13_bold);
+EpdFont etbb_13ItalicFont(&etbb_13_italic);
+EpdFont etbb_13BoldItalicFont(&etbb_13_bolditalic);
+EpdFontFamily etbb_13FontFamily(&etbb_13RegularFont, &etbb_13BoldFont, &etbb_13ItalicFont, &etbb_13BoldItalicFont);
+EpdFont etbb_14RegularFont(&etbb_14_regular);
+EpdFont etbb_14BoldFont(&etbb_14_bold);
+EpdFont etbb_14ItalicFont(&etbb_14_italic);
+EpdFont etbb_14BoldItalicFont(&etbb_14_bolditalic);
+EpdFontFamily etbb_14FontFamily(&etbb_14RegularFont, &etbb_14BoldFont, &etbb_14ItalicFont, &etbb_14BoldItalicFont);
+EpdFont etbb_15RegularFont(&etbb_15_regular);
+EpdFont etbb_15BoldFont(&etbb_15_bold);
+EpdFont etbb_15ItalicFont(&etbb_15_italic);
+EpdFont etbb_15BoldItalicFont(&etbb_15_bolditalic);
+EpdFontFamily etbb_15FontFamily(&etbb_15RegularFont, &etbb_15BoldFont, &etbb_15ItalicFont, &etbb_15BoldItalicFont);
+EpdFont etbb_16RegularFont(&etbb_16_regular);
+EpdFont etbb_16BoldFont(&etbb_16_bold);
+EpdFont etbb_16ItalicFont(&etbb_16_italic);
+EpdFont etbb_16BoldItalicFont(&etbb_16_bolditalic);
+EpdFontFamily etbb_16FontFamily(&etbb_16RegularFont, &etbb_16BoldFont, &etbb_16ItalicFont, &etbb_16BoldItalicFont);
+EpdFont etbb_17RegularFont(&etbb_17_regular);
+EpdFont etbb_17BoldFont(&etbb_17_bold);
+EpdFont etbb_17ItalicFont(&etbb_17_italic);
+EpdFont etbb_17BoldItalicFont(&etbb_17_bolditalic);
+EpdFontFamily etbb_17FontFamily(&etbb_17RegularFont, &etbb_17BoldFont, &etbb_17ItalicFont, &etbb_17BoldItalicFont);
 
-// F25 Bank Printer: stylised display reader font. Regular, Bold, Italic (the
-// BoldItalic source is not baked -- slot nullptr, renderer synthesises it,
-// Vollkorn/Bitter pattern). Sizes 10,11,12,13,14,16,17. The source TTFs were
-// patched (scripts/patch_f25.py) to add em/en dash, ellipsis, bullet, nbsp,
-// middot and pipe, which the stock font lacks, so prose renders without dropped
-// punctuation. NOTE: F25 has no Cyrillic/Greek and a small glyph set; missing
-// glyphs render as gaps (the renderer has no fallback chain).
-EpdFont f25_10RegularFont(&f25_10_regular);
-EpdFont f25_10BoldFont(&f25_10_bold);
-EpdFont f25_10ItalicFont(&f25_10_italic);
-EpdFontFamily f25_10FontFamily(&f25_10RegularFont, &f25_10BoldFont, &f25_10ItalicFont, nullptr);
-EpdFont f25_11RegularFont(&f25_11_regular);
-EpdFont f25_11BoldFont(&f25_11_bold);
-EpdFont f25_11ItalicFont(&f25_11_italic);
-EpdFontFamily f25_11FontFamily(&f25_11RegularFont, &f25_11BoldFont, &f25_11ItalicFont, nullptr);
-EpdFont f25_12RegularFont(&f25_12_regular);
-EpdFont f25_12BoldFont(&f25_12_bold);
-EpdFont f25_12ItalicFont(&f25_12_italic);
-EpdFontFamily f25_12FontFamily(&f25_12RegularFont, &f25_12BoldFont, &f25_12ItalicFont, nullptr);
-EpdFont f25_13RegularFont(&f25_13_regular);
-EpdFont f25_13BoldFont(&f25_13_bold);
-EpdFont f25_13ItalicFont(&f25_13_italic);
-EpdFontFamily f25_13FontFamily(&f25_13RegularFont, &f25_13BoldFont, &f25_13ItalicFont, nullptr);
-EpdFont f25_14RegularFont(&f25_14_regular);
-EpdFont f25_14BoldFont(&f25_14_bold);
-EpdFont f25_14ItalicFont(&f25_14_italic);
-EpdFontFamily f25_14FontFamily(&f25_14RegularFont, &f25_14BoldFont, &f25_14ItalicFont, nullptr);
-EpdFont f25_16RegularFont(&f25_16_regular);
-EpdFont f25_16BoldFont(&f25_16_bold);
-EpdFont f25_16ItalicFont(&f25_16_italic);
-EpdFontFamily f25_16FontFamily(&f25_16RegularFont, &f25_16BoldFont, &f25_16ItalicFont, nullptr);
-EpdFont f25_17RegularFont(&f25_17_regular);
-EpdFont f25_17BoldFont(&f25_17_bold);
-EpdFont f25_17ItalicFont(&f25_17_italic);
-EpdFontFamily f25_17FontFamily(&f25_17RegularFont, &f25_17BoldFont, &f25_17ItalicFont, nullptr);
+// Rosarivo: Renaissance serif reader font. Regular + Italic only -- no Bold or
+// BoldItalic source, so both bold slots are nullptr and a bold request falls
+// back to the regular face (no synthetic bold). Sizes 10, 12, 13, 14, 15, 16,
+// 17. Ships full prose punctuation incl. pipe.
+EpdFont rosarivo_10RegularFont(&rosarivo_10_regular);
+EpdFont rosarivo_10ItalicFont(&rosarivo_10_italic);
+EpdFontFamily rosarivo_10FontFamily(&rosarivo_10RegularFont, nullptr, &rosarivo_10ItalicFont, nullptr);
+EpdFont rosarivo_12RegularFont(&rosarivo_12_regular);
+EpdFont rosarivo_12ItalicFont(&rosarivo_12_italic);
+EpdFontFamily rosarivo_12FontFamily(&rosarivo_12RegularFont, nullptr, &rosarivo_12ItalicFont, nullptr);
+EpdFont rosarivo_13RegularFont(&rosarivo_13_regular);
+EpdFont rosarivo_13ItalicFont(&rosarivo_13_italic);
+EpdFontFamily rosarivo_13FontFamily(&rosarivo_13RegularFont, nullptr, &rosarivo_13ItalicFont, nullptr);
+EpdFont rosarivo_14RegularFont(&rosarivo_14_regular);
+EpdFont rosarivo_14ItalicFont(&rosarivo_14_italic);
+EpdFontFamily rosarivo_14FontFamily(&rosarivo_14RegularFont, nullptr, &rosarivo_14ItalicFont, nullptr);
+EpdFont rosarivo_15RegularFont(&rosarivo_15_regular);
+EpdFont rosarivo_15ItalicFont(&rosarivo_15_italic);
+EpdFontFamily rosarivo_15FontFamily(&rosarivo_15RegularFont, nullptr, &rosarivo_15ItalicFont, nullptr);
+EpdFont rosarivo_16RegularFont(&rosarivo_16_regular);
+EpdFont rosarivo_16ItalicFont(&rosarivo_16_italic);
+EpdFontFamily rosarivo_16FontFamily(&rosarivo_16RegularFont, nullptr, &rosarivo_16ItalicFont, nullptr);
+EpdFont rosarivo_17RegularFont(&rosarivo_17_regular);
+EpdFont rosarivo_17ItalicFont(&rosarivo_17_italic);
+EpdFontFamily rosarivo_17FontFamily(&rosarivo_17RegularFont, nullptr, &rosarivo_17ItalicFont, nullptr);
+
+// Lato: humanist sans-serif reader font. Regular, Bold, Italic, BoldItalic --
+// all four real faces baked. Sizes 10, 12, 13, 14, 15, 16, 17. Ships full prose
+// punctuation incl. pipe.
+EpdFont lato_10RegularFont(&lato_10_regular);
+EpdFont lato_10BoldFont(&lato_10_bold);
+EpdFont lato_10ItalicFont(&lato_10_italic);
+EpdFont lato_10BoldItalicFont(&lato_10_bolditalic);
+EpdFontFamily lato_10FontFamily(&lato_10RegularFont, &lato_10BoldFont, &lato_10ItalicFont, &lato_10BoldItalicFont);
+EpdFont lato_12RegularFont(&lato_12_regular);
+EpdFont lato_12BoldFont(&lato_12_bold);
+EpdFont lato_12ItalicFont(&lato_12_italic);
+EpdFont lato_12BoldItalicFont(&lato_12_bolditalic);
+EpdFontFamily lato_12FontFamily(&lato_12RegularFont, &lato_12BoldFont, &lato_12ItalicFont, &lato_12BoldItalicFont);
+EpdFont lato_13RegularFont(&lato_13_regular);
+EpdFont lato_13BoldFont(&lato_13_bold);
+EpdFont lato_13ItalicFont(&lato_13_italic);
+EpdFont lato_13BoldItalicFont(&lato_13_bolditalic);
+EpdFontFamily lato_13FontFamily(&lato_13RegularFont, &lato_13BoldFont, &lato_13ItalicFont, &lato_13BoldItalicFont);
+EpdFont lato_14RegularFont(&lato_14_regular);
+EpdFont lato_14BoldFont(&lato_14_bold);
+EpdFont lato_14ItalicFont(&lato_14_italic);
+EpdFont lato_14BoldItalicFont(&lato_14_bolditalic);
+EpdFontFamily lato_14FontFamily(&lato_14RegularFont, &lato_14BoldFont, &lato_14ItalicFont, &lato_14BoldItalicFont);
+EpdFont lato_15RegularFont(&lato_15_regular);
+EpdFont lato_15BoldFont(&lato_15_bold);
+EpdFont lato_15ItalicFont(&lato_15_italic);
+EpdFont lato_15BoldItalicFont(&lato_15_bolditalic);
+EpdFontFamily lato_15FontFamily(&lato_15RegularFont, &lato_15BoldFont, &lato_15ItalicFont, &lato_15BoldItalicFont);
+EpdFont lato_16RegularFont(&lato_16_regular);
+EpdFont lato_16BoldFont(&lato_16_bold);
+EpdFont lato_16ItalicFont(&lato_16_italic);
+EpdFont lato_16BoldItalicFont(&lato_16_bolditalic);
+EpdFontFamily lato_16FontFamily(&lato_16RegularFont, &lato_16BoldFont, &lato_16ItalicFont, &lato_16BoldItalicFont);
+EpdFont lato_17RegularFont(&lato_17_regular);
+EpdFont lato_17BoldFont(&lato_17_bold);
+EpdFont lato_17ItalicFont(&lato_17_italic);
+EpdFont lato_17BoldItalicFont(&lato_17_bolditalic);
+EpdFontFamily lato_17FontFamily(&lato_17RegularFont, &lato_17BoldFont, &lato_17ItalicFont, &lato_17BoldItalicFont);
 
 EpdFont smallFont(&ui_8_regular);
 EpdFontFamily smallFontFamily(&smallFont, nullptr, nullptr, nullptr, 0, 0, false);
@@ -564,16 +616,27 @@ void setupDisplayAndFonts() {
   renderer.insertFont(GEORGIA_15_FONT_ID, georgia_15FontFamily);
   renderer.insertFont(GEORGIA_16_FONT_ID, georgia_16FontFamily);
   renderer.insertFont(GEORGIA_17_FONT_ID, georgia_17FontFamily);
-  renderer.insertFont(PIXEL32_12_FONT_ID, pixel32_12FontFamily);
-  renderer.insertFont(PIXEL32_14_FONT_ID, pixel32_14FontFamily);
-  renderer.insertFont(PIXEL32_16_FONT_ID, pixel32_16FontFamily);
-  renderer.insertFont(F25_10_FONT_ID, f25_10FontFamily);
-  renderer.insertFont(F25_11_FONT_ID, f25_11FontFamily);
-  renderer.insertFont(F25_12_FONT_ID, f25_12FontFamily);
-  renderer.insertFont(F25_13_FONT_ID, f25_13FontFamily);
-  renderer.insertFont(F25_14_FONT_ID, f25_14FontFamily);
-  renderer.insertFont(F25_16_FONT_ID, f25_16FontFamily);
-  renderer.insertFont(F25_17_FONT_ID, f25_17FontFamily);
+  renderer.insertFont(ETBB_10_FONT_ID, etbb_10FontFamily);
+  renderer.insertFont(ETBB_12_FONT_ID, etbb_12FontFamily);
+  renderer.insertFont(ETBB_13_FONT_ID, etbb_13FontFamily);
+  renderer.insertFont(ETBB_14_FONT_ID, etbb_14FontFamily);
+  renderer.insertFont(ETBB_15_FONT_ID, etbb_15FontFamily);
+  renderer.insertFont(ETBB_16_FONT_ID, etbb_16FontFamily);
+  renderer.insertFont(ETBB_17_FONT_ID, etbb_17FontFamily);
+  renderer.insertFont(ROSARIVO_10_FONT_ID, rosarivo_10FontFamily);
+  renderer.insertFont(ROSARIVO_12_FONT_ID, rosarivo_12FontFamily);
+  renderer.insertFont(ROSARIVO_13_FONT_ID, rosarivo_13FontFamily);
+  renderer.insertFont(ROSARIVO_14_FONT_ID, rosarivo_14FontFamily);
+  renderer.insertFont(ROSARIVO_15_FONT_ID, rosarivo_15FontFamily);
+  renderer.insertFont(ROSARIVO_16_FONT_ID, rosarivo_16FontFamily);
+  renderer.insertFont(ROSARIVO_17_FONT_ID, rosarivo_17FontFamily);
+  renderer.insertFont(LATO_10_FONT_ID, lato_10FontFamily);
+  renderer.insertFont(LATO_12_FONT_ID, lato_12FontFamily);
+  renderer.insertFont(LATO_13_FONT_ID, lato_13FontFamily);
+  renderer.insertFont(LATO_14_FONT_ID, lato_14FontFamily);
+  renderer.insertFont(LATO_15_FONT_ID, lato_15FontFamily);
+  renderer.insertFont(LATO_16_FONT_ID, lato_16FontFamily);
+  renderer.insertFont(LATO_17_FONT_ID, lato_17FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);

@@ -207,11 +207,11 @@ void ReaderSettingsActivity::buildSettingsList() {
   };
 
   // --- Build reader settings directly (no intermediate vector) ---
-  // 5 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
-  // BOOKERLY, GEORGIA, F25_BANK_PRINTER, PIXEL32).
-  pushReader(ReaderSettingInfo::Enum(
-      StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_F25_BANK_PRINTER, StrId::STR_PIXEL32}));
+  // 6 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
+  // BOOKERLY, GEORGIA, ETBB, ROSARIVO, LATO).
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
+                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_ET_BOOK,
+                                      StrId::STR_ROSARIVO, StrId::STR_LATO}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));

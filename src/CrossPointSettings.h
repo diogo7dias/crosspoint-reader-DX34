@@ -147,12 +147,15 @@ class CrossPointSettings {
   //   10   TT2020   (removed 2026-04)
   //   11   BITTER   (removed 2026-06)
   //   12   CUSTOM   (user-uploaded .bin custom-font feature removed 2026-06)
+  //   13   F25_BANK_PRINTER  (removed 2026-06)
+  //   15   PIXEL32           (removed 2026-06)
   enum FONT_FAMILY {
     CHAREINK = 0,
     BOOKERLY = 1,
-    F25_BANK_PRINTER = 13,  // stylised display reader font
-    GEORGIA = 14,           // serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
-    PIXEL32 = 15,           // pixel display reader font (sizes 12, 14, 16)
+    GEORGIA = 14,   // serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
+    ETBB = 16,      // ET Book serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
+    ROSARIVO = 17,  // Rosarivo serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
+    LATO = 18,      // humanist sans-serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
