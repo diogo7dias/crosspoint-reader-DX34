@@ -152,10 +152,19 @@ class CrossPointSettings {
   enum FONT_FAMILY {
     CHAREINK = 0,
     BOOKERLY = 1,
-    GEORGIA = 14,   // serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
-    ETBB = 16,      // ET Book serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
-    ROSARIVO = 17,  // Rosarivo serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
-    LATO = 18,      // humanist sans-serif reader font (sizes 10, 12, 13, 14, 15, 16, 17)
+    GEORGIA = 14,  // serif reader font (sizes 10, 12, 14, 16, 17)
+    // 16 (ETBB / ET Book) and 17 (ROSARIVO) removed — kept as enum gaps so a
+    // persisted value normalizes to CHAREINK rather than re-mapping to another
+    // font. Do not reuse for a new family.
+    LATO = 18,  // humanist sans-serif reader font (sizes 10, 12, 14, 16, 17)
+    // 19 (COZETTE) was a brief reader font; removed. Kept as an enum gap so a
+    // persisted value normalizes to CHAREINK. Cozette is no longer bundled at all.
+    HELVETICA = 20,  // grotesque sans-serif reader font (sizes 10, 12, 14, 16, 17)
+    VERDANA = 21,    // humanist sans-serif reader font (sizes 10, 12, 14, 16, 17)
+    PIXELOPERATOR = 22,  // Pixel Operator bitmap font, SINGLE fixed 48px size (3x its
+                         // 16px design grid -> crisp + even). The reader size slider
+                         // is a no-op for this family; getReaderFontId always returns
+                         // the 48px id regardless of fontSize. Added "for fun".
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
@@ -195,16 +204,43 @@ class CrossPointSettings {
     FIRST_LINE_INDENT_MODE_COUNT
   };
   enum READER_STYLE_MODE { READER_STYLE_USER = 0, READER_STYLE_HYBRID = 1, READER_STYLE_MODE_COUNT };
+  // Ordered by visual stroke weight (lightest -> heaviest) so the settings
+  // picker reads naturally. The numeric values ARE the picker row order (generic
+  // ENUM settings store the option index), so this order is also the on-disk
+  // value. Files written before the weight-order renumber (Crisp=0,Dark=1,
+  // Bionic=2,Thin=3) are migrated in JsonSettingsIO via
+  // migrateTextRenderModeToWeightOrder(); see CrossPointSettings.cpp.
   enum TEXT_RENDER_MODE {
-    TEXT_RENDER_CRISP = 0,
-    TEXT_RENDER_DARK = 1,
-    TEXT_RENDER_BIONIC = 2,
     // Thin: in the 1-bit reading blit, drop the lightest anti-alias edge ring
     // (light-grey shade) instead of promoting every non-white shade to black.
-    // Yields crisper, less-blobby small text. Handled in GfxRenderer renderChar.
-    TEXT_RENDER_THIN = 3,
+    // Yields the skinniest, least-blobby small text. Handled in GfxRenderer.
+    TEXT_RENDER_THIN = 0,
+    TEXT_RENDER_CRISP = 1,
+    // Medium: Crisp shading plus a 1-pixel rightward smear of every ink pixel.
+    // Sits between Crisp and Dark in weight; still a fast 1-bit blit (no
+    // grayscale refresh cost). Handled in GfxRenderer renderChar.
+    TEXT_RENDER_MEDIUM = 2,
+    TEXT_RENDER_DARK = 3,
+    TEXT_RENDER_BIONIC = 4,
     TEXT_RENDER_MODE_COUNT
   };
+  // Maps a pre-weight-order render-mode value (Crisp=0,Dark=1,Bionic=2,Thin=3)
+  // to the current weight-order enum. Pure + header-inline so JsonSettingsIO and
+  // host tests share one source of truth. Unknown input -> Crisp.
+  static constexpr uint8_t migrateTextRenderModeToWeightOrder(const uint8_t legacy) {
+    switch (legacy) {
+      case 0:
+        return TEXT_RENDER_CRISP;  // old Crisp(0)  -> 1
+      case 1:
+        return TEXT_RENDER_DARK;  // old Dark(1)   -> 3
+      case 2:
+        return TEXT_RENDER_BIONIC;  // old Bionic(2) -> 4
+      case 3:
+        return TEXT_RENDER_THIN;  // old Thin(3)   -> 0
+      default:
+        return TEXT_RENDER_CRISP;
+    }
+  }
   enum EXTRA_PARAGRAPH_SPACING_LEVEL {
     EXTRA_SPACING_OFF = 0,
     EXTRA_SPACING_S = 1,
@@ -454,6 +490,26 @@ class CrossPointSettings {
   unsigned long getSleepTimeoutMs() const;
   int getRefreshFrequency() const;
 };
+
+// --- Compile-time contract for the weight-ordered render-mode enum ---
+// Generic ENUM settings store the picker row index as the on-disk value, so the
+// enum's numeric order IS the picker order AND the persisted value. Pin both the
+// order and the legacy->weight-order migration map so a future renumber can't
+// silently desync the picker, the renderer literals (GfxRenderer.cpp), or the
+// JsonSettingsIO migration.
+static_assert(CrossPointSettings::TEXT_RENDER_THIN == 0, "render-mode weight order");
+static_assert(CrossPointSettings::TEXT_RENDER_CRISP == 1, "render-mode weight order");
+static_assert(CrossPointSettings::TEXT_RENDER_MEDIUM == 2, "render-mode weight order");
+static_assert(CrossPointSettings::TEXT_RENDER_DARK == 3, "render-mode weight order");
+static_assert(CrossPointSettings::TEXT_RENDER_BIONIC == 4, "render-mode weight order");
+static_assert(CrossPointSettings::TEXT_RENDER_MODE_COUNT == 5, "render-mode count");
+// Legacy (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight order.
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(0) == CrossPointSettings::TEXT_RENDER_CRISP, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(1) == CrossPointSettings::TEXT_RENDER_DARK, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(2) == CrossPointSettings::TEXT_RENDER_BIONIC, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(3) == CrossPointSettings::TEXT_RENDER_THIN, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(99) == CrossPointSettings::TEXT_RENDER_CRISP,
+              "unknown legacy render mode -> crisp");
 
 // Helper macro to access settings
 #define SETTINGS CrossPointSettings::getInstance()

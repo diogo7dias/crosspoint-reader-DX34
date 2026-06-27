@@ -141,9 +141,30 @@ void test_parse_chapter_healthy() {
   // drift. The parse pipeline is verified healthy here (the footnote-placement +
   // correctness tests below all pass), and neither new renderer method feeds page
   // breaking (measureTextInk is render-time centring only, Page.cpp:183;
-  // isFontCacheScanning is unused in the parser/PageBuilder), so 37 is the current
-  // faithful count, not a stub artifact.
-  TEST_ASSERT_EQUAL_UINT(37, pages);
+  // isFontCacheScanning is unused in the parser/PageBuilder), so this is the
+  // current faithful count, not a stub artifact.
+  //
+  // Re-baselined 37 -> 47 (2026-06-27): the UI/stub font was swapped from Cozette
+  // (condensed pixel face) to Lato (proportional sans). Different per-glyph
+  // metrics reflow the same fixture chapter to more pages. Parse correctness is
+  // unchanged — the footnote-placement + style tests below all still pass.
+  //
+  // Re-baselined 47 -> 32 (2026-06-27): the ui_10 stub font's render size was
+  // lowered (UI sizes 10/12/14 -> 8/10/12 so the menus read smaller/lighter), so
+  // ui_10 now rasterises at a shorter line height -> more lines per page -> fewer
+  // pages for the same fixture. Pure stub-metric drift: the 1-bit binarisation
+  // threshold change that made the UI regular-weight does NOT touch glyph
+  // advanceX/bbox/line-height (verified: glyph-prop tables identical at threshold
+  // 2 vs 8), so this re-baseline tracks the render-size change only. Parse
+  // correctness unchanged — footnote + style tests below still pass.
+  //
+  // Re-baselined 32 -> 15 (2026-06-27): the UI/stub font was swapped from Lato to
+  // Pixel Operator (a compact 16px bitmap face) and the stub now includes
+  // ui_16_regular instead of ui_10_regular. Pixel Operator's 16px advances + 17px
+  // line height are far tighter than Lato's old ~27px lines, so the same fixture
+  // reflows to many fewer pages. Pure stub-metric drift; parse correctness
+  // unchanged — footnote + style tests below still pass.
+  TEST_ASSERT_EQUAL_UINT(15, pages);
   TEST_ASSERT_EQUAL_UINT(0, wouldAbort);
 }
 
@@ -209,9 +230,11 @@ void test_parse_whole_book_healthy() {
 
   // All 16 content sections (h-0..h-15) must parse; the wrapper may or may not.
   TEST_ASSERT_GREATER_OR_EQUAL_INT(16, parsed);
-  // The whole book is far larger than the single 57-page chapter — sanity floor,
-  // not a fidelity gate (that stays on test_parse_chapter_healthy).
-  TEST_ASSERT_GREATER_THAN_UINT(300, totalPages);
+  // The whole book is far larger than the single chapter (15 pages with the Pixel
+  // Operator stub font) — sanity floor, not a fidelity gate (that stays on
+  // test_parse_chapter_healthy). Lowered 300 -> 100 with the Lato -> Pixel Operator
+  // stub swap: the compact 16px bitmap reflows the whole book to ~180 pages.
+  TEST_ASSERT_GREATER_THAN_UINT(100, totalPages);
   TEST_ASSERT_EQUAL_UINT(0, totalWouldAbort);
 }
 

@@ -1128,7 +1128,7 @@ bool TxtReaderActivity::renderPage() {
   // EpubReaderActivity::renderContents.
   if (glyphOom > 0) {
     LOG_ERR("TRS", "render-time glyph OOM (%u alloc failures) — discarding partial frame", (unsigned)glyphOom);
-    renderer.setTextRenderStyle(0);
+    renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
     return false;
   }
 
@@ -1140,7 +1140,7 @@ bool TxtReaderActivity::renderPage() {
     pagesUntilFullRefresh--;
   }
 
-  renderer.setTextRenderStyle(0);
+  renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
   return true;
 }
 

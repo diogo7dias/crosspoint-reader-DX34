@@ -90,12 +90,14 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
 
   const EpdFontData* fontData = fontFamily.getData(style);
   const bool is2Bit = fontData->is2Bit;
-  // textRenderStyle: 0=crisp, 1=dark, 2=bionic, 3=thin
-  const uint8_t textStyle = renderMode == GfxRenderer::BW ? renderer.getTextRenderStyle() : 0;
-  // Thin (3) drops the lightest AA edge: only black(0)+dark-grey(1) become ink,
+  // textRenderStyle (weight order): 0=thin, 1=crisp, 2=medium, 3=dark, 4=bionic.
+  // (Mirrors CrossPointSettings::TEXT_RENDER_MODE; kept as literals because lib/
+  // must not depend on src/.) Style 1 (crisp) is the renderer default.
+  const uint8_t textStyle = renderMode == GfxRenderer::BW ? renderer.getTextRenderStyle() : 1;
+  // Thin (0) drops the lightest AA edge: only black(0)+dark-grey(1) become ink,
   // light-grey(2) stays white. Every other style promotes all non-white to black
   // (threshold 3). bmpVal: 0=black 1=dark-grey 2=light-grey 3=white.
-  const uint8_t bwShadeThreshold = (textStyle == 3) ? 2 : 3;
+  const uint8_t bwShadeThreshold = (textStyle == 0) ? 2 : 3;
   const uint8_t extraBoldPasses = renderMode == GfxRenderer::BW ? fontFamily.getSyntheticBoldPasses(style) : 0;
   const uint8_t width = glyph->width;
   const uint8_t height = glyph->height;
@@ -152,8 +154,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             for (uint8_t pass = 1; pass <= extraBoldPasses; ++pass) {
               renderer.drawPixel(screenX + pass, screenY, pixelState);
             }
-            if (textStyle == 1) {  // Dark: +1 right, +1 down
+            // Medium (2) and Dark (3) both smear +1 right; Dark also smears +1
+            // down. Medium is the deliberate middle weight between Crisp and Dark.
+            if (textStyle == 2 || textStyle == 3) {
               renderer.drawPixel(screenX + 1, screenY, pixelState);
+            }
+            if (textStyle == 3) {
               renderer.drawPixel(screenX, screenY + 1, pixelState);
             }
           } else if (renderMode == GfxRenderer::GRAYSCALE_MSB && (bmpVal == 1 || bmpVal == 2)) {

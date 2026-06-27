@@ -62,7 +62,7 @@ class GfxRenderer {
   bool darkModeInvert;
   bool pendingFullRefresh;
   bool pendingHalfRefresh;
-  uint8_t textRenderStyle;  // 0=crisp, 1=dark
+  uint8_t textRenderStyle;  // weight order: 0=thin 1=crisp 2=medium 3=dark 4=bionic
   uint8_t* frameBuffer = nullptr;
   // Chunked copy of the BW framebuffer during a grayscale render. Sized in
   // begin() to ceil(frameBufferSize / BW_BUFFER_CHUNK_SIZE): X4 48000 -> 6
@@ -95,7 +95,7 @@ class GfxRenderer {
         darkModeInvert(false),
         pendingFullRefresh(false),
         pendingHalfRefresh(false),
-        textRenderStyle(0) {}
+        textRenderStyle(1) {}  // 1 = crisp (weight-order default)
   ~GfxRenderer();
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;

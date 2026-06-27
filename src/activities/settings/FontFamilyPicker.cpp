@@ -13,8 +13,9 @@ namespace crosspoint::settings {
 namespace {
 // Built-in families in display-index order (matches displayIndexToFontFamily and
 // the enumValues used by both settings menus).
-constexpr StrId kBuiltinFamilyLabels[] = {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA,
-                                          StrId::STR_ET_BOOK,  StrId::STR_ROSARIVO, StrId::STR_LATO};
+constexpr StrId kBuiltinFamilyLabels[] = {StrId::STR_CHAREINK,  StrId::STR_BOOKERLY,  StrId::STR_GEORGIA,
+                                          StrId::STR_LATO,      StrId::STR_HELVETICA, StrId::STR_VERDANA,
+                                          StrId::STR_PIXEL_OPERATOR};
 }  // namespace
 
 void FontFamilyPicker::open() {

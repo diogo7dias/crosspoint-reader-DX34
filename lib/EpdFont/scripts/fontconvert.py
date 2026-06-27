@@ -18,12 +18,16 @@ parser.add_argument("--2bit", dest="is2Bit", action="store_true", help="generate
 parser.add_argument("--additional-intervals", dest="additional_intervals", action="append", help="Additional code point intervals to export as min,max. This argument can be repeated.")
 parser.add_argument("--compress", dest="compress", action="store_true", help="Compress glyph bitmaps using DEFLATE with group-based compression.")
 parser.add_argument("--force-autohint", dest="force_autohint", action="store_true", help="Force FreeType auto-hinter instead of native font hinting. Improves stem width consistency for fonts with weak or no native TrueType hints.")
+parser.add_argument("--bw-threshold", dest="bw_threshold", type=int, default=2, help="1-bit binarization cutoff on the 4-bit grey value (1-15): a pixel becomes black when its anti-aliased coverage grey >= this value. Higher = thinner strokes. Only affects the 1-bit path (no --2bit). Default 2 (historic 'any coverage = black', fattens AA halos -> bold look on smooth outline fonts). Use 8 for ~50%% coverage = true regular weight.")
+parser.add_argument("--dpi", dest="dpi", type=int, default=150, help="Rasterisation DPI passed to FreeType set_char_size. Default 150 (historic; ppem = size * 150/72). Pass 72 to make ppem == size exactly, which is required to land a pixel-grid bitmap font (e.g. Pixel Operator, designed at 16px) on its native grid so 1 font-pixel maps to 1 screen-pixel (no anti-aliasing, perfectly crisp).")
 args = parser.parse_args()
 
 GlyphProps = namedtuple("GlyphProps", ["width", "height", "advance_x", "left", "top", "data_length", "data_offset", "code_point"])
 
 font_stack = [freetype.Face(f) for f in args.fontstack]
 is2Bit = args.is2Bit
+bw_threshold = max(1, min(15, args.bw_threshold))
+dpi = args.dpi
 size = args.size
 font_name = args.name
 load_flags = freetype.FT_LOAD_RENDER
@@ -200,7 +204,7 @@ for i_start, i_end in unvalidated_intervals:
         intervals.append((start, i_end))
 
 for face in font_stack:
-    face.set_char_size(size << 6, size << 6, 150, 150)
+    face.set_char_size(size << 6, size << 6, dpi, dpi)
 
 total_size = 0
 all_glyphs = []
@@ -263,7 +267,12 @@ for i_start, i_end in intervals:
             #     print(line)
             # print('')
         else:
-            # Downsample to 1-bit bitmap - treat any 2+ as black
+            # Downsample to 1-bit bitmap. A pixel goes black when its 4-bit
+            # anti-aliased coverage grey >= bw_threshold. pixels4g packs two
+            # greys per byte: even x in the low nibble, odd x in the high nibble.
+            # Low threshold (2) turns faint AA edge pixels black -> strokes
+            # fatten -> smooth outline fonts look bold. ~8 (50% coverage) keeps
+            # true regular weight. See --bw-threshold.
             pixelsbw = []
             px = 0
             pitch = (bitmap.width // 2) + (bitmap.width % 2)
@@ -271,7 +280,8 @@ for i_start, i_end in intervals:
                 for x in range(bitmap.width):
                     px = px << 1
                     bm = pixels4g[y * pitch + (x // 2)]
-                    px += 1 if ((x & 1) == 0 and bm & 0xE > 0) or ((x & 1) == 1 and bm & 0xE0 > 0) else 0
+                    grey = (bm & 0xF) if (x & 1) == 0 else ((bm >> 4) & 0xF)
+                    px += 1 if grey >= bw_threshold else 0
 
                     if (y * bitmap.width + x) % 8 == 7:
                         pixelsbw.append(px)
@@ -446,10 +456,10 @@ def extract_kerning_fonttools(font_path, codepoints, ppem):
             result[(lcp, rcp)] = adjust
     return result
 
-# The ppem used by the existing glyph rasterization:
-#   face.set_char_size(size << 6, size << 6, 150, 150)
-# means size_pt at 150 DPI -> ppem = size * 150 / 72
-ppem = size * 150.0 / 72.0
+# The ppem used by the glyph rasterization:
+#   face.set_char_size(size << 6, size << 6, dpi, dpi)
+# means size_pt at <dpi> DPI -> ppem = size * dpi / 72 (so dpi=72 -> ppem == size)
+ppem = size * dpi / 72.0
 
 kern_map = {}  # (leftCp, rightCp) -> adjust
 for face_idx, cps in face_idx_cps.items():

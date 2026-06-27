@@ -42,6 +42,7 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["readerStyleMode"] = theme.readerStyleMode;
   obj["textRenderMode"] = theme.textRenderMode;
   obj["textRenderModeV2"] = true;
+  obj["textRenderModeWeightOrder"] = true;
   obj["orientation"] = theme.orientation;
   obj["embeddedStyle"] = theme.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   obj["hyphenationEnabled"] = theme.hyphenationEnabled;
@@ -114,19 +115,23 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
     theme.readerStyleMode =
         (raw < CrossPointSettings::READER_STYLE_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::READER_STYLE_USER;
   }
-  {
-    const uint8_t raw = obj["textRenderMode"] | (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+  if (obj["textRenderMode"].isNull()) {
+    // No mode stored: default to Crisp (do NOT run migration — the missing-key
+    // default of TEXT_RENDER_CRISP is now 1, which would falsely trip the
+    // pre-v2 "raw >= 1 -> Dark" branch below).
+    theme.textRenderMode = (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+  } else {
+    const uint8_t raw = obj["textRenderMode"] | (uint8_t)0;
     if (obj["textRenderModeV2"].isNull()) {
-      // Old v2 format: 0=Crisp, 1=Dark, 2=Dark(old), 3=ExtraDark(old) → map to new enum
-      if (raw >= 1) {
-        theme.textRenderMode = (uint8_t)CrossPointSettings::TEXT_RENDER_DARK;
-      } else {
-        theme.textRenderMode = (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
-      }
-    } else if (raw >= CrossPointSettings::TEXT_RENDER_MODE_COUNT) {
-      theme.textRenderMode = (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+      // Pre-v2 format: only Crisp/Dark existed; any non-zero -> Dark.
+      theme.textRenderMode =
+          raw >= 1 ? (uint8_t)CrossPointSettings::TEXT_RENDER_DARK : (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+    } else if (obj["textRenderModeWeightOrder"].isNull()) {
+      // v2 numbering (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight order.
+      theme.textRenderMode = CrossPointSettings::migrateTextRenderModeToWeightOrder(raw);
     } else {
-      theme.textRenderMode = raw;
+      theme.textRenderMode =
+          raw < CrossPointSettings::TEXT_RENDER_MODE_COUNT ? raw : (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
     }
   }
   theme.hyphenationEnabled = obj["hyphenationEnabled"] | (uint8_t)0;
@@ -485,6 +490,7 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["readerStyleMode"] = s.readerStyleMode;
   doc["textRenderMode"] = s.textRenderMode;
   doc["textRenderModeV2"] = true;
+  doc["textRenderModeWeightOrder"] = true;
   doc["useFactoryLUT"] = s.useFactoryLUT;
   doc["shortPwrBtn"] = s.shortPwrBtn;
   doc["orientation"] = s.orientation;
@@ -723,11 +729,16 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       *needsResave = true;
     }
   } else {
-    // Migrate from v2 enum (Crisp=0, Light=1, Dark=2, ExtraDark=3) to v3 (Crisp=0, Dark=1, Bionic=2).
+    // Render-mode enum has been renumbered to weight order (Thin=0, Crisp=1,
+    // Medium=2, Dark=3, Bionic=4). Older files are migrated by flag:
+    //   no textRenderModeV2  -> pre-v2 (only Crisp/Dark): non-zero -> Dark.
+    //   textRenderModeV2 only -> v2 numbering (Crisp=0,Dark=1,Bionic=2,Thin=3).
+    //   textRenderModeWeightOrder -> already current.
     const uint8_t raw = doc["textRenderMode"] | (uint8_t)S::TEXT_RENDER_CRISP;
     if (doc["textRenderModeV2"].isNull()) {
-      // Old v2 format: any non-zero value → Dark
       s.textRenderMode = raw >= 1 ? (uint8_t)S::TEXT_RENDER_DARK : (uint8_t)S::TEXT_RENDER_CRISP;
+    } else if (doc["textRenderModeWeightOrder"].isNull()) {
+      s.textRenderMode = S::migrateTextRenderModeToWeightOrder(raw);
     } else if (raw >= S::TEXT_RENDER_MODE_COUNT) {
       s.textRenderMode = (uint8_t)S::TEXT_RENDER_CRISP;
     } else {

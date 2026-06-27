@@ -18,53 +18,49 @@ reader_shared() {
 
 echo "#define CHAREINK_10_FONT_ID ($(font_id ./chareink_10_regular.h ./chareink_10_bold.h ./chareink_10_italic.h))"
 echo "#define CHAREINK_12_FONT_ID ($(font_id ./chareink_12_regular.h ./chareink_12_bold.h ./chareink_12_italic.h $(reader_shared chareink)))"
-echo "#define CHAREINK_13_FONT_ID ($(font_id ./chareink_13_regular.h ./chareink_13_bold.h ./chareink_13_italic.h $(reader_shared chareink)))"
 echo "#define CHAREINK_14_FONT_ID ($(font_id ./chareink_14_regular.h ./chareink_14_bold.h ./chareink_14_italic.h $(reader_shared chareink)))"
-echo "#define CHAREINK_15_FONT_ID ($(font_id ./chareink_15_regular.h ./chareink_15_bold.h ./chareink_15_italic.h $(reader_shared chareink)))"
 echo "#define CHAREINK_16_FONT_ID ($(font_id ./chareink_16_regular.h ./chareink_16_bold.h ./chareink_16_italic.h $(reader_shared chareink)))"
 echo "#define CHAREINK_17_FONT_ID ($(font_id ./chareink_17_regular.h ./chareink_17_bold.h ./chareink_17_italic.h $(reader_shared chareink)))"
 echo ""
 echo "#define BOOKERLY_10_FONT_ID ($(font_id ./bookerly_10_regular.h ./bookerly_10_bold.h ./bookerly_10_italic.h))"
 echo "#define BOOKERLY_12_FONT_ID ($(font_id ./bookerly_12_regular.h ./bookerly_12_bold.h ./bookerly_12_italic.h $(reader_shared bookerly)))"
-echo "#define BOOKERLY_13_FONT_ID ($(font_id ./bookerly_13_regular.h ./bookerly_13_bold.h ./bookerly_13_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_14_FONT_ID ($(font_id ./bookerly_14_regular.h ./bookerly_14_bold.h ./bookerly_14_italic.h $(reader_shared bookerly)))"
-echo "#define BOOKERLY_15_FONT_ID ($(font_id ./bookerly_15_regular.h ./bookerly_15_bold.h ./bookerly_15_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_16_FONT_ID ($(font_id ./bookerly_16_regular.h ./bookerly_16_bold.h ./bookerly_16_italic.h $(reader_shared bookerly)))"
 echo "#define BOOKERLY_17_FONT_ID ($(font_id ./bookerly_17_regular.h ./bookerly_17_bold.h ./bookerly_17_italic.h $(reader_shared bookerly)))"
 echo ""
-# Georgia: serif reader font. Sizes 10,12,13,14,15,16,17, three faces
+# Georgia: serif reader font. Sizes 10,12,14,16,17, three faces
 # (Regular/Bold/Italic). No shared tables (dedup-shared-tables.py does not
 # process Georgia), so each ID hashes just the three per-size headers.
-for size in 10 12 13 14 15 16 17; do
+for size in 10 12 14 16 17; do
   if [[ -f "./georgia_${size}_regular.h" ]]; then
     echo "#define GEORGIA_${size}_FONT_ID ($(font_id ./georgia_${size}_regular.h ./georgia_${size}_bold.h ./georgia_${size}_italic.h))"
   fi
 done
 echo ""
-# ETbb (ET Book): serif reader font. Sizes 10,12,13,14,15,16,17, FOUR faces
-# (Regular/Bold/Italic/BoldItalic). No shared tables (dedup-shared-tables.py
-# does not process it), so each ID hashes the four per-size headers.
-for size in 10 12 13 14 15 16 17; do
-  if [[ -f "./etbb_${size}_regular.h" ]]; then
-    echo "#define ETBB_${size}_FONT_ID ($(font_id ./etbb_${size}_regular.h ./etbb_${size}_bold.h ./etbb_${size}_italic.h ./etbb_${size}_bolditalic.h))"
-  fi
-done
-echo ""
-# Rosarivo: Renaissance serif reader font. Sizes 10,12,13,14,15,16,17, TWO faces
-# (Regular/Italic; no Bold/BoldItalic source). No shared tables, so each ID
-# hashes the two per-size headers.
-for size in 10 12 13 14 15 16 17; do
-  if [[ -f "./rosarivo_${size}_regular.h" ]]; then
-    echo "#define ROSARIVO_${size}_FONT_ID ($(font_id ./rosarivo_${size}_regular.h ./rosarivo_${size}_italic.h))"
-  fi
-done
-echo ""
-# Lato: humanist sans-serif reader font. Sizes 10,12,13,14,15,16,17, FOUR faces
+# Lato: humanist sans-serif reader font. Sizes 10,12,14,16,17, FOUR faces
 # (Regular/Bold/Italic/BoldItalic). No shared tables, so each ID hashes the four
 # per-size headers.
-for size in 10 12 13 14 15 16 17; do
+for size in 10 12 14 16 17; do
   if [[ -f "./lato_${size}_regular.h" ]]; then
     echo "#define LATO_${size}_FONT_ID ($(font_id ./lato_${size}_regular.h ./lato_${size}_bold.h ./lato_${size}_italic.h ./lato_${size}_bolditalic.h))"
+  fi
+done
+echo ""
+# Helvetica: grotesque sans-serif reader font. Sizes 10,12,14,16,17, THREE
+# faces (Regular/Bold/Italic). No shared tables, so each ID hashes the three
+# per-size headers.
+for size in 10 12 14 16 17; do
+  if [[ -f "./helvetica_${size}_regular.h" ]]; then
+    echo "#define HELVETICA_${size}_FONT_ID ($(font_id ./helvetica_${size}_regular.h ./helvetica_${size}_bold.h ./helvetica_${size}_italic.h))"
+  fi
+done
+echo ""
+# Verdana: humanist sans-serif reader font. Sizes 10,12,14,16,17, THREE
+# faces (Regular/Bold/Italic). No shared tables, so each ID hashes the three
+# per-size headers.
+for size in 10 12 14 16 17; do
+  if [[ -f "./verdana_${size}_regular.h" ]]; then
+    echo "#define VERDANA_${size}_FONT_ID ($(font_id ./verdana_${size}_regular.h ./verdana_${size}_bold.h ./verdana_${size}_italic.h))"
   fi
 done
 echo ""
@@ -82,6 +78,14 @@ for size in 12 13 14 15 16 17; do
   fi
 done
 echo ""
-echo "#define UI_10_FONT_ID ($(font_id ./ui_10_regular.h))"
-echo "#define UI_12_FONT_ID ($(font_id ./ui_12_regular.h))"
-echo "#define SMALL_FONT_ID ($(font_id ./ui_8_regular.h))"
+# UI font = Pixel Operator, two sizes: 16px (status, 1x grid) + 32px (body/menus/
+# titles, 2x grid). Both are exact multiples of the 16px design grid so both are
+# pixel-perfect and even. The 32px face carries regular + bold in one EpdFontFamily,
+# so titles/selection use BOLD weight rather than a third size. UI_12 (old "title"
+# size) is an alias of UI_10 — same 32px font.
+echo "#define UI_10_FONT_ID ($(font_id ./ui_32_regular.h))"
+echo "#define UI_12_FONT_ID UI_10_FONT_ID"
+echo "#define SMALL_FONT_ID ($(font_id ./ui_16_regular.h))"
+echo ""
+# Pixel Operator reader font: a single fixed 48px size (3x grid), regular + bold.
+echo "#define PIXELOPERATOR_48_FONT_ID ($(font_id ./pixelop_48_regular.h ./pixelop_48_bold.h))"

@@ -207,11 +207,19 @@ void ReaderSettingsActivity::buildSettingsList() {
   };
 
   // --- Build reader settings directly (no intermediate vector) ---
-  // 6 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
-  // BOOKERLY, GEORGIA, ETBB, ROSARIVO, LATO).
+  // 7 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
+  // BOOKERLY, GEORGIA, LATO, HELVETICA, VERDANA, PIXELOPERATOR). Pixel Operator is a
+  // fixed-48px "for fun" bitmap font; its size slider is a no-op.
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_ET_BOOK,
-                                      StrId::STR_ROSARIVO, StrId::STR_LATO}));
+                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
+                                      StrId::STR_HELVETICA, StrId::STR_VERDANA, StrId::STR_PIXEL_OPERATOR}));
+  // Text render mode sits directly under Font Family (2nd row) per user pref.
+  // Option order MUST match the weight-ordered TEXT_RENDER_MODE enum values
+  // (Thin=0, Crisp=1, Medium=2, Dark=3, Bionic=4) — generic ENUM settings store
+  // the selected option index as the persisted value.
+  pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
+                                     {StrId::STR_RENDER_THIN, StrId::STR_RENDER_CRISP, StrId::STR_RENDER_MEDIUM,
+                                      StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));
@@ -245,9 +253,6 @@ void ReaderSettingsActivity::buildSettingsList() {
       ReaderSettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
                               {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
                                StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50}));
-  pushReader(ReaderSettingInfo::Enum(
-      StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-      {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC, StrId::STR_RENDER_THIN}));
   if (!txt) {
     readerSettings.push_back(
         ReaderSettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled));

@@ -69,8 +69,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
 
     // --- Reader ---
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                                  {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_ET_BOOK,
-                                   StrId::STR_ROSARIVO, StrId::STR_LATO},
+                                  {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
+                                   StrId::STR_HELVETICA, StrId::STR_VERDANA, StrId::STR_PIXEL_OPERATOR},
                                   "fontFamily", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                   {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}, "fontSize",
@@ -118,10 +118,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                   {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
                                    StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50},
                                   "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
-    s.push_back(SettingInfo::Enum(
-        StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-        {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC, StrId::STR_RENDER_THIN},
-        "textRenderMode", StrId::STR_CAT_READER));
+    s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
+                                  {StrId::STR_RENDER_THIN, StrId::STR_RENDER_CRISP, StrId::STR_RENDER_MEDIUM,
+                                   StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC},
+                                  "textRenderMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled,
                                     "hyphenationEnabled", StrId::STR_CAT_READER));
 

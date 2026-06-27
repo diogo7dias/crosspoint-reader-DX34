@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 READER_FONT_STYLES=("Regular" "Italic" "Bold")
-CHAREINK_FONT_SIZES=(12 13 14 15 16 17)
+CHAREINK_FONT_SIZES=(10 12 14 16 17)
 for size in ${CHAREINK_FONT_SIZES[@]}; do
   for style in ${READER_FONT_STYLES[@]}; do
     lower_style=$(echo $style | tr '[:upper:]' '[:lower:]')
@@ -13,7 +13,7 @@ for size in ${CHAREINK_FONT_SIZES[@]}; do
   done
 done
 
-BOOKERLY_FONT_SIZES=(12 13 14 15 16 17)
+BOOKERLY_FONT_SIZES=(10 12 14 16 17)
 BOOKERLY_STYLES=("Regular:Bookerly.ttf" "Bold:Bookerly Bold.ttf" "Italic:Bookerly Italic.ttf")
 for size in ${BOOKERLY_FONT_SIZES[@]}; do
   for entry in "${BOOKERLY_STYLES[@]}"; do
@@ -44,21 +44,20 @@ for size in 14 18; do
   echo "Generating unifont_${size}_regular..."
   "$PYTHON_BIN" fontconvert.py "unifont_${size}_regular" $size "../builtinFonts/source/UI/unifont-english.ttf" > "../builtinFonts/unifont_${size}_regular.h"
 done
-# Cozette UI fonts: the file name indicates the nominal font size, but the actual
-# FreeType point size passed to fontconvert is +2. This mapping is intentional and
-# was established when the UI first shipped — the device UI is tuned to these
-# exact pixel metrics. Do not "fix" the mismatch by passing $size directly; doing
-# so shrinks every UI element and regresses status bar, menus, and settings.
-# (A 2026-06 round of UI-font experiments — Cairopixel/Pixel32/Ubuntu/Silkscreen/
-# VT323/Inter — was reverted; Cozette covers the UI glyphs directly, no graft.)
-UI_FONT_NAMES=(8 10 12)
-UI_FONT_RENDER_SIZES=(10 12 14)
-for i in "${!UI_FONT_NAMES[@]}"; do
-  name_size="${UI_FONT_NAMES[$i]}"
-  render_size="${UI_FONT_RENDER_SIZES[$i]}"
-  echo "Generating ui_${name_size}_regular (render at ${render_size}pt)..."
-  "$PYTHON_BIN" fontconvert.py "ui_${name_size}_regular" $render_size "../builtinFonts/source/UI/CozetteVector.ttf" > "../builtinFonts/ui_${name_size}_regular.h"
-done
+# UI font = Pixel Operator (CC0 bitmap face). Two sizes: PixelOperator @16px for
+# the status bar (16 == native grid -> pixel-perfect, threshold moot) and
+# PixelOperator @32px regular/bold for body, menus and titles. Rendered with
+# --dpi 72 so ppem == size. BOTH sizes are exact integer multiples of the 16px
+# design grid (16 = 1x, 32 = 2x), so there is NO anti-aliasing and every stem is a
+# uniform 1px / 2px block -> pixel-perfect and even (no fractional-pixel stem-width
+# wobble). --bw-threshold is therefore moot here. See convert-ui-only.sh for the
+# authoritative scoped rebake + rationale.
+echo "Generating ui_16_regular from PixelOperator @16px..."
+"$PYTHON_BIN" fontconvert.py "ui_16_regular" 16 "../builtinFonts/source/PixelOperator/PixelOperator.ttf" --dpi 72 --bw-threshold 8 > "../builtinFonts/ui_16_regular.h"
+echo "Generating ui_32_regular from PixelOperator @32px..."
+"$PYTHON_BIN" fontconvert.py "ui_32_regular" 32 "../builtinFonts/source/PixelOperator/PixelOperator.ttf" --dpi 72 --bw-threshold 8 > "../builtinFonts/ui_32_regular.h"
+echo "Generating ui_32_bold from PixelOperator-Bold @32px..."
+"$PYTHON_BIN" fontconvert.py "ui_32_bold" 32 "../builtinFonts/source/PixelOperator/PixelOperator-Bold.ttf" --dpi 72 --bw-threshold 8 > "../builtinFonts/ui_32_bold.h"
 
 echo "Running dedup-shared-tables.py..."
 "$PYTHON_BIN" "$(dirname "$0")/dedup-shared-tables.py"

@@ -496,16 +496,18 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return BOOKERLY;
     case GEORGIA:
       return GEORGIA;
-    case ETBB:
-      return ETBB;
-    case ROSARIVO:
-      return ROSARIVO;
     case LATO:
       return LATO;
+    case HELVETICA:
+      return HELVETICA;
+    case VERDANA:
+      return VERDANA;
+    case PIXELOPERATOR:
+      return PIXELOPERATOR;
     // Removed families (VOLLKORN 2, GALMURI 9, TT2020 10, BITTER 11, CUSTOM 12,
-    // F25_BANK_PRINTER 13, PIXEL32 15) and any other legacy value collapse to
-    // CHAREINK so old settings.json migrates. A user who had a removed font
-    // selected lands on ChareInk.
+    // F25_BANK_PRINTER 13, PIXEL32 15, ETBB 16, ROSARIVO 17, COZETTE 19) and any
+    // other legacy value collapse to CHAREINK so old settings.json migrates. A
+    // user who had a removed font selected lands on ChareInk.
     case CHAREINK:
     default:
       return CHAREINK;
@@ -518,12 +520,14 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 1;
     case GEORGIA:
       return 2;
-    case ETBB:
-      return 3;
-    case ROSARIVO:
-      return 4;
     case LATO:
+      return 3;
+    case HELVETICA:
+      return 4;
+    case VERDANA:
       return 5;
+    case PIXELOPERATOR:
+      return 6;
     case CHAREINK:
     default:
       return 0;
@@ -537,11 +541,13 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
     case 2:
       return GEORGIA;
     case 3:
-      return ETBB;
-    case 4:
-      return ROSARIVO;
-    case 5:
       return LATO;
+    case 4:
+      return HELVETICA;
+    case 5:
+      return VERDANA;
+    case 6:
+      return PIXELOPERATOR;
     case 0:
     default:
       return CHAREINK;
@@ -549,24 +555,25 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
-  // All families (ChareInk/Bookerly/Georgia/ETbb/Rosarivo) ship the full set
-  // 10, 12, 13, 14, 15, 16, 17 (LARGE).
+  // All families ship the 5-size set 10, 12, 14, 16, 17 (LARGE). Sizes 13 and 15
+  // were dropped (flash budget); a persisted 13/15 rounds to the nearest kept
+  // size (13 -> 14, 15 -> 16) so old settings migrate with no broken state.
   (void)family;
   switch (fontSize) {
     case SIZE_10:
       return SIZE_10;
     case SIZE_12:
       return SIZE_12;
-    case SIZE_13:
-      return SIZE_13;
     case SIZE_14:
       return SIZE_14;
-    case SIZE_15:
-      return SIZE_15;
     case SIZE_16:
       return SIZE_16;
     case LARGE:
       return LARGE;  // 17pt
+    case SIZE_13:
+      return SIZE_14;  // dropped size -> nearest kept
+    case SIZE_15:
+      return SIZE_16;  // dropped size -> nearest kept
     case SIZE_11:
       return SIZE_12;  // Galmuri-only -> 12 for other families
     case MEDIUM:
@@ -608,26 +615,24 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
   (void)family;
-  return 7;  // all families ship 10, 12, 13, 14, 15, 16, 17
+  return 5;  // all families ship 10, 12, 14, 16, 17
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
+  // normalizeFontSizeForFamily already folds 13->14 and 15->16, so only the five
+  // kept sizes reach this switch.
   switch (normalizeFontSizeForFamily(family, fontSize)) {
     case SIZE_10:
       return 0;
     case SIZE_12:
       return 1;
-    case SIZE_13:
-      return 2;
     case SIZE_14:
-      return 3;
-    case SIZE_15:
-      return 4;
+      return 2;
     case SIZE_16:
-      return 5;
+      return 3;
     case LARGE:
     default:
-      return 6;
+      return 4;
   }
 }
 
@@ -639,14 +644,10 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
     case 1:
       return SIZE_12;
     case 2:
-      return SIZE_13;
-    case 3:
       return SIZE_14;
-    case 4:
-      return SIZE_15;
-    case 5:
+    case 3:
       return SIZE_16;
-    case 6:
+    case 4:
     default:
       return LARGE;  // 17pt
   }
@@ -685,12 +686,8 @@ int CrossPointSettings::getReaderFontId() const {
         return BOOKERLY_10_FONT_ID;
       case SIZE_12:
         return BOOKERLY_12_FONT_ID;
-      case SIZE_13:
-        return BOOKERLY_13_FONT_ID;
       case SIZE_14:
         return BOOKERLY_14_FONT_ID;
-      case SIZE_15:
-        return BOOKERLY_15_FONT_ID;
       case SIZE_16:
         return BOOKERLY_16_FONT_ID;
       case LARGE:
@@ -704,55 +701,13 @@ int CrossPointSettings::getReaderFontId() const {
         return GEORGIA_10_FONT_ID;
       case SIZE_12:
         return GEORGIA_12_FONT_ID;
-      case SIZE_13:
-        return GEORGIA_13_FONT_ID;
       case SIZE_14:
         return GEORGIA_14_FONT_ID;
-      case SIZE_15:
-        return GEORGIA_15_FONT_ID;
       case SIZE_16:
         return GEORGIA_16_FONT_ID;
       case LARGE:
       default:
         return GEORGIA_17_FONT_ID;
-    }
-  }
-  if (normalizedFamily == ETBB) {
-    switch (normalizedFontSize) {
-      case SIZE_10:
-        return ETBB_10_FONT_ID;
-      case SIZE_12:
-        return ETBB_12_FONT_ID;
-      case SIZE_13:
-        return ETBB_13_FONT_ID;
-      case SIZE_14:
-        return ETBB_14_FONT_ID;
-      case SIZE_15:
-        return ETBB_15_FONT_ID;
-      case SIZE_16:
-        return ETBB_16_FONT_ID;
-      case LARGE:
-      default:
-        return ETBB_17_FONT_ID;
-    }
-  }
-  if (normalizedFamily == ROSARIVO) {
-    switch (normalizedFontSize) {
-      case SIZE_10:
-        return ROSARIVO_10_FONT_ID;
-      case SIZE_12:
-        return ROSARIVO_12_FONT_ID;
-      case SIZE_13:
-        return ROSARIVO_13_FONT_ID;
-      case SIZE_14:
-        return ROSARIVO_14_FONT_ID;
-      case SIZE_15:
-        return ROSARIVO_15_FONT_ID;
-      case SIZE_16:
-        return ROSARIVO_16_FONT_ID;
-      case LARGE:
-      default:
-        return ROSARIVO_17_FONT_ID;
     }
   }
   if (normalizedFamily == LATO) {
@@ -761,12 +716,8 @@ int CrossPointSettings::getReaderFontId() const {
         return LATO_10_FONT_ID;
       case SIZE_12:
         return LATO_12_FONT_ID;
-      case SIZE_13:
-        return LATO_13_FONT_ID;
       case SIZE_14:
         return LATO_14_FONT_ID;
-      case SIZE_15:
-        return LATO_15_FONT_ID;
       case SIZE_16:
         return LATO_16_FONT_ID;
       case LARGE:
@@ -774,17 +725,49 @@ int CrossPointSettings::getReaderFontId() const {
         return LATO_17_FONT_ID;
     }
   }
+  if (normalizedFamily == HELVETICA) {
+    switch (normalizedFontSize) {
+      case SIZE_10:
+        return HELVETICA_10_FONT_ID;
+      case SIZE_12:
+        return HELVETICA_12_FONT_ID;
+      case SIZE_14:
+        return HELVETICA_14_FONT_ID;
+      case SIZE_16:
+        return HELVETICA_16_FONT_ID;
+      case LARGE:
+      default:
+        return HELVETICA_17_FONT_ID;
+    }
+  }
+  if (normalizedFamily == VERDANA) {
+    switch (normalizedFontSize) {
+      case SIZE_10:
+        return VERDANA_10_FONT_ID;
+      case SIZE_12:
+        return VERDANA_12_FONT_ID;
+      case SIZE_14:
+        return VERDANA_14_FONT_ID;
+      case SIZE_16:
+        return VERDANA_16_FONT_ID;
+      case LARGE:
+      default:
+        return VERDANA_17_FONT_ID;
+    }
+  }
+  if (normalizedFamily == PIXELOPERATOR) {
+    // Single fixed 48px size — Pixel Operator is a bitmap face that only stays
+    // crisp + even at integer multiples of its 16px grid. The reader size slider
+    // is intentionally ignored here; every size resolves to the one 48px id.
+    return PIXELOPERATOR_48_FONT_ID;
+  }
   switch (normalizedFontSize) {
     case SIZE_10:
       return CHAREINK_10_FONT_ID;
     case SIZE_12:
       return CHAREINK_12_FONT_ID;
-    case SIZE_13:
-      return CHAREINK_13_FONT_ID;
     case SIZE_14:
       return CHAREINK_14_FONT_ID;
-    case SIZE_15:
-      return CHAREINK_15_FONT_ID;
     case SIZE_16:
       return CHAREINK_16_FONT_ID;
     case LARGE:

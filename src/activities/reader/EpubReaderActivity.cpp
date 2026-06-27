@@ -2694,7 +2694,7 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // restored here because the early return skips the reset at the tail.
   if (glyphOom > 0) {
     LOG_ERR("ERS", "render-time glyph OOM (%u alloc failures) — discarding partial frame", (unsigned)glyphOom);
-    renderer.setTextRenderStyle(0);
+    renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
     return false;
   }
 
@@ -2724,7 +2724,7 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     pagesUntilFullRefresh = 1;
   }
 
-  renderer.setTextRenderStyle(0);
+  renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
   return true;
 }
 

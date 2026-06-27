@@ -4,7 +4,7 @@
 # Does NOT invoke convert-builtin-fonts.sh or regenerate any other font.
 #
 # Lato is a humanist sans-serif reader font. Generated at sizes
-# 10, 12, 13, 14, 15, 16, 17 (matching Georgia/ChareInk/Bookerly) with FOUR
+# 10, 12, 14, 16, 17 (matching Georgia/ChareInk/Bookerly) with FOUR
 # styles (Regular, Bold, Italic, BoldItalic) -- all four real faces baked. Lato
 # ships full prose punctuation incl. the pipe glyph (fontconvert derives metrics
 # from '|'), so no source patching needed.
@@ -16,7 +16,7 @@ set -e
 cd "$(dirname "$0")"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-SIZES=(10 12 13 14 15 16 17)
+SIZES=(10 12 14 16 17)
 SOURCE_DIR="../builtinFonts/source/Lato"
 
 declare -a STYLES=(

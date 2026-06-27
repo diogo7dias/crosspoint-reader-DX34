@@ -3,7 +3,7 @@
 #
 # Does NOT invoke convert-builtin-fonts.sh or regenerate any other font.
 #
-# Georgia is a serif reader font. Generated at sizes 10, 12, 13, 14, 15, 16, 17
+# Georgia is a serif reader font. Generated at sizes 10, 12, 14, 16, 17
 # (matching ChareInk/Bookerly) with three styles (Regular, Bold, Italic). No
 # BoldItalic source TTF; the family ctor uses nullptr for that slot and the
 # renderer synthesises bold-italic (Vollkorn/Bitter pattern). Georgia ships full
@@ -12,7 +12,7 @@ set -e
 cd "$(dirname "$0")"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-SIZES=(10 12 13 14 15 16 17)
+SIZES=(10 12 14 16 17)
 SOURCE_DIR="../builtinFonts/source/Georgia"
 
 declare -a STYLES=(

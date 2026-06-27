@@ -85,7 +85,11 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     return;
   }
 
-  const bool bionicMode = renderer.getTextRenderStyle() == 2;
+  // textRenderStyle weight order (CrossPointSettings::TEXT_RENDER_MODE):
+  // 0=thin 1=crisp 2=medium 3=dark 4=bionic. Bionic is 4 — value 2 is Medium.
+  // (This check read == 2 under the old Bionic=2 numbering, which made Medium
+  // wrongly trigger bionic after the weight-order renumber.)
+  const bool bionicMode = renderer.getTextRenderStyle() == 4;
 
   for (size_t i = 0; i < words.size(); i++) {
     const int wordX = wordXpos[i] + x;
