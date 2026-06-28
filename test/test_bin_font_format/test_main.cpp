@@ -18,8 +18,10 @@
 #include <cstring>
 #include <vector>
 
+#include "EpdBinExport.h"
 #include "EpdBinFontLoader.h"
 #include "EpdBinFormat.h"
+#include "EpdFontData.h"
 
 using namespace crosspoint::binfont;
 
@@ -229,6 +231,88 @@ void test_loader_rejects_truncated_file() {
   TEST_ASSERT_EQUAL_INT(kSizeOverrun, loader.open(&src, kExpect));
 }
 
+// ---- EpdBinExport (serialize an in-flash EpdFontData blob to CPBN, for the
+//      on-device "Export font packs to SD" bootstrap) ----
+
+namespace {
+// Collects exported bytes in memory so the test can both validate the CPBN file
+// and feed it straight back through the loader (export -> consume roundtrip).
+class MemorySink : public ByteSink {
+ public:
+  bool write(const uint8_t* data, size_t len) override {
+    bytes_.insert(bytes_.end(), data, data + len);
+    return true;
+  }
+  const std::vector<uint8_t>& bytes() const { return bytes_; }
+
+ private:
+  std::vector<uint8_t> bytes_;
+};
+
+// A minimal compressed-font EpdFontData: a 20-byte "bitmap" reachable as a single
+// group, covering one 5-codepoint interval. Only the fields the exporter reads
+// are populated.
+EpdFontData makeSyntheticFont(const uint8_t* bitmap, const EpdFontGroup* groups, const EpdUnicodeInterval* intervals) {
+  EpdFontData fd{};
+  fd.bitmap = bitmap;
+  fd.groups = groups;
+  fd.groupCount = 1;
+  fd.intervals = intervals;
+  fd.intervalCount = 1;
+  fd.advanceY = 18;
+  fd.ascender = 14;
+  fd.descender = -4;
+  fd.is2Bit = true;
+  return fd;
+}
+}  // namespace
+
+void test_export_then_validate_and_consume_roundtrips() {
+  uint8_t bitmap[20];
+  for (int i = 0; i < 20; ++i) bitmap[i] = static_cast<uint8_t>((i * 11 + 5) & 0xFF);
+  const EpdFontGroup groups[1] = {{/*compressedOffset=*/0, /*compressedSize=*/20, /*uncompressedSize=*/40,
+                                   /*glyphCount=*/5, /*firstGlyphIndex=*/0}};
+  const EpdUnicodeInterval intervals[1] = {{/*first=*/32, /*last=*/36, /*offset=*/0}};  // 5 glyphs
+  const EpdFontData fd = makeSyntheticFont(bitmap, groups, intervals);
+
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlob(fd, /*variant=*/0, /*sizePt=*/14, sink));
+
+  // The exported bytes form a valid CPBN file matching this font's tables...
+  const FontBlobExpectation expect{5, 1, 1};
+  ParsedBlob parsed{};
+  TEST_ASSERT_EQUAL_INT(kOk, validateBlob(sink.bytes().data(), sink.bytes().size(), expect, &parsed));
+  TEST_ASSERT_EQUAL_UINT32(20u, parsed.blobSize);
+  // ...and the blob payload is the font's own bitmap bytes, verbatim.
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(bitmap, sink.bytes().data() + parsed.blobOffset, 20);
+
+  // Full loop: feed the exported file back through the SD loader.
+  MemoryBlobSource src(sink.bytes());
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kOk, loader.open(&src, expect));
+  uint8_t got[20] = {};
+  TEST_ASSERT_EQUAL_INT(20, EpdBinFontLoader::readBitmapTrampoline(loader.bitmapCtx(), 0, got, 20));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(bitmap, got, 20);
+}
+
+void test_export_blob_size_spans_all_groups() {
+  // Blob length must be the max group end, not just group 0, so multi-group fonts
+  // export their whole bitmap.
+  uint8_t bitmap[50];
+  for (int i = 0; i < 50; ++i) bitmap[i] = static_cast<uint8_t>(i);
+  const EpdFontGroup groups[2] = {{0, 18, 30, 3, 0}, {18, 32, 60, 4, 3}};  // ends at 18+32 = 50
+  const EpdUnicodeInterval intervals[1] = {{32, 38, 0}};  // 7 glyphs
+  EpdFontData fd = makeSyntheticFont(bitmap, groups, intervals);
+  fd.groupCount = 2;
+
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlob(fd, 1, 12, sink));
+  const FontBlobExpectation expect{7, 1, 2};
+  ParsedBlob parsed{};
+  TEST_ASSERT_EQUAL_INT(kOk, validateBlob(sink.bytes().data(), sink.bytes().size(), expect, &parsed));
+  TEST_ASSERT_EQUAL_UINT32(50u, parsed.blobSize);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_accepts_well_formed_blob);
@@ -247,5 +331,7 @@ int main(int, char**) {
   RUN_TEST(test_loader_rejects_count_mismatch);
   RUN_TEST(test_loader_rejects_corrupt_blob_via_streamed_crc);
   RUN_TEST(test_loader_rejects_truncated_file);
+  RUN_TEST(test_export_then_validate_and_consume_roundtrips);
+  RUN_TEST(test_export_blob_size_spans_all_groups);
   return UNITY_END();
 }
