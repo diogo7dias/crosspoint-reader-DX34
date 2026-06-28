@@ -36,9 +36,9 @@ SLIM = "CROSSPOINT_SD_FONTS_SLIM"
 # An optional pre-existing `#ifndef CROSSPOINT_SD_FONTS*` guard (and its trailing
 # `#endif`) is captured so re-runs / old-flag migrations normalise cleanly.
 _ARRAY_RE = re.compile(
-    r"(?:#ifndef[ \t]+CROSSPOINT_SD_FONTS\w*[ \t]*\n)?"
+    r"(?:#ifndef[ \t]+CROSSPOINT_SD_FONTS\w*[ \t]*(?://[^\n]*)?\n)?"
     r"(static const uint8_t (\w+Bitmaps)\[\d+\] = \{.*?\n\};\n)"
-    r"(?:#endif[ \t]*\n)?",
+    r"(?:#endif[ \t]*(?://[^\n]*)?\n)?",
     re.DOTALL,
 )
 

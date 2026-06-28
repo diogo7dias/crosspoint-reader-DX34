@@ -93,8 +93,47 @@ static const EpdFontData foo_12_regular = {
 """
 
 
+# The bookerly_17_regular pilot header was hand-edited with a COMMENTED closing
+# guard (`#endif  // CROSSPOINT_SD_FONTS`). The rewriter must consume that exact
+# form when migrating, otherwise it leaves a dangling `#endif` (#endif without
+# #if -> compile error).
+OLD_FLAG_COMMENTED_ENDIF = """\
+#pragma once
+#include "EpdFontData.h"
+
+// PILOT: dropped under -DCROSSPOINT_SD_FONTS
+#ifndef CROSSPOINT_SD_FONTS
+static const uint8_t foo_12_regularBitmaps[6] = {
+    0x01, 0x02, 0x03,
+    0x04, 0x05, 0x06,
+};
+#endif  // CROSSPOINT_SD_FONTS
+
+static const EpdFontData foo_12_regular = {
+#ifdef CROSSPOINT_SD_FONTS
+    nullptr,
+#else
+    foo_12_regularBitmaps,
+#endif
+    foo_12_regularGlyphs,
+    1,
+};
+"""
+
+
 def test_clean_header_gets_guards():
     assert ob.offload_header(CLEAN) == EXPECTED
+
+
+def test_migrates_commented_endif_without_dangling_guard():
+    out = ob.offload_header(OLD_FLAG_COMMENTED_ENDIF)
+    # Balanced preprocessor: every #if(n)(def) has exactly one matching #endif.
+    assert out.count("#if") == out.count("#endif"), out
+    # The old commented closing guard must be gone, migrated to the _SLIM array guard.
+    assert "// CROSSPOINT_SD_FONTS\n" not in out
+    assert out.count("#ifndef CROSSPOINT_SD_FONTS_SLIM") == 1
+    # Idempotent on this shape too.
+    assert ob.offload_header(out) == out
 
 
 def test_idempotent():
