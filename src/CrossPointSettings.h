@@ -149,6 +149,8 @@ class CrossPointSettings {
   //   12   CUSTOM   (user-uploaded .bin custom-font feature removed 2026-06)
   //   13   F25_BANK_PRINTER  (removed 2026-06)
   //   15   PIXEL32           (removed 2026-06)
+  //   22   PIXELOPERATOR     (brief "for fun" reader font; removed 2026-06. Pixel
+  //        Operator is still the UI font — that is separate from this reader enum.)
   enum FONT_FAMILY {
     CHAREINK = 0,
     BOOKERLY = 1,
@@ -161,10 +163,8 @@ class CrossPointSettings {
     // persisted value normalizes to CHAREINK. Cozette is no longer bundled at all.
     HELVETICA = 20,  // grotesque sans-serif reader font (sizes 10, 12, 14, 16, 17)
     VERDANA = 21,    // humanist sans-serif reader font (sizes 10, 12, 14, 16, 17)
-    PIXELOPERATOR = 22,  // Pixel Operator bitmap font, SINGLE fixed 48px size (3x its
-                         // 16px design grid -> crisp + even). The reader size slider
-                         // is a no-op for this family; getReaderFontId always returns
-                         // the 48px id regardless of fontSize. Added "for fun".
+    // 22 (PIXELOPERATOR) removed — kept as an enum gap so a persisted value
+    // normalizes to CHAREINK. (Pixel Operator remains the UI font; unrelated.)
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {

@@ -70,7 +70,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     // --- Reader ---
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                                   {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
-                                   StrId::STR_HELVETICA, StrId::STR_VERDANA, StrId::STR_PIXEL_OPERATOR},
+                                   StrId::STR_HELVETICA, StrId::STR_VERDANA},
                                   "fontFamily", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                   {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}, "fontSize",

@@ -502,8 +502,6 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return HELVETICA;
     case VERDANA:
       return VERDANA;
-    case PIXELOPERATOR:
-      return PIXELOPERATOR;
     // Removed families (VOLLKORN 2, GALMURI 9, TT2020 10, BITTER 11, CUSTOM 12,
     // F25_BANK_PRINTER 13, PIXEL32 15, ETBB 16, ROSARIVO 17, COZETTE 19) and any
     // other legacy value collapse to CHAREINK so old settings.json migrates. A
@@ -526,8 +524,6 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 4;
     case VERDANA:
       return 5;
-    case PIXELOPERATOR:
-      return 6;
     case CHAREINK:
     default:
       return 0;
@@ -546,8 +542,6 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
       return HELVETICA;
     case 5:
       return VERDANA;
-    case 6:
-      return PIXELOPERATOR;
     case 0:
     default:
       return CHAREINK;
@@ -754,12 +748,6 @@ int CrossPointSettings::getReaderFontId() const {
       default:
         return VERDANA_17_FONT_ID;
     }
-  }
-  if (normalizedFamily == PIXELOPERATOR) {
-    // Single fixed 48px size — Pixel Operator is a bitmap face that only stays
-    // crisp + even at integer multiples of its 16px grid. The reader size slider
-    // is intentionally ignored here; every size resolves to the one 48px id.
-    return PIXELOPERATOR_48_FONT_ID;
   }
   switch (normalizedFontSize) {
     case SIZE_10:

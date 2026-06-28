@@ -86,6 +86,3 @@ echo ""
 echo "#define UI_10_FONT_ID ($(font_id ./ui_32_regular.h))"
 echo "#define UI_12_FONT_ID UI_10_FONT_ID"
 echo "#define SMALL_FONT_ID ($(font_id ./ui_16_regular.h))"
-echo ""
-# Pixel Operator reader font: a single fixed 48px size (3x grid), regular + bold.
-echo "#define PIXELOPERATOR_48_FONT_ID ($(font_id ./pixelop_48_regular.h ./pixelop_48_bold.h))"

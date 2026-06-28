@@ -227,13 +227,6 @@ EpdFont uiRegularFont(&ui_32_regular);
 EpdFont uiBoldFont(&ui_32_bold);
 EpdFontFamily uiFontFamily(&uiRegularFont, &uiBoldFont, nullptr, nullptr, 0, 0, false);
 
-// Pixel Operator as a "for fun" reader font: a single fixed 48px size (3x its 16px
-// design grid, so crisp + even). Regular + Bold faces; no italic source, so italic
-// emphasis falls back to regular. Registered under one id; getReaderFontId() returns
-// it for this family regardless of the reader size slider.
-EpdFont pixelop48RegularFont(&pixelop_48_regular);
-EpdFont pixelop48BoldFont(&pixelop_48_bold);
-EpdFontFamily pixelop48FontFamily(&pixelop48RegularFont, &pixelop48BoldFont, nullptr, nullptr, 0, 0, false);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -590,7 +583,6 @@ void setupDisplayAndFonts() {
   // so a single registration serves both the body/menu and title call sites.
   renderer.insertFont(UI_10_FONT_ID, uiFontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
-  renderer.insertFont(PIXELOPERATOR_48_FONT_ID, pixelop48FontFamily);
   if (!fontDecompressor.init()) {
     LOG_ERR("MAIN", "Font decompressor init failed");
   }

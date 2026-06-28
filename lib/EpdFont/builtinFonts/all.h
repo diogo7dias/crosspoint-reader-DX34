@@ -101,9 +101,6 @@
 #include <builtinFonts/verdana_17_bold.h>
 #include <builtinFonts/verdana_17_italic.h>
 
-#include <builtinFonts/pixelop_48_bold.h>
-#include <builtinFonts/pixelop_48_regular.h>
-
 #include <builtinFonts/ui_16_regular.h>
 #include <builtinFonts/ui_32_bold.h>
 #include <builtinFonts/ui_32_regular.h>

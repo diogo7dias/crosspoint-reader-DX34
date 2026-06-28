@@ -207,12 +207,11 @@ void ReaderSettingsActivity::buildSettingsList() {
   };
 
   // --- Build reader settings directly (no intermediate vector) ---
-  // 7 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
-  // BOOKERLY, GEORGIA, LATO, HELVETICA, VERDANA, PIXELOPERATOR). Pixel Operator is a
-  // fixed-48px "for fun" bitmap font; its size slider is a no-op.
+  // 6 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
+  // BOOKERLY, GEORGIA, LATO, HELVETICA, VERDANA).
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                                      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
-                                      StrId::STR_HELVETICA, StrId::STR_VERDANA, StrId::STR_PIXEL_OPERATOR}));
+                                      StrId::STR_HELVETICA, StrId::STR_VERDANA}));
   // Text render mode sits directly under Font Family (2nd row) per user pref.
   // Option order MUST match the weight-ordered TEXT_RENDER_MODE enum values
   // (Thin=0, Crisp=1, Medium=2, Dark=3, Bionic=4) — generic ENUM settings store
