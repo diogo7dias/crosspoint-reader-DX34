@@ -56,7 +56,10 @@
 #include "boot/BootSequenceOrchestrator.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#include "fonts/SdFontPilot.h"
+#ifdef CROSSPOINT_SD_FONTS
+#include "fonts/HalSdFontIo.h"
+#include "fonts/SdFontManager.h"
+#endif
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -546,6 +549,71 @@ extern "C" void onHeapAllocFailed(size_t requested, uint32_t caps, const char* f
   crosspoint::mem::shedUnderPressure();
 }
 
+#ifdef CROSSPOINT_SD_FONTS
+// Registers every offloadable reader-font family/size with the SD font manager.
+// Each live EpdFont is paired with its same-size ChareInk regular as the fallback
+// used only if an SD pack fails to load in a slim build (where the flash bitmap is
+// gone), so the renderer never dereferences a dropped bitmap. The path stem mirrors
+// the header basename, so e.g. BOOKERLY_17 -> /fonts/bookerly_17_<weight>.bin.
+static void registerSdReaderFonts() {
+  auto& m = crosspoint::fonts::sdFonts();
+  m.registerFont(BOOKERLY_10_FONT_ID, 10, "bookerly", &bookerly10RegularFont, &bookerly10BoldFont,
+                 &bookerly10ItalicFont, nullptr, &chareink_10_regular);
+  m.registerFont(BOOKERLY_12_FONT_ID, 12, "bookerly", &bookerly12RegularFont, &bookerly12BoldFont,
+                 &bookerly12ItalicFont, nullptr, &chareink_12_regular);
+  m.registerFont(BOOKERLY_14_FONT_ID, 14, "bookerly", &bookerly14RegularFont, &bookerly14BoldFont,
+                 &bookerly14ItalicFont, nullptr, &chareink_14_regular);
+  m.registerFont(BOOKERLY_16_FONT_ID, 16, "bookerly", &bookerly16RegularFont, &bookerly16BoldFont,
+                 &bookerly16ItalicFont, nullptr, &chareink_16_regular);
+  m.registerFont(BOOKERLY_17_FONT_ID, 17, "bookerly", &bookerly17RegularFont, &bookerly17BoldFont,
+                 &bookerly17ItalicFont, nullptr, &chareink_17_regular);
+
+  m.registerFont(GEORGIA_10_FONT_ID, 10, "georgia", &georgia_10RegularFont, &georgia_10BoldFont,
+                 &georgia_10ItalicFont, nullptr, &chareink_10_regular);
+  m.registerFont(GEORGIA_12_FONT_ID, 12, "georgia", &georgia_12RegularFont, &georgia_12BoldFont,
+                 &georgia_12ItalicFont, nullptr, &chareink_12_regular);
+  m.registerFont(GEORGIA_14_FONT_ID, 14, "georgia", &georgia_14RegularFont, &georgia_14BoldFont,
+                 &georgia_14ItalicFont, nullptr, &chareink_14_regular);
+  m.registerFont(GEORGIA_16_FONT_ID, 16, "georgia", &georgia_16RegularFont, &georgia_16BoldFont,
+                 &georgia_16ItalicFont, nullptr, &chareink_16_regular);
+  m.registerFont(GEORGIA_17_FONT_ID, 17, "georgia", &georgia_17RegularFont, &georgia_17BoldFont,
+                 &georgia_17ItalicFont, nullptr, &chareink_17_regular);
+
+  m.registerFont(LATO_10_FONT_ID, 10, "lato", &lato_10RegularFont, &lato_10BoldFont, &lato_10ItalicFont,
+                 &lato_10BoldItalicFont, &chareink_10_regular);
+  m.registerFont(LATO_12_FONT_ID, 12, "lato", &lato_12RegularFont, &lato_12BoldFont, &lato_12ItalicFont,
+                 &lato_12BoldItalicFont, &chareink_12_regular);
+  m.registerFont(LATO_14_FONT_ID, 14, "lato", &lato_14RegularFont, &lato_14BoldFont, &lato_14ItalicFont,
+                 &lato_14BoldItalicFont, &chareink_14_regular);
+  m.registerFont(LATO_16_FONT_ID, 16, "lato", &lato_16RegularFont, &lato_16BoldFont, &lato_16ItalicFont,
+                 &lato_16BoldItalicFont, &chareink_16_regular);
+  m.registerFont(LATO_17_FONT_ID, 17, "lato", &lato_17RegularFont, &lato_17BoldFont, &lato_17ItalicFont,
+                 &lato_17BoldItalicFont, &chareink_17_regular);
+
+  m.registerFont(HELVETICA_10_FONT_ID, 10, "helvetica", &helvetica_10RegularFont, &helvetica_10BoldFont,
+                 &helvetica_10ItalicFont, nullptr, &chareink_10_regular);
+  m.registerFont(HELVETICA_12_FONT_ID, 12, "helvetica", &helvetica_12RegularFont, &helvetica_12BoldFont,
+                 &helvetica_12ItalicFont, nullptr, &chareink_12_regular);
+  m.registerFont(HELVETICA_14_FONT_ID, 14, "helvetica", &helvetica_14RegularFont, &helvetica_14BoldFont,
+                 &helvetica_14ItalicFont, nullptr, &chareink_14_regular);
+  m.registerFont(HELVETICA_16_FONT_ID, 16, "helvetica", &helvetica_16RegularFont, &helvetica_16BoldFont,
+                 &helvetica_16ItalicFont, nullptr, &chareink_16_regular);
+  m.registerFont(HELVETICA_17_FONT_ID, 17, "helvetica", &helvetica_17RegularFont, &helvetica_17BoldFont,
+                 &helvetica_17ItalicFont, nullptr, &chareink_17_regular);
+
+  m.registerFont(VERDANA_10_FONT_ID, 10, "verdana", &verdana_10RegularFont, &verdana_10BoldFont,
+                 &verdana_10ItalicFont, nullptr, &chareink_10_regular);
+  m.registerFont(VERDANA_12_FONT_ID, 12, "verdana", &verdana_12RegularFont, &verdana_12BoldFont,
+                 &verdana_12ItalicFont, nullptr, &chareink_12_regular);
+  m.registerFont(VERDANA_14_FONT_ID, 14, "verdana", &verdana_14RegularFont, &verdana_14BoldFont,
+                 &verdana_14ItalicFont, nullptr, &chareink_14_regular);
+  m.registerFont(VERDANA_16_FONT_ID, 16, "verdana", &verdana_16RegularFont, &verdana_16BoldFont,
+                 &verdana_16ItalicFont, nullptr, &chareink_16_regular);
+  m.registerFont(VERDANA_17_FONT_ID, 17, "verdana", &verdana_17RegularFont, &verdana_17BoldFont,
+                 &verdana_17ItalicFont, nullptr, &chareink_17_regular);
+}
+#endif  // CROSSPOINT_SD_FONTS
+
 void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
@@ -831,12 +899,18 @@ void setup() {
   logHeapStage("after_display_fonts");
 
 #ifdef CROSSPOINT_SD_FONTS
-  // Phase-1 SD-font pilot: SD is mounted (Storage.begin above) and the fonts are
-  // registered (pointer-based, so repointing this EpdFont propagates into the
-  // already-inserted family). Exports the pack from flash on first boot, then
-  // streams its bitmap from SD. Flash bitmap stays as the fallback.
-  crosspoint::fonts::bootstrapSdFontPilot(bookerly17RegularFont, bookerly_17_regular,
-                                          "/fonts/bookerly_17_regular.bin", 17, &chareink_17_regular);
+  // SD-backed reader fonts. SD is mounted (Storage.begin above) and every family
+  // is registered with the renderer (pointer-based, so the manager repointing an
+  // EpdFont propagates into the already-inserted family). On a fat/export build
+  // exportAllMissing() writes any missing /fonts/*.bin from the in-flash bitmaps;
+  // on a slim build those bitmaps are gone and the glyphs stream from the packs.
+  // The active reader font is backed immediately; renderContents()/renderPage()
+  // re-affirm whenever the selection changes.
+  static crosspoint::fonts::HalSdFontIo g_sdFontIo;
+  crosspoint::fonts::sdFonts().setIo(&g_sdFontIo);
+  registerSdReaderFonts();
+  crosspoint::fonts::sdFonts().exportAllMissing();
+  crosspoint::fonts::sdFonts().ensureActive(SETTINGS.getReaderFontId());
 #endif
 
   exitActivity();

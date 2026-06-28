@@ -41,6 +41,7 @@
 #include "activities/network/QRShareActivity.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
+#include "fonts/ReaderFontActivation.h"
 #include "fontIds.h"
 #include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
@@ -2557,6 +2558,10 @@ void EpubReaderActivity::saveQuoteToFile(const std::string& quote) {
 bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarginTop, const int orientedMarginRight,
                                         const int orientedMarginBottom, const int orientedMarginLeft,
                                         const StatusBarLayout& statusBarLayout) {
+  // SD-backed reader fonts: open this font's CPBN packs before any glyph ink is
+  // measured (getInkBounds) or drawn (page.render). No-op unless built with
+  // -DCROSSPOINT_SD_FONTS; only does I/O when the active reader font changes.
+  crosspoint::fonts::activateReaderFont(SETTINGS.getReaderFontId());
   renderer.setRenderMode(GfxRenderer::BW);
   renderer.setTextRenderStyle(SETTINGS.textRenderMode);
 

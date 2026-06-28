@@ -5,6 +5,8 @@
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <GfxRenderer.h>
+
+#include "fonts/ReaderFontActivation.h"
 #include <HalStorage.h>
 #include <HeapGuard.h>
 #include <I18n.h>
@@ -953,6 +955,9 @@ void TxtReaderActivity::renderRecentSwitcher() {
 }
 
 bool TxtReaderActivity::renderPage() {
+  // SD-backed reader fonts: open the active font's CPBN packs before any glyph is
+  // measured (measureTextInk) or drawn. No-op unless built with -DCROSSPOINT_SD_FONTS.
+  crosspoint::fonts::activateReaderFont(cachedFontId);
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
                                    &orientedMarginLeft);
