@@ -9,9 +9,7 @@
 #include "EpdFontData.h"
 #include "shared/bookerly_regular_tables.h"
 
-// PILOT: with -DCROSSPOINT_SD_FONTS this 37,723-byte bitmap blob is dropped from
-// flash and streamed from /fonts/bookerly_17_regular.bin on SD (SdFontPilot).
-#ifndef CROSSPOINT_SD_FONTS
+#ifndef CROSSPOINT_SD_FONTS_SLIM
 static const uint8_t bookerly_17_regularBitmaps[37723] = {
     0xB5, 0x5A, 0xBF, 0x93, 0xDD, 0xD6, 0x75, 0xBE, 0x00, 0xC8, 0x85, 0xC7, 0x98, 0x04, 0x2C, 0x42,
     0x47, 0x16, 0x27, 0x41, 0x8A, 0x14, 0x1E, 0x8D, 0x63, 0x34, 0x2E, 0x54, 0x98, 0x0B, 0x68, 0xFC,
@@ -2372,7 +2370,7 @@ static const uint8_t bookerly_17_regularBitmaps[37723] = {
     0x2E, 0x18, 0xC3, 0xFA, 0xA7, 0xE3, 0x37, 0x58, 0x0C, 0x5F, 0x47, 0x30, 0x57, 0xC3, 0x88, 0xFA,
     0x8C, 0xF9, 0x2F, 0xE9, 0x91, 0xFD, 0xD8, 0x86, 0xED, 0xE7, 0x07,
 };
-#endif  // CROSSPOINT_SD_FONTS
+#endif
 
 static const EpdGlyph bookerly_17_regularGlyphs[] = {
     { 0, 0, 0, 0, 0, 0, 0 }, // U+0000
@@ -3514,7 +3512,7 @@ static const int8_t bookerly_17_regularKernValues[] = {
 };
 
 static const EpdFontData bookerly_17_regular = {
-#ifdef CROSSPOINT_SD_FONTS
+#ifdef CROSSPOINT_SD_FONTS_SLIM
     nullptr,
 #else
     bookerly_17_regularBitmaps,
