@@ -102,6 +102,7 @@ class SdFontManager {
     if (fontId == activeFontId_) return;
     deactivateAll();
     activeFontId_ = fontId;
+    activeFellBack_ = false;
     Font* f = find(fontId);
     if (f == nullptr || io_ == nullptr) return;
 
@@ -118,13 +119,25 @@ class SdFontManager {
       }
       if (!activateWeight(s, wt, path)) {
         // SD load failed: fat build keeps its flash bitmap; slim build (no flash
-        // bitmap) substitutes the guaranteed fallback font.
-        wt.font->data = (wt.flashData->bitmap != nullptr) ? wt.flashData : f->fallback;
+        // bitmap) substitutes the guaranteed fallback font — a real degradation
+        // the reader must know about so it can drop to a fallback font id.
+        if (wt.flashData->bitmap != nullptr) {
+          wt.font->data = wt.flashData;
+        } else {
+          wt.font->data = f->fallback;
+          activeFellBack_ = true;
+        }
       }
     }
   }
 
   int activeFontId() const { return activeFontId_; }
+
+  // True when the active font could not be SD-loaded and a flash fallback font was
+  // substituted (slim build, pack missing/corrupt or out-of-memory). The reader
+  // uses this to render under a real fallback font id instead of the requested
+  // one, so layout caches stay consistent and self-heal when the pack returns.
+  bool activeFellBack() const { return activeFellBack_; }
 
   // Visits the SD path of every registered weight variant (e.g.
   // "/fonts/bookerly_17_regular.bin"). Lets a device-side downloader/exporter act
@@ -231,6 +244,7 @@ class SdFontManager {
   int fontCount_ = 0;
   Slot slots_[kMaxWeights];
   int activeFontId_ = kNoFont;
+  bool activeFellBack_ = false;
 };
 
 // Process-wide instance (ODR-safe across translation units). Only instantiated in

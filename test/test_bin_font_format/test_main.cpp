@@ -552,6 +552,66 @@ void test_manager_fat_keeps_flash_when_open_fails() {
   TEST_ASSERT_NOT_NULL(a.font.data->bitmap);
 }
 
+void test_manager_reports_fellback_in_slim_when_pack_missing() {
+  // Slim build, pack absent -> the manager substitutes the flash fallback. It must
+  // report this so the reader can degrade to a real fallback font id (keeping
+  // layout caches consistent) instead of rendering fallback glyphs under the real
+  // font's id.
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant a(0x10, /*hasFlashBitmap=*/false);
+  TestVariant fallback(0x77);
+  mgr.registerFont(kFontA, 14, "famA", &a.font, nullptr, nullptr, nullptr, &fallback.flash);
+
+  mgr.ensureActive(kFontA);
+
+  TEST_ASSERT_TRUE(mgr.activeFellBack());
+}
+
+void test_manager_not_fellback_when_pack_loads() {
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant a(0x10);
+  mgr.registerFont(kFontA, 14, "famA", &a.font, nullptr, nullptr, nullptr, nullptr);
+  mgr.exportAllMissing();
+
+  mgr.ensureActive(kFontA);
+
+  TEST_ASSERT_FALSE(mgr.activeFellBack());
+}
+
+void test_manager_not_fellback_in_fat_when_pack_missing() {
+  // Fat build keeps its flash bitmap on pack-miss -> not a degradation.
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant a(0x10);  // has flash bitmap
+  mgr.registerFont(kFontA, 14, "famA", &a.font, nullptr, nullptr, nullptr, nullptr);
+  io.files["/fonts/famA_14_regular.bin"] = {0, 1, 2, 3};  // corrupt -> load fails
+
+  mgr.ensureActive(kFontA);
+
+  TEST_ASSERT_FALSE(mgr.activeFellBack());  // flash bitmap retained, no degrade
+}
+
+void test_manager_fellback_clears_after_switch_to_loaded_font() {
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant a(0x10, /*hasFlashBitmap=*/false);
+  TestVariant fallback(0x77), b(0x40);
+  mgr.registerFont(kFontA, 14, "famA", &a.font, nullptr, nullptr, nullptr, &fallback.flash);
+  mgr.registerFont(kFontB, 12, "famB", &b.font, nullptr, nullptr, nullptr, nullptr);
+  mgr.exportAllMissing();  // writes famB (has bitmap); famA slim -> skipped
+
+  mgr.ensureActive(kFontA);
+  TEST_ASSERT_TRUE(mgr.activeFellBack());
+  mgr.ensureActive(kFontB);
+  TEST_ASSERT_FALSE(mgr.activeFellBack());  // famB loaded fine
+}
+
 void test_manager_for_each_pack_path_visits_all_registered() {
   // The registry doubles as the download/export manifest: every registered weight
   // variant must be reachable as a "/fonts/<stem>_<size>_<weight>.bin" path.
@@ -605,6 +665,10 @@ int main(int, char**) {
   RUN_TEST(test_manager_unknown_id_deactivates_active_font);
   RUN_TEST(test_manager_slim_falls_back_when_pack_missing);
   RUN_TEST(test_manager_fat_keeps_flash_when_open_fails);
+  RUN_TEST(test_manager_reports_fellback_in_slim_when_pack_missing);
+  RUN_TEST(test_manager_not_fellback_when_pack_loads);
+  RUN_TEST(test_manager_not_fellback_in_fat_when_pack_missing);
+  RUN_TEST(test_manager_fellback_clears_after_switch_to_loaded_font);
   RUN_TEST(test_manager_for_each_pack_path_visits_all_registered);
   return UNITY_END();
 }

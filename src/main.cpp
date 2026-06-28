@@ -58,6 +58,7 @@
 #include "fontIds.h"
 #ifdef CROSSPOINT_SD_FONTS
 #include "fonts/HalSdFontIo.h"
+#include "fonts/ReaderFontActivation.h"
 #include "fonts/SdFontManager.h"
 #endif
 #include "lifecycle/ActivityRouter.h"
@@ -911,7 +912,7 @@ void setup() {
   registerSdReaderFonts();
   Storage.mkdir("/fonts");  // ensure the dir exists so the browser pack-upload lands (slim never exports)
   crosspoint::fonts::sdFonts().exportAllMissing();
-  crosspoint::fonts::sdFonts().ensureActive(SETTINGS.getReaderFontId());
+  crosspoint::fonts::activateReaderFont(SETTINGS.getReaderFontId());
 #endif
 
   exitActivity();

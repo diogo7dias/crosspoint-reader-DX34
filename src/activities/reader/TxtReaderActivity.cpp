@@ -476,6 +476,10 @@ void TxtReaderActivity::initializeReader() {
     return;
   }
 
+  // SD-backed fonts: try the real font first; if its pack is unavailable it
+  // latches the emergency downgrade so cachedFontId below resolves to a real flash
+  // font id, keeping the page index consistent with what actually renders.
+  crosspoint::fonts::activateReaderFont(SETTINGS.getReaderFontId());
   // Store current settings for cache validation
   cachedFontId = SETTINGS.getReaderFontId();
   if (SETTINGS.dynamicMargins) {

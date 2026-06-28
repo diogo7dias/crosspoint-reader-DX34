@@ -1580,6 +1580,13 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
     return true;
   }
 
+  // SD-backed fonts: try the real font before laying out. If its pack is
+  // unavailable (slim build: not downloaded, or OOM), activateReaderFont latches
+  // the emergency downgrade so the getReaderFontId() calls below resolve to a real
+  // flash font id — this section is cached under that id, never the requested one,
+  // so caches stay consistent and rebuild once the pack returns.
+  crosspoint::fonts::activateReaderFont(SETTINGS.getReaderFontId());
+
   const auto filepath = epub->getSpineItem(currentSpineIndex).href;
   LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
   // Trace largest before/after Section alloc + clearPageCache. Phase 3
