@@ -972,6 +972,81 @@ void test_manager_for_each_pack_path_visits_all_registered() {
   TEST_ASSERT_TRUE(has("/fonts/famB_12_regular.bin"));
 }
 
+// ---- Manager support for Tier-2 (tables-in-file) fonts ----
+//
+// A Tier-2 reader size has no flash tables at all: its EpdFont starts on a flash
+// fallback stub, and the manager reconstructs the whole EpdFontData from the SD
+// pack on activation (vs Tier-1, which keeps the flash tables and only swaps the
+// bitmap pointer).
+
+void test_manager_tier2_activates_from_sd_tables() {
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+
+  // Author the Tier-2 pack from a real font (tables serialized into the file).
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(georgia_10_regular, 0, 10, sink));
+  io.files["/fonts/g2_10_regular.bin"] = sink.bytes();
+
+  // EpdFont starts on a flash fallback stub; tablesInFile marks it Tier-2.
+  TestVariant fb(0x55);
+  EpdFont g2font{nullptr};
+  g2font.data = &fb.flash;
+  mgr.registerFont(kFontA, 10, "g2", &g2font, nullptr, nullptr, nullptr, &fb.flash, /*tablesInFile=*/true);
+
+  mgr.ensureActive(kFontA);
+
+  // Now pointed at the SD-reconstructed font, not the fallback stub.
+  TEST_ASSERT_TRUE(g2font.data != &fb.flash);
+  TEST_ASSERT_FALSE(mgr.activeFellBack());
+  const uint32_t gc = glyphCountFromIntervals(georgia_10_regular);
+  TEST_ASSERT_EQUAL_UINT32(gc, glyphCountFromIntervals(*g2font.data));
+  TEST_ASSERT_EQUAL_UINT16(georgia_10_regular.groupCount, g2font.data->groupCount);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(reinterpret_cast<const uint8_t*>(georgia_10_regular.glyph),
+                                reinterpret_cast<const uint8_t*>(g2font.data->glyph), gc * sizeof(EpdGlyph));
+  // Bitmap streams from SD identically to flash.
+  uint8_t got[32] = {};
+  TEST_ASSERT_EQUAL_INT(32, readThroughFont(g2font, 0, got, 32));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(georgia_10_regular.bitmap, got, 32);
+
+  // Switching away restores the fallback stub and frees the Tier-2 heap.
+  mgr.ensureActive(SdFontManager::kNoFont);
+  TEST_ASSERT_EQUAL_PTR(&fb.flash, g2font.data);
+}
+
+void test_manager_tier2_falls_back_when_pack_missing() {
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant fb(0x55);
+  EpdFont g2font{nullptr};
+  g2font.data = &fb.flash;
+  mgr.registerFont(kFontA, 10, "g2", &g2font, nullptr, nullptr, nullptr, &fb.flash, /*tablesInFile=*/true);
+
+  mgr.ensureActive(kFontA);  // no pack present
+
+  TEST_ASSERT_EQUAL_PTR(&fb.flash, g2font.data);  // fell back to the flash stub
+  TEST_ASSERT_TRUE(mgr.activeFellBack());
+}
+
+void test_manager_tier2_export_all_skips_tables_in_file() {
+  // exportAllMissing must never serialize a Tier-2 font's fallback stub as if it
+  // were that font's pack (it would write the wrong glyphs to the SD path).
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant fb(0x55);
+  EpdFont g2font{nullptr};
+  g2font.data = &fb.flash;
+  mgr.registerFont(kFontA, 10, "g2", &g2font, nullptr, nullptr, nullptr, &fb.flash, /*tablesInFile=*/true);
+
+  mgr.exportAllMissing();
+
+  TEST_ASSERT_EQUAL_INT(0, io.exportCalls);
+  TEST_ASSERT_FALSE(io.exists("/fonts/g2_10_regular.bin"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_accepts_well_formed_blob);
@@ -1013,5 +1088,8 @@ int main(int, char**) {
   RUN_TEST(test_manager_not_fellback_in_fat_when_pack_missing);
   RUN_TEST(test_manager_fellback_clears_after_switch_to_loaded_font);
   RUN_TEST(test_manager_for_each_pack_path_visits_all_registered);
+  RUN_TEST(test_manager_tier2_activates_from_sd_tables);
+  RUN_TEST(test_manager_tier2_falls_back_when_pack_missing);
+  RUN_TEST(test_manager_tier2_export_all_skips_tables_in_file);
   return UNITY_END();
 }

@@ -27,6 +27,7 @@
 #include "EpdBinExport.h"       // exportFontBlob, glyphCountFromIntervals
 #include "EpdBinFontLoader.h"   // EpdBinFontLoader, BlobSource
 #include "EpdBinFormat.h"       // FontBlobExpectation, BlobReject
+#include "EpdBinTablesFont.h"   // EpdBinTablesFont (Tier-2: tables reconstructed from the pack)
 #include "EpdFont.h"
 #include "EpdFontData.h"
 
@@ -61,14 +62,20 @@ class SdFontManager {
   // current `font->data` is captured as the flash source for export/restore.
   // `slimFallback` is substituted in a slim build if the SD pack can't be loaded
   // (so the renderer never dereferences a null bitmap); pass nullptr in fat builds.
+  //
+  // `tablesInFile` marks a Tier-2 font: it has NO flash tables at all (the
+  // EpdFont starts on `slimFallback`), so the whole EpdFontData is reconstructed
+  // from the pack on activation. Such fonts are never exported (nothing to
+  // serialize from flash) and always fall back when their pack is unavailable.
   void registerFont(int fontId, uint16_t sizePt, const char* stem, EpdFont* regular, EpdFont* bold, EpdFont* italic,
-                    EpdFont* boldItalic, const EpdFontData* slimFallback) {
+                    EpdFont* boldItalic, const EpdFontData* slimFallback, bool tablesInFile = false) {
     if (fontCount_ >= kMaxFonts) return;
     Font& f = fonts_[fontCount_++];
     f.fontId = fontId;
     f.sizePt = sizePt;
     f.stem = stem;
     f.fallback = slimFallback;
+    f.tablesInFile = tablesInFile;
     f.weightCount = 0;
     addWeight(f, regular, "regular");
     addWeight(f, bold, "bold");
@@ -84,6 +91,7 @@ class SdFontManager {
     char path[kPathMax];
     for (int i = 0; i < fontCount_; ++i) {
       Font& f = fonts_[i];
+      if (f.tablesInFile) continue;  // Tier-2: no flash tables to serialize from
       for (int w = 0; w < f.weightCount; ++w) {
         const Weight& wt = f.weights[w];
         if (wt.flashData->bitmap == nullptr) continue;  // slim: can't export
@@ -114,14 +122,20 @@ class SdFontManager {
 
       buildPath(path, f->stem, f->sizePt, wt.suffix);
       // Fat build self-heal: export a pack that is somehow missing on demand.
-      if (wt.flashData->bitmap != nullptr && !io_->exists(path)) {
+      // Never for a Tier-2 font — its flash "data" is only a fallback stub.
+      if (!f->tablesInFile && wt.flashData->bitmap != nullptr && !io_->exists(path)) {
         io_->exportBlob(path, *wt.flashData, f->sizePt);
       }
-      if (!activateWeight(s, wt, path)) {
+      if (!activateWeight(s, wt, path, f->tablesInFile)) {
         // SD load failed: fat build keeps its flash bitmap; slim build (no flash
         // bitmap) substitutes the guaranteed fallback font — a real degradation
         // the reader must know about so it can drop to a fallback font id.
-        if (wt.flashData->bitmap != nullptr) {
+        if (f->tablesInFile) {
+          // Tier 2 has no real flash font — the stub IS the fallback, so a failed
+          // load is always a degradation regardless of the stub having a bitmap.
+          wt.font->data = f->fallback;
+          activeFellBack_ = true;
+        } else if (wt.flashData->bitmap != nullptr) {
           wt.font->data = wt.flashData;
         } else {
           wt.font->data = f->fallback;
@@ -167,13 +181,16 @@ class SdFontManager {
     uint16_t sizePt;
     const char* stem;
     const EpdFontData* fallback;
+    bool tablesInFile = false;  // Tier 2: reconstruct the whole EpdFontData from SD
     Weight weights[kMaxWeights];
     int weightCount;
   };
   // One open SD pack: its loader (holds the BlobSource) and the SD-backed
-  // EpdFontData the bound font points at while active.
+  // EpdFontData the bound font points at while active. For Tier-2 fonts the
+  // `tablesFont` reconstructs the whole EpdFontData (tables + bitmap) instead.
   struct Slot {
-    binfont::EpdBinFontLoader loader;
+    binfont::EpdBinFontLoader loader;       // Tier 1 (bitmap-only)
+    binfont::EpdBinTablesFont tablesFont;   // Tier 2 (tables + bitmap)
     binfont::BlobSource* src = nullptr;
     EpdFont* boundFont = nullptr;
     const EpdFontData* flashData = nullptr;
@@ -202,9 +219,25 @@ class SdFontManager {
 
   // Open + validate one pack and repoint the font at an SD-backed copy. Returns
   // false (leaving the font untouched) on any open/validation failure.
-  bool activateWeight(Slot& s, Weight& wt, const char* path) {
+  bool activateWeight(Slot& s, Weight& wt, const char* path, bool tablesInFile) {
     s.src = io_->openSource(path);
     if (s.src == nullptr) return false;
+
+    if (tablesInFile) {
+      // Tier 2: reconstruct the entire EpdFontData (tables + streamed bitmap)
+      // from the self-describing pack — there are no flash tables to reuse.
+      if (s.tablesFont.open(s.src) != binfont::kOk) {
+        io_->releaseSource(s.src);
+        s.src = nullptr;
+        return false;
+      }
+      s.boundFont = wt.font;
+      s.flashData = wt.flashData;  // the fallback stub (for restore on switch)
+      wt.font->data = const_cast<EpdFontData*>(s.tablesFont.font());
+      return true;
+    }
+
+    // Tier 1: keep the flash tables, swap only the bitmap to stream from SD.
     const binfont::FontBlobExpectation expect{binfont::glyphCountFromIntervals(*wt.flashData),
                                               wt.flashData->intervalCount, wt.flashData->groupCount};
     if (s.loader.open(s.src, expect) != binfont::kOk) {
@@ -225,13 +258,16 @@ class SdFontManager {
   void deactivateAll() {
     for (int w = 0; w < kMaxWeights; ++w) {
       Slot& s = slots_[w];
+      // Move the live font OFF any SD-backed data before that data is freed.
+      // Restore to flash; in a slim build (or for a Tier-2 stub) the flash
+      // bitmap is null, so fall back.
+      if (s.boundFont != nullptr && s.flashData != nullptr) {
+        s.boundFont->data = (s.flashData->bitmap != nullptr) ? s.flashData : s.fallback;
+      }
+      s.tablesFont.close();  // Tier 2: free the reconstructed tables (no-op if unused)
       if (s.src != nullptr) {
         if (io_ != nullptr) io_->releaseSource(s.src);
         s.src = nullptr;
-      }
-      if (s.boundFont != nullptr && s.flashData != nullptr) {
-        // Restore to flash; in a slim build the flash bitmap is null, so fall back.
-        s.boundFont->data = (s.flashData->bitmap != nullptr) ? s.flashData : s.fallback;
       }
       s.boundFont = nullptr;
       s.flashData = nullptr;
