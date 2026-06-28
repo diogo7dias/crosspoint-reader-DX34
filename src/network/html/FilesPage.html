@@ -2207,7 +2207,7 @@
     <button class="action-btn folder-action-btn" onclick="openFolderModal()">📁 <span data-i18n="STR_WEB_NEW_FOLDER">New Folder</span></button>
     <button class="action-btn" style="background-color:#2980b9" onclick="downloadSelected()">💾 <span data-i18n="STR_WEB_DOWNLOAD_SELECTED">Download Selected</span></button>
     <button class="action-btn" style="background-color:#e74c3c" onclick="openDeleteSelectedModal()">🗑️ <span data-i18n="STR_WEB_DELETE_SELECTED">Delete Selected</span></button>
-    <button class="action-btn" style="background-color:#16a085" onclick="downloadFontPacks()">🔤 Get Font Packs</button>
+    <button class="action-btn" style="background-color:#16a085" onclick="downloadFontPacks()">🔤 <span data-i18n="STR_WEB_GET_FONT_PACKS">Get Font Packs</span></button>
   </div>
   <div id="fontpack-status" style="display:none;margin:8px 0;font-weight:bold"></div>
 </div>
@@ -4356,21 +4356,22 @@ async function downloadFontPacks() {
   const BRANCH = 'https://raw.githubusercontent.com/diogo7dias/crosspoint-reader-DX34/fonts';
   const statusEl = document.getElementById('fontpack-status');
   const show = (msg) => { statusEl.style.display = 'block'; statusEl.textContent = msg; };
-  if (!confirm('Download the built-in reader-font packs to this device’s /fonts/ folder?')) return;
-  show('Fetching font list…');
+  if (!confirm(window.tr('STR_WEB_FONT_PACKS_CONFIRM'))) return;
+  show(window.tr('STR_WEB_FONT_PACKS_FETCHING'));
   let names;
   try {
     const r = await fetch(BRANCH + '/manifest.json', { cache: 'no-cache' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     names = await r.json();
   } catch (e) {
-    show('Could not fetch font list: ' + e.message);
+    show(window.tr('STR_WEB_FONT_PACKS_FETCH_ERR').replace('{error}', e.message));
     return;
   }
   let ok = 0, failed = 0;
   for (let i = 0; i < names.length; i++) {
     const name = names[i];
-    show('Downloading fonts ' + (i + 1) + '/' + names.length + ' (' + name + ')…');
+    show(window.tr('STR_WEB_FONT_PACKS_PROGRESS')
+      .replace('{current}', i + 1).replace('{total}', names.length).replace('{name}', name));
     try {
       const resp = await fetch(BRANCH + '/' + name, { cache: 'no-cache' });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -4385,7 +4386,8 @@ async function downloadFontPacks() {
       console.error('font pack failed', name, e);
     }
   }
-  show('Font packs done: ' + ok + ' saved, ' + failed + ' failed. Reopen your book to use them.');
+  show(window.tr('STR_WEB_FONT_PACKS_DONE')
+    .replace('{ok}', ok).replace('{failed}', failed));
 }
 
 function uploadFile() {
