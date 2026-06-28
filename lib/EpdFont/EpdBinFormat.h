@@ -120,9 +120,14 @@ inline BlobReject parseHeader(const uint8_t* buf, size_t len, const FontBlobExpe
   if (h.version != kBlobFormatVersion) return kBadVersion;
   if (h.bitsPerPixel != kBitsPerPixel) return kBadBitsPerPix;
 
-  if (h.glyphCount != expect.glyphCount || h.intervalCount != expect.intervalCount ||
-      h.groupCount != expect.groupCount) {
-    return kCountMismatch;
+  // Tier-2 blobs carry their own tables and have no flash counterpart to match,
+  // so the count cross-check (a stale-SD guard meaningful only for Tier-1, where
+  // the tables live in flash) is skipped; the TablesHeader self-checks instead.
+  if ((h.flags & kFlagTablesInFile) == 0) {
+    if (h.glyphCount != expect.glyphCount || h.intervalCount != expect.intervalCount ||
+        h.groupCount != expect.groupCount) {
+      return kCountMismatch;
+    }
   }
 
   if (out != nullptr) *out = h;

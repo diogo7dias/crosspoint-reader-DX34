@@ -23,6 +23,7 @@
 #include "EpdBinExport.h"
 #include "EpdBinFontLoader.h"
 #include "EpdBinFormat.h"
+#include "EpdBinTables.h"
 #include "EpdFont.h"
 #include "EpdFontData.h"
 #include "SdFontManager.h"
@@ -315,6 +316,248 @@ void test_export_blob_size_spans_all_groups() {
   ParsedBlob parsed{};
   TEST_ASSERT_EQUAL_INT(kOk, validateBlob(sink.bytes().data(), sink.bytes().size(), expect, &parsed));
   TEST_ASSERT_EQUAL_UINT32(50u, parsed.blobSize);
+}
+
+// ---- Tier 2: glyph TABLES on SD (kFlagTablesInFile) ----
+//
+// Tier 1 keeps the glyph / interval / group / kerning tables in flash and
+// offloads only the bitmap blob. Tier 2 serializes those tables into the .bin
+// too, so a brand-new reader size costs ~0 flash. The roundtrips below build
+// synthetic fonts and assert the serialized tables parse back bit-identically.
+
+namespace {
+
+// A fully-populated compressed font: 5 glyphs over 2 intervals, 2 groups, an
+// explicit glyphToGroup map, a 2x2 sparse kerning CSR, and 1 ligature. All
+// pointers reference this struct's own arrays, so callers must keep it alive for
+// the lifetime of fd's use (no copy/return).
+struct RichFont {
+  uint8_t bitmap[18];
+  EpdGlyph glyphs[5];
+  EpdUnicodeInterval intervals[2];
+  EpdFontGroup groups[2];
+  uint16_t glyphToGroup[5];
+  EpdKernClassEntry kernLeft[2];
+  EpdKernClassEntry kernRight[2];
+  uint16_t kernRowStart[3];
+  uint8_t kernCols[2];
+  int8_t kernValues[2];
+  EpdLigaturePair ligatures[1];
+  EpdFontData fd;
+};
+
+void initRichFont(RichFont& f) {
+  for (int i = 0; i < 18; ++i) f.bitmap[i] = static_cast<uint8_t>((i * 7 + 1) & 0xFF);
+  for (int i = 0; i < 5; ++i) {
+    f.glyphs[i] = EpdGlyph{static_cast<uint8_t>(4 + i), static_cast<uint8_t>(6 + i),
+                           static_cast<uint16_t>(80 + i), static_cast<int8_t>(-2 + i),
+                           static_cast<int8_t>(3 + i), static_cast<uint16_t>(10 + i),
+                           static_cast<uint16_t>(i * 3)};
+  }
+  f.intervals[0] = EpdUnicodeInterval{32, 34, 0};  // 3 glyphs (idx 0..2)
+  f.intervals[1] = EpdUnicodeInterval{65, 66, 3};  // 2 glyphs (idx 3..4)
+  f.groups[0] = EpdFontGroup{0, 10, 20, 3, 0};
+  f.groups[1] = EpdFontGroup{10, 8, 16, 2, 3};
+  f.glyphToGroup[0] = 0;
+  f.glyphToGroup[1] = 0;
+  f.glyphToGroup[2] = 0;
+  f.glyphToGroup[3] = 1;
+  f.glyphToGroup[4] = 1;
+  f.kernLeft[0] = EpdKernClassEntry{65, 1};
+  f.kernLeft[1] = EpdKernClassEntry{66, 2};
+  f.kernRight[0] = EpdKernClassEntry{65, 1};
+  f.kernRight[1] = EpdKernClassEntry{66, 2};
+  f.kernRowStart[0] = 0;
+  f.kernRowStart[1] = 1;
+  f.kernRowStart[2] = 2;
+  f.kernCols[0] = 0;
+  f.kernCols[1] = 1;
+  f.kernValues[0] = -3;
+  f.kernValues[1] = 5;
+  f.ligatures[0] = EpdLigaturePair{(65u << 16) | 66u, 0x1234u};
+
+  EpdFontData& fd = f.fd;
+  fd = EpdFontData{};
+  fd.bitmap = f.bitmap;
+  fd.glyph = f.glyphs;
+  fd.intervals = f.intervals;
+  fd.intervalCount = 2;
+  fd.advanceY = 18;
+  fd.ascender = 14;
+  fd.descender = -4;
+  fd.is2Bit = true;
+  fd.groups = f.groups;
+  fd.groupCount = 2;
+  fd.glyphToGroup = f.glyphToGroup;
+  fd.kernLeftClasses = f.kernLeft;
+  fd.kernRightClasses = f.kernRight;
+  fd.kernRowStart = f.kernRowStart;
+  fd.kernCols = f.kernCols;
+  fd.kernValues = f.kernValues;
+  fd.kernLeftEntryCount = 2;
+  fd.kernRightEntryCount = 2;
+  fd.kernLeftClassCount = 2;
+  fd.kernRightClassCount = 2;
+  fd.ligaturePairs = f.ligatures;
+  fd.ligaturePairCount = 1;
+}
+}  // namespace
+
+void test_export_tables_roundtrips() {
+  RichFont f;
+  initRichFont(f);
+
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(f.fd, /*variant=*/2, /*sizePt=*/20, sink));
+
+  const uint8_t* bytes = sink.bytes().data();
+  const size_t n = sink.bytes().size();
+
+  // Header carries the tables-in-file flag; its count cross-check is skipped
+  // (the tables are self-describing, not matched against a flash counterpart).
+  BlobHeader bh{};
+  const FontBlobExpectation ignored{0, 0, 0};
+  TEST_ASSERT_EQUAL_INT(kOk, parseHeader(bytes, n, ignored, &bh));
+  TEST_ASSERT_TRUE((bh.flags & kFlagTablesInFile) != 0);
+  TEST_ASSERT_EQUAL_UINT32(5u, bh.glyphCount);
+  TEST_ASSERT_EQUAL_UINT32(2u, bh.intervalCount);
+  TEST_ASSERT_EQUAL_UINT32(2u, bh.groupCount);
+
+  // Parse the tables section that follows the BlobHeader.
+  EpdFontData fd2{};
+  EpdFontGroup groups2[4]{};
+  TEST_ASSERT_EQUAL_INT(kOk, parseTablesSection(bytes + sizeof(BlobHeader),
+                                                static_cast<uint32_t>(n - sizeof(BlobHeader)), bh,
+                                                &fd2, groups2, 4));
+
+  // Scalars.
+  TEST_ASSERT_EQUAL_UINT8(18, fd2.advanceY);
+  TEST_ASSERT_EQUAL_INT(14, fd2.ascender);
+  TEST_ASSERT_EQUAL_INT(-4, fd2.descender);
+  TEST_ASSERT_TRUE(fd2.is2Bit);
+  TEST_ASSERT_EQUAL_UINT32(2u, fd2.intervalCount);
+  TEST_ASSERT_EQUAL_UINT16(2u, fd2.groupCount);
+  TEST_ASSERT_EQUAL_UINT16(2u, fd2.kernLeftEntryCount);
+  TEST_ASSERT_EQUAL_UINT16(2u, fd2.kernRightEntryCount);
+  TEST_ASSERT_EQUAL_UINT8(2u, fd2.kernLeftClassCount);
+  TEST_ASSERT_EQUAL_UINT8(2u, fd2.kernRightClassCount);
+  TEST_ASSERT_EQUAL_UINT32(1u, fd2.ligaturePairCount);
+
+  // Glyph array (packed 10B each) — byte-identical.
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(reinterpret_cast<const uint8_t*>(f.glyphs),
+                                reinterpret_cast<const uint8_t*>(fd2.glyph), 10 * 5);
+  // Intervals.
+  for (int i = 0; i < 2; ++i) {
+    TEST_ASSERT_EQUAL_UINT32(f.intervals[i].first, fd2.intervals[i].first);
+    TEST_ASSERT_EQUAL_UINT32(f.intervals[i].last, fd2.intervals[i].last);
+    TEST_ASSERT_EQUAL_UINT32(f.intervals[i].offset, fd2.intervals[i].offset);
+  }
+  // Groups (expanded from the 18-byte packed on-disk form).
+  for (int i = 0; i < 2; ++i) {
+    TEST_ASSERT_EQUAL_UINT32(f.groups[i].compressedOffset, fd2.groups[i].compressedOffset);
+    TEST_ASSERT_EQUAL_UINT32(f.groups[i].compressedSize, fd2.groups[i].compressedSize);
+    TEST_ASSERT_EQUAL_UINT32(f.groups[i].uncompressedSize, fd2.groups[i].uncompressedSize);
+    TEST_ASSERT_EQUAL_UINT16(f.groups[i].glyphCount, fd2.groups[i].glyphCount);
+    TEST_ASSERT_EQUAL_UINT32(f.groups[i].firstGlyphIndex, fd2.groups[i].firstGlyphIndex);
+  }
+  // glyphToGroup.
+  TEST_ASSERT_NOT_NULL(fd2.glyphToGroup);
+  for (int i = 0; i < 5; ++i) TEST_ASSERT_EQUAL_UINT16(f.glyphToGroup[i], fd2.glyphToGroup[i]);
+  // Kerning CSR.
+  for (int i = 0; i < 2; ++i) {
+    TEST_ASSERT_EQUAL_UINT16(f.kernLeft[i].codepoint, fd2.kernLeftClasses[i].codepoint);
+    TEST_ASSERT_EQUAL_UINT8(f.kernLeft[i].classId, fd2.kernLeftClasses[i].classId);
+    TEST_ASSERT_EQUAL_UINT16(f.kernRight[i].codepoint, fd2.kernRightClasses[i].codepoint);
+    TEST_ASSERT_EQUAL_UINT8(f.kernRight[i].classId, fd2.kernRightClasses[i].classId);
+  }
+  for (int i = 0; i < 3; ++i) TEST_ASSERT_EQUAL_UINT16(f.kernRowStart[i], fd2.kernRowStart[i]);
+  for (int i = 0; i < 2; ++i) {
+    TEST_ASSERT_EQUAL_UINT8(f.kernCols[i], fd2.kernCols[i]);
+    TEST_ASSERT_EQUAL_INT8(f.kernValues[i], fd2.kernValues[i]);
+  }
+  // Ligatures.
+  TEST_ASSERT_EQUAL_UINT32(f.ligatures[0].pair, fd2.ligaturePairs[0].pair);
+  TEST_ASSERT_EQUAL_UINT32(f.ligatures[0].ligatureCp, fd2.ligaturePairs[0].ligatureCp);
+}
+
+void test_export_tables_minimal_no_optionals() {
+  // A font with no glyphToGroup, no kerning and no ligatures: those pointers
+  // come back null and the counts zero.
+  uint8_t bitmap[20];
+  for (int i = 0; i < 20; ++i) bitmap[i] = static_cast<uint8_t>(i * 3 + 1);
+  EpdGlyph glyphs[5]{};
+  for (int i = 0; i < 5; ++i) glyphs[i] = EpdGlyph{static_cast<uint8_t>(i), 7, 64, 0, 2, 4, static_cast<uint16_t>(i)};
+  const EpdFontGroup groups[1] = {{0, 20, 40, 5, 0}};
+  const EpdUnicodeInterval intervals[1] = {{32, 36, 0}};  // 5 glyphs
+  EpdFontData fd{};
+  fd.bitmap = bitmap;
+  fd.glyph = glyphs;
+  fd.intervals = intervals;
+  fd.intervalCount = 1;
+  fd.advanceY = 16;
+  fd.ascender = 12;
+  fd.descender = -3;
+  fd.is2Bit = true;
+  fd.groups = groups;
+  fd.groupCount = 1;
+
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(fd, 0, 12, sink));
+
+  BlobHeader bh{};
+  const FontBlobExpectation ignored{0, 0, 0};
+  TEST_ASSERT_EQUAL_INT(kOk, parseHeader(sink.bytes().data(), sink.bytes().size(), ignored, &bh));
+  EpdFontData fd2{};
+  EpdFontGroup groups2[2]{};
+  TEST_ASSERT_EQUAL_INT(kOk, parseTablesSection(sink.bytes().data() + sizeof(BlobHeader),
+                                                static_cast<uint32_t>(sink.bytes().size() - sizeof(BlobHeader)),
+                                                bh, &fd2, groups2, 2));
+  TEST_ASSERT_EQUAL_UINT32(5u, bh.glyphCount);
+  TEST_ASSERT_EQUAL_UINT16(1u, fd2.groupCount);
+  TEST_ASSERT_NULL(fd2.glyphToGroup);
+  TEST_ASSERT_NULL(fd2.kernRowStart);
+  TEST_ASSERT_NULL(fd2.kernCols);
+  TEST_ASSERT_NULL(fd2.kernValues);
+  TEST_ASSERT_NULL(fd2.ligaturePairs);
+  TEST_ASSERT_EQUAL_UINT8(0u, fd2.kernLeftClassCount);
+  TEST_ASSERT_EQUAL_UINT32(0u, fd2.ligaturePairCount);
+}
+
+void test_parse_tables_rejects_corrupt_tables_crc() {
+  RichFont f;
+  initRichFont(f);
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(f.fd, 0, 12, sink));
+
+  std::vector<uint8_t> bytes = sink.bytes();
+  // Flip a byte inside the serialized tables (past BlobHeader + TablesHeader).
+  bytes[sizeof(BlobHeader) + sizeof(TablesHeader) + 3] ^= 0xFF;
+
+  BlobHeader bh{};
+  const FontBlobExpectation ignored{0, 0, 0};
+  TEST_ASSERT_EQUAL_INT(kOk, parseHeader(bytes.data(), bytes.size(), ignored, &bh));
+  EpdFontData fd2{};
+  EpdFontGroup groups2[4]{};
+  TEST_ASSERT_EQUAL_INT(kBadCrc,
+                        parseTablesSection(bytes.data() + sizeof(BlobHeader),
+                                           static_cast<uint32_t>(bytes.size() - sizeof(BlobHeader)), bh,
+                                           &fd2, groups2, 4));
+}
+
+void test_parse_tables_rejects_insufficient_group_capacity() {
+  RichFont f;
+  initRichFont(f);  // 2 groups
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(f.fd, 0, 12, sink));
+  BlobHeader bh{};
+  const FontBlobExpectation ignored{0, 0, 0};
+  parseHeader(sink.bytes().data(), sink.bytes().size(), ignored, &bh);
+  EpdFontData fd2{};
+  EpdFontGroup groups2[1]{};  // too small for 2 groups
+  TEST_ASSERT_EQUAL_INT(kCountMismatch,
+                        parseTablesSection(sink.bytes().data() + sizeof(BlobHeader),
+                                           static_cast<uint32_t>(sink.bytes().size() - sizeof(BlobHeader)), bh,
+                                           &fd2, groups2, 1));
 }
 
 // ---- SdFontManager (registry + active-set swap + export-all, HAL-free) ----
@@ -656,6 +899,10 @@ int main(int, char**) {
   RUN_TEST(test_loader_rejects_truncated_file);
   RUN_TEST(test_export_then_validate_and_consume_roundtrips);
   RUN_TEST(test_export_blob_size_spans_all_groups);
+  RUN_TEST(test_export_tables_roundtrips);
+  RUN_TEST(test_export_tables_minimal_no_optionals);
+  RUN_TEST(test_parse_tables_rejects_corrupt_tables_crc);
+  RUN_TEST(test_parse_tables_rejects_insufficient_group_capacity);
   RUN_TEST(test_manager_export_all_writes_missing_packs);
   RUN_TEST(test_manager_export_all_skips_existing_packs);
   RUN_TEST(test_manager_export_skips_when_no_flash_bitmap_slim);
