@@ -51,7 +51,7 @@ struct SdFontIo {
 class SdFontManager {
  public:
   static constexpr int kMaxWeights = 4;  // regular / bold / italic / bolditalic
-  static constexpr int kMaxFonts = 32;   // 5 families x 5 sizes = 25; rounded up
+  static constexpr int kMaxFonts = 48;   // 5 families x 9 sizes = 45
   static constexpr int kPathMax = 64;
   static constexpr int kNoFont = -1;
 

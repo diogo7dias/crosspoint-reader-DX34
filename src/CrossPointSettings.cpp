@@ -548,11 +548,25 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
   }
 }
 
+// With SD fonts enabled, every offloadable family gains the in-between/large
+// sizes 11/13/15/18 as Tier-1 fonts (tables in flash, bitmaps streamed from SD
+// packs — zero added heap, same as the existing sizes). ChareInk is excluded: it
+// is the always-in-flash fallback floor and ships only the five flash sizes. In
+// the default (non-SD) build, or for ChareInk, the extra sizes fold to the
+// nearest kept size so a persisted value never lands on a font that does not
+// exist.
+#ifdef CROSSPOINT_SD_FONTS
+static constexpr bool kSdExtraSizes = true;
+#else
+static constexpr bool kSdExtraSizes = false;
+#endif
+
+static bool familyHasExtraSizes(const uint8_t family) {
+  return kSdExtraSizes && CrossPointSettings::normalizeFontFamily(family) != CrossPointSettings::CHAREINK;
+}
+
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
-  // All families ship the 5-size set 10, 12, 14, 16, 17 (LARGE). Sizes 13 and 15
-  // were dropped (flash budget); a persisted 13/15 rounds to the nearest kept
-  // size (13 -> 14, 15 -> 16) so old settings migrate with no broken state.
-  (void)family;
+  const bool extra = familyHasExtraSizes(family);
   switch (fontSize) {
     case SIZE_10:
       return SIZE_10;
@@ -564,18 +578,19 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
       return SIZE_16;
     case LARGE:
       return LARGE;  // 17pt
-    case SIZE_13:
-      return SIZE_14;  // dropped size -> nearest kept
-    case SIZE_15:
-      return SIZE_16;  // dropped size -> nearest kept
     case SIZE_11:
-      return SIZE_12;  // Galmuri-only -> 12 for other families
+      return extra ? SIZE_11 : SIZE_12;  // SD: real 11; else -> 12
+    case SIZE_13:
+      return extra ? SIZE_13 : SIZE_14;  // SD: real 13; else -> 14
+    case SIZE_15:
+      return extra ? SIZE_15 : SIZE_16;  // SD: real 15; else -> 16
+    case SIZE_18:
+      return extra ? SIZE_18 : LARGE;  // SD: real 18; else -> 17
     case MEDIUM:
       return SIZE_14;  // legacy 15pt MEDIUM -> 14 (preserve existing user size)
-    case SIZE_18:
     case X_LARGE:
     default:
-      return LARGE;  // legacy 18/19 -> 17
+      return LARGE;  // legacy 19 -> 17
   }
 }
 
@@ -601,6 +616,8 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
       return 15;
     case SIZE_16:
       return 16;
+    case SIZE_18:
+      return 18;
     case LARGE:
     default:
       return 17;
@@ -608,14 +625,38 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
 }
 
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
-  (void)family;
-  return 5;  // all families ship 10, 12, 14, 16, 17
+  // Offloadable families add 11/13/15/18 -> 9 sizes (10..18); ChareInk and the
+  // default build keep the 5-size flash set.
+  return familyHasExtraSizes(family) ? 9 : 5;
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
-  // normalizeFontSizeForFamily already folds 13->14 and 15->16, so only the five
-  // kept sizes reach this switch.
-  switch (normalizeFontSizeForFamily(family, fontSize)) {
+  const uint8_t normalized = normalizeFontSizeForFamily(family, fontSize);
+  if (familyHasExtraSizes(family)) {
+    switch (normalized) {
+      case SIZE_10:
+        return 0;
+      case SIZE_11:
+        return 1;
+      case SIZE_12:
+        return 2;
+      case SIZE_13:
+        return 3;
+      case SIZE_14:
+        return 4;
+      case SIZE_15:
+        return 5;
+      case SIZE_16:
+        return 6;
+      case SIZE_18:
+        return 8;
+      case LARGE:
+      default:
+        return 7;  // 17pt
+    }
+  }
+  // 5-size set: normalize already folded 11/13/15/18 to a kept size.
+  switch (normalized) {
     case SIZE_10:
       return 0;
     case SIZE_12:
@@ -631,7 +672,29 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
 }
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
-  (void)family;
+  if (familyHasExtraSizes(family)) {
+    switch (displayIndex) {
+      case 0:
+        return SIZE_10;
+      case 1:
+        return SIZE_11;
+      case 2:
+        return SIZE_12;
+      case 3:
+        return SIZE_13;
+      case 4:
+        return SIZE_14;
+      case 5:
+        return SIZE_15;
+      case 6:
+        return SIZE_16;
+      case 8:
+        return SIZE_18;
+      case 7:
+      default:
+        return LARGE;  // 17pt
+    }
+  }
   switch (displayIndex) {
     case 0:
       return SIZE_10;
@@ -684,6 +747,14 @@ int CrossPointSettings::getReaderFontId() const {
         return BOOKERLY_14_FONT_ID;
       case SIZE_16:
         return BOOKERLY_16_FONT_ID;
+      case SIZE_11:
+        return BOOKERLY_11_FONT_ID;
+      case SIZE_13:
+        return BOOKERLY_13_FONT_ID;
+      case SIZE_15:
+        return BOOKERLY_15_FONT_ID;
+      case SIZE_18:
+        return BOOKERLY_18_FONT_ID;
       case LARGE:
       default:
         return BOOKERLY_17_FONT_ID;
@@ -699,6 +770,14 @@ int CrossPointSettings::getReaderFontId() const {
         return GEORGIA_14_FONT_ID;
       case SIZE_16:
         return GEORGIA_16_FONT_ID;
+      case SIZE_11:
+        return GEORGIA_11_FONT_ID;
+      case SIZE_13:
+        return GEORGIA_13_FONT_ID;
+      case SIZE_15:
+        return GEORGIA_15_FONT_ID;
+      case SIZE_18:
+        return GEORGIA_18_FONT_ID;
       case LARGE:
       default:
         return GEORGIA_17_FONT_ID;
@@ -714,6 +793,14 @@ int CrossPointSettings::getReaderFontId() const {
         return LATO_14_FONT_ID;
       case SIZE_16:
         return LATO_16_FONT_ID;
+      case SIZE_11:
+        return LATO_11_FONT_ID;
+      case SIZE_13:
+        return LATO_13_FONT_ID;
+      case SIZE_15:
+        return LATO_15_FONT_ID;
+      case SIZE_18:
+        return LATO_18_FONT_ID;
       case LARGE:
       default:
         return LATO_17_FONT_ID;
@@ -729,6 +816,14 @@ int CrossPointSettings::getReaderFontId() const {
         return HELVETICA_14_FONT_ID;
       case SIZE_16:
         return HELVETICA_16_FONT_ID;
+      case SIZE_11:
+        return HELVETICA_11_FONT_ID;
+      case SIZE_13:
+        return HELVETICA_13_FONT_ID;
+      case SIZE_15:
+        return HELVETICA_15_FONT_ID;
+      case SIZE_18:
+        return HELVETICA_18_FONT_ID;
       case LARGE:
       default:
         return HELVETICA_17_FONT_ID;
@@ -744,6 +839,14 @@ int CrossPointSettings::getReaderFontId() const {
         return VERDANA_14_FONT_ID;
       case SIZE_16:
         return VERDANA_16_FONT_ID;
+      case SIZE_11:
+        return VERDANA_11_FONT_ID;
+      case SIZE_13:
+        return VERDANA_13_FONT_ID;
+      case SIZE_15:
+        return VERDANA_15_FONT_ID;
+      case SIZE_18:
+        return VERDANA_18_FONT_ID;
       case LARGE:
       default:
         return VERDANA_17_FONT_ID;
