@@ -24,6 +24,8 @@
 #include "EpdBinFontLoader.h"
 #include "EpdBinFormat.h"
 #include "EpdBinTables.h"
+#include "EpdBinTablesFont.h"
+#include "builtinFonts/georgia_10_regular.h"  // a real compressed reader font (groups + kerning)
 #include "EpdFont.h"
 #include "EpdFontData.h"
 #include "SdFontManager.h"
@@ -544,6 +546,97 @@ void test_parse_tables_rejects_corrupt_tables_crc() {
                                            &fd2, groups2, 4));
 }
 
+// ---- Tier 2 device loader: SD pack -> ready EpdFontData ----
+
+void test_tier2_loader_reconstructs_real_font_equivalently() {
+  // Export a REAL built-in font as a Tier-2 pack, load it back through the SD
+  // loader, and assert the reconstructed EpdFontData matches the flash font
+  // field-for-field — proving an SD-resident size renders identically.
+  const EpdFontData& flash = georgia_10_regular;
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(flash, /*variant=*/0, /*sizePt=*/10, sink));
+
+  MemoryBlobSource src(sink.bytes());
+  EpdBinTablesFont tf;
+  TEST_ASSERT_EQUAL_INT(kOk, tf.open(&src));
+  TEST_ASSERT_TRUE(tf.isOpen());
+  const EpdFontData* lf = tf.font();
+  TEST_ASSERT_NOT_NULL(lf);
+
+  const uint32_t glyphCount = glyphCountFromIntervals(flash);
+  TEST_ASSERT_EQUAL_UINT8(flash.advanceY, lf->advanceY);
+  TEST_ASSERT_EQUAL_INT(flash.ascender, lf->ascender);
+  TEST_ASSERT_EQUAL_INT(flash.descender, lf->descender);
+  TEST_ASSERT_EQUAL(flash.is2Bit, lf->is2Bit);
+  TEST_ASSERT_EQUAL_UINT32(flash.intervalCount, lf->intervalCount);
+  TEST_ASSERT_EQUAL_UINT16(flash.groupCount, lf->groupCount);
+  TEST_ASSERT_EQUAL_UINT16(flash.kernLeftEntryCount, lf->kernLeftEntryCount);
+  TEST_ASSERT_EQUAL_UINT16(flash.kernRightEntryCount, lf->kernRightEntryCount);
+  TEST_ASSERT_EQUAL_UINT8(flash.kernLeftClassCount, lf->kernLeftClassCount);
+  TEST_ASSERT_EQUAL_UINT8(flash.kernRightClassCount, lf->kernRightClassCount);
+
+  // Glyph + interval tables byte-identical.
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(reinterpret_cast<const uint8_t*>(flash.glyph),
+                                reinterpret_cast<const uint8_t*>(lf->glyph), glyphCount * sizeof(EpdGlyph));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(reinterpret_cast<const uint8_t*>(flash.intervals),
+                                reinterpret_cast<const uint8_t*>(lf->intervals),
+                                flash.intervalCount * sizeof(EpdUnicodeInterval));
+  // Groups field-by-field (expanded from the packed on-disk form).
+  for (uint16_t i = 0; i < flash.groupCount; ++i) {
+    TEST_ASSERT_EQUAL_UINT32(flash.groups[i].compressedOffset, lf->groups[i].compressedOffset);
+    TEST_ASSERT_EQUAL_UINT32(flash.groups[i].compressedSize, lf->groups[i].compressedSize);
+    TEST_ASSERT_EQUAL_UINT32(flash.groups[i].uncompressedSize, lf->groups[i].uncompressedSize);
+    TEST_ASSERT_EQUAL_UINT16(flash.groups[i].glyphCount, lf->groups[i].glyphCount);
+    TEST_ASSERT_EQUAL_UINT32(flash.groups[i].firstGlyphIndex, lf->groups[i].firstGlyphIndex);
+  }
+  // Kerning CSR arrays byte-identical.
+  const uint32_t cells = kernCellCountOf(flash);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(flash.kernCols, lf->kernCols, cells);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(reinterpret_cast<const uint8_t*>(flash.kernValues),
+                                reinterpret_cast<const uint8_t*>(lf->kernValues), cells);
+
+  // Bitmap reachable through the streaming SD callback, byte-identical to flash.
+  const uint32_t blobSize = blobSizeFromGroups(flash);
+  TEST_ASSERT_NOT_NULL(lf->readBitmapBytes);
+  uint8_t buf[64];
+  const uint32_t probes[4] = {0u, blobSize / 4u, blobSize / 2u, (blobSize * 3u) / 4u};
+  for (uint32_t pi = 0; pi < 4; ++pi) {
+    const uint32_t off = probes[pi];
+    if (off + sizeof(buf) > blobSize) continue;
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(sizeof(buf)),
+                          lf->readBitmapBytes(lf->bitmapCtx, off, buf, sizeof(buf)));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(flash.bitmap + off, buf, sizeof(buf));
+  }
+}
+
+void test_tier2_loader_rejects_tier1_blob() {
+  // A Tier-1 export (no kFlagTablesInFile) must not open as a Tier-2 font.
+  const EpdFontData& flash = georgia_10_regular;
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlob(flash, 0, 10, sink));  // Tier 1
+  MemoryBlobSource src(sink.bytes());
+  EpdBinTablesFont tf;
+  TEST_ASSERT_NOT_EQUAL(kOk, tf.open(&src));
+  TEST_ASSERT_FALSE(tf.isOpen());
+  TEST_ASSERT_NULL(tf.font());
+}
+
+void test_tier2_loader_rejects_corrupt_bitmap_crc() {
+  const EpdFontData& flash = georgia_10_regular;
+  MemorySink sink;
+  TEST_ASSERT_TRUE(exportFontBlobWithTables(flash, 0, 10, sink));
+  std::vector<uint8_t> bytes = sink.bytes();
+  // Corrupt a byte inside the bitmap blob (past header + table section).
+  const uint32_t glyphCount = glyphCountFromIntervals(flash);
+  const uint32_t tablesLen = tablesByteLengthOf(flash, glyphCount, kernCellCountOf(flash));
+  const size_t bmpOffset = sizeof(BlobHeader) + sizeof(TablesHeader) + tablesLen;
+  bytes[bmpOffset + 7] ^= 0xFF;
+  MemoryBlobSource src(bytes);
+  EpdBinTablesFont tf;
+  TEST_ASSERT_EQUAL_INT(kBadCrc, tf.open(&src));
+  TEST_ASSERT_FALSE(tf.isOpen());
+}
+
 void test_parse_tables_rejects_insufficient_group_capacity() {
   RichFont f;
   initRichFont(f);  // 2 groups
@@ -903,6 +996,9 @@ int main(int, char**) {
   RUN_TEST(test_export_tables_minimal_no_optionals);
   RUN_TEST(test_parse_tables_rejects_corrupt_tables_crc);
   RUN_TEST(test_parse_tables_rejects_insufficient_group_capacity);
+  RUN_TEST(test_tier2_loader_reconstructs_real_font_equivalently);
+  RUN_TEST(test_tier2_loader_rejects_tier1_blob);
+  RUN_TEST(test_tier2_loader_rejects_corrupt_bitmap_crc);
   RUN_TEST(test_manager_export_all_writes_missing_packs);
   RUN_TEST(test_manager_export_all_skips_existing_packs);
   RUN_TEST(test_manager_export_skips_when_no_flash_bitmap_slim);

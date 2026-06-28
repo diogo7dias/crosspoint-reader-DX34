@@ -78,6 +78,7 @@ enum BlobReject : uint8_t {
   kSizeOverrun,    // header.bitmapBlobSize does not fit in the buffer
   kCountMismatch,  // tables do not match this firmware (stale SD card)
   kBadCrc,         // blob bytes are corrupt
+  kOom,            // heap allocation for the (Tier-2) tables failed
 };
 
 // CRC32 with the zlib/PNG polynomial (0xEDB88320), matching Python zlib.crc32 so
