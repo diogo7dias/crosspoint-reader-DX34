@@ -56,6 +56,7 @@
 #include "boot/BootSequenceOrchestrator.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "fonts/SdFontPilot.h"
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -828,6 +829,15 @@ void setup() {
 
   setupDisplayAndFonts();
   logHeapStage("after_display_fonts");
+
+#ifdef CROSSPOINT_SD_FONTS
+  // Phase-1 SD-font pilot: SD is mounted (Storage.begin above) and the fonts are
+  // registered (pointer-based, so repointing this EpdFont propagates into the
+  // already-inserted family). Exports the pack from flash on first boot, then
+  // streams its bitmap from SD. Flash bitmap stays as the fallback.
+  crosspoint::fonts::bootstrapSdFontPilot(bookerly17RegularFont, bookerly_17_regular,
+                                          "/fonts/bookerly_17_regular.bin", 17, &chareink_17_regular);
+#endif
 
   exitActivity();
   // Silent-reboot path skips the splash entirely — the screen state from the
