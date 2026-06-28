@@ -552,6 +552,30 @@ void test_manager_fat_keeps_flash_when_open_fails() {
   TEST_ASSERT_NOT_NULL(a.font.data->bitmap);
 }
 
+void test_manager_for_each_pack_path_visits_all_registered() {
+  // The registry doubles as the download/export manifest: every registered weight
+  // variant must be reachable as a "/fonts/<stem>_<size>_<weight>.bin" path.
+  SdFontManager mgr;
+  MemorySdFontIo io;
+  mgr.setIo(&io);
+  TestVariant aReg(0x10), aBold(0x20), bReg(0x40);
+  mgr.registerFont(kFontA, 14, "famA", &aReg.font, &aBold.font, nullptr, nullptr, nullptr);  // 2 weights
+  mgr.registerFont(kFontB, 12, "famB", &bReg.font, nullptr, nullptr, nullptr, nullptr);      // 1 weight
+
+  std::vector<std::string> paths;
+  mgr.forEachPackPath([&](const char* p) { paths.push_back(p); });
+
+  TEST_ASSERT_EQUAL_INT(3, static_cast<int>(paths.size()));
+  auto has = [&](const char* want) {
+    for (const auto& p : paths)
+      if (p == want) return true;
+    return false;
+  };
+  TEST_ASSERT_TRUE(has("/fonts/famA_14_regular.bin"));
+  TEST_ASSERT_TRUE(has("/fonts/famA_14_bold.bin"));
+  TEST_ASSERT_TRUE(has("/fonts/famB_12_regular.bin"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_accepts_well_formed_blob);
@@ -581,5 +605,6 @@ int main(int, char**) {
   RUN_TEST(test_manager_unknown_id_deactivates_active_font);
   RUN_TEST(test_manager_slim_falls_back_when_pack_missing);
   RUN_TEST(test_manager_fat_keeps_flash_when_open_fails);
+  RUN_TEST(test_manager_for_each_pack_path_visits_all_registered);
   return UNITY_END();
 }

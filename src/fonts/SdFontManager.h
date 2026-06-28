@@ -126,6 +126,23 @@ class SdFontManager {
 
   int activeFontId() const { return activeFontId_; }
 
+  // Visits the SD path of every registered weight variant (e.g.
+  // "/fonts/bookerly_17_regular.bin"). Lets a device-side downloader/exporter act
+  // on the full pack set without the manager depending on HTTP or the HAL: the
+  // registry is itself the manifest of which packs this firmware expects. `cb` is
+  // any callable taking `const char*`.
+  template <class Fn>
+  void forEachPackPath(Fn&& cb) const {
+    char path[kPathMax];
+    for (int i = 0; i < fontCount_; ++i) {
+      const Font& f = fonts_[i];
+      for (int w = 0; w < f.weightCount; ++w) {
+        buildPath(path, f.stem, f.sizePt, f.weights[w].suffix);
+        cb(static_cast<const char*>(path));
+      }
+    }
+  }
+
  private:
   struct Weight {
     EpdFont* font;                // live object the renderer dereferences
