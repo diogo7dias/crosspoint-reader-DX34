@@ -18,9 +18,29 @@
 #include <cstring>
 #include <vector>
 
+#include "EpdBinFontLoader.h"
 #include "EpdBinFormat.h"
 
 using namespace crosspoint::binfont;
+
+namespace {
+// In-memory BlobSource standing in for the device HalFile adapter, so the loader
+// logic (header validation, streamed CRC, the readBitmapBytes trampoline) is
+// exercised on the host with no HAL.
+class MemoryBlobSource : public BlobSource {
+ public:
+  explicit MemoryBlobSource(std::vector<uint8_t> bytes) : bytes_(std::move(bytes)) {}
+  int read(uint32_t offset, uint8_t* dst, size_t len) override {
+    if (static_cast<uint64_t>(offset) + len > bytes_.size()) return -1;
+    std::memcpy(dst, bytes_.data() + offset, len);
+    return static_cast<int>(len);
+  }
+  uint32_t size() const override { return static_cast<uint32_t>(bytes_.size()); }
+
+ private:
+  std::vector<uint8_t> bytes_;
+};
+}  // namespace
 
 namespace {
 
@@ -141,6 +161,74 @@ void test_crc32_matches_zlib_check_vector() {
   TEST_ASSERT_EQUAL_HEX32(0xCBF43926u, crc32(reinterpret_cast<const uint8_t*>(s), 9));
 }
 
+// ---- EpdBinFontLoader (SD blob loader, Tier 1) ----
+
+void test_loader_opens_valid_blob_and_streams_bytes() {
+  // A blob long enough to cross the loader's internal streaming-CRC chunk so the
+  // chunk loop is genuinely exercised, with a recognisable pattern to read back.
+  std::vector<uint8_t> blob(1000);
+  for (size_t i = 0; i < blob.size(); ++i) blob[i] = static_cast<uint8_t>((i * 7 + 3) & 0xFF);
+  MemoryBlobSource src(makeBlobBuffer(blob));
+
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kOk, loader.open(&src, kExpect));
+  TEST_ASSERT_TRUE(loader.isOpen());
+  TEST_ASSERT_EQUAL_UINT32(sizeof(BlobHeader), loader.blobOffset());
+  TEST_ASSERT_EQUAL_UINT32(blob.size(), loader.blobSize());
+
+  // The trampoline reads bitmap bytes by offset RELATIVE to the blob start,
+  // exactly as FontDecompressor invokes EpdFontData::readBitmapBytes.
+  uint8_t got[16] = {};
+  const int n = EpdBinFontLoader::readBitmapTrampoline(loader.bitmapCtx(), 500, got, sizeof(got));
+  TEST_ASSERT_EQUAL_INT(sizeof(got), n);
+  for (size_t i = 0; i < sizeof(got); ++i) {
+    TEST_ASSERT_EQUAL_UINT8(blob[500 + i], got[i]);
+  }
+}
+
+void test_loader_trampoline_rejects_out_of_range_read() {
+  std::vector<uint8_t> blob{1, 2, 3, 4, 5};
+  MemoryBlobSource src(makeBlobBuffer(blob));
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kOk, loader.open(&src, kExpect));
+  uint8_t got[8] = {};
+  // Reading past the end of the blob must fail, not read into neighbouring data.
+  TEST_ASSERT_NOT_EQUAL(static_cast<int>(sizeof(got)),
+                        EpdBinFontLoader::readBitmapTrampoline(loader.bitmapCtx(), 2, got, sizeof(got)));
+}
+
+void test_loader_rejects_bad_magic() {
+  std::vector<uint8_t> buf = makeBlobBuffer({9, 8, 7});
+  buf[0] ^= 0xFF;
+  MemoryBlobSource src(buf);
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kBadMagic, loader.open(&src, kExpect));
+  TEST_ASSERT_FALSE(loader.isOpen());
+}
+
+void test_loader_rejects_count_mismatch() {
+  MemoryBlobSource src(makeBlobBuffer({9, 8, 7}, /*glyphCount=*/99));
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kCountMismatch, loader.open(&src, kExpect));
+}
+
+void test_loader_rejects_corrupt_blob_via_streamed_crc() {
+  std::vector<uint8_t> buf = makeBlobBuffer({9, 8, 7, 6});
+  buf[sizeof(BlobHeader) + 2] ^= 0x40;  // flip a blob bit; header CRC field unchanged
+  MemoryBlobSource src(buf);
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kBadCrc, loader.open(&src, kExpect));
+  TEST_ASSERT_FALSE(loader.isOpen());
+}
+
+void test_loader_rejects_truncated_file() {
+  std::vector<uint8_t> buf = makeBlobBuffer({9, 8, 7, 6, 5});
+  buf.resize(sizeof(BlobHeader) + 2);  // header says 5 blob bytes, only 2 present
+  MemoryBlobSource src(buf);
+  EpdBinFontLoader loader;
+  TEST_ASSERT_EQUAL_INT(kSizeOverrun, loader.open(&src, kExpect));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_accepts_well_formed_blob);
@@ -153,5 +241,11 @@ int main(int, char**) {
   RUN_TEST(test_rejects_count_mismatch_stale_card);
   RUN_TEST(test_rejects_corrupt_blob_bytes);
   RUN_TEST(test_crc32_matches_zlib_check_vector);
+  RUN_TEST(test_loader_opens_valid_blob_and_streams_bytes);
+  RUN_TEST(test_loader_trampoline_rejects_out_of_range_read);
+  RUN_TEST(test_loader_rejects_bad_magic);
+  RUN_TEST(test_loader_rejects_count_mismatch);
+  RUN_TEST(test_loader_rejects_corrupt_blob_via_streamed_crc);
+  RUN_TEST(test_loader_rejects_truncated_file);
   return UNITY_END();
 }

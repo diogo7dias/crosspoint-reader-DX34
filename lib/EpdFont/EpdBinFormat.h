@@ -81,9 +81,12 @@ enum BlobReject : uint8_t {
 };
 
 // CRC32 with the zlib/PNG polynomial (0xEDB88320), matching Python zlib.crc32 so
-// the serializer and the validator agree.
-inline uint32_t crc32(const uint8_t* data, size_t len) {
-  uint32_t crc = 0xFFFFFFFFu;
+// the serializer and the validator agree. Exposed in incremental form so the
+// device loader can stream the blob through it in chunks rather than pinning the
+// whole blob in a contiguous buffer just to check integrity at open time.
+constexpr uint32_t kCrc32Init = 0xFFFFFFFFu;
+
+inline uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len) {
   for (size_t i = 0; i < len; ++i) {
     crc ^= data[i];
     for (int b = 0; b < 8; ++b) {
@@ -91,13 +94,20 @@ inline uint32_t crc32(const uint8_t* data, size_t len) {
       crc = (crc >> 1) ^ (0xEDB88320u & mask);
     }
   }
-  return ~crc;
+  return crc;
 }
 
-// Validates a CPBN blob buffer against the firmware's expectation. Returns kOk
-// and fills `out` when the blob is trustworthy; otherwise returns the reason and
-// leaves `out` untouched.
-inline BlobReject validateBlob(const uint8_t* buf, size_t len, const FontBlobExpectation& expect, ParsedBlob* out) {
+inline uint32_t crc32Finish(uint32_t crc) { return ~crc; }
+
+inline uint32_t crc32(const uint8_t* data, size_t len) {
+  return crc32Finish(crc32Update(kCrc32Init, data, len));
+}
+
+// Validates the fixed 38-byte header alone: structure (magic/version/bit-depth)
+// and that the tables match this firmware (counts). Does NOT verify the blob
+// CRC or that the blob fits any particular buffer — callers that stream the blob
+// off SD verify the CRC incrementally via crc32Update. Fills `*out` on success.
+inline BlobReject parseHeader(const uint8_t* buf, size_t len, const FontBlobExpectation& expect, BlobHeader* out) {
   if (buf == nullptr || len < sizeof(BlobHeader)) return kTooSmall;
 
   BlobHeader h{};
@@ -110,14 +120,26 @@ inline BlobReject validateBlob(const uint8_t* buf, size_t len, const FontBlobExp
   if (h.version != kBlobFormatVersion) return kBadVersion;
   if (h.bitsPerPixel != kBitsPerPixel) return kBadBitsPerPix;
 
-  // Blob must fit within the buffer (guard the addition against overflow).
-  const uint64_t need = static_cast<uint64_t>(sizeof(BlobHeader)) + h.bitmapBlobSize;
-  if (need > len) return kSizeOverrun;
-
   if (h.glyphCount != expect.glyphCount || h.intervalCount != expect.intervalCount ||
       h.groupCount != expect.groupCount) {
     return kCountMismatch;
   }
+
+  if (out != nullptr) *out = h;
+  return kOk;
+}
+
+// Validates a fully in-memory CPBN blob buffer against the firmware's
+// expectation, including the blob CRC. Returns kOk and fills `out` when the blob
+// is trustworthy; otherwise returns the reason and leaves `out` untouched.
+inline BlobReject validateBlob(const uint8_t* buf, size_t len, const FontBlobExpectation& expect, ParsedBlob* out) {
+  BlobHeader h{};
+  const BlobReject hr = parseHeader(buf, len, expect, &h);
+  if (hr != kOk) return hr;
+
+  // Blob must fit within the buffer (guard the addition against overflow).
+  const uint64_t need = static_cast<uint64_t>(sizeof(BlobHeader)) + h.bitmapBlobSize;
+  if (need > len) return kSizeOverrun;
 
   if (crc32(buf + sizeof(BlobHeader), h.bitmapBlobSize) != h.blobCrc32) return kBadCrc;
 
