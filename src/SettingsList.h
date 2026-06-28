@@ -122,6 +122,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                   {StrId::STR_RENDER_THIN, StrId::STR_RENDER_CRISP, StrId::STR_RENDER_MEDIUM,
                                    StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC},
                                   "textRenderMode", StrId::STR_CAT_READER));
+    s.push_back(SettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText, "smoothText",
+                                    StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled,
                                     "hyphenationEnabled", StrId::STR_CAT_READER));
 

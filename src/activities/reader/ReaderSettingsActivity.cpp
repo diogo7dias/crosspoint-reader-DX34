@@ -219,6 +219,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
                                      {StrId::STR_RENDER_THIN, StrId::STR_RENDER_CRISP, StrId::STR_RENDER_MEDIUM,
                                       StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
+  pushReader(ReaderSettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));

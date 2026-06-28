@@ -514,6 +514,7 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["randomBookOnBoot"] = s.randomBookOnBoot;
   doc["refreshFrequency"] = s.refreshFrequency;
   doc["screenMargin"] = s.screenMargin;
+  doc["smoothText"] = s.smoothText;
   doc["uniformMargins"] = s.uniformMargins;
   // Defensive clamp: field is 0/1/2 in the UI, but a bad in-memory value
   // would otherwise hit disk and force a reset on load.
@@ -814,6 +815,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.refreshFrequency =
       clampEnum(doc["refreshFrequency"] | (uint8_t)S::REFRESH_15, S::REFRESH_FREQUENCY_COUNT, S::REFRESH_15);
   s.screenMargin = doc["screenMargin"] | (uint8_t)5;
+  s.smoothText = doc["smoothText"] | (uint8_t)0;
+  if (s.smoothText > 1) s.smoothText = 0;
   s.uniformMargins = doc["uniformMargins"] | (uint8_t)0;
   if (s.uniformMargins > 1) s.uniformMargins = 0;
   s.dynamicMargins = doc["dynamicMargins"] | (uint8_t)0;

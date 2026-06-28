@@ -422,6 +422,10 @@ class CrossPointSettings {
   // Legacy uniform reader margin (kept for backward compatibility in settings
   // migration)
   uint8_t screenMargin = 20;
+  // Smooth text (anti-aliasing): 0 = off (crisp 1-bit, fast). 1 = render glyph
+  // grey edges via a greyscale overlay → smoother text, but every page takes the
+  // slow greyscale refresh (~3x slower turns). Global, off by default (Snappy LAW).
+  uint8_t smoothText = 0;
   // Reader screen margin settings
   uint8_t uniformMargins = 0;  // 0 = separate margins, 1 = uniform (all sides equal)
   uint8_t dynamicMargins = 0;  // 0 = off, 1 = auto-calculate (10px min), 2 = auto-calculate (20px min)
