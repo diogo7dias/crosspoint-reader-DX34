@@ -8,6 +8,16 @@ font_id() {
   ruby -rdigest -e 'puts(ARGV.map{|f| Digest::SHA256.hexdigest(File.read(f)).to_i(16)}.sum % (2**32) - (2**31))' "$@"
 }
 
+# Same 32-bit reduction as font_id, but hashes the argument STRINGS instead of
+# file contents. Used for the Tier-2 SD-only sizes (11/13/15/18) which have no
+# flash header to hash — their id derives from the canonical weight-name set, so
+# it is stable + reproducible with no file present. (A future change to such a
+# font's glyphs must bump SECTION_FILE_VERSION, since the id is name-derived and
+# would not otherwise invalidate the on-SD section cache.)
+name_font_id() {
+  ruby -rdigest -e 'puts(ARGV.map{|s| Digest::SHA256.hexdigest(s).to_i(16)}.sum % (2**32) - (2**31))' "$@"
+}
+
 # Reader-font IDs hash the 3 weight-specific per-size headers plus the matching shared
 # tables, so a change to either the per-size bitmap / kerning matrix or a shared
 # interval / class / ligature table invalidates the on-SD font cache.
@@ -62,6 +72,20 @@ for size in 10 12 14 16 17; do
   if [[ -f "./verdana_${size}_regular.h" ]]; then
     echo "#define VERDANA_${size}_FONT_ID ($(font_id ./verdana_${size}_regular.h ./verdana_${size}_bold.h ./verdana_${size}_italic.h))"
   fi
+done
+echo ""
+
+# Tier-2 SD-only extra reader sizes (11/13/15/18) for every offloadable family.
+# No flash header ships for these — the glyph TABLES live in the SD .bin pack
+# (see bake-sd-extra-packs.sh), so each costs ~0 flash. Their IDs hash the
+# canonical weight-NAME set (name_font_id), reproducible without any file. Lato
+# carries a real bold-italic; the other four synthesise it (3 names).
+for size in 11 13 15 18; do
+  echo "#define BOOKERLY_${size}_FONT_ID ($(name_font_id bookerly_${size}_regular bookerly_${size}_bold bookerly_${size}_italic))"
+  echo "#define GEORGIA_${size}_FONT_ID ($(name_font_id georgia_${size}_regular georgia_${size}_bold georgia_${size}_italic))"
+  echo "#define LATO_${size}_FONT_ID ($(name_font_id lato_${size}_regular lato_${size}_bold lato_${size}_italic lato_${size}_bolditalic))"
+  echo "#define HELVETICA_${size}_FONT_ID ($(name_font_id helvetica_${size}_regular helvetica_${size}_bold helvetica_${size}_italic))"
+  echo "#define VERDANA_${size}_FONT_ID ($(name_font_id verdana_${size}_regular verdana_${size}_bold verdana_${size}_italic))"
 done
 echo ""
 

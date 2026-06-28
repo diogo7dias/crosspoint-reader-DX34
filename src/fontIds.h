@@ -41,3 +41,30 @@
 #define UI_10_FONT_ID (-551108662)
 #define UI_12_FONT_ID UI_10_FONT_ID
 #define SMALL_FONT_ID (-698893830)
+
+// --- Tier-2 SD-only extra reader sizes (11/13/15/18) ---
+// No flash header ships for these (glyph tables live in the SD .bin pack, see
+// lib/EpdFont/scripts/bake-sd-extra-packs.sh). IDs hash the canonical weight-NAME
+// set (name_font_id in build-font-ids.sh), so they are stable + reproducible with
+// no header file. Appended rather than regenerated to avoid re-keying the existing
+// content-hashed ids (the committed fontIds.h predates later header edits).
+#define BOOKERLY_11_FONT_ID (-1568226765)
+#define GEORGIA_11_FONT_ID (-1039436286)
+#define LATO_11_FONT_ID (-664650482)
+#define HELVETICA_11_FONT_ID (-384593747)
+#define VERDANA_11_FONT_ID (1710894204)
+#define BOOKERLY_13_FONT_ID (-1342458288)
+#define GEORGIA_13_FONT_ID (-1469831864)
+#define LATO_13_FONT_ID (293585460)
+#define HELVETICA_13_FONT_ID (-1847257606)
+#define VERDANA_13_FONT_ID (739309968)
+#define BOOKERLY_15_FONT_ID (-874954626)
+#define GEORGIA_15_FONT_ID (-137735079)
+#define LATO_15_FONT_ID (1743376185)
+#define HELVETICA_15_FONT_ID (-1985027492)
+#define VERDANA_15_FONT_ID (743450860)
+#define BOOKERLY_18_FONT_ID (-2093482358)
+#define GEORGIA_18_FONT_ID (233400001)
+#define LATO_18_FONT_ID (-770132080)
+#define HELVETICA_18_FONT_ID (943921862)
+#define VERDANA_18_FONT_ID (2114719867)

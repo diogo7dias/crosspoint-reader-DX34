@@ -221,6 +221,111 @@ EpdFont verdana_17BoldFont(&verdana_17_bold);
 EpdFont verdana_17ItalicFont(&verdana_17_italic);
 EpdFontFamily verdana_17FontFamily(&verdana_17RegularFont, &verdana_17BoldFont, &verdana_17ItalicFont, nullptr);
 
+#ifdef CROSSPOINT_SD_FONTS
+// SD-only Tier-2 reader sizes (11/13/15/18) for every offloadable family. No flash
+// header ships for these (glyph tables stream from the SD .bin pack), so the whole
+// block is gated to the SD-fonts build; the default build is byte-unchanged.
+// Bookerly: SD-only Tier-2 sizes 11/13/15/18 (no flash header; glyph tables stream
+// from the SD pack). EpdFont objects start on the nearest ChareInk so the renderer
+// never dereferences null before activateReaderFont() repoints them to the SD font.
+EpdFont bookerly_11RegularFont(&chareink_12_regular);
+EpdFont bookerly_11BoldFont(&chareink_12_bold);
+EpdFont bookerly_11ItalicFont(&chareink_12_italic);
+EpdFontFamily bookerly_11FontFamily(&bookerly_11RegularFont, &bookerly_11BoldFont, &bookerly_11ItalicFont, nullptr);
+EpdFont bookerly_13RegularFont(&chareink_14_regular);
+EpdFont bookerly_13BoldFont(&chareink_14_bold);
+EpdFont bookerly_13ItalicFont(&chareink_14_italic);
+EpdFontFamily bookerly_13FontFamily(&bookerly_13RegularFont, &bookerly_13BoldFont, &bookerly_13ItalicFont, nullptr);
+EpdFont bookerly_15RegularFont(&chareink_16_regular);
+EpdFont bookerly_15BoldFont(&chareink_16_bold);
+EpdFont bookerly_15ItalicFont(&chareink_16_italic);
+EpdFontFamily bookerly_15FontFamily(&bookerly_15RegularFont, &bookerly_15BoldFont, &bookerly_15ItalicFont, nullptr);
+EpdFont bookerly_18RegularFont(&chareink_17_regular);
+EpdFont bookerly_18BoldFont(&chareink_17_bold);
+EpdFont bookerly_18ItalicFont(&chareink_17_italic);
+EpdFontFamily bookerly_18FontFamily(&bookerly_18RegularFont, &bookerly_18BoldFont, &bookerly_18ItalicFont, nullptr);
+// Georgia: SD-only Tier-2 sizes 11/13/15/18 (no flash header; glyph tables stream
+// from the SD pack). EpdFont objects start on the nearest ChareInk so the renderer
+// never dereferences null before activateReaderFont() repoints them to the SD font.
+EpdFont georgia_11RegularFont(&chareink_12_regular);
+EpdFont georgia_11BoldFont(&chareink_12_bold);
+EpdFont georgia_11ItalicFont(&chareink_12_italic);
+EpdFontFamily georgia_11FontFamily(&georgia_11RegularFont, &georgia_11BoldFont, &georgia_11ItalicFont, nullptr);
+EpdFont georgia_13RegularFont(&chareink_14_regular);
+EpdFont georgia_13BoldFont(&chareink_14_bold);
+EpdFont georgia_13ItalicFont(&chareink_14_italic);
+EpdFontFamily georgia_13FontFamily(&georgia_13RegularFont, &georgia_13BoldFont, &georgia_13ItalicFont, nullptr);
+EpdFont georgia_15RegularFont(&chareink_16_regular);
+EpdFont georgia_15BoldFont(&chareink_16_bold);
+EpdFont georgia_15ItalicFont(&chareink_16_italic);
+EpdFontFamily georgia_15FontFamily(&georgia_15RegularFont, &georgia_15BoldFont, &georgia_15ItalicFont, nullptr);
+EpdFont georgia_18RegularFont(&chareink_17_regular);
+EpdFont georgia_18BoldFont(&chareink_17_bold);
+EpdFont georgia_18ItalicFont(&chareink_17_italic);
+EpdFontFamily georgia_18FontFamily(&georgia_18RegularFont, &georgia_18BoldFont, &georgia_18ItalicFont, nullptr);
+// Lato: SD-only Tier-2 sizes 11/13/15/18 (no flash header; glyph tables stream
+// from the SD pack). EpdFont objects start on the nearest ChareInk so the renderer
+// never dereferences null before activateReaderFont() repoints them to the SD font.
+EpdFont lato_11RegularFont(&chareink_12_regular);
+EpdFont lato_11BoldFont(&chareink_12_bold);
+EpdFont lato_11ItalicFont(&chareink_12_italic);
+EpdFont lato_11BoldItalicFont(&chareink_12_bold);
+EpdFontFamily lato_11FontFamily(&lato_11RegularFont, &lato_11BoldFont, &lato_11ItalicFont, &lato_11BoldItalicFont);
+EpdFont lato_13RegularFont(&chareink_14_regular);
+EpdFont lato_13BoldFont(&chareink_14_bold);
+EpdFont lato_13ItalicFont(&chareink_14_italic);
+EpdFont lato_13BoldItalicFont(&chareink_14_bold);
+EpdFontFamily lato_13FontFamily(&lato_13RegularFont, &lato_13BoldFont, &lato_13ItalicFont, &lato_13BoldItalicFont);
+EpdFont lato_15RegularFont(&chareink_16_regular);
+EpdFont lato_15BoldFont(&chareink_16_bold);
+EpdFont lato_15ItalicFont(&chareink_16_italic);
+EpdFont lato_15BoldItalicFont(&chareink_16_bold);
+EpdFontFamily lato_15FontFamily(&lato_15RegularFont, &lato_15BoldFont, &lato_15ItalicFont, &lato_15BoldItalicFont);
+EpdFont lato_18RegularFont(&chareink_17_regular);
+EpdFont lato_18BoldFont(&chareink_17_bold);
+EpdFont lato_18ItalicFont(&chareink_17_italic);
+EpdFont lato_18BoldItalicFont(&chareink_17_bold);
+EpdFontFamily lato_18FontFamily(&lato_18RegularFont, &lato_18BoldFont, &lato_18ItalicFont, &lato_18BoldItalicFont);
+// Helvetica: SD-only Tier-2 sizes 11/13/15/18 (no flash header; glyph tables stream
+// from the SD pack). EpdFont objects start on the nearest ChareInk so the renderer
+// never dereferences null before activateReaderFont() repoints them to the SD font.
+EpdFont helvetica_11RegularFont(&chareink_12_regular);
+EpdFont helvetica_11BoldFont(&chareink_12_bold);
+EpdFont helvetica_11ItalicFont(&chareink_12_italic);
+EpdFontFamily helvetica_11FontFamily(&helvetica_11RegularFont, &helvetica_11BoldFont, &helvetica_11ItalicFont, nullptr);
+EpdFont helvetica_13RegularFont(&chareink_14_regular);
+EpdFont helvetica_13BoldFont(&chareink_14_bold);
+EpdFont helvetica_13ItalicFont(&chareink_14_italic);
+EpdFontFamily helvetica_13FontFamily(&helvetica_13RegularFont, &helvetica_13BoldFont, &helvetica_13ItalicFont, nullptr);
+EpdFont helvetica_15RegularFont(&chareink_16_regular);
+EpdFont helvetica_15BoldFont(&chareink_16_bold);
+EpdFont helvetica_15ItalicFont(&chareink_16_italic);
+EpdFontFamily helvetica_15FontFamily(&helvetica_15RegularFont, &helvetica_15BoldFont, &helvetica_15ItalicFont, nullptr);
+EpdFont helvetica_18RegularFont(&chareink_17_regular);
+EpdFont helvetica_18BoldFont(&chareink_17_bold);
+EpdFont helvetica_18ItalicFont(&chareink_17_italic);
+EpdFontFamily helvetica_18FontFamily(&helvetica_18RegularFont, &helvetica_18BoldFont, &helvetica_18ItalicFont, nullptr);
+// Verdana: SD-only Tier-2 sizes 11/13/15/18 (no flash header; glyph tables stream
+// from the SD pack). EpdFont objects start on the nearest ChareInk so the renderer
+// never dereferences null before activateReaderFont() repoints them to the SD font.
+EpdFont verdana_11RegularFont(&chareink_12_regular);
+EpdFont verdana_11BoldFont(&chareink_12_bold);
+EpdFont verdana_11ItalicFont(&chareink_12_italic);
+EpdFontFamily verdana_11FontFamily(&verdana_11RegularFont, &verdana_11BoldFont, &verdana_11ItalicFont, nullptr);
+EpdFont verdana_13RegularFont(&chareink_14_regular);
+EpdFont verdana_13BoldFont(&chareink_14_bold);
+EpdFont verdana_13ItalicFont(&chareink_14_italic);
+EpdFontFamily verdana_13FontFamily(&verdana_13RegularFont, &verdana_13BoldFont, &verdana_13ItalicFont, nullptr);
+EpdFont verdana_15RegularFont(&chareink_16_regular);
+EpdFont verdana_15BoldFont(&chareink_16_bold);
+EpdFont verdana_15ItalicFont(&chareink_16_italic);
+EpdFontFamily verdana_15FontFamily(&verdana_15RegularFont, &verdana_15BoldFont, &verdana_15ItalicFont, nullptr);
+EpdFont verdana_18RegularFont(&chareink_17_regular);
+EpdFont verdana_18BoldFont(&chareink_17_bold);
+EpdFont verdana_18ItalicFont(&chareink_17_italic);
+EpdFontFamily verdana_18FontFamily(&verdana_18RegularFont, &verdana_18BoldFont, &verdana_18ItalicFont, nullptr);
+#endif  // CROSSPOINT_SD_FONTS
+
 // UI font = Pixel Operator (CC0). 16px for the status bar (SMALL_FONT_ID,
 // pixel-perfect on its native grid); one 32px family for body, menus and titles
 // (UI_10_FONT_ID, with UI_12_FONT_ID aliased to it in fontIds.h). The 32px family
@@ -612,6 +717,50 @@ static void registerSdReaderFonts() {
                  &verdana_16ItalicFont, nullptr, &chareink_16_regular);
   m.registerFont(VERDANA_17_FONT_ID, 17, "verdana", &verdana_17RegularFont, &verdana_17BoldFont,
                  &verdana_17ItalicFont, nullptr, &chareink_17_regular);
+
+  // SD-only Tier-2 extra sizes (11/13/15/18). tablesInFile=true: the whole
+  // EpdFontData is reconstructed from the SD pack; the EpdFont's ChareInk stub is
+  // only the fallback shown if the pack is missing.
+  m.registerFont(BOOKERLY_11_FONT_ID, 11, "bookerly", &bookerly_11RegularFont, &bookerly_11BoldFont,
+                 &bookerly_11ItalicFont, nullptr, &chareink_12_regular, /*tablesInFile=*/true);
+  m.registerFont(BOOKERLY_13_FONT_ID, 13, "bookerly", &bookerly_13RegularFont, &bookerly_13BoldFont,
+                 &bookerly_13ItalicFont, nullptr, &chareink_14_regular, /*tablesInFile=*/true);
+  m.registerFont(BOOKERLY_15_FONT_ID, 15, "bookerly", &bookerly_15RegularFont, &bookerly_15BoldFont,
+                 &bookerly_15ItalicFont, nullptr, &chareink_16_regular, /*tablesInFile=*/true);
+  m.registerFont(BOOKERLY_18_FONT_ID, 18, "bookerly", &bookerly_18RegularFont, &bookerly_18BoldFont,
+                 &bookerly_18ItalicFont, nullptr, &chareink_17_regular, /*tablesInFile=*/true);
+  m.registerFont(GEORGIA_11_FONT_ID, 11, "georgia", &georgia_11RegularFont, &georgia_11BoldFont,
+                 &georgia_11ItalicFont, nullptr, &chareink_12_regular, /*tablesInFile=*/true);
+  m.registerFont(GEORGIA_13_FONT_ID, 13, "georgia", &georgia_13RegularFont, &georgia_13BoldFont,
+                 &georgia_13ItalicFont, nullptr, &chareink_14_regular, /*tablesInFile=*/true);
+  m.registerFont(GEORGIA_15_FONT_ID, 15, "georgia", &georgia_15RegularFont, &georgia_15BoldFont,
+                 &georgia_15ItalicFont, nullptr, &chareink_16_regular, /*tablesInFile=*/true);
+  m.registerFont(GEORGIA_18_FONT_ID, 18, "georgia", &georgia_18RegularFont, &georgia_18BoldFont,
+                 &georgia_18ItalicFont, nullptr, &chareink_17_regular, /*tablesInFile=*/true);
+  m.registerFont(LATO_11_FONT_ID, 11, "lato", &lato_11RegularFont, &lato_11BoldFont,
+                 &lato_11ItalicFont, &lato_11BoldItalicFont, &chareink_12_regular, /*tablesInFile=*/true);
+  m.registerFont(LATO_13_FONT_ID, 13, "lato", &lato_13RegularFont, &lato_13BoldFont,
+                 &lato_13ItalicFont, &lato_13BoldItalicFont, &chareink_14_regular, /*tablesInFile=*/true);
+  m.registerFont(LATO_15_FONT_ID, 15, "lato", &lato_15RegularFont, &lato_15BoldFont,
+                 &lato_15ItalicFont, &lato_15BoldItalicFont, &chareink_16_regular, /*tablesInFile=*/true);
+  m.registerFont(LATO_18_FONT_ID, 18, "lato", &lato_18RegularFont, &lato_18BoldFont,
+                 &lato_18ItalicFont, &lato_18BoldItalicFont, &chareink_17_regular, /*tablesInFile=*/true);
+  m.registerFont(HELVETICA_11_FONT_ID, 11, "helvetica", &helvetica_11RegularFont, &helvetica_11BoldFont,
+                 &helvetica_11ItalicFont, nullptr, &chareink_12_regular, /*tablesInFile=*/true);
+  m.registerFont(HELVETICA_13_FONT_ID, 13, "helvetica", &helvetica_13RegularFont, &helvetica_13BoldFont,
+                 &helvetica_13ItalicFont, nullptr, &chareink_14_regular, /*tablesInFile=*/true);
+  m.registerFont(HELVETICA_15_FONT_ID, 15, "helvetica", &helvetica_15RegularFont, &helvetica_15BoldFont,
+                 &helvetica_15ItalicFont, nullptr, &chareink_16_regular, /*tablesInFile=*/true);
+  m.registerFont(HELVETICA_18_FONT_ID, 18, "helvetica", &helvetica_18RegularFont, &helvetica_18BoldFont,
+                 &helvetica_18ItalicFont, nullptr, &chareink_17_regular, /*tablesInFile=*/true);
+  m.registerFont(VERDANA_11_FONT_ID, 11, "verdana", &verdana_11RegularFont, &verdana_11BoldFont,
+                 &verdana_11ItalicFont, nullptr, &chareink_12_regular, /*tablesInFile=*/true);
+  m.registerFont(VERDANA_13_FONT_ID, 13, "verdana", &verdana_13RegularFont, &verdana_13BoldFont,
+                 &verdana_13ItalicFont, nullptr, &chareink_14_regular, /*tablesInFile=*/true);
+  m.registerFont(VERDANA_15_FONT_ID, 15, "verdana", &verdana_15RegularFont, &verdana_15BoldFont,
+                 &verdana_15ItalicFont, nullptr, &chareink_16_regular, /*tablesInFile=*/true);
+  m.registerFont(VERDANA_18_FONT_ID, 18, "verdana", &verdana_18RegularFont, &verdana_18BoldFont,
+                 &verdana_18ItalicFont, nullptr, &chareink_17_regular, /*tablesInFile=*/true);
 }
 #endif  // CROSSPOINT_SD_FONTS
 
@@ -649,6 +798,28 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VERDANA_14_FONT_ID, verdana_14FontFamily);
   renderer.insertFont(VERDANA_16_FONT_ID, verdana_16FontFamily);
   renderer.insertFont(VERDANA_17_FONT_ID, verdana_17FontFamily);
+#ifdef CROSSPOINT_SD_FONTS
+  renderer.insertFont(BOOKERLY_11_FONT_ID, bookerly_11FontFamily);
+  renderer.insertFont(BOOKERLY_13_FONT_ID, bookerly_13FontFamily);
+  renderer.insertFont(BOOKERLY_15_FONT_ID, bookerly_15FontFamily);
+  renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly_18FontFamily);
+  renderer.insertFont(GEORGIA_11_FONT_ID, georgia_11FontFamily);
+  renderer.insertFont(GEORGIA_13_FONT_ID, georgia_13FontFamily);
+  renderer.insertFont(GEORGIA_15_FONT_ID, georgia_15FontFamily);
+  renderer.insertFont(GEORGIA_18_FONT_ID, georgia_18FontFamily);
+  renderer.insertFont(LATO_11_FONT_ID, lato_11FontFamily);
+  renderer.insertFont(LATO_13_FONT_ID, lato_13FontFamily);
+  renderer.insertFont(LATO_15_FONT_ID, lato_15FontFamily);
+  renderer.insertFont(LATO_18_FONT_ID, lato_18FontFamily);
+  renderer.insertFont(HELVETICA_11_FONT_ID, helvetica_11FontFamily);
+  renderer.insertFont(HELVETICA_13_FONT_ID, helvetica_13FontFamily);
+  renderer.insertFont(HELVETICA_15_FONT_ID, helvetica_15FontFamily);
+  renderer.insertFont(HELVETICA_18_FONT_ID, helvetica_18FontFamily);
+  renderer.insertFont(VERDANA_11_FONT_ID, verdana_11FontFamily);
+  renderer.insertFont(VERDANA_13_FONT_ID, verdana_13FontFamily);
+  renderer.insertFont(VERDANA_15_FONT_ID, verdana_15FontFamily);
+  renderer.insertFont(VERDANA_18_FONT_ID, verdana_18FontFamily);
+#endif  // CROSSPOINT_SD_FONTS
   // UI_12_FONT_ID is an alias of UI_10_FONT_ID (same 16px Pixel Operator family),
   // so a single registration serves both the body/menu and title call sites.
   renderer.insertFont(UI_10_FONT_ID, uiFontFamily);
