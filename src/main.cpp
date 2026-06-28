@@ -909,6 +909,7 @@ void setup() {
   static crosspoint::fonts::HalSdFontIo g_sdFontIo;
   crosspoint::fonts::sdFonts().setIo(&g_sdFontIo);
   registerSdReaderFonts();
+  Storage.mkdir("/fonts");  // ensure the dir exists so the browser pack-upload lands (slim never exports)
   crosspoint::fonts::sdFonts().exportAllMissing();
   crosspoint::fonts::sdFonts().ensureActive(SETTINGS.getReaderFontId());
 #endif

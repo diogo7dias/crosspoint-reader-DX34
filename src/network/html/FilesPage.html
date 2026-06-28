@@ -2207,7 +2207,9 @@
     <button class="action-btn folder-action-btn" onclick="openFolderModal()">📁 <span data-i18n="STR_WEB_NEW_FOLDER">New Folder</span></button>
     <button class="action-btn" style="background-color:#2980b9" onclick="downloadSelected()">💾 <span data-i18n="STR_WEB_DOWNLOAD_SELECTED">Download Selected</span></button>
     <button class="action-btn" style="background-color:#e74c3c" onclick="openDeleteSelectedModal()">🗑️ <span data-i18n="STR_WEB_DELETE_SELECTED">Delete Selected</span></button>
+    <button class="action-btn" style="background-color:#16a085" onclick="downloadFontPacks()">🔤 Get Font Packs</button>
   </div>
+  <div id="fontpack-status" style="display:none;margin:8px 0;font-weight:bold"></div>
 </div>
 
 <!-- Failed Uploads Banner -->
@@ -4343,6 +4345,47 @@ function uploadFileHTTP(file, onProgress, onComplete, onError) {
     xhr.onabort = function() { currentUploadXhr = null; reject(new Error('Upload aborted')); };
     xhr.send(formData);
   });
+}
+
+// Browser-assisted SD font packs: the device can't reliably do TLS itself (mbedTLS
+// needs ~10 KB contiguous heap — same wall that moved OTA to the browser), so the
+// browser fetches the CPBN packs from the `fonts` branch (CORS-OK on raw.github)
+// and uploads each to the device's /fonts/ over the local connection. Only the
+// packs missing from the card are sent. Reads the names from manifest.json.
+async function downloadFontPacks() {
+  const BRANCH = 'https://raw.githubusercontent.com/diogo7dias/crosspoint-reader-DX34/fonts';
+  const statusEl = document.getElementById('fontpack-status');
+  const show = (msg) => { statusEl.style.display = 'block'; statusEl.textContent = msg; };
+  if (!confirm('Download the built-in reader-font packs to this device’s /fonts/ folder?')) return;
+  show('Fetching font list…');
+  let names;
+  try {
+    const r = await fetch(BRANCH + '/manifest.json', { cache: 'no-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    names = await r.json();
+  } catch (e) {
+    show('Could not fetch font list: ' + e.message);
+    return;
+  }
+  let ok = 0, failed = 0;
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i];
+    show('Downloading fonts ' + (i + 1) + '/' + names.length + ' (' + name + ')…');
+    try {
+      const resp = await fetch(BRANCH + '/' + name, { cache: 'no-cache' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      const fd = new FormData();
+      fd.append('file', new File([blob], name));
+      const up = await fetch('/upload?path=' + encodeURIComponent('/fonts'), { method: 'POST', body: fd });
+      if (!up.ok) throw new Error('upload HTTP ' + up.status);
+      ok++;
+    } catch (e) {
+      failed++;
+      console.error('font pack failed', name, e);
+    }
+  }
+  show('Font packs done: ' + ok + ' saved, ' + failed + ' failed. Reopen your book to use them.');
 }
 
 function uploadFile() {

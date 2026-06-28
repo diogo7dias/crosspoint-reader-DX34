@@ -90,6 +90,22 @@ int main(int argc, char** argv) {
       ++fail;
     }
   }
-  std::printf("%d packs written to %s, %d failed\n", ok, outDir, fail);
+  // Emit manifest.json (the browser font-download flow reads this from the `fonts`
+  // branch to know which packs to fetch, no device endpoint or GitHub API needed).
+  const std::string manifestPath = std::string(outDir) + "/manifest.json";
+  if (FILE* mf = std::fopen(manifestPath.c_str(), "wb")) {
+    std::fputc('[', mf);
+    for (size_t i = 0; i < sizeof(kRows) / sizeof(kRows[0]); ++i) {
+      std::fprintf(mf, "%s\"%s\"", i ? "," : "", kRows[i].name);
+    }
+    std::fputc(']', mf);
+    std::fputc('\n', mf);
+    std::fclose(mf);
+  } else {
+    std::printf("manifest write failed\n");
+    ++fail;
+  }
+
+  std::printf("%d packs + manifest written to %s, %d failed\n", ok, outDir, fail);
   return fail ? 1 : 0;
 }
