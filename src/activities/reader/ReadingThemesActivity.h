@@ -1,9 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
 #include "activities/ActivityWithSubactivity.h"
+#include "activities/DeferredActionQueue.h"
 #include "util/ButtonNavigator.h"
 
 class ReadingThemesActivity final : public ActivityWithSubactivity {
@@ -28,7 +30,12 @@ class ReadingThemesActivity final : public ActivityWithSubactivity {
   bool messagePopupOpen = false;
   std::string messagePopupText;
   bool settingsDirty = false;
-  bool pendingSubactivityExit = false;  // Defer subactivity exit to avoid use-after-free
+  // Deferred subactivity exit (RFC #167): callbacks post; loop() drains after
+  // subActivity->loop() returns, to avoid use-after-free. pendingSettingsChanged
+  // and pendingPostExitAction are PAYLOADS consumed inside the same drain run(),
+  // not queue actions.
+  enum class ThemesAction : uint8_t { SubactivityExit, Count };
+  crosspoint::DeferredActionQueue<ThemesAction> deferred_;
   bool pendingSettingsChanged = false;
   std::function<void()> pendingPostExitAction;
 

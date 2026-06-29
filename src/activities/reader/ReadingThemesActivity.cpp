@@ -79,14 +79,14 @@ void ReadingThemesActivity::openKeyboardForNewTheme() {
       [this, suggestedName](const std::string& name) {
         const std::string effective = name.empty() ? suggestedName : name;
         const bool ok = READING_THEMES.addTheme(effective);
-        pendingSubactivityExit = true;
+        deferred_.post(ThemesAction::SubactivityExit);
         if (!ok) {
           pendingPostExitAction = [this]() { showMessage(tr(STR_SAVE_THEME_FAILED)); };
           return;
         }
         pendingPostExitAction = [this]() { selectedRowIndex = rowCount() - 1; };
       },
-      [this]() { pendingSubactivityExit = true; }, suggestedName));
+      [this]() { deferred_.post(ThemesAction::SubactivityExit); }, suggestedName));
 }
 
 void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
@@ -101,11 +101,11 @@ void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
       renderer, mappedInput, tr(STR_RENAME_THEME), "", 10, ReadingThemeStore::MAX_THEME_NAME_LENGTH, false,
       [this, themeIndex](const std::string& name) {
         if (name.empty()) {
-          pendingSubactivityExit = true;
+          deferred_.post(ThemesAction::SubactivityExit);
           return;
         }
         const bool ok = READING_THEMES.renameTheme(themeIndex, name);
-        pendingSubactivityExit = true;
+        deferred_.post(ThemesAction::SubactivityExit);
         pendingPostExitAction = [this, themeIndex, ok]() {
           actionPopupOpen = false;
           if (!ok) {
@@ -116,7 +116,7 @@ void ReadingThemesActivity::openKeyboardForRename(const int themeIndex) {
         };
       },
       [this]() {
-        pendingSubactivityExit = true;
+        deferred_.post(ThemesAction::SubactivityExit);
         pendingPostExitAction = [this]() { actionPopupOpen = false; };
       }));
 }
@@ -186,18 +186,21 @@ void ReadingThemesActivity::loop() {
   if (subActivity) {
     subActivity->loop();
     // Deferred exit: process after subActivity->loop() returns to avoid
-    // use-after-free
-    if (pendingSubactivityExit) {
-      pendingSubactivityExit = false;
-      const bool changed = pendingSettingsChanged;
-      pendingSettingsChanged = false;
-      auto postAction = std::move(pendingPostExitAction);
-      pendingPostExitAction = nullptr;
-      exitActivity();
-      settingsDirty = settingsDirty || changed;
-      if (postAction) postAction();
-      requestUpdate();
-    }
+    // use-after-free. SubactivityExit is the only action; the bit is cleared
+    // before run(), matching the old "set flag false first" ordering.
+    deferred_.drain([this](ThemesAction action) {
+      if (action == ThemesAction::SubactivityExit) {
+        const bool changed = pendingSettingsChanged;
+        pendingSettingsChanged = false;
+        auto postAction = std::move(pendingPostExitAction);
+        pendingPostExitAction = nullptr;
+        exitActivity();
+        settingsDirty = settingsDirty || changed;
+        if (postAction) postAction();
+        requestUpdate();
+      }
+      return false;
+    });
     return;
   }
 
@@ -247,7 +250,7 @@ void ReadingThemesActivity::loop() {
       exitActivity();
       enterNewActivity(new (std::nothrow)
                            ReaderSettingsActivity(renderer, mappedInput, bookCachePath, [this](const bool changed) {
-                             pendingSubactivityExit = true;
+                             deferred_.post(ThemesAction::SubactivityExit);
                              pendingSettingsChanged = changed;
                            }));
       return;
