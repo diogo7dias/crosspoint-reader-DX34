@@ -498,6 +498,21 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   doc["statusBarTextAlignment"] = s.statusBarTextAlignment;
   doc["statusBarProgressStyle"] = s.statusBarProgressStyle;
   doc["statusBarBarThickness"] = s.statusBarBarThickness;
+  // v6.0.0 granular status-bar items. These were serialized into reading_themes.json
+  // (writeReadingThemeObject) but were never added here, so toggling them from the
+  // Settings menu mutated RAM + saved settings.json yet did NOT survive a reboot
+  // unless also baked into a reading theme. Mirror the theme path so global persists.
+  doc["statusBarShowBookPageCounter"] = s.statusBarShowBookPageCounter;
+  doc["statusBarBookPageCounterPosition"] = s.statusBarBookPageCounterPosition;
+  doc["statusBarShowPagesLeft"] = s.statusBarShowPagesLeft;
+  doc["statusBarPagesLeftPosition"] = s.statusBarPagesLeftPosition;
+  doc["statusBarTitleContent"] = s.statusBarTitleContent;
+  doc["statusBarShowChapterNumber"] = s.statusBarShowChapterNumber;
+  doc["statusBarChapterNumberPosition"] = s.statusBarChapterNumberPosition;
+  doc["statusBarShowQuoteCount"] = s.statusBarShowQuoteCount;
+  doc["statusBarQuoteCountPosition"] = s.statusBarQuoteCountPosition;
+  doc["statusBarShowFreeHeap"] = s.statusBarShowFreeHeap;
+  doc["statusBarFreeHeapPosition"] = s.statusBarFreeHeapPosition;
   doc["extraParagraphSpacingLevel"] = s.extraParagraphSpacingLevel;
   // Legacy compatibility key for older builds that still expect a toggle.
   doc["extraParagraphSpacing"] = s.extraParagraphSpacingLevel != CrossPointSettings::EXTRA_SPACING_OFF;
@@ -707,6 +722,30 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                                          S::STATUS_BAR_PROGRESS_STYLE_COUNT, S::STATUS_BAR_THICK);
     s.statusBarBarThickness = clampEnum(doc["statusBarBarThickness"] | (uint8_t)S::STATUS_BAR_THICKNESS_NORMAL,
                                         S::STATUS_BAR_BAR_THICKNESS_COUNT, S::STATUS_BAR_THICKNESS_NORMAL);
+    // v6.0.0 granular status-bar items (see populateSettingsDoc). Absent from files
+    // written before this fix -> fall back to struct defaults; persisted on next save.
+    s.statusBarShowBookPageCounter = doc["statusBarShowBookPageCounter"] | (uint8_t)0;
+    s.statusBarBookPageCounterPosition =
+        clampEnum(doc["statusBarBookPageCounterPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
+                  S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
+    s.statusBarShowPagesLeft = doc["statusBarShowPagesLeft"] | (uint8_t)0;
+    s.statusBarPagesLeftPosition =
+        clampEnum(doc["statusBarPagesLeftPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_RIGHT,
+                  S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_RIGHT);
+    s.statusBarTitleContent = clampEnum(doc["statusBarTitleContent"] | (uint8_t)S::STATUS_TITLE_CHAPTER,
+                                        S::STATUS_BAR_TITLE_CONTENT_COUNT, S::STATUS_TITLE_CHAPTER);
+    s.statusBarShowChapterNumber = doc["statusBarShowChapterNumber"] | (uint8_t)0;
+    s.statusBarChapterNumberPosition =
+        clampEnum(doc["statusBarChapterNumberPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_LEFT,
+                  S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_LEFT);
+    s.statusBarShowQuoteCount = doc["statusBarShowQuoteCount"] | (uint8_t)0;
+    s.statusBarQuoteCountPosition =
+        clampEnum(doc["statusBarQuoteCountPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_RIGHT,
+                  S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_RIGHT);
+    s.statusBarShowFreeHeap = doc["statusBarShowFreeHeap"] | (uint8_t)0;
+    s.statusBarFreeHeapPosition =
+        clampEnum(doc["statusBarFreeHeapPosition"] | (uint8_t)S::STATUS_TEXT_TOP_RIGHT,
+                  S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_TOP_RIGHT);
   } else {
     migrateLegacyStatusBarMode(s);
     if (needsResave) *needsResave = true;
