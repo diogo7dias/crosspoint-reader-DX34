@@ -10,6 +10,7 @@
  * File list is capped at 300 entries (1000 for /sleep) to stay within heap.
  */
 #pragma once
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -17,6 +18,7 @@
 #include <vector>
 
 #include "../ActivityWithSubactivity.h"
+#include "../DeferredActionQueue.h"
 #include "LibraryEnvPort.h"
 #include "RecentBooksStore.h"
 #include "util/ButtonNavigator.h"
@@ -31,6 +33,11 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   };
 
   enum class Mode { BROWSE, IMAGE_VIEW, FILE_ACTIONS, FILE_MOVE_BROWSER };
+
+  // Deferred cross-task actions (RFC #167): a callback (render task or a
+  // delegated subActivity->loop()) posts; the loop task drains. Enum VALUE is
+  // drain priority (lowest first). Replaces the hand-rolled pending* bools.
+  enum class LibraryAction : uint8_t { LibraryLoad, SearchResolve, RenameResolve, Count };
 
   ButtonNavigator buttonNavigator;
 
@@ -57,20 +64,25 @@ class MyLibraryActivity final : public ActivityWithSubactivity {
   std::vector<std::string> files;
   std::vector<size_t> filteredFileIndexes;
   std::string activeSearchQuery;
+  // Payload + submit-vs-cancel selector for the deferred SearchResolve action.
+  // searchSubmitWins_ defaults false (cancel); only the submit callback sets it
+  // true, so a coalesced submit+cancel resolves as submit (submit wins).
   std::string pendingSearchQuery;
-  bool pendingSearchSubmit = false;
-  bool pendingSearchCancel = false;
+  bool searchSubmitWins_ = false;
+  // Payload + submit-vs-cancel selector for the deferred RenameResolve action
+  // (same submit-wins contract as searchSubmitWins_ above).
   std::string pendingRenameBase;
-  bool pendingRenameSubmit = false;
-  bool pendingRenameCancel = false;
+  bool renameSubmitWins_ = false;
   std::unordered_map<std::string, std::string> progressPrefixCache;
   size_t fileLoadLimit = 200;
   bool hasMoreFiles = false;
   bool folderHasBooks = false;
-  // Paint-then-load flag (A3): true after onEnter sets up a loading frame and
-  // before loop() runs the SD scan. Render path draws a placeholder while
-  // set; loop bails out of input handling so user can't act on stale state.
-  bool pendingLibraryLoad = false;
+  // Paint-then-load (A3): LibraryAction::LibraryLoad is posted in onEnter so the
+  // first frame paints a "Loading library…" placeholder; loop() drains it on the
+  // next tick to run the SD scan. Render path draws the placeholder while the
+  // action is pending; loop bails out of input handling so the user can't act on
+  // stale state.
+  crosspoint::DeferredActionQueue<LibraryAction> deferred_;
 
   // Callbacks
   const std::function<void(const std::string& path)> onSelectBook;

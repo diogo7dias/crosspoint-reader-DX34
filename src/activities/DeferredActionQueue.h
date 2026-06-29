@@ -35,7 +35,7 @@ class DeferredActionQueue {
   // Guarded read-modify-write against a concurrent drain.
   void post(Action a) {
     DeferredActionGuard g;
-    pending_ = static_cast<uint32_t>(pending_ | bit(a));
+    pending_ = static_cast<uint32_t>(pending_ | actionBit(a));
   }
 
   // Loop-task drain, in enum-order priority. `run(Action)` returns true to STOP
@@ -59,16 +59,18 @@ class DeferredActionQueue {
   }
 
   // Non-mutating gate read (for render()'s "bail while X is queued" checks).
-  bool pending(Action a) const { return (pending_ & bit(a)) != 0u; }
+  bool pending(Action a) const { return (pending_ & actionBit(a)) != 0u; }
 
   // Explicit single-kind clear (for sites that consumed a flag without draining).
   void clear(Action a) {
     DeferredActionGuard g;
-    pending_ = static_cast<uint32_t>(pending_ & ~bit(a));
+    pending_ = static_cast<uint32_t>(pending_ & ~actionBit(a));
   }
 
  private:
-  static uint32_t bit(Action a) { return static_cast<uint32_t>(1u) << static_cast<uint8_t>(a); }
+  // Named actionBit (not bit) to avoid clashing with the Arduino core's
+  // `#define bit(b)` macro when this header is compiled into a firmware TU.
+  static uint32_t actionBit(Action a) { return static_cast<uint32_t>(1u) << static_cast<uint8_t>(a); }
 
   volatile uint32_t pending_ = 0;
 };

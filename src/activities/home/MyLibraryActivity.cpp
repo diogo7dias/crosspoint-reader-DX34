@@ -297,9 +297,10 @@ void MyLibraryActivity::openSearchActivity() {
       renderer, mappedInput, basepath, files, activeSearchQuery,
       [this](const std::string& query) {
         pendingSearchQuery = query;
-        pendingSearchSubmit = true;
+        searchSubmitWins_ = true;
+        deferred_.post(LibraryAction::SearchResolve);
       },
-      [this]() { pendingSearchCancel = true; }));
+      [this]() { deferred_.post(LibraryAction::SearchResolve); }));
 }
 
 void MyLibraryActivity::clearSearch() {
@@ -553,15 +554,16 @@ void MyLibraryActivity::openKeyboardForRenameImage() {
   if (!isImageFile(selectedFilePath)) return;
 
   pendingRenameBase.clear();
-  pendingRenameSubmit = false;
-  pendingRenameCancel = false;
+  renameSubmitWins_ = false;
+  deferred_.clear(LibraryAction::RenameResolve);
   enterNewActivity(new (std::nothrow) KeyboardEntryActivity(
       renderer, mappedInput, tr(STR_RENAME_IMAGE_TITLE), "", 10, 200, false,
       [this](const std::string& newBase) {
         pendingRenameBase = newBase;
-        pendingRenameSubmit = true;
+        renameSubmitWins_ = true;
+        deferred_.post(LibraryAction::RenameResolve);
       },
-      [this]() { pendingRenameCancel = true; }));
+      [this]() { deferred_.post(LibraryAction::RenameResolve); }));
 }
 
 void MyLibraryActivity::renameSelectedImage(const std::string& newBase) {
@@ -861,12 +863,12 @@ void MyLibraryActivity::onEnter() {
   filteredFileIndexes.clear();
   hasMoreFiles = false;
   folderHasBooks = false;
-  pendingLibraryLoad = true;
+  deferred_.post(LibraryAction::LibraryLoad);
 
   selectorIndex = 0;
   pendingSearchQuery.clear();
-  pendingSearchSubmit = false;
-  pendingSearchCancel = false;
+  searchSubmitWins_ = false;
+  deferred_.clear(LibraryAction::SearchResolve);
 
   renderer.requestHalfRefresh();
   requestUpdate();
@@ -877,21 +879,31 @@ void MyLibraryActivity::onExit() {
   files.clear();
   filteredFileIndexes.clear();
   activeSearchQuery.clear();
+  // Fully clear all queued actions + their payloads on exit so no stale deferred
+  // action survives into a later re-entry (invariant c).
   pendingSearchQuery.clear();
-  pendingSearchSubmit = false;
-  pendingSearchCancel = false;
+  searchSubmitWins_ = false;
+  pendingRenameBase.clear();
+  renameSubmitWins_ = false;
+  deferred_.clear(LibraryAction::LibraryLoad);
+  deferred_.clear(LibraryAction::SearchResolve);
+  deferred_.clear(LibraryAction::RenameResolve);
 }
 
 void MyLibraryActivity::loop() {
   // A3 paint-then-load: first tick after onEnter — placeholder frame already
   // painted, now run the actual SD scan. Skip input handling entirely until
   // the load completes so the user cannot act on a stale empty list.
-  if (pendingLibraryLoad) {
-    loadFiles();
-    pendingLibraryLoad = false;
-    rebuildFilteredFileIndexes();
-    requestUpdate();
-    return;
+  if (deferred_.pending(LibraryAction::LibraryLoad)) {
+    deferred_.drain([this](LibraryAction action) {
+      if (action == LibraryAction::LibraryLoad) {
+        loadFiles();
+        rebuildFilteredFileIndexes();
+        requestUpdate();
+      }
+      return false;  // no early-out: LibraryLoad is the only action pending here
+    });
+    return;  // skip input handling on the load tick (placeholder was painted)
   }
 
   if (subActivity) {
@@ -919,31 +931,40 @@ void MyLibraryActivity::loop() {
 
 void MyLibraryActivity::loopSubActivity() {
   subActivity->loop();
-  if (pendingSearchSubmit || pendingSearchCancel) {
-    const bool shouldApplySearch = pendingSearchSubmit;
-    const std::string submittedQuery = pendingSearchQuery;
-    pendingSearchSubmit = false;
-    pendingSearchCancel = false;
-    pendingSearchQuery.clear();
-    exitActivity();
-    if (shouldApplySearch) {
-      setSearchQuery(submittedQuery);
+  // Drain the deferred subactivity resolutions AFTER subActivity->loop() returns
+  // (the callbacks post from inside it) to avoid use-after-free. Each resolution
+  // exits the subactivity, so it returns true to stop the drain.
+  deferred_.drain([this](LibraryAction action) {
+    switch (action) {
+      case LibraryAction::SearchResolve: {
+        const bool shouldApplySearch = searchSubmitWins_;
+        const std::string submittedQuery = pendingSearchQuery;
+        searchSubmitWins_ = false;
+        pendingSearchQuery.clear();
+        exitActivity();
+        if (shouldApplySearch) {
+          setSearchQuery(submittedQuery);
+        }
+        requestUpdate();
+        return true;
+      }
+      case LibraryAction::RenameResolve: {
+        const bool shouldApplyRename = renameSubmitWins_;
+        const std::string typed = pendingRenameBase;
+        renameSubmitWins_ = false;
+        pendingRenameBase.clear();
+        exitActivity();
+        if (shouldApplyRename) {
+          renameSelectedImage(typed);
+        } else {
+          requestUpdate();
+        }
+        return true;
+      }
+      default:
+        return false;
     }
-    requestUpdate();
-  }
-  if (pendingRenameSubmit || pendingRenameCancel) {
-    const bool shouldApplyRename = pendingRenameSubmit;
-    const std::string typed = pendingRenameBase;
-    pendingRenameSubmit = false;
-    pendingRenameCancel = false;
-    pendingRenameBase.clear();
-    exitActivity();
-    if (shouldApplyRename) {
-      renameSelectedImage(typed);
-    } else {
-      requestUpdate();
-    }
-  }
+  });
 }
 
 void MyLibraryActivity::loopMessagePopup() {
@@ -1447,7 +1468,7 @@ void MyLibraryActivity::render(Activity::RenderLock&&) {
   // A3 paint-then-load placeholder: SD scan deferred to next loop tick.
   // Draw a centered "Loading library…" indicator in the list area so the
   // first frame is meaningful instead of an empty list.
-  if (pendingLibraryLoad) {
+  if (deferred_.pending(LibraryAction::LibraryLoad)) {
     const int loadingFont = UI_10_FONT_ID;
     const char* msg = tr(STR_LOADING_LIBRARY);
     const int msgW = renderer.getTextWidth(loadingFont, msg);
