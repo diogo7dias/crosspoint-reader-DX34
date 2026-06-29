@@ -165,6 +165,12 @@ class CrossPointSettings {
     VERDANA = 21,    // humanist sans-serif reader font (sizes 10, 12, 14, 16, 17)
     // 22 (PIXELOPERATOR) removed — kept as an enum gap so a persisted value
     // normalizes to CHAREINK. (Pixel Operator remains the UI font; unrelated.)
+    MERRIWEATHER = 23,  // serif reader font (SD-only; sizes 10..18, all 4 weights)
+    PLAYFAIR = 24,      // high-contrast serif reader font (SD-only; sizes 10..18)
+    GALMURI = 25,       // pixel font (SD-only; native crisp 14px/28px, mapped onto 10..18).
+                        // NOTE distinct from the old removed GALMURI=9 gap (do not reuse 9).
+    VOLLKORN = 26,      // serif reader font (SD-only; sizes 10..18, all 4 weights, real kerning).
+                        // NOTE distinct from the old removed VOLLKORN=2 gap (do not reuse 2).
     FONT_FAMILY_COUNT
   };
   enum FONT_SIZE {
@@ -204,42 +210,51 @@ class CrossPointSettings {
     FIRST_LINE_INDENT_MODE_COUNT
   };
   enum READER_STYLE_MODE { READER_STYLE_USER = 0, READER_STYLE_HYBRID = 1, READER_STYLE_MODE_COUNT };
-  // Ordered by visual stroke weight (lightest -> heaviest) so the settings
-  // picker reads naturally. The numeric values ARE the picker row order (generic
-  // ENUM settings store the option index), so this order is also the on-disk
-  // value. Files written before the weight-order renumber (Crisp=0,Dark=1,
-  // Bionic=2,Thin=3) are migrated in JsonSettingsIO via
-  // migrateTextRenderModeToWeightOrder(); see CrossPointSettings.cpp.
+  // User-facing text render: two options only — Normal (plain render, no weight
+  // effect) and Dark (a heavier pass). The numeric values ARE the picker row order
+  // (generic ENUM settings store the option index). Older files used a 5-way
+  // weight-order palette (Thin0 Crisp1 Medium2 Dark3 Bionic4), and even older ones
+  // a 4-way order; both are collapsed to Normal/Dark on load in JsonSettingsIO
+  // (gated by the textRenderModeNormalDark flag).
   enum TEXT_RENDER_MODE {
-    // Thin: in the 1-bit reading blit, drop the lightest anti-alias edge ring
-    // (light-grey shade) instead of promoting every non-white shade to black.
-    // Yields the skinniest, least-blobby small text. Handled in GfxRenderer.
-    TEXT_RENDER_THIN = 0,
-    TEXT_RENDER_CRISP = 1,
-    // Medium: Crisp shading plus a 1-pixel rightward smear of every ink pixel.
-    // Sits between Crisp and Dark in weight; still a fast 1-bit blit (no
-    // grayscale refresh cost). Handled in GfxRenderer renderChar.
-    TEXT_RENDER_MEDIUM = 2,
-    TEXT_RENDER_DARK = 3,
-    TEXT_RENDER_BIONIC = 4,
+    TEXT_RENDER_NORMAL = 0,  // plain 1-bit blit, no weight effect (engine "crisp" style)
+    TEXT_RENDER_DARK = 1,    // heavier/darker pass (engine "dark" style)
     TEXT_RENDER_MODE_COUNT
   };
-  // Maps a pre-weight-order render-mode value (Crisp=0,Dark=1,Bionic=2,Thin=3)
-  // to the current weight-order enum. Pure + header-inline so JsonSettingsIO and
-  // host tests share one source of truth. Unknown input -> Crisp.
+  // Engine text-render-STYLE palette fed to GfxRenderer::setTextRenderStyle. NOT the
+  // user setting — these are the renderer's historical weight-order blit styles, of
+  // which only Crisp + Dark are now reachable (via renderStyleForTextMode). Kept as
+  // named constants so the status bar + OOM recovery can force plain (crisp) text,
+  // and so old persisted values migrate through the same numbering.
+  static constexpr uint8_t kRenderStyleThin = 0;
+  static constexpr uint8_t kRenderStyleCrisp = 1;
+  static constexpr uint8_t kRenderStyleMedium = 2;
+  static constexpr uint8_t kRenderStyleDark = 3;
+  static constexpr uint8_t kRenderStyleBionic = 4;
+  // Translate a user render mode to the engine render style passed to the renderer.
+  static constexpr uint8_t renderStyleForTextMode(const uint8_t mode) {
+    return mode == TEXT_RENDER_DARK ? kRenderStyleDark : kRenderStyleCrisp;
+  }
+  // Maps a pre-weight-order render-mode value (Crisp=0,Dark=1,Bionic=2,Thin=3) to
+  // the weight-order STYLE palette. Pure + header-inline. Unknown input -> Crisp.
   static constexpr uint8_t migrateTextRenderModeToWeightOrder(const uint8_t legacy) {
     switch (legacy) {
       case 0:
-        return TEXT_RENDER_CRISP;  // old Crisp(0)  -> 1
+        return kRenderStyleCrisp;  // old Crisp(0)  -> 1
       case 1:
-        return TEXT_RENDER_DARK;  // old Dark(1)   -> 3
+        return kRenderStyleDark;  // old Dark(1)   -> 3
       case 2:
-        return TEXT_RENDER_BIONIC;  // old Bionic(2) -> 4
+        return kRenderStyleBionic;  // old Bionic(2) -> 4
       case 3:
-        return TEXT_RENDER_THIN;  // old Thin(3)   -> 0
+        return kRenderStyleThin;  // old Thin(3)   -> 0
       default:
-        return TEXT_RENDER_CRISP;
+        return kRenderStyleCrisp;
     }
+  }
+  // Collapse a weight-order STYLE value (0..4) to the 2-way user mode: only the
+  // Dark style maps to Dark; every other style is Normal.
+  static constexpr uint8_t collapseRenderStyleToMode(const uint8_t style) {
+    return style == kRenderStyleDark ? TEXT_RENDER_DARK : TEXT_RENDER_NORMAL;
   }
   enum EXTRA_PARAGRAPH_SPACING_LEVEL {
     EXTRA_SPACING_OFF = 0,
@@ -248,17 +263,40 @@ class CrossPointSettings {
     EXTRA_SPACING_L = 3,
     EXTRA_SPACING_XL = 4,
     EXTRA_SPACING_XXL = 5,
+    EXTRA_SPACING_XXXL = 6,  // ~80% of line height (appended; existing 0..5 unchanged)
     EXTRA_PARAGRAPH_SPACING_COUNT
   };
 
+  // Visual order (the picker stores the index == enum value). Midpoints inserted
+  // between the original five, plus a new top step, so persisted pre-insert values
+  // are remapped on load (migrateWordSpacingToMidpoints + JsonSettingsIO flag).
   enum WORD_SPACING_MODE {
-    WORD_SPACING_TIGHT = 0,
-    WORD_SPACING_NORMAL = 1,
-    WORD_SPACING_WIDE = 2,
-    WORD_SPACING_VERY_WIDE = 3,
-    WORD_SPACING_EXTRA_WIDE = 4,
+    WORD_SPACING_TIGHT = 0,       // -30%
+    WORD_SPACING_NORMAL = 1,      // 0%
+    WORD_SPACING_P40 = 2,         // +40%  (inserted)
+    WORD_SPACING_WIDE = 3,        // +80%
+    WORD_SPACING_P115 = 4,        // +115% (inserted)
+    WORD_SPACING_VERY_WIDE = 5,   // +150%
+    WORD_SPACING_P195 = 6,        // +195% (inserted)
+    WORD_SPACING_EXTRA_WIDE = 7,  // +240%
+    WORD_SPACING_P300 = 8,        // +300% (inserted, after 240)
     WORD_SPACING_MODE_COUNT
   };
+  // Remap a pre-midpoint persisted word-spacing value (TIGHT0 NORMAL1 WIDE2
+  // VERY_WIDE3 EXTRA_WIDE4) to the current visual-order enum. Identity for the
+  // two lowest (0,1); the three wide steps shift up past the inserted midpoints.
+  static constexpr uint8_t migrateWordSpacingToMidpoints(const uint8_t legacy) {
+    switch (legacy) {
+      case 2:
+        return WORD_SPACING_WIDE;  // old +80%  (2) -> 3
+      case 3:
+        return WORD_SPACING_VERY_WIDE;  // old +150% (3) -> 5
+      case 4:
+        return WORD_SPACING_EXTRA_WIDE;  // old +240% (4) -> 7
+      default:
+        return legacy <= WORD_SPACING_NORMAL ? legacy : WORD_SPACING_NORMAL;
+    }
+  }
 
   enum HIGHLIGHT_MODE { HIGHLIGHT_WORD = 0, HIGHLIGHT_PAGE = 1, HIGHLIGHT_MODE_COUNT };
 
@@ -357,7 +395,7 @@ class CrossPointSettings {
   uint8_t wordSpacingPercent = WORD_SPACING_NORMAL;
   uint8_t firstLineIndentMode = INDENT_BOOK;
   uint8_t readerStyleMode = READER_STYLE_USER;
-  uint8_t textRenderMode = TEXT_RENDER_CRISP;
+  uint8_t textRenderMode = TEXT_RENDER_NORMAL;
   // Legacy binary-compat field; always 0. Do not remove (breaks serialization).
   uint8_t textAntiAliasing = 0;
   // Factory LUT grayscale (off-by-default; ships behind a settings toggle for first release).
@@ -501,19 +539,35 @@ class CrossPointSettings {
 // order and the legacy->weight-order migration map so a future renumber can't
 // silently desync the picker, the renderer literals (GfxRenderer.cpp), or the
 // JsonSettingsIO migration.
-static_assert(CrossPointSettings::TEXT_RENDER_THIN == 0, "render-mode weight order");
-static_assert(CrossPointSettings::TEXT_RENDER_CRISP == 1, "render-mode weight order");
-static_assert(CrossPointSettings::TEXT_RENDER_MEDIUM == 2, "render-mode weight order");
-static_assert(CrossPointSettings::TEXT_RENDER_DARK == 3, "render-mode weight order");
-static_assert(CrossPointSettings::TEXT_RENDER_BIONIC == 4, "render-mode weight order");
-static_assert(CrossPointSettings::TEXT_RENDER_MODE_COUNT == 5, "render-mode count");
-// Legacy (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight order.
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(0) == CrossPointSettings::TEXT_RENDER_CRISP, "");
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(1) == CrossPointSettings::TEXT_RENDER_DARK, "");
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(2) == CrossPointSettings::TEXT_RENDER_BIONIC, "");
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(3) == CrossPointSettings::TEXT_RENDER_THIN, "");
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(99) == CrossPointSettings::TEXT_RENDER_CRISP,
+static_assert(CrossPointSettings::kRenderStyleThin == 0, "render-style weight order");
+static_assert(CrossPointSettings::kRenderStyleCrisp == 1, "render-style weight order");
+static_assert(CrossPointSettings::kRenderStyleMedium == 2, "render-style weight order");
+static_assert(CrossPointSettings::kRenderStyleDark == 3, "render-style weight order");
+static_assert(CrossPointSettings::kRenderStyleBionic == 4, "render-style weight order");
+static_assert(CrossPointSettings::TEXT_RENDER_NORMAL == 0, "user render mode order");
+static_assert(CrossPointSettings::TEXT_RENDER_DARK == 1, "user render mode order");
+static_assert(CrossPointSettings::TEXT_RENDER_MODE_COUNT == 2, "render-mode count");
+// renderStyleForTextMode: Normal -> crisp style, Dark -> dark style.
+static_assert(CrossPointSettings::renderStyleForTextMode(CrossPointSettings::TEXT_RENDER_NORMAL) ==
+                  CrossPointSettings::kRenderStyleCrisp,
+              "");
+static_assert(CrossPointSettings::renderStyleForTextMode(CrossPointSettings::TEXT_RENDER_DARK) ==
+                  CrossPointSettings::kRenderStyleDark,
+              "");
+// Legacy (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight-order STYLE palette.
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(0) == CrossPointSettings::kRenderStyleCrisp, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(1) == CrossPointSettings::kRenderStyleDark, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(2) == CrossPointSettings::kRenderStyleBionic, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(3) == CrossPointSettings::kRenderStyleThin, "");
+static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(99) == CrossPointSettings::kRenderStyleCrisp,
               "unknown legacy render mode -> crisp");
+// Weight-order STYLE -> 2-way user mode collapse (only Dark stays Dark).
+static_assert(CrossPointSettings::collapseRenderStyleToMode(CrossPointSettings::kRenderStyleDark) ==
+                  CrossPointSettings::TEXT_RENDER_DARK,
+              "");
+static_assert(CrossPointSettings::collapseRenderStyleToMode(CrossPointSettings::kRenderStyleCrisp) ==
+                  CrossPointSettings::TEXT_RENDER_NORMAL,
+              "");
 
 // Helper macro to access settings
 #define SETTINGS CrossPointSettings::getInstance()

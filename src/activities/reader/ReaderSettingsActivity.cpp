@@ -207,18 +207,23 @@ void ReaderSettingsActivity::buildSettingsList() {
   };
 
   // --- Build reader settings directly (no intermediate vector) ---
-  // 6 built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
-  // BOOKERLY, GEORGIA, LATO, HELVETICA, VERDANA).
+  // Built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
+  // BOOKERLY, GEORGIA, LATO, HELVETICA, VERDANA, then the SD-only MERRIWEATHER,
+  // PLAYFAIR). Keep in sync with FontFamilyPicker's kBuiltinFamilyLabels.
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                                      {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
-                                      StrId::STR_HELVETICA, StrId::STR_VERDANA}));
+                                      StrId::STR_HELVETICA, StrId::STR_VERDANA,
+#ifdef CROSSPOINT_SD_FONTS
+                                      StrId::STR_MERRIWEATHER, StrId::STR_PLAYFAIR, StrId::STR_GALMURI,
+                                      StrId::STR_VOLLKORN,
+#endif
+                                     }));
   // Text render mode sits directly under Font Family (2nd row) per user pref.
-  // Option order MUST match the weight-ordered TEXT_RENDER_MODE enum values
-  // (Thin=0, Crisp=1, Medium=2, Dark=3, Bionic=4) — generic ENUM settings store
-  // the selected option index as the persisted value.
+  // Two options only: Normal (no weight effect) and Dark. Option order MUST match
+  // the TEXT_RENDER_MODE enum (Normal=0, Dark=1) — generic ENUM settings store the
+  // selected option index as the persisted value.
   pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                     {StrId::STR_RENDER_THIN, StrId::STR_RENDER_CRISP, StrId::STR_RENDER_MEDIUM,
-                                      StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC}));
+                                     {StrId::STR_RENDER_NORMAL, StrId::STR_RENDER_DARK}));
   pushReader(ReaderSettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
@@ -247,12 +252,14 @@ void ReaderSettingsActivity::buildSettingsList() {
       StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
       {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacingPercent,
-                                     {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80,
-                                      StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240}));
+                                     {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P40,
+                                      StrId::STR_WSPACING_P80, StrId::STR_WSPACING_P115, StrId::STR_WSPACING_P150,
+                                      StrId::STR_WSPACING_P195, StrId::STR_WSPACING_P240, StrId::STR_WSPACING_P300}));
   pushReader(
       ReaderSettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
                               {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
-                               StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50}));
+                               StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50,
+                               StrId::STR_PARA_SPACING_80}));
   if (!txt) {
     readerSettings.push_back(
         ReaderSettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled));
@@ -284,6 +291,17 @@ void ReaderSettingsActivity::buildSettingsList() {
       StrId::STR_STATUS_BOOK_PERCENT_POSITION, &CrossPointSettings::statusBarBookPercentagePosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_BAR, &CrossPointSettings::statusBarShowBookBar));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_BAR_POSITION, &CrossPointSettings::statusBarBookBarPosition,
+                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER,
+                                                        &CrossPointSettings::statusBarShowBookPageCounter));
+  statusBarSettings.push_back(ReaderSettingInfo::Enum(
+      StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
+      {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
+       StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
   statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PERCENT,
                                                         &CrossPointSettings::statusBarShowChapterPercentage));
   statusBarSettings.push_back(ReaderSettingInfo::Enum(
@@ -291,31 +309,10 @@ void ReaderSettingsActivity::buildSettingsList() {
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
   statusBarSettings.push_back(
-      ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_BAR, &CrossPointSettings::statusBarShowBookBar));
-  statusBarSettings.push_back(
-      ReaderSettingInfo::Enum(StrId::STR_STATUS_BOOK_BAR_POSITION, &CrossPointSettings::statusBarBookBarPosition,
-                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(
       ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_BAR, &CrossPointSettings::statusBarShowChapterBar));
   statusBarSettings.push_back(
       ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_BAR_POSITION, &CrossPointSettings::statusBarChapterBarPosition,
                               {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(
-      ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_TITLE, &CrossPointSettings::statusBarShowChapterTitle));
-  statusBarSettings.push_back(
-      ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
-                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
-  statusBarSettings.push_back(
-      ReaderSettingInfo::Enum(StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
-                              {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR}));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
-                                                        &CrossPointSettings::statusBarNoTitleTruncation));
-  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER,
-                                                        &CrossPointSettings::statusBarShowBookPageCounter));
-  statusBarSettings.push_back(ReaderSettingInfo::Enum(
-      StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
-      {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
-       StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
   statusBarSettings.push_back(
       ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT, &CrossPointSettings::statusBarShowPagesLeft));
   statusBarSettings.push_back(ReaderSettingInfo::Enum(
@@ -328,6 +325,16 @@ void ReaderSettingsActivity::buildSettingsList() {
       StrId::STR_STATUS_CHAPTER_NUMBER_POSITION, &CrossPointSettings::statusBarChapterNumberPosition,
       {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
        StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_TITLE, &CrossPointSettings::statusBarShowChapterTitle));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_CHAPTER_TITLE_POSITION, &CrossPointSettings::statusBarTitlePosition,
+                              {StrId::STR_STATUS_POSITION_TOP, StrId::STR_STATUS_POSITION_BOTTOM}));
+  statusBarSettings.push_back(
+      ReaderSettingInfo::Enum(StrId::STR_STATUS_TITLE_CONTENT, &CrossPointSettings::statusBarTitleContent,
+                              {StrId::STR_STATUS_TITLE_CONTENT_CHAPTER, StrId::STR_STATUS_TITLE_CONTENT_BOOK_AUTHOR}));
+  statusBarSettings.push_back(ReaderSettingInfo::Toggle(StrId::STR_STATUS_NO_TITLE_TRUNCATION,
+                                                        &CrossPointSettings::statusBarNoTitleTruncation));
   statusBarSettings.push_back(
       ReaderSettingInfo::Toggle(StrId::STR_STATUS_QUOTE_COUNT, &CrossPointSettings::statusBarShowQuoteCount));
   statusBarSettings.push_back(ReaderSettingInfo::Enum(

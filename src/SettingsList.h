@@ -70,7 +70,12 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     // --- Reader ---
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                                   {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
-                                   StrId::STR_HELVETICA, StrId::STR_VERDANA},
+                                   StrId::STR_HELVETICA, StrId::STR_VERDANA,
+#ifdef CROSSPOINT_SD_FONTS
+                                   StrId::STR_MERRIWEATHER, StrId::STR_PLAYFAIR, StrId::STR_GALMURI,
+                                   StrId::STR_VOLLKORN,
+#endif
+                                  },
                                   "fontFamily", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                   {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}, "fontSize",
@@ -111,16 +116,17 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                           {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW},
                           "orientation", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacingPercent,
-                                  {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P80,
-                                   StrId::STR_WSPACING_P150, StrId::STR_WSPACING_P240},
+                                  {StrId::STR_WSPACING_M30, StrId::STR_WSPACING_0, StrId::STR_WSPACING_P40,
+                                   StrId::STR_WSPACING_P80, StrId::STR_WSPACING_P115, StrId::STR_WSPACING_P150,
+                                   StrId::STR_WSPACING_P195, StrId::STR_WSPACING_P240, StrId::STR_WSPACING_P300},
                                   "wordSpacingPercent", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacingLevel,
                                   {StrId::STR_NONE_OPT, StrId::STR_PARA_SPACING_17, StrId::STR_PARA_SPACING_25,
-                                   StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50},
+                                   StrId::STR_PARA_SPACING_33, StrId::STR_PARA_SPACING_42, StrId::STR_PARA_SPACING_50,
+                                   StrId::STR_PARA_SPACING_80},
                                   "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                  {StrId::STR_RENDER_THIN, StrId::STR_RENDER_CRISP, StrId::STR_RENDER_MEDIUM,
-                                   StrId::STR_RENDER_DARK, StrId::STR_RENDER_BIONIC},
+                                  {StrId::STR_RENDER_NORMAL, StrId::STR_RENDER_DARK},
                                   "textRenderMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText, "smoothText",
                                     StrId::STR_CAT_READER));

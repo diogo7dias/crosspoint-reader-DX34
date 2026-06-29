@@ -25,12 +25,20 @@ int wordSpacingSettingToPixelDelta(const uint8_t mode, const int baseSpaceWidth)
   switch (mode) {
     case 0:  // Tight (-30%)
       return -(baseSpaceWidth * 3 / 10);
-    case 2:  // Wide (+80%)
+    case 2:  // +40%
+      return (baseSpaceWidth * 2 / 5);
+    case 3:  // Wide (+80%)
       return (baseSpaceWidth * 4 / 5);
-    case 3:  // Very Wide (+150%)
+    case 4:  // +115%
+      return (baseSpaceWidth * 23 / 20);
+    case 5:  // Very Wide (+150%)
       return (baseSpaceWidth * 3 / 2);
-    case 4:  // Extra Wide (+240%)
+    case 6:  // +195%
+      return (baseSpaceWidth * 39 / 20);
+    case 7:  // Extra Wide (+240%)
       return (baseSpaceWidth * 12 / 5);
+    case 8:  // +300%
+      return (baseSpaceWidth * 3);
     case 1:  // Normal (0%)
     default:
       return 0;

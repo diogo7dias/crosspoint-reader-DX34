@@ -66,3 +66,44 @@
 #define LATO_18_FONT_ID (-770132080)
 #define HELVETICA_18_FONT_ID (943921862)
 #define VERDANA_18_FONT_ID (2114719867)
+
+// --- Merriweather + Playfair Display (SD-only Tier-1 families: tables in flash, bitmaps in SD packs) ---
+// Brand-new families, so EVERY size is name-hashed (name_font_id in build-font-ids.sh) and
+// APPENDED here — same stable-id rule as the extra-size block above. Both carry a real
+// bold-italic instance (4 weight names hashed per id). Sizes 10..18, all SD-gated in main.cpp.
+#define MERRIWEATHER_10_FONT_ID (474655552)
+#define MERRIWEATHER_11_FONT_ID (-606843941)
+#define MERRIWEATHER_12_FONT_ID (-980914712)
+#define MERRIWEATHER_13_FONT_ID (-830270881)
+#define MERRIWEATHER_14_FONT_ID (506990549)
+#define MERRIWEATHER_15_FONT_ID (-1015801518)
+#define MERRIWEATHER_16_FONT_ID (1378690)
+#define MERRIWEATHER_17_FONT_ID (-1787212573)
+#define MERRIWEATHER_18_FONT_ID (1957572858)
+#define PLAYFAIR_10_FONT_ID (-969321885)
+#define PLAYFAIR_11_FONT_ID (493939792)
+#define PLAYFAIR_12_FONT_ID (-501493939)
+#define PLAYFAIR_13_FONT_ID (-818259531)
+#define PLAYFAIR_14_FONT_ID (-1393258150)
+#define PLAYFAIR_15_FONT_ID (1294861658)
+#define PLAYFAIR_16_FONT_ID (573896367)
+#define PLAYFAIR_17_FONT_ID (-820597265)
+#define PLAYFAIR_18_FONT_ID (-1912081502)
+
+// --- Galmuri (SD-only PIXEL family; native crisp sizes 14px=1x + 28px=2x, 3 weights) ---
+// Name-hashed + APPENDED (stable-id rule). The reader maps the 10..18 size scale onto
+// these two native pixel sizes (10..15 -> 14, 16..18 -> 28); a pixel font has no crisp
+// in-between sizes. Bold-italic synthesised (3 weight names hashed).
+#define GALMURI_14_FONT_ID (-412052972)
+#define GALMURI_28_FONT_ID (1316825346)
+
+// --- Vollkorn (SD-only Tier-1 serif family; sizes 10..18, 4 real weights, real kerning) ---
+#define VOLLKORN_10_FONT_ID (1993148124)
+#define VOLLKORN_11_FONT_ID (1379963285)
+#define VOLLKORN_12_FONT_ID (1159099680)
+#define VOLLKORN_13_FONT_ID (1530087009)
+#define VOLLKORN_14_FONT_ID (-852618491)
+#define VOLLKORN_15_FONT_ID (745130094)
+#define VOLLKORN_16_FONT_ID (-537170164)
+#define VOLLKORN_17_FONT_ID (-1872023147)
+#define VOLLKORN_18_FONT_ID (-1379873034)

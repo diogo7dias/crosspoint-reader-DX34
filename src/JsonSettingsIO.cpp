@@ -38,11 +38,13 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["paragraphAlignment"] = theme.paragraphAlignment;
   obj["extraParagraphSpacingLevel"] = theme.extraParagraphSpacingLevel;
   obj["wordSpacingPercent"] = theme.wordSpacingPercent;
+  obj["wordSpacingMidpoints"] = true;
   obj["firstLineIndentMode"] = theme.firstLineIndentMode;
   obj["readerStyleMode"] = theme.readerStyleMode;
   obj["textRenderMode"] = theme.textRenderMode;
   obj["textRenderModeV2"] = true;
   obj["textRenderModeWeightOrder"] = true;
+  obj["textRenderModeNormalDark"] = true;
   obj["orientation"] = theme.orientation;
   obj["embeddedStyle"] = theme.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
   obj["hyphenationEnabled"] = theme.hyphenationEnabled;
@@ -100,9 +102,18 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.extraParagraphSpacingLevel =
       clampEnum(obj["extraParagraphSpacingLevel"] | (uint8_t)CrossPointSettings::EXTRA_SPACING_M,
                 CrossPointSettings::EXTRA_PARAGRAPH_SPACING_COUNT, CrossPointSettings::EXTRA_SPACING_M);
-  theme.wordSpacingPercent =
-      clampEnum(obj["wordSpacingPercent"] | (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL,
-                CrossPointSettings::WORD_SPACING_MODE_COUNT, CrossPointSettings::WORD_SPACING_NORMAL);
+  {
+    const uint8_t raw = obj["wordSpacingPercent"] | (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
+    if (obj["wordSpacingMidpoints"].isNull()) {
+      // Pre-midpoint 5-value numbering -> remap the three wide steps up past the
+      // inserted midpoints (TIGHT/NORMAL unchanged).
+      theme.wordSpacingPercent = CrossPointSettings::migrateWordSpacingToMidpoints(raw);
+    } else {
+      theme.wordSpacingPercent = raw < CrossPointSettings::WORD_SPACING_MODE_COUNT
+                                     ? raw
+                                     : (uint8_t)CrossPointSettings::WORD_SPACING_NORMAL;
+    }
+  }
   theme.firstLineIndentMode =
       clampEnum(obj["firstLineIndentMode"] | (uint8_t)CrossPointSettings::INDENT_BOOK,
                 CrossPointSettings::FIRST_LINE_INDENT_MODE_COUNT, CrossPointSettings::INDENT_BOOK);
@@ -116,22 +127,27 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
         (raw < CrossPointSettings::READER_STYLE_MODE_COUNT) ? raw : (uint8_t)CrossPointSettings::READER_STYLE_USER;
   }
   if (obj["textRenderMode"].isNull()) {
-    // No mode stored: default to Crisp (do NOT run migration — the missing-key
-    // default of TEXT_RENDER_CRISP is now 1, which would falsely trip the
-    // pre-v2 "raw >= 1 -> Dark" branch below).
-    theme.textRenderMode = (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+    theme.textRenderMode = (uint8_t)CrossPointSettings::TEXT_RENDER_NORMAL;
   } else {
     const uint8_t raw = obj["textRenderMode"] | (uint8_t)0;
-    if (obj["textRenderModeV2"].isNull()) {
-      // Pre-v2 format: only Crisp/Dark existed; any non-zero -> Dark.
+    if (!obj["textRenderModeNormalDark"].isNull()) {
+      // Already the 2-way user mode (Normal=0, Dark=1).
       theme.textRenderMode =
-          raw >= 1 ? (uint8_t)CrossPointSettings::TEXT_RENDER_DARK : (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
-    } else if (obj["textRenderModeWeightOrder"].isNull()) {
-      // v2 numbering (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight order.
-      theme.textRenderMode = CrossPointSettings::migrateTextRenderModeToWeightOrder(raw);
+          raw < CrossPointSettings::TEXT_RENDER_MODE_COUNT ? raw : (uint8_t)CrossPointSettings::TEXT_RENDER_NORMAL;
     } else {
-      theme.textRenderMode =
-          raw < CrossPointSettings::TEXT_RENDER_MODE_COUNT ? raw : (uint8_t)CrossPointSettings::TEXT_RENDER_CRISP;
+      // Resolve older formats to the weight-order STYLE palette, then collapse to
+      // the 2-way user mode (only the Dark style stays Dark).
+      uint8_t style;
+      if (obj["textRenderModeV2"].isNull()) {
+        // Pre-v2: only Crisp/Dark existed; any non-zero -> Dark style.
+        style = raw >= 1 ? CrossPointSettings::kRenderStyleDark : CrossPointSettings::kRenderStyleCrisp;
+      } else if (obj["textRenderModeWeightOrder"].isNull()) {
+        // v2 numbering (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight-order style.
+        style = CrossPointSettings::migrateTextRenderModeToWeightOrder(raw);
+      } else {
+        style = raw;  // already weight-order style (0..4)
+      }
+      theme.textRenderMode = CrossPointSettings::collapseRenderStyleToMode(style);
     }
   }
   theme.hyphenationEnabled = obj["hyphenationEnabled"] | (uint8_t)0;
@@ -486,11 +502,13 @@ void JsonSettingsIO::populateSettingsDoc(const CrossPointSettings& s, JsonDocume
   // Legacy compatibility key for older builds that still expect a toggle.
   doc["extraParagraphSpacing"] = s.extraParagraphSpacingLevel != CrossPointSettings::EXTRA_SPACING_OFF;
   doc["wordSpacingPercent"] = s.wordSpacingPercent;
+  doc["wordSpacingMidpoints"] = true;
   doc["firstLineIndentMode"] = s.firstLineIndentMode;
   doc["readerStyleMode"] = s.readerStyleMode;
   doc["textRenderMode"] = s.textRenderMode;
   doc["textRenderModeV2"] = true;
   doc["textRenderModeWeightOrder"] = true;
+  doc["textRenderModeNormalDark"] = true;
   doc["useFactoryLUT"] = s.useFactoryLUT;
   doc["shortPwrBtn"] = s.shortPwrBtn;
   doc["orientation"] = s.orientation;
@@ -703,7 +721,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
   {
     const uint8_t raw = doc["wordSpacingPercent"] | (uint8_t)S::WORD_SPACING_NORMAL;
-    if (raw < S::WORD_SPACING_MODE_COUNT) {
+    if (doc["wordSpacingMidpoints"].isNull()) {
+      // Pre-midpoint 5-value numbering -> remap the three wide steps up past the
+      // inserted midpoints (TIGHT/NORMAL unchanged).
+      s.wordSpacingPercent = S::migrateWordSpacingToMidpoints(raw);
+      if (needsResave) *needsResave = true;
+    } else if (raw < S::WORD_SPACING_MODE_COUNT) {
       s.wordSpacingPercent = raw;
     } else {
       s.wordSpacingPercent = (uint8_t)S::WORD_SPACING_NORMAL;
@@ -725,28 +748,33 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                                   S::READER_STYLE_USER);
   }
   if (doc["textRenderMode"].isNull()) {
-    s.textRenderMode = (uint8_t)S::TEXT_RENDER_CRISP;
+    s.textRenderMode = (uint8_t)S::TEXT_RENDER_NORMAL;
     if (needsResave) {
       *needsResave = true;
     }
   } else {
-    // Render-mode enum has been renumbered to weight order (Thin=0, Crisp=1,
-    // Medium=2, Dark=3, Bionic=4). Older files are migrated by flag:
+    // Render mode is now a 2-way user setting (Normal=0, Dark=1). Older files are
+    // migrated by flag: textRenderModeNormalDark -> already current; otherwise
+    // resolve to the weight-order STYLE palette and collapse (only Dark stays Dark):
     //   no textRenderModeV2  -> pre-v2 (only Crisp/Dark): non-zero -> Dark.
     //   textRenderModeV2 only -> v2 numbering (Crisp=0,Dark=1,Bionic=2,Thin=3).
-    //   textRenderModeWeightOrder -> already current.
-    const uint8_t raw = doc["textRenderMode"] | (uint8_t)S::TEXT_RENDER_CRISP;
-    if (doc["textRenderModeV2"].isNull()) {
-      s.textRenderMode = raw >= 1 ? (uint8_t)S::TEXT_RENDER_DARK : (uint8_t)S::TEXT_RENDER_CRISP;
-    } else if (doc["textRenderModeWeightOrder"].isNull()) {
-      s.textRenderMode = S::migrateTextRenderModeToWeightOrder(raw);
-    } else if (raw >= S::TEXT_RENDER_MODE_COUNT) {
-      s.textRenderMode = (uint8_t)S::TEXT_RENDER_CRISP;
+    //   textRenderModeWeightOrder -> weight-order style (0..4).
+    const uint8_t raw = doc["textRenderMode"] | (uint8_t)S::TEXT_RENDER_NORMAL;
+    if (!doc["textRenderModeNormalDark"].isNull()) {
+      s.textRenderMode = raw < S::TEXT_RENDER_MODE_COUNT ? raw : (uint8_t)S::TEXT_RENDER_NORMAL;
     } else {
-      s.textRenderMode = raw;
-    }
-    if (needsResave && s.textRenderMode != raw) {
-      *needsResave = true;
+      uint8_t style;
+      if (doc["textRenderModeV2"].isNull()) {
+        style = raw >= 1 ? S::kRenderStyleDark : S::kRenderStyleCrisp;
+      } else if (doc["textRenderModeWeightOrder"].isNull()) {
+        style = S::migrateTextRenderModeToWeightOrder(raw);
+      } else {
+        style = raw;
+      }
+      s.textRenderMode = S::collapseRenderStyleToMode(style);
+      if (needsResave) {
+        *needsResave = true;
+      }
     }
   }
   s.textAntiAliasing = 0;

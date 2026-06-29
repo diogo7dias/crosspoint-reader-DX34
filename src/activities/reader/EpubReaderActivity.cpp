@@ -2570,7 +2570,7 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // -DCROSSPOINT_SD_FONTS; only does I/O when the active reader font changes.
   crosspoint::fonts::activateReaderFont(SETTINGS.getReaderFontId());
   renderer.setRenderMode(GfxRenderer::BW);
-  renderer.setTextRenderStyle(SETTINGS.textRenderMode);
+  renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(SETTINGS.textRenderMode));
 
   const int viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
   // Vertically center text on full pages so the visible *ink* sits with equal
@@ -2706,7 +2706,7 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
   // restored here because the early return skips the reset at the tail.
   if (glyphOom > 0) {
     LOG_ERR("ERS", "render-time glyph OOM (%u alloc failures) — discarding partial frame", (unsigned)glyphOom);
-    renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
+    renderer.setTextRenderStyle(CrossPointSettings::kRenderStyleCrisp);
     return false;
   }
 
@@ -2744,7 +2744,7 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     pagesUntilFullRefresh = 1;
   }
 
-  renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
+  renderer.setTextRenderStyle(CrossPointSettings::kRenderStyleCrisp);
   return true;
 }
 

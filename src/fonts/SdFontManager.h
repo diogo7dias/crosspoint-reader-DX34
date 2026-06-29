@@ -30,6 +30,7 @@
 #include "EpdBinTablesFont.h"   // EpdBinTablesFont (Tier-2: tables reconstructed from the pack)
 #include "EpdFont.h"
 #include "EpdFontData.h"
+#include <Logging.h>
 
 namespace crosspoint {
 namespace fonts {
@@ -51,7 +52,13 @@ struct SdFontIo {
 class SdFontManager {
  public:
   static constexpr int kMaxWeights = 4;  // regular / bold / italic / bolditalic
-  static constexpr int kMaxFonts = 48;   // 5 families x 9 sizes = 45
+  // 9 reader families now register here (5 flash + Merriweather/Playfair/Vollkorn
+  // at 9 sizes = 8x9=72, plus Galmuri's 2 native pixel sizes = 74). The array only
+  // holds small per-font structs (pointers + ids; the heavy Tier-2 buffers live in
+  // slots_), so headroom is cheap. registerFont LOGs + drops past this — keep it
+  // comfortably above the registration count or new fonts silently vanish from the
+  // picker and the SD download manifest.
+  static constexpr int kMaxFonts = 96;
   static constexpr int kPathMax = 64;
   static constexpr int kNoFont = -1;
 
@@ -69,7 +76,11 @@ class SdFontManager {
   // serialize from flash) and always fall back when their pack is unavailable.
   void registerFont(int fontId, uint16_t sizePt, const char* stem, EpdFont* regular, EpdFont* bold, EpdFont* italic,
                     EpdFont* boldItalic, const EpdFontData* slimFallback, bool tablesInFile = false) {
-    if (fontCount_ >= kMaxFonts) return;
+    if (fontCount_ >= kMaxFonts) {
+      LOG_ERR("SDF", "registerFont registry full (kMaxFonts=%d) — dropping id=%d sz=%u stem=%s; bump kMaxFonts",
+              kMaxFonts, fontId, (unsigned)sizePt, stem ? stem : "?");
+      return;
+    }
     Font& f = fonts_[fontCount_++];
     f.fontId = fontId;
     f.sizePt = sizePt;

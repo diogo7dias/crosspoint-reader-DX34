@@ -1002,6 +1002,9 @@ void ChapterHtmlSlimParser::makePages() {
     case 5:  // XXL (50%)
       extraParagraphGap = blockLineHeight / 2;
       break;
+    case 6:  // XXXL (~80%)
+      extraParagraphGap = blockLineHeight * 4 / 5;
+      break;
     case 0:  // Off
     default:
       break;

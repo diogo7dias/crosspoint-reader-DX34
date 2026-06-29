@@ -102,7 +102,7 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
 
   // Status bar chrome always renders crisp, regardless of the book's textRenderMode.
   const uint8_t previousTextRenderStyle = renderer.getTextRenderStyle();
-  renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
+  renderer.setTextRenderStyle(CrossPointSettings::kRenderStyleCrisp);
 
   const bool showBattery = SETTINGS.statusBarShowBattery;
   const bool showBatteryPercentage =

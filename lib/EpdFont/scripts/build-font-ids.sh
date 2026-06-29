@@ -88,6 +88,32 @@ for size in 11 13 15 18; do
 done
 echo ""
 
+# Merriweather + Playfair Display: SD-only Tier-1 serif families. Brand-new, so
+# EVERY size 10..18 is name-hashed (there is no in-flash fallback in the default
+# build — both families are gated behind CROSSPOINT_SD_FONTS). Both carry a real
+# bold-italic instance, so each id hashes four weight names.
+for size in 10 11 12 13 14 15 16 17 18; do
+  echo "#define MERRIWEATHER_${size}_FONT_ID ($(name_font_id merriweather_${size}_regular merriweather_${size}_bold merriweather_${size}_italic merriweather_${size}_bolditalic))"
+  echo "#define PLAYFAIR_${size}_FONT_ID ($(name_font_id playfair_${size}_regular playfair_${size}_bold playfair_${size}_italic playfair_${size}_bolditalic))"
+done
+echo ""
+
+# Galmuri: SD-only PIXEL serif family. Crisp only at integer multiples of its 14px
+# design grid, so only two native sizes are baked — 14 (1x) and 28 (2x) — rendered
+# with --dpi 72. The reader maps the 10..18 scale onto them. Three weights
+# (bold-italic synthesised).
+for size in 14 28; do
+  echo "#define GALMURI_${size}_FONT_ID ($(name_font_id galmuri_${size}_regular galmuri_${size}_bold galmuri_${size}_italic))"
+done
+echo ""
+
+# Vollkorn: SD-only Tier-1 serif family. Sizes 10..18, four real weights. Real
+# pair kerning kept (small kern matrix, unlike Merriweather/Playfair).
+for size in 10 11 12 13 14 15 16 17 18; do
+  echo "#define VOLLKORN_${size}_FONT_ID ($(name_font_id vollkorn_${size}_regular vollkorn_${size}_bold vollkorn_${size}_italic vollkorn_${size}_bolditalic))"
+done
+echo ""
+
 # TT2020: experimental typewriter-emulation font (debug env only). Single
 # size (15) with four faces. Base supplies Regular + Italic; Style E (the
 # "worn" variant) stands in for Bold + BoldItalic. No shared tables.

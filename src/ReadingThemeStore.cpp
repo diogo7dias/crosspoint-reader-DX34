@@ -177,7 +177,7 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
   settings.readerStyleMode = clampRange(theme.readerStyleMode, 0, CrossPointSettings::READER_STYLE_MODE_COUNT - 1,
                                         CrossPointSettings::READER_STYLE_USER);
   settings.textRenderMode = clampRange(theme.textRenderMode, 0, CrossPointSettings::TEXT_RENDER_MODE_COUNT - 1,
-                                       CrossPointSettings::TEXT_RENDER_CRISP);
+                                       CrossPointSettings::TEXT_RENDER_NORMAL);
   settings.orientation =
       clampRange(theme.orientation, 0, CrossPointSettings::ORIENTATION_COUNT - 1, CrossPointSettings::PORTRAIT);
   settings.embeddedStyle = settings.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID ? 1 : 0;
@@ -548,7 +548,7 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.readerStyleMode = clampRange(theme.readerStyleMode, 0, CrossPointSettings::READER_STYLE_MODE_COUNT - 1,
                                           CrossPointSettings::READER_STYLE_USER);
   normalized.textRenderMode = clampRange(theme.textRenderMode, 0, CrossPointSettings::TEXT_RENDER_MODE_COUNT - 1,
-                                         CrossPointSettings::TEXT_RENDER_CRISP);
+                                         CrossPointSettings::TEXT_RENDER_NORMAL);
   normalized.orientation =
       clampRange(theme.orientation, 0, CrossPointSettings::ORIENTATION_COUNT - 1, CrossPointSettings::PORTRAIT);
   normalized.hyphenationEnabled = theme.hyphenationEnabled ? 1 : 0;

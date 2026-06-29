@@ -22,7 +22,7 @@ struct ReadingTheme {
   uint8_t wordSpacingPercent = CrossPointSettings::WORD_SPACING_NORMAL;
   uint8_t firstLineIndentMode = CrossPointSettings::INDENT_BOOK;
   uint8_t readerStyleMode = CrossPointSettings::READER_STYLE_USER;
-  uint8_t textRenderMode = CrossPointSettings::TEXT_RENDER_CRISP;
+  uint8_t textRenderMode = CrossPointSettings::TEXT_RENDER_NORMAL;
   uint8_t orientation = CrossPointSettings::PORTRAIT;
   uint8_t hyphenationEnabled = 0;
   uint8_t statusBarEnabled = 1;

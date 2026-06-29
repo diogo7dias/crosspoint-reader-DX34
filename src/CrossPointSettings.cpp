@@ -438,7 +438,7 @@ bool CrossPointSettings::loadFromBinaryFile() {
   wordSpacingPercent = WORD_SPACING_NORMAL;
   firstLineIndentMode = INDENT_BOOK;
   readerStyleMode = embeddedStyle ? READER_STYLE_HYBRID : READER_STYLE_USER;
-  textRenderMode = TEXT_RENDER_CRISP;
+  textRenderMode = TEXT_RENDER_NORMAL;
   textAntiAliasing = 0;
 
   inputFile.close();
@@ -502,6 +502,20 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return HELVETICA;
     case VERDANA:
       return VERDANA;
+#ifdef CROSSPOINT_SD_FONTS
+    // Merriweather + Playfair are SD-only families (no in-flash fallback). They
+    // exist only in CROSSPOINT_SD_FONTS builds; in the default build a persisted
+    // value falls through to CHAREINK below, so old settings never select a font
+    // that was not compiled in.
+    case MERRIWEATHER:
+      return MERRIWEATHER;
+    case PLAYFAIR:
+      return PLAYFAIR;
+    case GALMURI:
+      return GALMURI;
+    case VOLLKORN:
+      return VOLLKORN;
+#endif
     // Removed families (VOLLKORN 2, GALMURI 9, TT2020 10, BITTER 11, CUSTOM 12,
     // F25_BANK_PRINTER 13, PIXEL32 15, ETBB 16, ROSARIVO 17, COZETTE 19) and any
     // other legacy value collapse to CHAREINK so old settings.json migrates. A
@@ -524,6 +538,16 @@ uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
       return 4;
     case VERDANA:
       return 5;
+#ifdef CROSSPOINT_SD_FONTS
+    case MERRIWEATHER:
+      return 6;
+    case PLAYFAIR:
+      return 7;
+    case GALMURI:
+      return 8;
+    case VOLLKORN:
+      return 9;
+#endif
     case CHAREINK:
     default:
       return 0;
@@ -542,6 +566,16 @@ uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex)
       return HELVETICA;
     case 5:
       return VERDANA;
+#ifdef CROSSPOINT_SD_FONTS
+    case 6:
+      return MERRIWEATHER;
+    case 7:
+      return PLAYFAIR;
+    case 8:
+      return GALMURI;
+    case 9:
+      return VOLLKORN;
+#endif
     case 0:
     default:
       return CHAREINK;
@@ -712,15 +746,23 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
 
 int CrossPointSettings::wordSpacingSettingToPixelDelta(const uint8_t mode, const int baseSpaceWidth) {
   switch (mode) {
-    case WORD_SPACING_TIGHT:
+    case WORD_SPACING_TIGHT:  // -30%
       return -(baseSpaceWidth * 3 / 10);
-    case WORD_SPACING_WIDE:
+    case WORD_SPACING_P40:  // +40%
+      return (baseSpaceWidth * 2 / 5);
+    case WORD_SPACING_WIDE:  // +80%
       return (baseSpaceWidth * 4 / 5);
-    case WORD_SPACING_VERY_WIDE:
+    case WORD_SPACING_P115:  // +115%
+      return (baseSpaceWidth * 23 / 20);
+    case WORD_SPACING_VERY_WIDE:  // +150%
       return (baseSpaceWidth * 3 / 2);
-    case WORD_SPACING_EXTRA_WIDE:
+    case WORD_SPACING_P195:  // +195%
+      return (baseSpaceWidth * 39 / 20);
+    case WORD_SPACING_EXTRA_WIDE:  // +240%
       return (baseSpaceWidth * 12 / 5);
-    case WORD_SPACING_NORMAL:
+    case WORD_SPACING_P300:  // +300%
+      return (baseSpaceWidth * 3);
+    case WORD_SPACING_NORMAL:  // 0%
     default:
       return 0;
   }
@@ -852,6 +894,92 @@ int CrossPointSettings::getReaderFontId() const {
         return VERDANA_17_FONT_ID;
     }
   }
+#ifdef CROSSPOINT_SD_FONTS
+  // Merriweather + Playfair are SD-only families (normalizeFontFamily keeps them
+  // only in CROSSPOINT_SD_FONTS builds), so these blocks are unreachable in the
+  // default build where the family folds to CHAREINK above.
+  if (normalizedFamily == MERRIWEATHER) {
+    switch (normalizedFontSize) {
+      case SIZE_10:
+        return MERRIWEATHER_10_FONT_ID;
+      case SIZE_12:
+        return MERRIWEATHER_12_FONT_ID;
+      case SIZE_14:
+        return MERRIWEATHER_14_FONT_ID;
+      case SIZE_16:
+        return MERRIWEATHER_16_FONT_ID;
+      case SIZE_11:
+        return MERRIWEATHER_11_FONT_ID;
+      case SIZE_13:
+        return MERRIWEATHER_13_FONT_ID;
+      case SIZE_15:
+        return MERRIWEATHER_15_FONT_ID;
+      case SIZE_18:
+        return MERRIWEATHER_18_FONT_ID;
+      case LARGE:
+      default:
+        return MERRIWEATHER_17_FONT_ID;
+    }
+  }
+  if (normalizedFamily == PLAYFAIR) {
+    switch (normalizedFontSize) {
+      case SIZE_10:
+        return PLAYFAIR_10_FONT_ID;
+      case SIZE_12:
+        return PLAYFAIR_12_FONT_ID;
+      case SIZE_14:
+        return PLAYFAIR_14_FONT_ID;
+      case SIZE_16:
+        return PLAYFAIR_16_FONT_ID;
+      case SIZE_11:
+        return PLAYFAIR_11_FONT_ID;
+      case SIZE_13:
+        return PLAYFAIR_13_FONT_ID;
+      case SIZE_15:
+        return PLAYFAIR_15_FONT_ID;
+      case SIZE_18:
+        return PLAYFAIR_18_FONT_ID;
+      case LARGE:
+      default:
+        return PLAYFAIR_17_FONT_ID;
+    }
+  }
+  if (normalizedFamily == GALMURI) {
+    // Pixel font: only two native crisp sizes. Map the lower half of the 10..18
+    // scale (10..15) to the 14px (1x) cut and the upper half (16..18) to 28px (2x).
+    switch (normalizedFontSize) {
+      case SIZE_16:
+      case SIZE_18:
+      case LARGE:  // 17pt
+        return GALMURI_28_FONT_ID;
+      default:
+        return GALMURI_14_FONT_ID;
+    }
+  }
+  if (normalizedFamily == VOLLKORN) {
+    switch (normalizedFontSize) {
+      case SIZE_10:
+        return VOLLKORN_10_FONT_ID;
+      case SIZE_12:
+        return VOLLKORN_12_FONT_ID;
+      case SIZE_14:
+        return VOLLKORN_14_FONT_ID;
+      case SIZE_16:
+        return VOLLKORN_16_FONT_ID;
+      case SIZE_11:
+        return VOLLKORN_11_FONT_ID;
+      case SIZE_13:
+        return VOLLKORN_13_FONT_ID;
+      case SIZE_15:
+        return VOLLKORN_15_FONT_ID;
+      case SIZE_18:
+        return VOLLKORN_18_FONT_ID;
+      case LARGE:
+      default:
+        return VOLLKORN_17_FONT_ID;
+    }
+  }
+#endif  // CROSSPOINT_SD_FONTS
   switch (normalizedFontSize) {
     case SIZE_10:
       return CHAREINK_10_FONT_ID;

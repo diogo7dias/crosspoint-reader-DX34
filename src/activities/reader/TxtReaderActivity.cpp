@@ -1044,7 +1044,7 @@ bool TxtReaderActivity::renderPage() {
   const StatusBarLayout statusBarLayout =
       buildStatusBarLayout(usableWidth, statusBarTopReserved, statusBarBottomReserved, resolvedTitleLineCount);
   renderer.setRenderMode(GfxRenderer::BW);
-  renderer.setTextRenderStyle(SETTINGS.textRenderMode);
+  renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(SETTINGS.textRenderMode));
 
   // Vertically center text on full pages so the visible *ink* sits with equal
   // top and bottom gaps. Nominal line boxes leave the gaps uneven: the font
@@ -1137,7 +1137,7 @@ bool TxtReaderActivity::renderPage() {
   // EpubReaderActivity::renderContents.
   if (glyphOom > 0) {
     LOG_ERR("TRS", "render-time glyph OOM (%u alloc failures) — discarding partial frame", (unsigned)glyphOom);
-    renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
+    renderer.setTextRenderStyle(CrossPointSettings::kRenderStyleCrisp);
     return false;
   }
 
@@ -1149,7 +1149,7 @@ bool TxtReaderActivity::renderPage() {
     pagesUntilFullRefresh--;
   }
 
-  renderer.setTextRenderStyle(CrossPointSettings::TEXT_RENDER_CRISP);
+  renderer.setTextRenderStyle(CrossPointSettings::kRenderStyleCrisp);
   return true;
 }
 
