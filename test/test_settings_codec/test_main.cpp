@@ -19,10 +19,12 @@
 #include <ArduinoJson.h>
 #include <unity.h>
 
+#include <cstdio>
 #include <string>
 
 #include "CrossPointSettings.h"
 #include "persist/SettingsCodec.h"
+#include "persist/SettingsSchema.h"
 
 using crosspoint::persist::decodeSettings;
 using crosspoint::persist::encodeSettings;
@@ -174,6 +176,40 @@ void test_golden_default_snapshot() {
   TEST_ASSERT_EQUAL_STRING(expected, json.c_str());
 }
 
+// 8. Structural: every MECHANICAL field in the shared kFields table is BOTH
+// written by encodeSettings and read back by decodeSettings. Iterate the table,
+// set each field to a valid non-default value, round-trip it, and assert it
+// survives. This is the standing guarantee that the v6.0.0 write-but-not-read
+// regression class cannot recur for any table-driven field: if a row is dropped
+// from encode (or decode), its round-trip fails here. Adding a new mechanical
+// field to the table is automatically covered.
+void test_structural_table_write_read_parity() {
+  using crosspoint::persist::kFieldCount;
+  using crosspoint::persist::kFields;
+  TEST_ASSERT_TRUE(kFieldCount > 0);
+  for (size_t i = 0; i < kFieldCount; ++i) {
+    const auto& f = kFields[i];
+    // A valid value that differs from the default: enums always have count >= 2,
+    // clamped raws have maxRaw >= 1, and unclamped raws accept anything, so
+    // flipping between 0 and 1 is always valid and never equals the default.
+    const uint8_t testval = (f.deflt == 0) ? (uint8_t)1 : (uint8_t)0;
+
+    CrossPointSettings a;  // defaults
+    a.*(f.member) = testval;
+    const std::string json = encodeToString(a);
+
+    CrossPointSettings b;
+    bool needsResave = false;
+    TEST_ASSERT_TRUE(decodeSettings(b, json.c_str(), testEnv(), &needsResave));
+
+    const uint8_t got = b.*(f.member);
+    char msg[128];
+    std::snprintf(msg, sizeof(msg), "field '%s' (row %zu) not round-tripped: set %u, got %u", f.key, i,
+                  (unsigned)testval, (unsigned)got);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(testval, got, msg);
+  }
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_round_trip_identity);
@@ -183,5 +219,6 @@ int main(int, char**) {
   RUN_TEST(test_migration_text_render_mode_prev2);
   RUN_TEST(test_stable_no_resave_for_current_doc);
   RUN_TEST(test_golden_default_snapshot);
+  RUN_TEST(test_structural_table_write_read_parity);
   return UNITY_END();
 }

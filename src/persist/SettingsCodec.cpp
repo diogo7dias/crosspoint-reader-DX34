@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../CrossPointSettings.h"
+#include "SettingsSchema.h"
 
 #if defined(UNIT_TEST_HOST)
 #define LOG_DIAG(...) ((void)0)
@@ -24,14 +25,31 @@ inline void copyCStr(char (&dst)[N], const char* src) {
 }  // namespace
 
 void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocument& doc, const SettingsEnv& env) {
-  doc["homeLayout"] = s.homeLayout;
-  doc["quoteScreenStyle"] = s.quoteScreenStyle;
-  doc["sleepScreen"] = s.sleepScreen;
-  doc["sleepScreenCoverMode"] = s.sleepScreenCoverMode;
-  doc["sleepScreenCoverFilter"] = s.sleepScreenCoverFilter;
-  doc["showSleepImageFilename"] = s.showSleepImageFilename;
-  doc["showSleepFavoriteBadge"] = s.showSleepFavoriteBadge;
-  doc["statusBar"] = s.statusBar;
+  using S = CrossPointSettings;
+  // Mechanical fields are emitted from the shared kFields table (SettingsSchema.h)
+  // in ordered slices; irregular/companion fields are emitted explicitly at their
+  // exact positions between the slices, reproducing the historic key order. The
+  // GOLDEN snapshot test pins that order byte-for-byte.
+  size_t cur = 0;
+  auto emitMechUntil = [&](const char* stopKey) {
+    while (cur < kFieldCount && std::strcmp(kFields[cur].key, stopKey) != 0) {
+      doc[kFields[cur].key] = s.*(kFields[cur].member);
+      ++cur;
+    }
+  };
+  auto emitMechRest = [&]() {
+    while (cur < kFieldCount) {
+      doc[kFields[cur].key] = s.*(kFields[cur].member);
+      ++cur;
+    }
+  };
+
+  // run A: homeLayout .. statusBar
+  emitMechUntil("firstLineIndentMode");
+
+  // --- gated status-bar block (decode is present-or-migrate gated; encode is
+  // unconditional). v6.0.0 granular items mirror the reading_themes.json path so
+  // toggling them from the Settings menu survives a reboot. ---
   doc["statusBarEnabled"] = s.statusBarEnabled;
   doc["statusBarShowBattery"] = s.statusBarShowBattery;
   doc["statusBarShowPageCounter"] = s.statusBarShowPageCounter;
@@ -55,10 +73,6 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["statusBarTextAlignment"] = s.statusBarTextAlignment;
   doc["statusBarProgressStyle"] = s.statusBarProgressStyle;
   doc["statusBarBarThickness"] = s.statusBarBarThickness;
-  // v6.0.0 granular status-bar items. These were serialized into reading_themes.json
-  // (writeReadingThemeObject) but were never added here, so toggling them from the
-  // Settings menu mutated RAM + saved settings.json yet did NOT survive a reboot
-  // unless also baked into a reading theme. Mirror the theme path so global persists.
   doc["statusBarShowBookPageCounter"] = s.statusBarShowBookPageCounter;
   doc["statusBarBookPageCounterPosition"] = s.statusBarBookPageCounterPosition;
   doc["statusBarShowPagesLeft"] = s.statusBarShowPagesLeft;
@@ -70,26 +84,39 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["statusBarQuoteCountPosition"] = s.statusBarQuoteCountPosition;
   doc["statusBarShowFreeHeap"] = s.statusBarShowFreeHeap;
   doc["statusBarFreeHeapPosition"] = s.statusBarFreeHeapPosition;
+
+  // extra-paragraph + word-spacing (migrations + legacy companion keys)
   doc["extraParagraphSpacingLevel"] = s.extraParagraphSpacingLevel;
   // Legacy compatibility key for older builds that still expect a toggle.
-  doc["extraParagraphSpacing"] = s.extraParagraphSpacingLevel != CrossPointSettings::EXTRA_SPACING_OFF;
+  doc["extraParagraphSpacing"] = s.extraParagraphSpacingLevel != S::EXTRA_SPACING_OFF;
   doc["wordSpacingPercent"] = s.wordSpacingPercent;
   doc["wordSpacingMidpoints"] = true;
-  doc["firstLineIndentMode"] = s.firstLineIndentMode;
+
+  // run B: firstLineIndentMode
+  emitMechUntil("shortPwrBtn");
+
+  // reader style + text-render mode (migrations + companion flag keys)
   doc["readerStyleMode"] = s.readerStyleMode;
   doc["textRenderMode"] = s.textRenderMode;
   doc["textRenderModeV2"] = true;
   doc["textRenderModeWeightOrder"] = true;
   doc["textRenderModeNormalDark"] = true;
-  doc["useFactoryLUT"] = s.useFactoryLUT;
-  doc["shortPwrBtn"] = s.shortPwrBtn;
-  doc["orientation"] = s.orientation;
-  doc["tiltPageTurn"] = s.tiltPageTurn;
-  doc["statusBarClock"] = s.statusBarClock;
-  doc["clockUtcOffsetQ"] = s.clockUtcOffsetQ;
+  doc["useFactoryLUT"] = s.useFactoryLUT;  // decode has a side effect (applyFactoryLut)
+
+  // run C: shortPwrBtn, orientation, tiltPageTurn
+  emitMechUntil("clockUtcOffsetQ");
+  doc["statusBarClock"] = s.statusBarClock;  // decode coerces (x ? 1 : 0)
+
+  // run D: clockUtcOffsetQ
+  emitMechUntil("sideButtonLayout");
   doc["clockFormat"] = s.clockFormat;
   doc["clockHasBeenSynced"] = s.clockHasBeenSynced;
-  doc["sideButtonLayout"] = s.sideButtonLayout;
+
+  // run E: sideButtonLayout
+  emitMechUntil("paragraphAlignment");
+
+  // front-button remap (cross-field validate), font family/size (normalize),
+  // line spacing (fallback dependency)
   doc["frontButtonBack"] = s.frontButtonBack;
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
@@ -98,14 +125,14 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["fontSize"] = s.fontSize;
   doc["lineSpacing"] = s.lineSpacing;
   doc["lineSpacingPercent"] = s.lineSpacingPercent;
-  doc["paragraphAlignment"] = s.paragraphAlignment;
-  doc["sleepTimeout"] = s.sleepTimeout;
-  doc["showHiddenFiles"] = s.showHiddenFiles;
-  doc["randomBookOnBoot"] = s.randomBookOnBoot;
-  doc["refreshFrequency"] = s.refreshFrequency;
-  doc["screenMargin"] = s.screenMargin;
-  doc["smoothText"] = s.smoothText;
-  doc["uniformMargins"] = s.uniformMargins;
+
+  // run F: paragraphAlignment .. refreshFrequency
+  emitMechUntil("smoothText");
+  doc["screenMargin"] = s.screenMargin;  // split-margin fallback source
+
+  // run G: smoothText, uniformMargins
+  emitMechUntil("hideBatteryPercentage");
+
   // Defensive clamp: field is 0/1/2 in the UI, but a bad in-memory value
   // would otherwise hit disk and force a reset on load.
   doc["dynamicMargins"] = static_cast<uint8_t>(s.dynamicMargins > 2 ? 0 : s.dynamicMargins);
@@ -115,17 +142,17 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["opdsServerUrl"] = s.opdsServerUrl;
   doc["opdsUsername"] = s.opdsUsername;
   doc["opdsPassword_obf"] = env.obfuscate(s.opdsPassword);
-  doc["hideBatteryPercentage"] = s.hideBatteryPercentage;
-  doc["longPressChapterSkip"] = s.longPressChapterSkip;
-  doc["hyphenationEnabled"] = s.hyphenationEnabled;
-  doc["uiLanguage"] = s.uiLanguage;
-  doc["fadingFix"] = s.fadingFix;
-  doc["embeddedStyle"] = s.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID;
-  doc["debugBorders"] = s.debugBorders;
-  doc["highlightMode"] = s.highlightMode;
-  doc["darkMode"] = s.darkMode;
-  doc["booksFolderOrder"] = s.booksFolderOrder;
-  doc["imageDither"] = s.imageDither;
+
+  // run H: hideBatteryPercentage, longPressChapterSkip, hyphenationEnabled
+  emitMechUntil("fadingFix");
+  doc["uiLanguage"] = s.uiLanguage;  // decode clamps against env.languageCount()
+
+  // run I: fadingFix
+  emitMechUntil("debugBorders");
+  doc["embeddedStyle"] = s.readerStyleMode == S::READER_STYLE_HYBRID;  // derived
+
+  // run J: debugBorders .. imageDither
+  emitMechRest();
 }
 
 bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json, const SettingsEnv& env,
@@ -140,18 +167,21 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
 
   using S = CrossPointSettings;
 
-  s.homeLayout =
-      clampEnum(doc["homeLayout"] | (uint8_t)S::HOME_LAYOUT_CLASSIC, S::HOME_LAYOUT_COUNT, S::HOME_LAYOUT_CLASSIC);
-  s.quoteScreenStyle = clampEnum(doc["quoteScreenStyle"] | (uint8_t)S::QUOTE_STYLE_CLASSIC, S::QUOTE_STYLE_COUNT,
-                                 S::QUOTE_STYLE_CLASSIC);
-  s.sleepScreen = clampEnum(doc["sleepScreen"] | (uint8_t)S::DARK, S::SLEEP_SCREEN_MODE_COUNT, S::DARK);
-  s.sleepScreenCoverMode =
-      clampEnum(doc["sleepScreenCoverMode"] | (uint8_t)S::FIT, S::SLEEP_SCREEN_COVER_MODE_COUNT, S::FIT);
-  s.sleepScreenCoverFilter = clampEnum(doc["sleepScreenCoverFilter"] | (uint8_t)S::NO_FILTER,
-                                       S::SLEEP_SCREEN_COVER_FILTER_COUNT, S::NO_FILTER);
-  s.showSleepImageFilename = doc["showSleepImageFilename"] | (uint8_t)0;
-  s.showSleepFavoriteBadge = doc["showSleepFavoriteBadge"] | (uint8_t)0;
-  s.statusBar = clampEnum(doc["statusBar"] | (uint8_t)S::FULL, S::STATUS_BAR_MODE_COUNT, S::FULL);
+  // Mechanical fields: decode every row of the shared kFields table (encode
+  // emits the same rows from the same table, so a table field can never be
+  // written-but-not-read). Each row is independent and disjoint from the
+  // irregular fields below, so loop order does not matter.
+  for (size_t i = 0; i < kFieldCount; ++i) {
+    const FieldDesc& f = kFields[i];
+    uint8_t v = doc[f.key] | f.deflt;
+    if (f.count) {
+      v = clampEnum(v, f.count, f.deflt);
+    } else if (f.maxRaw && v > f.maxRaw) {
+      v = f.deflt;
+    }
+    s.*(f.member) = v;
+  }
+
   const bool hasGranularStatusBar = !doc["statusBarEnabled"].isNull() && !doc["statusBarShowBattery"].isNull() &&
                                     !doc["statusBarShowPageCounter"].isNull() &&
                                     !doc["statusBarShowBookPercentage"].isNull() &&
@@ -313,8 +343,6 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
       if (needsResave) *needsResave = true;
     }
   }
-  s.firstLineIndentMode =
-      clampEnum(doc["firstLineIndentMode"] | (uint8_t)S::INDENT_BOOK, S::FIRST_LINE_INDENT_MODE_COUNT, S::INDENT_BOOK);
   if (doc["readerStyleMode"].isNull()) {
     s.readerStyleMode =
         doc["embeddedStyle"].isNull()
@@ -360,16 +388,9 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
   s.textAntiAliasing = 0;
   s.useFactoryLUT = (doc["useFactoryLUT"] | 0) ? 1 : 0;
   env.applyFactoryLut(s.useFactoryLUT != 0);
-  s.shortPwrBtn = clampEnum(doc["shortPwrBtn"] | (uint8_t)S::IGNORE, S::SHORT_PWRBTN_COUNT, S::IGNORE);
-  s.tiltPageTurn = clampEnum(doc["tiltPageTurn"] | (uint8_t)S::TILT_OFF, S::TILT_PAGE_TURN_COUNT, S::TILT_OFF);
   s.statusBarClock = (doc["statusBarClock"] | 0) ? 1 : 0;
-  // Biased quarter-hour UTC offset, clamped to [-12:00 .. +14:00] (0..104).
-  s.clockUtcOffsetQ = clampEnum(doc["clockUtcOffsetQ"] | (uint8_t)48, (uint8_t)105, (uint8_t)48);
   s.clockFormat = (doc["clockFormat"] | 0) ? 1 : 0;
   s.clockHasBeenSynced = (doc["clockHasBeenSynced"] | 0) ? 1 : 0;
-  s.orientation = clampEnum(doc["orientation"] | (uint8_t)S::PORTRAIT, S::ORIENTATION_COUNT, S::PORTRAIT);
-  s.sideButtonLayout =
-      clampEnum(doc["sideButtonLayout"] | (uint8_t)S::PREV_NEXT, S::SIDE_BUTTON_LAYOUT_COUNT, S::PREV_NEXT);
   s.frontButtonBack =
       clampEnum(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
   s.frontButtonConfirm = clampEnum(doc["frontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM,
@@ -379,6 +400,7 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
   s.frontButtonRight = clampEnum(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT,
                                  S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
+  // fontFamily/fontSize: cross-field normalize (size depends on family).
   const bool ffPresent = !doc["fontFamily"].isNull();
   const int ffRaw = ffPresent ? (int)(doc["fontFamily"] | (uint8_t)S::CHAREINK) : -1;
   s.fontFamily = clampEnum(doc["fontFamily"] | (uint8_t)S::CHAREINK, S::FONT_FAMILY_COUNT, S::CHAREINK);
@@ -415,18 +437,7 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
       *needsResave = true;
     }
   }
-  s.paragraphAlignment =
-      clampEnum(doc["paragraphAlignment"] | (uint8_t)S::JUSTIFIED, S::PARAGRAPH_ALIGNMENT_COUNT, S::JUSTIFIED);
-  s.sleepTimeout = clampEnum(doc["sleepTimeout"] | (uint8_t)S::SLEEP_10_MIN, S::SLEEP_TIMEOUT_COUNT, S::SLEEP_10_MIN);
-  s.showHiddenFiles = doc["showHiddenFiles"] | (uint8_t)0;
-  s.randomBookOnBoot = doc["randomBookOnBoot"] | (uint8_t)0;
-  s.refreshFrequency =
-      clampEnum(doc["refreshFrequency"] | (uint8_t)S::REFRESH_15, S::REFRESH_FREQUENCY_COUNT, S::REFRESH_15);
-  s.screenMargin = doc["screenMargin"] | (uint8_t)5;
-  s.smoothText = doc["smoothText"] | (uint8_t)0;
-  if (s.smoothText > 1) s.smoothText = 0;
-  s.uniformMargins = doc["uniformMargins"] | (uint8_t)0;
-  if (s.uniformMargins > 1) s.uniformMargins = 0;
+  s.screenMargin = doc["screenMargin"] | (uint8_t)5;  // split-margin fallback source
   s.dynamicMargins = doc["dynamicMargins"] | (uint8_t)0;
   if (s.dynamicMargins > 2) s.dynamicMargins = 0;
   const bool hasSplitMargins = !doc["screenMarginHorizontal"].isNull() && !doc["screenMarginTop"].isNull() &&
@@ -441,21 +452,10 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
     s.screenMarginBottom = s.screenMargin;
     if (needsResave) *needsResave = true;
   }
-  s.hideBatteryPercentage =
-      clampEnum(doc["hideBatteryPercentage"] | (uint8_t)S::HIDE_NEVER, S::HIDE_BATTERY_PERCENTAGE_COUNT, S::HIDE_NEVER);
-  s.longPressChapterSkip = doc["longPressChapterSkip"] | (uint8_t)1;
-  s.hyphenationEnabled = doc["hyphenationEnabled"] | (uint8_t)0;
+  // uiLanguage: clamp against the injected language count (env dependency).
   s.uiLanguage = clampEnum(doc["uiLanguage"] | (uint8_t)0, env.languageCount(), 0);
-  s.fadingFix = doc["fadingFix"] | (uint8_t)0;
+  // embeddedStyle: derived from readerStyleMode (legacy compat field).
   s.embeddedStyle = s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
-  s.debugBorders = doc["debugBorders"] | (uint8_t)0;
-  s.highlightMode = clampEnum(doc["highlightMode"] | (uint8_t)0, S::HIGHLIGHT_MODE_COUNT, 0);
-  s.darkMode = doc["darkMode"] | (uint8_t)0;
-  if (s.darkMode > 1) s.darkMode = 0;
-  s.booksFolderOrder = doc["booksFolderOrder"] | (uint8_t)0;
-  if (s.booksFolderOrder > 1) s.booksFolderOrder = 0;
-  s.imageDither =
-      clampEnum(doc["imageDither"] | (uint8_t)S::IMAGE_DITHER_QUALITY, S::IMAGE_DITHER_COUNT, S::IMAGE_DITHER_QUALITY);
 
   const char* url = doc["opdsServerUrl"] | "";
   copyCStr(s.opdsServerUrl, url);
