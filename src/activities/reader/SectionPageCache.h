@@ -10,11 +10,12 @@
  *   - Absorbs pageCache[3] + pageCacheSpineIndex + clearPageCache +
  *     getCachedPage + loadAndCachePage + refreshPageCacheWindow from
  *     EpubReaderActivity (lines 115-116, 246-322).
- *   - Also carries PendingNav (pendingPercentJump + pendingSpineProgress +
- *     pendingAnchor, RFC #21 lines 1483-1500) as a passive bundle — the
+ *   - Also carries PendingNav (anchor navigation) as a passive bundle — the
  *     cache is the natural owner since the block runs exactly when a new
  *     section loads and its cache is empty. Resolution logic stays in the
- *     activity (it needs Section to compute the target page).
+ *     activity (it needs Section to compute the target page). (The cross-book
+ *     percent-jump path this once also mirrored was removed from
+ *     EpubReaderActivity along with its jumpToPercent member.)
  *   - Templated on PageT so host tests can use a stub Page type without
  *     pulling in HalStorage / Epub headers.
  *

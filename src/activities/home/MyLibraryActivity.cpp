@@ -895,14 +895,14 @@ void MyLibraryActivity::loop() {
   // painted, now run the actual SD scan. Skip input handling entirely until
   // the load completes so the user cannot act on a stale empty list.
   if (deferred_.pending(LibraryAction::LibraryLoad)) {
-    deferred_.drain([this](LibraryAction action) {
-      if (action == LibraryAction::LibraryLoad) {
-        loadFiles();
-        rebuildFilteredFileIndexes();
-        requestUpdate();
-      }
-      return false;  // no early-out: LibraryLoad is the only action pending here
-    });
+    // Consume only LibraryLoad in isolation (not a full drain(), which would
+    // clear any other pending action's bit without running it). LibraryLoad is
+    // the sole action reachable on this no-subactivity first tick today, but
+    // isolating it keeps that true if a future action is ever posted alongside.
+    deferred_.clear(LibraryAction::LibraryLoad);
+    loadFiles();
+    rebuildFilteredFileIndexes();
+    requestUpdate();
     return;  // skip input handling on the load tick (placeholder was painted)
   }
 
