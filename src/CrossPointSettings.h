@@ -11,8 +11,6 @@
  * normalizeFontFamily() can upgrade old settings files without data loss.
  */
 #pragma once
-#include <HalStorage.h>
-
 #include <cstdint>
 #include <iosfwd>
 #include <string>
@@ -525,6 +523,9 @@ class CrossPointSettings {
   static void validateFrontButtonMapping(CrossPointSettings& settings);
 
  private:
+  // Internal helper: true when the family gains the SD-only in-between/large
+  // sizes (10..18). Defined in CrossPointSettingsLogic.cpp.
+  static bool familyHasExtraSizes(uint8_t family);
   bool loadFromBinaryFile();
 
  public:
