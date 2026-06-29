@@ -78,11 +78,6 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   int pagesUntilFullRefresh = 0;
   int cachedSpineIndex = 0;
   int cachedChapterTotalPageCount = 0;
-  // Signals that the next render should reposition within the newly loaded section
-  // based on a cross-book percentage jump.
-  bool pendingPercentJump = false;
-  // Normalized 0.0-1.0 progress within the target spine item, computed from book percentage.
-  float pendingSpineProgress = 0.0f;
   std::string pendingAnchor;
   bool pendingSubactivityExit = false;  // Defer subactivity exit to avoid use-after-free
   bool pendingGoHome = false;           // Defer go home to avoid race condition with display task
@@ -251,8 +246,6 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // Paint a brief low-memory notice, preserve the boot crash-loop guard, and
   // bail to the library instead of stranding the user on a retry-only screen.
   void giveUpOpenToHome();
-  // Jump to a percentage of the book (0-100), mapping it to spine and page.
-  void jumpToPercent(int percent);
   void onReaderMenuBack(uint8_t orientation);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
   void applyOrientation(uint8_t orientation);

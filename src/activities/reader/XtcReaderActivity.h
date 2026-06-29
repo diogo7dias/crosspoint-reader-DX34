@@ -30,8 +30,6 @@ class XtcReaderActivity final : public ActivityWithSubactivity {
   const std::function<void()> onGoHome;
   const std::function<void(const std::string&)> onOpenBook;
   bool recentSwitcherOpen = false;
-  bool pendingSingleBack = false;
-  unsigned long lastBackReleaseMs = 0;
   // RFC #165: the Confirm tap/double-tap/long-press FSM now lives in the shared
   // ReaderInputDispatcher. chapterSkip=true maps the held page-button to a
   // 10-page jump; longPressConfirm maps to the orientation toggle.

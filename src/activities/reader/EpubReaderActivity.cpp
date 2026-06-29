@@ -41,8 +41,8 @@
 #include "activities/network/QRShareActivity.h"
 #include "activities/util/ConfirmDialogActivity.h"
 #include "components/themes/BaseTheme.h"
-#include "fonts/ReaderFontActivation.h"
 #include "fontIds.h"
+#include "fonts/ReaderFontActivation.h"
 #include "persist/BackupMirror.h"
 #include "util/DrawUtils.h"
 #include "util/FavoriteImage.h"
@@ -1105,73 +1105,6 @@ void EpubReaderActivity::onReaderMenuBack(const uint8_t orientation) {
   requestUpdate();
 }
 
-// Translate an absolute percent into a spine index plus a normalized position
-// within that spine so we can jump after the section is loaded.
-void EpubReaderActivity::jumpToPercent(int percent) {
-  if (!epub) {
-    return;
-  }
-
-  const size_t bookSize = epub->getBookSize();
-  if (bookSize == 0) {
-    return;
-  }
-
-  // Normalize input to 0-100 to avoid invalid jumps.
-  percent = clampPercent(percent);
-
-  // Convert percent into a byte-like absolute position across the spine sizes.
-  // Use an overflow-safe computation: (bookSize / 100) * percent + (bookSize %
-  // 100) * percent / 100
-  size_t targetSize =
-      (bookSize / 100) * static_cast<size_t>(percent) + (bookSize % 100) * static_cast<size_t>(percent) / 100;
-  if (percent >= 100) {
-    // Ensure the final percent lands inside the last spine item.
-    targetSize = bookSize - 1;
-  }
-
-  const int spineCount = epub->getSpineItemsCount();
-  if (spineCount == 0) {
-    return;
-  }
-
-  int targetSpineIndex = spineCount - 1;
-  size_t prevCumulative = 0;
-
-  for (int i = 0; i < spineCount; i++) {
-    const size_t cumulative = epub->getCumulativeSpineItemSize(i);
-    if (targetSize <= cumulative) {
-      // Found the spine item containing the absolute position.
-      targetSpineIndex = i;
-      prevCumulative = (i > 0) ? epub->getCumulativeSpineItemSize(i - 1) : 0;
-      break;
-    }
-  }
-
-  const size_t cumulative = epub->getCumulativeSpineItemSize(targetSpineIndex);
-  const size_t spineSize = (cumulative > prevCumulative) ? (cumulative - prevCumulative) : 0;
-  // Store a normalized position within the spine so it can be applied once
-  // loaded.
-  pendingSpineProgress =
-      (spineSize == 0) ? 0.0f : static_cast<float>(targetSize - prevCumulative) / static_cast<float>(spineSize);
-  if (pendingSpineProgress < 0.0f) {
-    pendingSpineProgress = 0.0f;
-  } else if (pendingSpineProgress > 1.0f) {
-    pendingSpineProgress = 1.0f;
-  }
-
-  // Reset state so render() reloads and repositions on the target spine.
-  TransitionFeedback::show(renderer, tr(STR_LOADING));
-  {
-    RenderLock lock(*this);
-    currentSpineIndex = targetSpineIndex;
-    nextPageNumber = 0;
-    pendingPercentJump = true;
-    clearPageCache();
-    section.reset();
-  }
-}
-
 void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action) {
   switch (action) {
     case EpubReaderMenuActivity::MenuAction::HIGHLIGHT_QUOTE: {
@@ -1720,15 +1653,6 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
       section->currentPage = static_cast<int>(progress * section->pageCount);
     }
     cachedChapterTotalPageCount = 0;  // One-shot: don't re-apply on subsequent renders.
-  }
-
-  if (pendingPercentJump && section->pageCount > 0) {
-    int newPage = static_cast<int>(pendingSpineProgress * static_cast<float>(section->pageCount));
-    if (newPage >= section->pageCount) {
-      newPage = section->pageCount - 1;
-    }
-    section->currentPage = newPage;
-    pendingPercentJump = false;
   }
 
   if (!pendingAnchor.empty()) {
