@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "StatusBarLayout.h"
+
 namespace ReaderStatusBar {
 
 // Constants shared by both readers' status bar rendering.
@@ -13,34 +15,7 @@ constexpr int kStatusTextLineGap = 1;
 constexpr int kStatusTextToBarsGap = 0;
 constexpr int kStatusItemGap = 12;
 
-// Unified status bar layout populated by each reader's buildStatusBarLayout().
-// TXT readers set bookProgress and chapterProgress to the same value.
-// titleLineWidths is optional — when empty, widths are computed at render time.
-struct StatusBarLayout {
-  int topReservedHeight = 0;
-  int bottomReservedHeight = 0;
-  int usableWidth = 0;
-  std::string pageCounterText;
-  int pageCounterTextWidth = 0;
-  std::string bookPercentageText;
-  int bookPercentageTextWidth = 0;
-  std::string chapterPercentageText;
-  int chapterPercentageTextWidth = 0;
-  std::string bookPageCounterText;
-  int bookPageCounterTextWidth = 0;
-  std::string pagesLeftText;
-  int pagesLeftTextWidth = 0;
-  std::string chapterNumberText;
-  int chapterNumberTextWidth = 0;
-  std::string quoteCountText;
-  int quoteCountTextWidth = 0;
-  std::string freeHeapText;
-  int freeHeapTextWidth = 0;
-  std::vector<std::string> titleLines;
-  std::vector<int> titleLineWidths;
-  float bookProgress = 0.0f;
-  float chapterProgress = 0.0f;
-};
+// StatusBarLayout now lives in StatusBarLayout.h (host-safe, no GfxRenderer).
 
 // --- Shared helpers (previously duplicated in both reader .cpp files) ---
 
