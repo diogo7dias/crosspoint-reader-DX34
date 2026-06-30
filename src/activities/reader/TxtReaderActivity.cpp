@@ -87,10 +87,7 @@ void TxtReaderActivity::onEnter() {
     APP_STATE.saveToFile();
   }
 
-  cachedTitleUsableWidth = -1;
-  cachedTitleNoTitleTruncation = false;
-  cachedTitleMaxLines = -1;
-  cachedTitleLines.clear();
+  statusBar_.invalidateTitleCaches();
 
   // Trigger first update
   requestUpdate();
@@ -107,106 +104,16 @@ void TxtReaderActivity::onExit() {
   currentPageLines.clear();
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
-  cachedTitleUsableWidth = -1;
-  cachedTitleNoTitleTruncation = false;
-  cachedTitleMaxLines = -1;
-  cachedTitleLines.clear();
+  statusBar_.invalidateTitleCaches();
   txt.reset();
 }
 
-const std::vector<std::string>& TxtReaderActivity::getStatusBarTitleLines(const int usableWidth,
-                                                                          const bool noTitleTruncation,
-                                                                          const int maxTitleLineCount) {
-  if (cachedTitleUsableWidth == usableWidth && cachedTitleNoTitleTruncation == noTitleTruncation &&
-      cachedTitleMaxLines == maxTitleLineCount) {
-    return cachedTitleLines;
-  }
-
+std::string TxtReaderActivity::statusTitleText() const {
   std::string titleText = txt ? txt->getTitle() : "";
   if (titleText.empty()) {
     titleText = tr(STR_UNNAMED);
   }
-
-  cachedTitleLines = ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(), titleText,
-                                                         usableWidth, noTitleTruncation, maxTitleLineCount);
-
-  cachedTitleUsableWidth = usableWidth;
-  cachedTitleNoTitleTruncation = noTitleTruncation;
-  cachedTitleMaxLines = maxTitleLineCount;
-  return cachedTitleLines;
-}
-
-int TxtReaderActivity::getStatusBarReserveTitleLineCount(const int usableWidth, const bool noTitleTruncation) {
-  return static_cast<int>(getStatusBarTitleLines(usableWidth, noTitleTruncation, 1024).size());
-}
-
-TxtReaderActivity::StatusBarLayout TxtReaderActivity::buildStatusBarLayout(const int usableWidth,
-                                                                           const int topReservedHeight,
-                                                                           const int bottomReservedHeight,
-                                                                           const int maxTitleLineCount) {
-  StatusBarLayout layout;
-  layout.usableWidth = ReaderLayoutSafety::clampViewportDimension(usableWidth, ReaderLayoutSafety::kMinViewportWidth,
-                                                                  "TRS", "status width");
-  layout.topReservedHeight = topReservedHeight;
-  layout.bottomReservedHeight = bottomReservedHeight;
-  if (!SETTINGS.statusBarEnabled) {
-    return layout;
-  }
-
-  const float progress = totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0.0f;
-  layout.bookProgress = progress;
-  layout.chapterProgress = progress;
-
-  if (SETTINGS.statusBarShowPageCounter) {
-    layout.pageCounterText =
-        ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
-    layout.pageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
-  }
-  if (SETTINGS.statusBarShowBookPercentage) {
-    char bookPercentageStr[16] = {0};
-    snprintf(bookPercentageStr, sizeof(bookPercentageStr), "B:%.0f%%", layout.bookProgress);
-    layout.bookPercentageText = bookPercentageStr;
-    layout.bookPercentageTextWidth =
-        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.bookPercentageText.c_str());
-  }
-  if (SETTINGS.statusBarShowChapterPercentage) {
-    char chapterPercentageStr[16] = {0};
-    snprintf(chapterPercentageStr, sizeof(chapterPercentageStr), "C:%.0f%%", layout.chapterProgress);
-    layout.chapterPercentageText = chapterPercentageStr;
-    layout.chapterPercentageTextWidth =
-        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
-  }
-
-  if (SETTINGS.statusBarShowBookPageCounter && totalPages > 0) {
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%d/%d", currentPage + 1, totalPages);
-    layout.bookPageCounterText = buf;
-    layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-  }
-
-  if (SETTINGS.statusBarShowPagesLeft && totalPages > 0) {
-    // TXT has no chapters, so "pages left in chapter" == pages to end of file.
-    const int remaining = std::max(0, totalPages - (currentPage + 1));
-    char buf[24];
-    snprintf(buf, sizeof(buf), "%d %s", remaining, tr(STR_STATUS_PAGES_LEFT_LABEL));
-    layout.pagesLeftText = buf;
-    layout.pagesLeftTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-  }
-
-  if (SETTINGS.statusBarShowFreeHeap) {
-    char buf[24];
-    snprintf(buf, sizeof(buf), "RAM %uK", static_cast<unsigned>(esp_get_free_heap_size() / 1024));
-    layout.freeHeapText = buf;
-    layout.freeHeapTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-  }
-
-  if (SETTINGS.statusBarShowChapterTitle) {
-    constexpr int titlePadding = 4;
-    const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
-    layout.titleLines = getStatusBarTitleLines(titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
-  }
-
-  return layout;
+  return titleText;
 }
 
 int TxtReaderActivity::getReaderLineHeightPx() const {
@@ -308,10 +215,7 @@ void TxtReaderActivity::reloadCurrentLayoutForDisplaySettings() {
   pendingRelayoutPage = currentPage;
   pendingRelayoutPageCount = std::max(totalPages, 1);
   session_.progress().seed({0, currentPage, 1});
-  cachedTitleUsableWidth = -1;
-  cachedTitleNoTitleTruncation = false;
-  cachedTitleMaxLines = -1;
-  cachedTitleLines.clear();
+  statusBar_.invalidateTitleCaches();
   initialized = false;
   pageOffsets.clear();
   currentPageLines.clear();
@@ -526,62 +430,21 @@ void TxtReaderActivity::initializeReader() {
     const int usableWidth =
         ReaderLayoutSafety::clampViewportDimension(renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
                                                    ReaderLayoutSafety::kMinViewportWidth, "TRS", "usable width");
-    const bool showTopStatusTextRow =
-        (SETTINGS.statusBarShowBattery && statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter && statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
-        (SETTINGS.statusBarShowChapterPercentage &&
-         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
-        (SETTINGS.statusBarShowPagesLeft && statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
-    const bool showBottomStatusTextRow =
-        (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
-        (SETTINGS.statusBarShowChapterPercentage &&
-         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
-        (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
-    const int titleLineCount =
-        SETTINGS.statusBarShowChapterTitle
-            ? (SETTINGS.statusBarNoTitleTruncation
-                   ? getStatusBarReserveTitleLineCount(usableWidth, SETTINGS.statusBarNoTitleTruncation)
-                   : 1)
-            : 0;
-    const int topTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle && statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
-                                                                                                    : 0;
-    const int bottomTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle && !statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
-                                                                                                     : 0;
-    const auto budget = ReaderLayoutSafety::resolveStatusBarBudget(
-        renderer, SETTINGS.getStatusBarFontId(), "TRS", renderer.getScreenHeight(), getStatusTopInset(renderer),
-        getStatusBottomInset(renderer), cachedScreenMarginTop, cachedScreenMarginBottom, minContentHeight,
-        SETTINGS.getStatusBarProgressBarHeight(),
-        ReaderLayoutSafety::StatusBarBandConfig{
-            .showStatusTextRow = showTopStatusTextRow,
-            .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar && statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
-            .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar && statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
-            .desiredTitleLineCount = topTitleLineCount,
-        },
-        ReaderLayoutSafety::StatusBarBandConfig{
-            .showStatusTextRow = showBottomStatusTextRow,
-            .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar && !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
-            .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar && !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
-            .desiredTitleLineCount = bottomTitleLineCount,
-        });
-    const int statusBarTopReserved = budget.top.reservedHeight;
-    const int statusBarBottomReserved = budget.bottom.reservedHeight;
-    if (statusBarTopReserved > 0) {
-      orientedMarginTop = getStatusTopInset(renderer) + cachedScreenMarginTop + statusBarTopReserved;
+    const auto statusSettings = crosspoint::reader::snapshotStatusBarSettings();
+    crosspoint::reader::ReserveInput reserveInput;
+    reserveInput.screenHeight = renderer.getScreenHeight();
+    reserveInput.statusTopInset = getStatusTopInset(renderer);
+    reserveInput.statusBottomInset = getStatusBottomInset(renderer);
+    reserveInput.marginTop = cachedScreenMarginTop;
+    reserveInput.marginBottom = cachedScreenMarginBottom;
+    reserveInput.minContentHeight = minContentHeight;
+    reserveInput.titleReserveWrapWidth = usableWidth;  // TXT samples the reserve title at usableWidth (frozen quirk)
+    const auto reserved = statusBar_.reserve(statusSettings, reserveInput);
+    if (reserved.topReservedHeight > 0) {
+      orientedMarginTop = getStatusTopInset(renderer) + cachedScreenMarginTop + reserved.topReservedHeight;
     }
-    if (statusBarBottomReserved > 0) {
-      orientedMarginBottom = getStatusBottomInset(renderer) + cachedScreenMarginBottom + statusBarBottomReserved;
+    if (reserved.bottomReservedHeight > 0) {
+      orientedMarginBottom = getStatusBottomInset(renderer) + cachedScreenMarginBottom + reserved.bottomReservedHeight;
     }
   }
 
@@ -981,72 +844,37 @@ bool TxtReaderActivity::renderPage() {
   const int usableWidth =
       ReaderLayoutSafety::clampViewportDimension(renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
                                                  ReaderLayoutSafety::kMinViewportWidth, "TRS", "usable width");
-  int statusBarTopReserved = 0;
-  int statusBarBottomReserved = 0;
-  int resolvedTitleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
-  if (SETTINGS.statusBarEnabled) {
-    const bool showTopStatusTextRow =
-        (SETTINGS.statusBarShowBattery && statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter && statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
-        (SETTINGS.statusBarShowChapterPercentage &&
-         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
-        (SETTINGS.statusBarShowPagesLeft && statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
-    const bool showBottomStatusTextRow =
-        (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
-        (SETTINGS.statusBarShowChapterPercentage &&
-         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
-        (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
-    const int titleLineCount =
-        SETTINGS.statusBarShowChapterTitle
-            ? (SETTINGS.statusBarNoTitleTruncation
-                   ? getStatusBarReserveTitleLineCount(usableWidth, SETTINGS.statusBarNoTitleTruncation)
-                   : 1)
-            : 0;
-    const int topTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle && statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
-                                                                                                    : 0;
-    const int bottomTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle && !statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
-                                                                                                     : 0;
-    const auto budget = ReaderLayoutSafety::resolveStatusBarBudget(
-        renderer, SETTINGS.getStatusBarFontId(), "TRS", renderer.getScreenHeight(), getStatusTopInset(renderer),
-        getStatusBottomInset(renderer), cachedScreenMarginTop, cachedScreenMarginBottom, minContentHeight,
-        SETTINGS.getStatusBarProgressBarHeight(),
-        ReaderLayoutSafety::StatusBarBandConfig{
-            .showStatusTextRow = showTopStatusTextRow,
-            .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar && statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
-            .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar && statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
-            .desiredTitleLineCount = topTitleLineCount,
-        },
-        ReaderLayoutSafety::StatusBarBandConfig{
-            .showStatusTextRow = showBottomStatusTextRow,
-            .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar && !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
-            .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar && !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
-            .desiredTitleLineCount = bottomTitleLineCount,
-        });
-    statusBarTopReserved = budget.top.reservedHeight;
-    statusBarBottomReserved = budget.bottom.reservedHeight;
-    resolvedTitleLineCount =
-        statusBarItemIsTop(SETTINGS.statusBarTitlePosition) ? budget.top.titleLineCount : budget.bottom.titleLineCount;
-    if (statusBarTopReserved > 0) {
-      orientedMarginTop = getStatusTopInset(renderer) + cachedScreenMarginTop + statusBarTopReserved;
-    }
-    if (statusBarBottomReserved > 0) {
-      orientedMarginBottom = getStatusBottomInset(renderer) + cachedScreenMarginBottom + statusBarBottomReserved;
-    }
+  const auto statusSettings = crosspoint::reader::snapshotStatusBarSettings();
+  crosspoint::reader::ReserveInput reserveInput;
+  reserveInput.screenHeight = renderer.getScreenHeight();
+  reserveInput.statusTopInset = getStatusTopInset(renderer);
+  reserveInput.statusBottomInset = getStatusBottomInset(renderer);
+  reserveInput.marginTop = cachedScreenMarginTop;
+  reserveInput.marginBottom = cachedScreenMarginBottom;
+  reserveInput.minContentHeight = minContentHeight;
+  reserveInput.titleReserveWrapWidth = usableWidth;  // TXT samples the reserve title at usableWidth (frozen quirk)
+  const auto reserved = statusBar_.reserve(statusSettings, reserveInput);
+  if (reserved.topReservedHeight > 0) {
+    orientedMarginTop = getStatusTopInset(renderer) + cachedScreenMarginTop + reserved.topReservedHeight;
   }
-  const StatusBarLayout statusBarLayout =
-      buildStatusBarLayout(usableWidth, statusBarTopReserved, statusBarBottomReserved, resolvedTitleLineCount);
+  if (reserved.bottomReservedHeight > 0) {
+    orientedMarginBottom = getStatusBottomInset(renderer) + cachedScreenMarginBottom + reserved.bottomReservedHeight;
+  }
+
+  crosspoint::reader::StatusValues statusValues;
+  const float progress = totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0.0f;
+  statusValues.bookProgress = progress;
+  statusValues.chapterProgress = progress;  // TXT: book == chapter
+  statusValues.currentPage0 = currentPage;
+  statusValues.pageCount = totalPages;
+  statusValues.freeHeapBytes = esp_get_free_heap_size();
+  statusValues.pagesLeftLabel = tr(STR_STATUS_PAGES_LEFT_LABEL);
+  statusValues.pageCounterText =
+      ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
+  if (totalPages > 0) {
+    statusValues.bookPageCounterText = std::to_string(currentPage + 1) + "/" + std::to_string(totalPages);
+  }
+  const StatusBarLayout statusBarLayout = statusBar_.build(statusSettings, usableWidth, reserved, statusValues);
   renderer.setRenderMode(GfxRenderer::BW);
   renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(SETTINGS.textRenderMode));
 

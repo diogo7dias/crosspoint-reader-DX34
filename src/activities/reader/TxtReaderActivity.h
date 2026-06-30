@@ -19,6 +19,8 @@
 #include "ReaderSession.h"
 #include "ReaderSessionPorts.h"
 #include "ReaderStatusBar.h"
+#include "ReaderStatusComposer.h"
+#include "StatusBarPorts.h"
 #include "activities/ActivityWithSubactivity.h"
 #include "activities/DeferredActionQueue.h"
 
@@ -68,6 +70,15 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   int recentSwitcherSelection = 0;
   std::vector<RecentBook> recentSwitcherBooks;
 
+  // Status-bar reserve/build extracted to the shared host-tested composer.
+  // TXT is single-document: title key is constant, samples is the one file title.
+  crosspoint::reader::ProdStatusMeasurePort statusMeasure_{renderer};
+  crosspoint::reader::ReaderStatusComposer statusBar_{
+      statusMeasure_, "TRS",
+      crosspoint::reader::StatusTitleHooks{[] { return 0; },
+                                           [this](int) { return std::vector<std::string>{statusTitleText()}; },
+                                           [] { return 0; }, [this] { return statusTitleText(); }}};
+
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
   std::vector<FlowLine> currentPageLines;
@@ -86,10 +97,6 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   uint8_t cachedLineSpacingPercent = 110;
   uint8_t cachedWordSpacingPercent = 100;
   uint8_t cachedFirstLineIndentMode = CrossPointSettings::INDENT_BOOK;
-  int cachedTitleUsableWidth = -1;
-  bool cachedTitleNoTitleTruncation = false;
-  int cachedTitleMaxLines = -1;
-  std::vector<std::string> cachedTitleLines;
 
   // Returns false when render-time glyph allocation failed (fragmented heap):
   // the partial/garbage frame was NOT displayed and the caller must recover.
@@ -105,11 +112,9 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   int getTxtParagraphIndentPx() const;
   int measureFlowLineWidth(const std::string& text) const;
   void drawFlowLine(const FlowLine& line, int x, int y, int contentWidth) const;
-  const std::vector<std::string>& getStatusBarTitleLines(int usableWidth, bool noTitleTruncation,
-                                                         int maxTitleLineCount);
-  int getStatusBarReserveTitleLineCount(int usableWidth, bool noTitleTruncation);
-  StatusBarLayout buildStatusBarLayout(int usableWidth, int topReservedHeight, int bottomReservedHeight,
-                                       int maxTitleLineCount);
+  // Status-bar title text for this file (filename title with Unnamed fallback),
+  // fed to the composer's title hooks. Defined out-of-line to keep i18n out of the header.
+  std::string statusTitleText() const;
 
   void initializeReader();
   bool loadPageAtOffset(size_t offset, std::vector<FlowLine>& outLines, size_t& nextOffset);
