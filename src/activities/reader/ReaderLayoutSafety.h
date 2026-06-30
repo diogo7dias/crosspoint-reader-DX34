@@ -1,11 +1,15 @@
 #pragma once
 
-#include <GfxRenderer.h>
-
 #include <string>
 #include <vector>
 
 #include "IStatusMeasurePort.h"
+
+// Forward declaration only: the GfxRenderer overloads below take it by reference,
+// so this header stays free of GfxRenderer.h (and its HalDisplay weld) and can be
+// included by host-test translation units. The overload definitions live in the
+// device-only ReaderLayoutSafetyGfx.cpp; the port-based bodies in ReaderLayoutSafety.cpp.
+class GfxRenderer;
 
 namespace ReaderLayoutSafety {
 

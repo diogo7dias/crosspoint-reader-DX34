@@ -1,15 +1,19 @@
 #include "ReaderLayoutSafety.h"
 
-#include <Logging.h>
-
 #include <algorithm>
 #include <utility>
 
-#include "StatusBarPorts.h"
-#include "fontIds.h"
+// Logging is a hardware-coupled lib excluded from the host test build; shim it
+// to no-ops there (same pattern as SettingsCodec.cpp). This TU holds only the
+// port-based logic so it compiles host-side; the GfxRenderer overloads live in
+// ReaderLayoutSafetyGfx.cpp (device-only).
+#if defined(UNIT_TEST_HOST)
+#define LOG_DBG(...) ((void)0)
+#else
+#include <Logging.h>
+#endif
 
 using crosspoint::reader::IStatusMeasurePort;
-using crosspoint::reader::ProdStatusMeasurePort;
 
 namespace ReaderLayoutSafety {
 namespace {
@@ -95,12 +99,6 @@ std::vector<std::string> wrapText(const IStatusMeasurePort& measure, const int f
   return lines;
 }
 
-std::vector<std::string> wrapText(const GfxRenderer& renderer, const int fontId, const std::string& text,
-                                  const int maxWidth) {
-  const ProdStatusMeasurePort measure(renderer);
-  return wrapText(measure, fontId, text, maxWidth);
-}
-
 std::vector<std::string> buildTitleLines(const IStatusMeasurePort& measure, const int fontId, const std::string& text,
                                          const int maxWidth, const bool noTitleTruncation, const int maxLineCount) {
   if (text.empty() || maxLineCount <= 0 || maxWidth <= 0) {
@@ -129,12 +127,6 @@ std::vector<std::string> buildTitleLines(const IStatusMeasurePort& measure, cons
   return wrapped;
 }
 
-std::vector<std::string> buildTitleLines(const GfxRenderer& renderer, const int fontId, const std::string& text,
-                                         const int maxWidth, const bool noTitleTruncation, const int maxLineCount) {
-  const ProdStatusMeasurePort measure(renderer);
-  return buildTitleLines(measure, fontId, text, maxWidth, noTitleTruncation, maxLineCount);
-}
-
 int computeStatusTextBlockHeight(const IStatusMeasurePort& measure, const int fontId, const bool showStatusTextRow,
                                  const int titleLineCount) {
   const int statusTextHeight = measure.getTextHeight(fontId);
@@ -149,12 +141,6 @@ int computeStatusTextBlockHeight(const IStatusMeasurePort& measure, const int fo
     textBlockHeight += titleLineCount * statusTextHeight + (titleLineCount - 1) * kStatusTextLineGap;
   }
   return textBlockHeight;
-}
-
-int computeStatusTextBlockHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow,
-                                 const int titleLineCount) {
-  const ProdStatusMeasurePort measure(renderer);
-  return computeStatusTextBlockHeight(measure, fontId, showStatusTextRow, titleLineCount);
 }
 
 int computeStatusBarsHeight(const bool showBookProgressBar, const bool showChapterProgressBar,
@@ -186,14 +172,6 @@ int computeReservedHeight(const IStatusMeasurePort& measure, const int fontId, c
     reservedHeight += kStatusTextBottomPadding;
   }
   return reservedHeight;
-}
-
-int computeReservedHeight(const GfxRenderer& renderer, const int fontId, const bool showStatusTextRow,
-                          const bool showBookProgressBar, const bool showChapterProgressBar, const int titleLineCount,
-                          const int statusBarProgressHeight) {
-  const ProdStatusMeasurePort measure(renderer);
-  return computeReservedHeight(measure, fontId, showStatusTextRow, showBookProgressBar, showChapterProgressBar,
-                               titleLineCount, statusBarProgressHeight);
 }
 
 StatusBarBudgetResult resolveStatusBarBudget(const IStatusMeasurePort& measure, const int fontId, const char* logTag,
@@ -250,56 +228,6 @@ StatusBarBudgetResult resolveStatusBarBudget(const IStatusMeasurePort& measure, 
   }
 
   return result;
-}
-
-StatusBarBudgetResult resolveStatusBarBudget(const GfxRenderer& renderer, const int fontId, const char* logTag,
-                                             const int screenHeight, const int statusTopInset,
-                                             const int statusBottomInset, const int marginTop, const int marginBottom,
-                                             const int minContentHeight, const int statusBarProgressHeight,
-                                             const StatusBarBandConfig& topConfig,
-                                             const StatusBarBandConfig& bottomConfig) {
-  const ProdStatusMeasurePort measure(renderer);
-  return resolveStatusBarBudget(measure, fontId, logTag, screenHeight, statusTopInset, statusBottomInset, marginTop,
-                                marginBottom, minContentHeight, statusBarProgressHeight, topConfig, bottomConfig);
-}
-
-ReaderMargins resolveBaseReaderMargins(const GfxRenderer& renderer, const int userMarginTop, const int userMarginBottom,
-                                       const int userMarginHorizontal, const int dynamicMargins,
-                                       const int readerFontId) {
-  ReaderMargins m;
-  renderer.getOrientedViewableTRBL(&m.top, &m.right, &m.bottom, &m.left);
-
-  // Normalize pairs to the larger of each so the page stays visually centered even when the
-  // driver reports asymmetric hardware insets. Kept inline (not a call to
-  // ReaderStatusBar::normalizeReaderMargins) to keep this module free of reverse deps.
-  const int vertical = std::max(m.top, m.bottom);
-  const int horizontal = std::max(m.left, m.right);
-  m.top = vertical;
-  m.bottom = vertical;
-  m.left = horizontal;
-  m.right = horizontal;
-
-  m.top += userMarginTop;
-  m.bottom += userMarginBottom;
-  if (dynamicMargins) {
-    // Dynamic horizontal margins: widen toward a target ~62 characters per line using the
-    // current reader font's average glyph width as the yardstick. Pathological fonts with zero
-    // width fall back to 8 px/char to avoid divide-by-zero; the floor/ceiling (10/20 .. 55)
-    // prevents the auto-widen from eating the viewport on narrow orientations.
-    const int sampleWidth = renderer.getTextWidth(readerFontId, "abcdefghijklmnopqrstuvwxyz");
-    const int avgCharWidth = (sampleWidth > 0) ? sampleWidth / 26 : 8;
-    constexpr int targetCPL = 62;
-    const int targetTextWidth = targetCPL * avgCharWidth;
-    const int availableWidth = renderer.getScreenWidth() - m.left - m.right;
-    const int minDynamicMargin = (dynamicMargins >= 2) ? 20 : 10;
-    const int dynamicMargin = std::max(minDynamicMargin, std::min(55, (availableWidth - targetTextWidth) / 2));
-    m.left += dynamicMargin;
-    m.right += dynamicMargin;
-  } else {
-    m.left += userMarginHorizontal;
-    m.right += userMarginHorizontal;
-  }
-  return m;
 }
 
 int clampViewportDimension(const int value, const int minValue, const char* logTag, const char* dimensionName) {
