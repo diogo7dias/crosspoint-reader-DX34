@@ -327,7 +327,7 @@ void EpubReaderActivity::onExit() {
   invalidateStatusBarCaches();
 }
 
-void EpubReaderActivity::invalidateStatusBarCaches() { statusBarCache_.clear(); }
+void EpubReaderActivity::invalidateStatusBarCaches() { statusBar_.invalidateTitleCaches(); }
 
 void EpubReaderActivity::clearPageCache() { cache_.detach(); }
 
@@ -545,31 +545,25 @@ void EpubReaderActivity::refreshPageCacheWindow(const int centerPage, const std:
   });
 }
 
-int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidth) {
-  if (!epub || usableWidth <= 0) {
-    return 1;
+int EpubReaderActivity::statusReserveTitleKey() const {
+  // Book/Author title is one fixed string per book; give it a stable sentinel key
+  // distinct from any spine index so its (now-cached) reserve count never collides.
+  if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
+    return INT_MIN;
   }
-  // Book+author title is a single fixed string per book — wrap it directly
-  // rather than going through the per-chapter TOC measurement + cache.
-  if (SETTINGS.statusBarShowChapterTitle &&
-      SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
-    const int lines = static_cast<int>(
-        wrapStatusText(renderer, SETTINGS.getStatusBarFontId(), buildBookAuthorTitleText(), usableWidth).size());
-    return std::max(1, lines);
-  }
-  // Composite cache key: (spineIndex, usableWidth, noTitleTruncation). All three must match for
-  // the cached reserve-line count to be valid.
-  //   spineIndex          — the TOC title set changes per chapter.
-  //   usableWidth         — orientation flip or margin changes reflow the wrap.
-  //   noTitleTruncation   — toggling the setting changes the line-count policy, not the width.
-  // Any mismatch forces a re-measure, which is expensive (see kMaxTocTitlesMeasured below).
-  if (statusBarCache_.cachedReserveSpineIndex == currentSpineIndex &&
-      statusBarCache_.cachedReserveUsableWidth == usableWidth &&
-      statusBarCache_.cachedReserveNoTitleTruncation == SETTINGS.statusBarNoTitleTruncation) {
-    return statusBarCache_.cachedReserveTitleLineCount;
-  }
+  return currentSpineIndex;
+}
 
-  int maxLines = 1;
+std::vector<std::string> EpubReaderActivity::statusReserveTitleSamples(const int maxSamples) const {
+  std::vector<std::string> out;
+  if (!epub) {
+    return out;
+  }
+  // Book+author title is a single fixed string per book — one sample.
+  if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
+    out.push_back(buildBookAuthorTitleText());
+    return out;
+  }
   auto tocIndexes = epub->getTocIndexesForSpineIndex(currentSpineIndex);
   if (tocIndexes.empty()) {
     const int fallbackIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
@@ -577,184 +571,39 @@ int EpubReaderActivity::getWrappedStatusBarReserveLineCount(const int usableWidt
       tocIndexes.push_back(fallbackIndex);
     }
   }
-
-  // Cap the sample size. Books like Pocket Oracle have hundreds of TOC
-  // entries per spine (one per aphorism). Measuring each title against a
-  // cold font cache on first-open costs ~140 ms per entry — on a 300-entry
-  // spine that's 40+ seconds of blocking work while "Opening book..." sits
-  // invisible on screen. The first handful of entries are representative
-  // of the max wrap count for the rest, so cap the iteration and move on.
-  constexpr size_t kMaxTocTitlesMeasured = 8;
-  const size_t toMeasure = std::min(tocIndexes.size(), kMaxTocTitlesMeasured);
+  // Cap the sample count (books like Pocket Oracle have hundreds of TOC entries
+  // per spine; each cold-wrap costs ~140 ms). The composer skips empty titles
+  // when counting lines, matching the original loop.
+  const size_t toMeasure = std::min(tocIndexes.size(), static_cast<size_t>(std::max(0, maxSamples)));
+  out.reserve(toMeasure);
   for (size_t i = 0; i < toMeasure; ++i) {
-    const int tocIndex = tocIndexes[i];
-    const std::string title = epub->formatTocDisplayTitle(tocIndex);
-    if (title.empty()) {
-      continue;
-    }
-    const int lineCount =
-        static_cast<int>(wrapStatusText(renderer, SETTINGS.getStatusBarFontId(), title, usableWidth).size());
-    if (lineCount > maxLines) {
-      maxLines = lineCount;
-    }
+    out.push_back(epub->formatTocDisplayTitle(tocIndexes[i]));
   }
-
-  statusBarCache_.cachedReserveSpineIndex = currentSpineIndex;
-  statusBarCache_.cachedReserveUsableWidth = usableWidth;
-  statusBarCache_.cachedReserveNoTitleTruncation = SETTINGS.statusBarNoTitleTruncation;
-  statusBarCache_.cachedReserveTitleLineCount = maxLines;
-  return statusBarCache_.cachedReserveTitleLineCount;
+  return out;
 }
 
-const std::vector<std::string>& EpubReaderActivity::getStatusBarTitleLines(const int tocIndex, const int usableWidth,
-                                                                           const bool noTitleTruncation,
-                                                                           const int maxTitleLineCount) {
-  if (statusBarCache_.cachedTitleTocIndex == tocIndex && statusBarCache_.cachedTitleUsableWidth == usableWidth &&
-      statusBarCache_.cachedTitleNoTitleTruncation == noTitleTruncation &&
-      statusBarCache_.cachedTitleMaxLines == maxTitleLineCount) {
-    return statusBarCache_.cachedTitleLines;
+int EpubReaderActivity::statusDisplayTitleKey() const {
+  if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
+    return INT_MIN;
   }
+  return section ? section->getTocIndexForPage(section->currentPage) : -2;
+}
 
+std::string EpubReaderActivity::statusDisplayTitleText() const {
+  if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
+    return buildBookAuthorTitleText();
+  }
   std::string titleText = tr(STR_UNNAMED);
-  if (tocIndex >= 0 && epub) {
-    titleText = epub->formatTocDisplayTitle(tocIndex);
-    if (titleText.empty()) {
-      titleText = tr(STR_UNNAMED);
-    }
-  }
-
-  statusBarCache_.cachedTitleLines = ReaderLayoutSafety::buildTitleLines(
-      renderer, SETTINGS.getStatusBarFontId(), titleText, usableWidth, noTitleTruncation, maxTitleLineCount);
-
-  statusBarCache_.cachedTitleTocIndex = tocIndex;
-  statusBarCache_.cachedTitleUsableWidth = usableWidth;
-  statusBarCache_.cachedTitleNoTitleTruncation = noTitleTruncation;
-  statusBarCache_.cachedTitleMaxLines = maxTitleLineCount;
-  return statusBarCache_.cachedTitleLines;
-}
-
-EpubReaderActivity::StatusBarLayout EpubReaderActivity::buildStatusBarLayout(const int usableWidth,
-                                                                             const int topReservedHeight,
-                                                                             const int bottomReservedHeight,
-                                                                             const int maxTitleLineCount) {
-  StatusBarLayout layout;
-  layout.usableWidth = ReaderLayoutSafety::clampViewportDimension(usableWidth, ReaderLayoutSafety::kMinViewportWidth,
-                                                                  "ERS", "status width");
-  layout.topReservedHeight = topReservedHeight;
-  layout.bottomReservedHeight = bottomReservedHeight;
-  if (!SETTINGS.statusBarEnabled || !section || !epub) {
-    return layout;
-  }
-
-  const float sectionChapterProg =
-      (section->pageCount > 0) ? static_cast<float>(section->currentPage) / section->pageCount : 0.0f;
-  layout.bookProgress = epub->calculateProgress(currentSpineIndex, sectionChapterProg) * 100.0f;
-  layout.chapterProgress =
-      (section->pageCount > 0) ? (static_cast<float>(section->currentPage + 1) / section->pageCount) * 100.0f : 0.0f;
-
-  if (SETTINGS.statusBarShowPageCounter) {
-    layout.pageCounterText = ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode,
-                                                                 section->currentPage, section->pageCount);
-    layout.pageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.pageCounterText.c_str());
-  }
-  if (SETTINGS.statusBarShowBookPercentage) {
-    char bookPercentageStr[16] = {0};
-    snprintf(bookPercentageStr, sizeof(bookPercentageStr), "B:%.0f%%", layout.bookProgress);
-    layout.bookPercentageText = bookPercentageStr;
-    layout.bookPercentageTextWidth =
-        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.bookPercentageText.c_str());
-  }
-  if (SETTINGS.statusBarShowChapterPercentage) {
-    char chapterPercentageStr[16] = {0};
-    snprintf(chapterPercentageStr, sizeof(chapterPercentageStr), "C:%.0f%%", layout.chapterProgress);
-    layout.chapterPercentageText = chapterPercentageStr;
-    layout.chapterPercentageTextWidth =
-        renderer.getTextWidth(SETTINGS.getStatusBarFontId(), layout.chapterPercentageText.c_str());
-  }
-
-  populateBookPageCounterText(layout);
-
-  if (SETTINGS.statusBarShowPagesLeft && section->pageCount > 0) {
-    // Pages remaining to the end of the current chapter. currentPage is 0-based,
-    // so the last page yields 0 left.
-    const int remaining = std::max(0, section->pageCount - (section->currentPage + 1));
-    char buf[24];
-    snprintf(buf, sizeof(buf), "%d %s", remaining, tr(STR_STATUS_PAGES_LEFT_LABEL));
-    layout.pagesLeftText = buf;
-    layout.pagesLeftTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-  }
-
-  if (SETTINGS.statusBarShowChapterNumber) {
-    const int total = epub->getTocItemsCount();
+  if (section && epub) {
     const int tocIndex = section->getTocIndexForPage(section->currentPage);
-    if (total > 0 && tocIndex >= 0) {
-      const int chapterNum = std::min(tocIndex + 1, total);
-      char buf[24];
-      snprintf(buf, sizeof(buf), "%s %d/%d", tr(STR_STATUS_CHAPTER_NUMBER_LABEL), chapterNum, total);
-      layout.chapterNumberText = buf;
-      layout.chapterNumberTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+    if (tocIndex >= 0) {
+      const std::string formatted = epub->formatTocDisplayTitle(tocIndex);
+      if (!formatted.empty()) {
+        titleText = formatted;
+      }
     }
   }
-
-  if (SETTINGS.statusBarShowQuoteCount) {
-    char buf[24];
-    snprintf(buf, sizeof(buf), "%d %s", getQuoteCountCached(), tr(STR_STATUS_QUOTE_LABEL));
-    layout.quoteCountText = buf;
-    layout.quoteCountTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-  }
-
-  if (SETTINGS.statusBarShowFreeHeap) {
-    char buf[24];
-    snprintf(buf, sizeof(buf), "RAM %uK", static_cast<unsigned>(ESP.getFreeHeap() / 1024));
-    layout.freeHeapText = buf;
-    layout.freeHeapTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
-  }
-
-  if (SETTINGS.statusBarShowChapterTitle) {
-    constexpr int titlePadding = 4;
-    const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
-    if (SETTINGS.statusBarTitleContent == CrossPointSettings::STATUS_TITLE_BOOK_AUTHOR) {
-      // Constant per book, so it's cheap to wrap inline each page turn (no cache).
-      layout.titleLines =
-          ReaderLayoutSafety::buildTitleLines(renderer, SETTINGS.getStatusBarFontId(), buildBookAuthorTitleText(),
-                                              titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
-    } else {
-      const int tocIndex = section->getTocIndexForPage(section->currentPage);
-      layout.titleLines =
-          getStatusBarTitleLines(tocIndex, titleWrapWidth, SETTINGS.statusBarNoTitleTruncation, maxTitleLineCount);
-    }
-    layout.titleLineWidths.reserve(layout.titleLines.size());
-    for (const auto& line : layout.titleLines) {
-      layout.titleLineWidths.push_back(renderer.getTextWidth(SETTINGS.getStatusBarFontId(), line.c_str()));
-    }
-  }
-
-  return layout;
-}
-
-void EpubReaderActivity::populateBookPageCounterText(StatusBarLayout& layout) const {
-  if (!SETTINGS.statusBarShowBookPageCounter || !section || !epub || section->pageCount <= 0) {
-    return;
-  }
-  // Estimate total book pages by extrapolating the current chapter's pages-per-byte ratio to
-  // the whole book. Approximate by design: chapters with images or code have different density
-  // than prose, so the estimated total can fluctuate as the reader moves between chapter types.
-  // We accept that drift rather than pre-indexing every chapter (which would block first-open).
-  const size_t bookSize = epub->getBookSize();
-  const size_t prevChapterSize = (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
-  const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
-  if (curChapterSize == 0 || bookSize == 0) {
-    return;
-  }
-  const float pagesPerByte = static_cast<float>(section->pageCount) / static_cast<float>(curChapterSize);
-  const int totalEstimatedPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
-  const int currentAbsPage = std::max(
-      1, std::min(totalEstimatedPages,
-                  static_cast<int>(layout.bookProgress / 100.0f * static_cast<float>(totalEstimatedPages) + 0.5f)));
-  char buf[32];
-  snprintf(buf, sizeof(buf), "%d/%d", currentAbsPage, totalEstimatedPages);
-  layout.bookPageCounterText = buf;
-  layout.bookPageCounterTextWidth = renderer.getTextWidth(SETTINGS.getStatusBarFontId(), buf);
+  return titleText;
 }
 
 void EpubReaderActivity::loop() {
@@ -1726,72 +1575,24 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
   const int usableWidth =
       ReaderLayoutSafety::clampViewportDimension(renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight,
                                                  ReaderLayoutSafety::kMinViewportWidth, "ERS", "usable width");
-  int statusBarTopReserved = 0;
-  int statusBarBottomReserved = 0;
-  int resolvedTitleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
-  if (SETTINGS.statusBarEnabled) {
-    const bool showTopStatusTextRow =
-        (SETTINGS.statusBarShowBattery && statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter && statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage && statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
-        (SETTINGS.statusBarShowChapterPercentage &&
-         statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter && statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
-        (SETTINGS.statusBarShowPagesLeft && statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
-    const bool showBottomStatusTextRow =
-        (SETTINGS.statusBarShowBattery && !statusTextPositionIsTop(SETTINGS.statusBarBatteryPosition)) ||
-        (SETTINGS.statusBarShowPageCounter && !statusTextPositionIsTop(SETTINGS.statusBarPageCounterPosition)) ||
-        (SETTINGS.statusBarShowBookPercentage && !statusTextPositionIsTop(SETTINGS.statusBarBookPercentagePosition)) ||
-        (SETTINGS.statusBarShowChapterPercentage &&
-         !statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition)) ||
-        (SETTINGS.statusBarShowBookPageCounter &&
-         !statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition)) ||
-        (SETTINGS.statusBarShowPagesLeft && !statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition));
-    int titleLineCount = SETTINGS.statusBarShowChapterTitle ? 1 : 0;
-    if (SETTINGS.statusBarShowChapterTitle && SETTINGS.statusBarNoTitleTruncation) {
-      constexpr int titlePadding = 4;
-      const int titleWrapWidth = renderer.getScreenWidth() - titlePadding * 2;
-      titleLineCount = getWrappedStatusBarReserveLineCount(titleWrapWidth);
-    }
-    const int topTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle && statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
-                                                                                                    : 0;
-    const int bottomTitleLineCount =
-        (SETTINGS.statusBarShowChapterTitle && !statusBarItemIsTop(SETTINGS.statusBarTitlePosition)) ? titleLineCount
-                                                                                                     : 0;
-    const auto budget = ReaderLayoutSafety::resolveStatusBarBudget(
-        renderer, SETTINGS.getStatusBarFontId(), "ERS", renderer.getScreenHeight(), getStatusTopInset(renderer),
-        getStatusBottomInset(renderer), SETTINGS.screenMarginTop, SETTINGS.screenMarginBottom, minContentHeight,
-        SETTINGS.getStatusBarProgressBarHeight(),
-        ReaderLayoutSafety::StatusBarBandConfig{
-            .showStatusTextRow = showTopStatusTextRow,
-            .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar && statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
-            .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar && statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
-            .desiredTitleLineCount = topTitleLineCount,
-        },
-        ReaderLayoutSafety::StatusBarBandConfig{
-            .showStatusTextRow = showBottomStatusTextRow,
-            .showBookProgressBar =
-                SETTINGS.statusBarShowBookBar && !statusBarItemIsTop(SETTINGS.statusBarBookBarPosition),
-            .showChapterProgressBar =
-                SETTINGS.statusBarShowChapterBar && !statusBarItemIsTop(SETTINGS.statusBarChapterBarPosition),
-            .desiredTitleLineCount = bottomTitleLineCount,
-        });
-    statusBarTopReserved = budget.top.reservedHeight;
-    statusBarBottomReserved = budget.bottom.reservedHeight;
-    resolvedTitleLineCount =
-        statusBarItemIsTop(SETTINGS.statusBarTitlePosition) ? budget.top.titleLineCount : budget.bottom.titleLineCount;
-    if (statusBarTopReserved > 0) {
-      orientedMarginTop = getStatusTopInset(renderer) + SETTINGS.screenMarginTop + statusBarTopReserved;
-    }
-    if (statusBarBottomReserved > 0) {
-      // When the status bar is present it handles the display bottom inset
-      // itself. Use only the display inset + user margin so the gap equals
-      // exactly screenMarginBottom (0 = text flush against the status bar).
-      orientedMarginBottom = getStatusBottomInset(renderer) + SETTINGS.screenMarginBottom + statusBarBottomReserved;
-    }
+  const auto statusSettings = crosspoint::reader::snapshotStatusBarSettings();
+  crosspoint::reader::ReserveInput reserveInput;
+  reserveInput.screenHeight = renderer.getScreenHeight();
+  reserveInput.statusTopInset = getStatusTopInset(renderer);
+  reserveInput.statusBottomInset = getStatusBottomInset(renderer);
+  reserveInput.marginTop = SETTINGS.screenMarginTop;
+  reserveInput.marginBottom = SETTINGS.screenMarginBottom;
+  reserveInput.minContentHeight = minContentHeight;
+  reserveInput.titleReserveWrapWidth = renderer.getScreenWidth() - 8;  // EPUB samples reserve title at screenWidth-8
+  const auto reserved = statusBar_.reserve(statusSettings, reserveInput);
+  if (reserved.topReservedHeight > 0) {
+    orientedMarginTop = getStatusTopInset(renderer) + SETTINGS.screenMarginTop + reserved.topReservedHeight;
+  }
+  if (reserved.bottomReservedHeight > 0) {
+    // When the status bar is present it handles the display bottom inset itself.
+    // Use only the display inset + user margin so the gap equals exactly
+    // screenMarginBottom (0 = text flush against the status bar).
+    orientedMarginBottom = getStatusBottomInset(renderer) + SETTINGS.screenMarginBottom + reserved.bottomReservedHeight;
   }
 
   const uint16_t viewportWidth = static_cast<uint16_t>(
@@ -1810,8 +1611,58 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
   const uint32_t ensureMs_diag = millis() - tEnsure_diag;
 
   renderer.clearScreen();
-  const StatusBarLayout statusBarLayout =
-      buildStatusBarLayout(usableWidth, statusBarTopReserved, statusBarBottomReserved, resolvedTitleLineCount);
+
+  crosspoint::reader::StatusValues statusValues;
+  const float sectionChapterProg =
+      (section->pageCount > 0) ? static_cast<float>(section->currentPage) / section->pageCount : 0.0f;
+  statusValues.bookProgress = epub->calculateProgress(currentSpineIndex, sectionChapterProg) * 100.0f;
+  statusValues.chapterProgress =
+      (section->pageCount > 0) ? (static_cast<float>(section->currentPage + 1) / section->pageCount) * 100.0f : 0.0f;
+  statusValues.currentPage0 = section->currentPage;
+  statusValues.pageCount = section->pageCount;
+  statusValues.freeHeapBytes = ESP.getFreeHeap();
+  statusValues.pagesLeftLabel = tr(STR_STATUS_PAGES_LEFT_LABEL);
+  statusValues.pageCounterText =
+      ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode, section->currentPage, section->pageCount);
+  // Book-page counter: extrapolate total book pages from this chapter's pages-per-byte ratio
+  // (was populateBookPageCounterText). Approximate by design (chapter density varies); empty
+  // when the size data isn't available.
+  if (section && epub && section->pageCount > 0) {
+    const size_t bookSize = epub->getBookSize();
+    const size_t prevChapterSize =
+        (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
+    const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
+    if (curChapterSize != 0 && bookSize != 0) {
+      const float pagesPerByte = static_cast<float>(section->pageCount) / static_cast<float>(curChapterSize);
+      const int totalEstimatedPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
+      const int currentAbsPage = std::max(
+          1, std::min(totalEstimatedPages,
+                      static_cast<int>(statusValues.bookProgress / 100.0f * static_cast<float>(totalEstimatedPages) +
+                                       0.5f)));
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%d/%d", currentAbsPage, totalEstimatedPages);
+      statusValues.bookPageCounterText = buf;
+    }
+  }
+  // Chapter number (EPUB only).
+  if (section && epub) {
+    const int total = epub->getTocItemsCount();
+    const int tocIndex = section->getTocIndexForPage(section->currentPage);
+    if (total > 0 && tocIndex >= 0) {
+      const int chapterNum = std::min(tocIndex + 1, total);
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%s %d/%d", tr(STR_STATUS_CHAPTER_NUMBER_LABEL), chapterNum, total);
+      statusValues.chapterNumberText = buf;
+    }
+  }
+  // Quote count (EPUB only). getQuoteCountCached() lazily populates a cache, so only
+  // compute it when the item is shown — matching the original gating.
+  if (SETTINGS.statusBarShowQuoteCount) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%d %s", getQuoteCountCached(), tr(STR_STATUS_QUOTE_LABEL));
+    statusValues.quoteCountText = buf;
+  }
+  const StatusBarLayout statusBarLayout = statusBar_.build(statusSettings, usableWidth, reserved, statusValues);
 
   if (section->pageCount == 0) {
     LOG_DBG("ERS", "No pages to render");

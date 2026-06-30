@@ -24,7 +24,9 @@
 #include "ReaderInputDispatcher.h"
 #include "ReaderProgressTracker.h"
 #include "ReaderStatusBar.h"
+#include "ReaderStatusComposer.h"
 #include "SectionPageCache.h"
+#include "StatusBarPorts.h"
 #include "activities/ActivityWithSubactivity.h"
 
 class EpubReaderActivity final : public ActivityWithSubactivity {
@@ -135,38 +137,21 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // resetting it, so the next boot force-routes to the library rather than
   // reopening this same un-openable book. See giveUpOpenToHome().
   bool openGiveUpExit_ = false;
-  // Memoized status-bar title wrap results. Two sub-caches with distinct keys:
-  //   - reserve: max TOC-title wrap height for the current spine (input to budget resolution).
-  //   - titleLines: wrapped lines for the currently-displayed title (input to the paint step).
-  // Both are invalidated together via clear() from invalidateStatusBarCaches() — bundling
-  // forces every invalidation point through the same method so we can't accidentally reset
-  // one sub-cache but leave the other live (a bug we hit during the status-bar V2 work).
-  // Field naming preserves the original loose-field spelling on purpose: minimizes diff noise
-  // at read/write sites and keeps "grep cachedReserveSpineIndex" working.
-  struct StatusBarTitleCache {
-    int cachedReserveSpineIndex = -1;
-    int cachedReserveUsableWidth = -1;
-    bool cachedReserveNoTitleTruncation = false;
-    int cachedReserveTitleLineCount = 1;
-    int cachedTitleTocIndex = -2;
-    int cachedTitleUsableWidth = -1;
-    bool cachedTitleNoTitleTruncation = false;
-    int cachedTitleMaxLines = -1;
-    std::vector<std::string> cachedTitleLines;
-
-    void clear() {
-      cachedReserveSpineIndex = -1;
-      cachedReserveUsableWidth = -1;
-      cachedReserveNoTitleTruncation = false;
-      cachedReserveTitleLineCount = 1;
-      cachedTitleTocIndex = -2;
-      cachedTitleUsableWidth = -1;
-      cachedTitleNoTitleTruncation = false;
-      cachedTitleMaxLines = -1;
-      cachedTitleLines.clear();
-    }
-  };
-  StatusBarTitleCache statusBarCache_;
+  // Status-bar reserve/build extracted to the shared host-tested composer. The
+  // title sub-caches (reserve line-count + displayed title lines) now live inside
+  // it; invalidateStatusBarCaches() delegates to statusBar_.invalidateTitleCaches().
+  // Title hooks branch on Book/Author vs TOC content; defined out-of-line to keep
+  // i18n + Epub access out of the header.
+  crosspoint::reader::ProdStatusMeasurePort statusMeasure_{renderer};
+  crosspoint::reader::ReaderStatusComposer statusBar_{
+      statusMeasure_, "ERS",
+      crosspoint::reader::StatusTitleHooks{
+          [this] { return statusReserveTitleKey(); }, [this](int n) { return statusReserveTitleSamples(n); },
+          [this] { return statusDisplayTitleKey(); }, [this] { return statusDisplayTitleText(); }}};
+  int statusReserveTitleKey() const;
+  std::vector<std::string> statusReserveTitleSamples(int maxSamples) const;
+  int statusDisplayTitleKey() const;
+  std::string statusDisplayTitleText() const;
   const std::function<void()> onGoBack;
   const std::function<void()> onGoHome;
   const std::function<void(const std::string&)> onOpenBook;
@@ -206,17 +191,6 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   std::shared_ptr<Page> getCachedPage(int pageIndex) const;
   std::shared_ptr<Page> loadAndCachePage(int pageIndex);
   void refreshPageCacheWindow(int centerPage, const std::shared_ptr<Page>& currentPage);
-  int getWrappedStatusBarReserveLineCount(int usableWidth);
-  const std::vector<std::string>& getStatusBarTitleLines(int tocIndex, int usableWidth, bool noTitleTruncation,
-                                                         int maxTitleLineCount);
-  StatusBarLayout buildStatusBarLayout(int usableWidth, int topReservedHeight, int bottomReservedHeight,
-                                       int maxTitleLineCount);
-  // Writes StatusBarLayout::bookPageCounterText + width when the setting is enabled AND we have
-  // enough chapter-size data to extrapolate. Left empty otherwise (the renderer treats empty as
-  // "don't draw"). Isolated from buildStatusBarLayout because the extrapolation math (21 lines,
-  // pages-per-byte × total book size) is the densest block in the status-bar pipeline and the
-  // only one with non-trivial WHY notes (chapter density variance).
-  void populateBookPageCounterText(StatusBarLayout& layout) const;
   // If `section` is already live, no-op. Otherwise constructs a Section for the current spine
   // index, loads (or builds-then-loads) its page-layout cache, frees transient memory used only
   // during layout (font glyph caches + CSS parser) to reclaim heap for the render pass, and

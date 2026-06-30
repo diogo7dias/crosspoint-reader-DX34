@@ -35,13 +35,13 @@ int ReaderStatusComposer::reserveTitleLineCountCached(const int fontId, const in
   }
 
   int maxLines = 1;
+  // The hook caps its candidate set to kMaxTocTitlesMeasured (it owns the
+  // domain knowledge of which entries to sample); empties don't contribute but
+  // are not re-counted, matching getWrappedStatusBarReserveLineCount's loop.
   const std::vector<std::string> samples =
       hooks_.reserveTitleSamples ? hooks_.reserveTitleSamples(kMaxTocTitlesMeasured) : std::vector<std::string>{};
-  int measured = 0;
   for (const auto& title : samples) {
-    if (measured >= kMaxTocTitlesMeasured) break;
     if (title.empty()) continue;
-    ++measured;
     const int lineCount = static_cast<int>(ReaderLayoutSafety::wrapText(measure_, fontId, title, wrapWidth).size());
     if (lineCount > maxLines) maxLines = lineCount;
   }
