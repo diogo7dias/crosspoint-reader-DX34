@@ -133,28 +133,45 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
   }
 }
 
-// With SD fonts enabled, every offloadable family gains the in-between/large
-// sizes 11/13/15/18 as Tier-1 fonts (tables in flash, bitmaps streamed from SD
-// packs — zero added heap, same as the existing sizes). ChareInk is excluded: it
-// is the always-in-flash fallback floor and ships only the five flash sizes. In
-// the default (non-SD) build, or for ChareInk, the extra sizes fold to the
-// nearest kept size so a persisted value never lands on a font that does not
-// exist.
+// The 5 offloadable reader families (Bookerly/Georgia/Helvetica/Verdana/Lato) gain
+// in-between sizes as Tier-1 fonts (tables in flash; bitmaps streamed from SD in SD
+// builds, baked into flash in the flash-extra build — zero added heap either way).
+// Two extra-size regimes:
+//   * SD builds (CROSSPOINT_SD_FONTS): the broad 9-size set {10,11,12,13,14,15,16,
+//     17,18}, shared by these 5 + the SD-only families (Merriweather/Playfair/
+//     Galmuri/Vollkorn).
+//   * Flash-extra build (CROSSPOINT_FLASH_EXTRA_SIZES, no SD): the 7-size set
+//     {11,12,13,14,15,16,17} for the 5 families (10 and 18 are NOT baked).
+// ChareInk is always excluded — it is the in-flash fallback floor and ships only
+// the five base sizes {10,12,14,16,17}. In the plain default build (neither flag)
+// or for ChareInk, the extra sizes fold to the nearest kept size so a persisted
+// value never lands on a font that does not exist.
 #ifdef CROSSPOINT_SD_FONTS
 static constexpr bool kSdExtraSizes = true;
 #else
 static constexpr bool kSdExtraSizes = false;
 #endif
+// Flash-extra only applies when SD is NOT in play (SD's broader set wins if both
+// are somehow defined), so the two regimes never overlap.
+#if defined(CROSSPOINT_FLASH_EXTRA_SIZES) && !defined(CROSSPOINT_SD_FONTS)
+static constexpr bool kFlashExtraSizes = true;
+#else
+static constexpr bool kFlashExtraSizes = false;
+#endif
 
 bool CrossPointSettings::familyHasExtraSizes(const uint8_t family) {
-  return kSdExtraSizes && normalizeFontFamily(family) != CHAREINK;
+  return (kSdExtraSizes || kFlashExtraSizes) && normalizeFontFamily(family) != CHAREINK;
 }
 
 uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, const uint8_t fontSize) {
   const bool extra = familyHasExtraSizes(family);
+  // Flash-extra families ship the 7-size set {11..17}: sizes 10 and 18 have no
+  // baked bitmaps there, so fold them to a kept neighbour. SD's 9-size set keeps
+  // both; the plain default 5-size set keeps 10 (its smallest) and folds 18 -> 17.
+  const bool flashSevenSize = extra && !kSdExtraSizes;
   switch (fontSize) {
     case SIZE_10:
-      return SIZE_10;
+      return flashSevenSize ? SIZE_12 : SIZE_10;  // flash-extra drops 10 -> 12
     case SIZE_12:
       return SIZE_12;
     case SIZE_14:
@@ -164,13 +181,13 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
     case LARGE:
       return LARGE;  // 17pt
     case SIZE_11:
-      return extra ? SIZE_11 : SIZE_12;  // SD: real 11; else -> 12
+      return extra ? SIZE_11 : SIZE_12;  // extra: real 11; else -> 12
     case SIZE_13:
-      return extra ? SIZE_13 : SIZE_14;  // SD: real 13; else -> 14
+      return extra ? SIZE_13 : SIZE_14;  // extra: real 13; else -> 14
     case SIZE_15:
-      return extra ? SIZE_15 : SIZE_16;  // SD: real 15; else -> 16
+      return extra ? SIZE_15 : SIZE_16;  // extra: real 15; else -> 16
     case SIZE_18:
-      return extra ? SIZE_18 : LARGE;  // SD: real 18; else -> 17
+      return (extra && kSdExtraSizes) ? SIZE_18 : LARGE;  // SD-only real 18; else -> 17
     case MEDIUM:
       return SIZE_14;  // legacy 15pt MEDIUM -> 14 (preserve existing user size)
     case X_LARGE:

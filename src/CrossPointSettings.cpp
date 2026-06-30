@@ -486,35 +486,71 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
   }
 }
 
+// Mirror of the build-regime flag in CrossPointSettingsLogic.cpp (internal
+// linkage; this TU is not host-tested so it reads the macro directly). True =
+// SD build's broad 9-size set {10..18}; otherwise an extra-size family uses the
+// flash-extra 7-size set {11..17}. See familyHasExtraSizes() for the gate.
+#ifdef CROSSPOINT_SD_FONTS
+static constexpr bool kSdExtraSizes = true;
+#else
+static constexpr bool kSdExtraSizes = false;
+#endif
+
 uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
-  // Offloadable families add 11/13/15/18 -> 9 sizes (10..18); ChareInk and the
-  // default build keep the 5-size flash set.
-  return familyHasExtraSizes(family) ? 9 : 5;
+  // No extra sizes -> base 5-size flash set {10,12,14,16,17} (ChareInk + plain
+  // default). Extra-size families: 9 sizes {10..18} in SD builds, 7 sizes
+  // {11..17} in the flash-extra build.
+  if (!familyHasExtraSizes(family)) {
+    return 5;
+  }
+  return kSdExtraSizes ? 9 : 7;
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
   const uint8_t normalized = normalizeFontSizeForFamily(family, fontSize);
   if (familyHasExtraSizes(family)) {
+    if (kSdExtraSizes) {
+      // 9-size set {10,11,12,13,14,15,16,17,18}.
+      switch (normalized) {
+        case SIZE_10:
+          return 0;
+        case SIZE_11:
+          return 1;
+        case SIZE_12:
+          return 2;
+        case SIZE_13:
+          return 3;
+        case SIZE_14:
+          return 4;
+        case SIZE_15:
+          return 5;
+        case SIZE_16:
+          return 6;
+        case SIZE_18:
+          return 8;
+        case LARGE:
+        default:
+          return 7;  // 17pt
+      }
+    }
+    // Flash-extra 7-size set {11,12,13,14,15,16,17}. normalize already folded
+    // 10 -> 12 and 18 -> 17.
     switch (normalized) {
-      case SIZE_10:
-        return 0;
       case SIZE_11:
-        return 1;
+        return 0;
       case SIZE_12:
-        return 2;
+        return 1;
       case SIZE_13:
-        return 3;
+        return 2;
       case SIZE_14:
-        return 4;
+        return 3;
       case SIZE_15:
-        return 5;
+        return 4;
       case SIZE_16:
-        return 6;
-      case SIZE_18:
-        return 8;
+        return 5;
       case LARGE:
       default:
-        return 7;  // 17pt
+        return 6;  // 17pt
     }
   }
   // 5-size set: normalize already folded 11/13/15/18 to a kept size.
@@ -535,24 +571,45 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
 
 uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const uint8_t displayIndex) {
   if (familyHasExtraSizes(family)) {
+    if (kSdExtraSizes) {
+      // 9-size set {10,11,12,13,14,15,16,17,18}.
+      switch (displayIndex) {
+        case 0:
+          return SIZE_10;
+        case 1:
+          return SIZE_11;
+        case 2:
+          return SIZE_12;
+        case 3:
+          return SIZE_13;
+        case 4:
+          return SIZE_14;
+        case 5:
+          return SIZE_15;
+        case 6:
+          return SIZE_16;
+        case 8:
+          return SIZE_18;
+        case 7:
+        default:
+          return LARGE;  // 17pt
+      }
+    }
+    // Flash-extra 7-size set {11,12,13,14,15,16,17}.
     switch (displayIndex) {
       case 0:
-        return SIZE_10;
-      case 1:
         return SIZE_11;
-      case 2:
+      case 1:
         return SIZE_12;
-      case 3:
+      case 2:
         return SIZE_13;
-      case 4:
+      case 3:
         return SIZE_14;
-      case 5:
+      case 4:
         return SIZE_15;
-      case 6:
+      case 5:
         return SIZE_16;
-      case 8:
-        return SIZE_18;
-      case 7:
+      case 6:
       default:
         return LARGE;  // 17pt
     }
