@@ -68,6 +68,20 @@ bool FontDecompressor::decompressGroup(const EpdFontData* fontData, uint16_t gro
     // SD-backed font: pull this group's compressed bytes off disk
     // into the reusable scratch, then point inflate at the scratch.
     if (sdCompressedScratch.size() < group.compressedSize) {
+      // vector::resize() calls abort() on OOM (ESP32, -fno-exceptions). Pre-check
+      // with a nothrow malloc so a genuine OOM OR a corrupt/oversized
+      // compressedSize (e.g. a stale SD font pack mismatched to the firmware)
+      // fails gracefully here instead of bad_alloc -> abort -> bootloop. The
+      // caller (getBitmap) turns the false return into a bitmapAllocFailures_
+      // signal so the reader degrades to the in-flash font. Mirrors the same
+      // pre-check pattern used for hotGroup/hotGlyphBuf in getBitmap().
+      void* check = crosspoint::mem::tryMalloc(group.compressedSize);  // alloc-ok
+      if (!check) {
+        stats.decompressTimeMs += millis() - tDecomp;
+        LOG_ERR("FDC", "OOM/oversized compressed scratch for group %u (%u bytes)", groupIndex, group.compressedSize);
+        return false;
+      }
+      free(check);
       sdCompressedScratch.resize(group.compressedSize);
     }
     const int got = fontData->readBitmapBytes(fontData->bitmapCtx, group.compressedOffset, sdCompressedScratch.data(),
@@ -226,6 +240,11 @@ const uint8_t* FontDecompressor::getBitmap(const EpdFontData* fontData, const Ep
       hotGroup.shrink_to_fit();
       hotGroupFont = nullptr;
       hotGroupIndex = UINT16_MAX;
+      // Decompress failed (OOM, or a corrupt / stale SD font pack). Signal
+      // render-OOM so renderContents discards the frame and triggers the
+      // emergency font downgrade to the in-flash font, instead of silently
+      // dropping this whole group's glyphs into a garbage page.
+      bitmapAllocFailures_++;
       stats.getBitmapTimeUs += micros() - tStart;
       return nullptr;
     }
