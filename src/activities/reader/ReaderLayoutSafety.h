@@ -5,7 +5,11 @@
 #include <string>
 #include <vector>
 
+#include "IStatusMeasurePort.h"
+
 namespace ReaderLayoutSafety {
+
+using crosspoint::reader::IStatusMeasurePort;
 
 constexpr int kMinViewportWidth = 64;
 constexpr int kMinViewportHeight = 48;
@@ -51,14 +55,36 @@ struct StatusBarBudgetResult {
   StatusBarBandBudget bottom;
 };
 
+// Measurement-dependent helpers come in two overloads each: the primary takes an
+// IStatusMeasurePort (host-testable with a fake measurer), the convenience overload
+// takes a GfxRenderer and forwards through a ProdStatusMeasurePort. Existing callers
+// pass a GfxRenderer unchanged; the status-bar composer + host tests pass a port.
+std::vector<std::string> wrapText(const IStatusMeasurePort& measure, int fontId, const std::string& text, int maxWidth);
 std::vector<std::string> wrapText(const GfxRenderer& renderer, int fontId, const std::string& text, int maxWidth);
+
+std::vector<std::string> buildTitleLines(const IStatusMeasurePort& measure, int fontId, const std::string& text,
+                                         int maxWidth, bool noTitleTruncation, int maxLineCount);
 std::vector<std::string> buildTitleLines(const GfxRenderer& renderer, int fontId, const std::string& text, int maxWidth,
                                          bool noTitleTruncation, int maxLineCount);
+
+int computeStatusTextBlockHeight(const IStatusMeasurePort& measure, int fontId, bool showStatusTextRow,
+                                 int titleLineCount);
 int computeStatusTextBlockHeight(const GfxRenderer& renderer, int fontId, bool showStatusTextRow, int titleLineCount);
+
 int computeStatusBarsHeight(bool showBookProgressBar, bool showChapterProgressBar, int statusBarProgressHeight,
                             bool includeTopMargin);
+
+int computeReservedHeight(const IStatusMeasurePort& measure, int fontId, bool showStatusTextRow,
+                          bool showBookProgressBar, bool showChapterProgressBar, int titleLineCount,
+                          int statusBarProgressHeight);
 int computeReservedHeight(const GfxRenderer& renderer, int fontId, bool showStatusTextRow, bool showBookProgressBar,
                           bool showChapterProgressBar, int titleLineCount, int statusBarProgressHeight);
+
+StatusBarBudgetResult resolveStatusBarBudget(const IStatusMeasurePort& measure, int fontId, const char* logTag,
+                                             int screenHeight, int statusTopInset, int statusBottomInset, int marginTop,
+                                             int marginBottom, int minContentHeight, int statusBarProgressHeight,
+                                             const StatusBarBandConfig& topConfig,
+                                             const StatusBarBandConfig& bottomConfig);
 StatusBarBudgetResult resolveStatusBarBudget(const GfxRenderer& renderer, int fontId, const char* logTag,
                                              int screenHeight, int statusTopInset, int statusBottomInset, int marginTop,
                                              int marginBottom, int minContentHeight, int statusBarProgressHeight,
