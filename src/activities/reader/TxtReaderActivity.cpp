@@ -5,8 +5,6 @@
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
 #include <GfxRenderer.h>
-
-#include "fonts/ReaderFontActivation.h"
 #include <HalStorage.h>
 #include <HeapGuard.h>
 #include <I18n.h>
@@ -32,6 +30,7 @@
 #include "SilentRestart.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
+#include "fonts/ReaderFontActivation.h"
 #include "persist/BackupMirror.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
@@ -294,7 +293,7 @@ void TxtReaderActivity::openReadingThemes() {
   exitActivity();
   enterNewActivity(new (std::nothrow) ReadingThemesActivity(
       renderer, mappedInput, txt ? txt->getCachePath() : std::string(), [this](const bool changed) {
-        pendingSubactivityExit = true;
+        deferred_.post(TxtAction::SubactivityExit);
         if (changed) {
           reloadCurrentLayoutForDisplaySettings();
         } else {
@@ -323,11 +322,16 @@ void TxtReaderActivity::loop() {
 
   if (subActivity) {
     subActivity->loop();
-    if (pendingSubactivityExit) {
-      pendingSubactivityExit = false;
-      exitActivity();  // suppressUntilAllReleased() called inside
-      requestUpdate();
-    }
+    // Deferred exit: process after subActivity->loop() returns (the onClose
+    // callback posts from inside it) to avoid use-after-free. drain() clears the
+    // bit before run(), matching the old "set flag false first" ordering.
+    deferred_.drain([this](TxtAction action) {
+      if (action == TxtAction::SubactivityExit) {
+        exitActivity();  // suppressUntilAllReleased() called inside
+        requestUpdate();
+      }
+      return false;
+    });
     return;
   }
 

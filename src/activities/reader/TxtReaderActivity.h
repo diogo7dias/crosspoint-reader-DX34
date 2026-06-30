@@ -20,6 +20,7 @@
 #include "ReaderSessionPorts.h"
 #include "ReaderStatusBar.h"
 #include "activities/ActivityWithSubactivity.h"
+#include "activities/DeferredActionQueue.h"
 
 struct RecentBook;
 
@@ -41,7 +42,8 @@ class TxtReaderActivity final : public ActivityWithSubactivity {
   const std::function<void()> onGoHome;
   const std::function<void(const std::string&)> onOpenBook;
   bool recentSwitcherOpen = false;
-  bool pendingSubactivityExit = false;
+  enum class TxtAction : uint8_t { SubactivityExit, Count };
+  crosspoint::DeferredActionQueue<TxtAction> deferred_;
   // RFC #165: the tap/double-tap/long-press FSM now lives in the shared
   // ReaderInputDispatcher (no doubleTap-vs-menu, no chapter-skip, no footnote
   // for the txt reader). longPressConfirm maps to the orientation toggle.
