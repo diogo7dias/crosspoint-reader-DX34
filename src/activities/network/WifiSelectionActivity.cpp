@@ -244,6 +244,7 @@ void WifiSelectionActivity::selectNetwork(const int index) {
 void WifiSelectionActivity::attemptConnection() {
   state = autoConnecting ? WifiSelectionState::AUTO_CONNECTING : WifiSelectionState::CONNECTING;
   connectionStartTime = millis();
+  connectAttempts = 0;
   connectedIP.clear();
   connectionError.clear();
   requestUpdate();
@@ -323,25 +324,40 @@ void WifiSelectionActivity::checkConnectionStatus() {
     return;
   }
 
-  if (status == WL_CONNECT_FAILED || status == WL_NO_SSID_AVAIL) {
-    connectionError = tr(STR_ERROR_GENERAL_FAILURE);
-    if (status == WL_NO_SSID_AVAIL) {
-      connectionError = tr(STR_ERROR_NETWORK_NOT_FOUND);
+  // On a failure, quietly re-try a couple of times before giving up (the retry
+  // stays on the "Connecting" screen). Only when the attempts are exhausted do we
+  // surface the reason-specific message + write the diagnostic report. The diag
+  // timeline keeps accumulating across retries, so the report shows every attempt.
+  auto retryOrFail = [this](WifiDiagReport::FailureKind kind) {
+    WiFi.disconnect(true, true);
+    if (connectAttempts + 1 < MAX_CONNECT_ATTEMPTS) {
+      connectAttempts++;
+      LOG_DBG("WIFI", "connect failed — retry %d/%d", connectAttempts + 1, MAX_CONNECT_ATTEMPTS);
+      delay(100);
+      if (selectedRequiresPassword && !enteredPassword.empty()) {
+        WiFi.begin(selectedSSID.c_str(), enteredPassword.c_str());
+      } else {
+        WiFi.begin(selectedSSID.c_str());
+      }
+      connectionStartTime = millis();
+      requestUpdate();
+      return;
     }
-    WifiDiagReport::writeReportOnFailure(status == WL_NO_SSID_AVAIL ? WifiDiagReport::FailureKind::NoSsidAvail
-                                                                    : WifiDiagReport::FailureKind::StatusFailed);
+    WifiDiagReport::writeReportOnFailure(kind);
+    connectionError = WifiDiagReport::shortFailureMessage(kind);
     state = WifiSelectionState::CONNECTION_FAILED;
     requestUpdate();
+  };
+
+  if (status == WL_CONNECT_FAILED || status == WL_NO_SSID_AVAIL) {
+    retryOrFail(status == WL_NO_SSID_AVAIL ? WifiDiagReport::FailureKind::NoSsidAvail
+                                           : WifiDiagReport::FailureKind::StatusFailed);
     return;
   }
 
   // Check for timeout
   if (millis() - connectionStartTime > CONNECTION_TIMEOUT_MS) {
-    WiFi.disconnect();
-    connectionError = tr(STR_ERROR_CONNECTION_TIMEOUT);
-    WifiDiagReport::writeReportOnFailure(WifiDiagReport::FailureKind::Timeout);
-    state = WifiSelectionState::CONNECTION_FAILED;
-    requestUpdate();
+    retryOrFail(WifiDiagReport::FailureKind::Timeout);
     return;
   }
 }

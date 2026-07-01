@@ -80,6 +80,13 @@ class WifiSelectionActivity final : public ActivityWithSubactivity {
   static constexpr unsigned long CONNECTION_TIMEOUT_MS = 15000;
   unsigned long connectionStartTime = 0;
 
+  // Bounded auto-retry. ESP32-C3 first-attempt connects fail transiently
+  // (handshake / DHCP) often enough that a couple of quick re-tries turn a
+  // "failed" screen into a success. A genuine wrong password / WPA3 mismatch
+  // just fails every attempt, then shows the reason-specific message.
+  static constexpr int MAX_CONNECT_ATTEMPTS = 3;
+  int connectAttempts = 0;
+
   // Cached scan summary, fed to WifiDiagReport on attemptConnection. Holds
   // scan-time facts about the target network (RSSI, channel, auth mode) so a
   // failure report can include them without re-scanning. SSIDs themselves

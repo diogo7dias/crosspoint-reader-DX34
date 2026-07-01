@@ -461,6 +461,38 @@ void noteOtaInstallResult(uint8_t tagAsByte, int32_t espErr, const char* espErrN
   updateMinHeap();
 }
 
+const char* shortFailureMessage(FailureKind kind) {
+  const int32_t r = s_lastDisconnectReason;
+  if (kind == FailureKind::NoSsidAvail || r == 201 /*NO_AP_FOUND*/) {
+    return "Network not found — check it is on, in range, and 2.4GHz (not 5GHz-only).";
+  }
+  switch (r) {
+    case 15:   // 4WAY_HANDSHAKE_TIMEOUT
+    case 204:  // HANDSHAKE_TIMEOUT
+    case 202:  // AUTH_FAIL
+      return "Password rejected, or the router uses WPA3/PMF. Re-check the password; set the "
+             "router to WPA2 or PMF-optional.";
+    case 17:  // IE_IN_4WAY_DIFFERS
+    case 18:  // GROUP_CIPHER_INVALID
+    case 19:  // PAIRWISE_CIPHER_INVALID
+    case 20:  // AKMP_INVALID
+    case 24:  // CIPHER_SUITE_REJECTED
+      return "Security mismatch (likely WPA3-only) — enable WPA2 compatibility on the router.";
+    case 200:  // BEACON_TIMEOUT
+      return "Signal too weak — the router dropped mid-connect. Move closer.";
+    case 4:  // ASSOC_EXPIRE
+    case 5:  // ASSOC_TOOMANY
+    case 8:  // ASSOC_LEAVE
+      return "The router disconnected the device — MAC filter, client limit, or band-steering.";
+    default:
+      break;
+  }
+  if (kind == FailureKind::Timeout) {
+    return "No response from the router (weak signal, or connected but got no IP). See CRASH_INFO.TXT.";
+  }
+  return "Connection failed — see the WIFI section of CRASH_INFO.TXT for the reason code.";
+}
+
 void writeReportOnFailure(FailureKind kind) {
   s_attemptInProgress = false;
   const bool isOtaKind = (kind == FailureKind::OtaCheckFailed || kind == FailureKind::OtaInstallFailed);

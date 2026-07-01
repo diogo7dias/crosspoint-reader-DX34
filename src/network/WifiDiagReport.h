@@ -59,6 +59,11 @@ void noteScanSummary(size_t totalNetworks, bool targetFound, int32_t targetRssi,
 // previous report. Safe to call from any task.
 void writeReportOnFailure(FailureKind kind);
 
+// Short, user-facing failure message for the connect screen, derived from the
+// last disconnect reason code (wrong password / WPA3-PMF / weak signal / no-IP /
+// not-found). English-first; the full numeric reason is in CRASH_INFO.TXT.
+const char* shortFailureMessage(FailureKind kind);
+
 // Capture the WiFi diagnostic report on a silent restart, so a WiFi-induced
 // reboot leaves its timeline on the SD card (the heap report alone misses it).
 // No-op when no WiFi attempt happened this boot (s_timelineCount == 0) — so a
