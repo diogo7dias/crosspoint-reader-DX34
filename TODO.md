@@ -2,11 +2,13 @@
 
 Open follow-ups for this firmware. Prioritised top-down. Workflow per item: build → flash → user tests on device → ship in next release. No soak windows, no waiting periods — this is a hobby project, not a paid product.
 
-## LECTOR — RELEASED v0.0.1 (2026-07-01)
+## LECTOR — RELEASED v0.0.2 (2026-07-01)
 
-**DONE + SHIPPED:** all 10 build steps + font-trim to 11-16 + dead-code cleanup (Bionic, kRenderStyle constants/migration, `#ifdef CROSSPOINT_SD_FONTS` blocks, `/fonts` mkdir all removed). Merged `lector`→`main` (ff `369b3f6c`), pushed. GitHub repo **renamed `crosspoint-reader-DX34`→`lector`**; REPO string in CrossPointWebServer.cpp → `diogo7dias/lector`; tag+release `v0.0.1` (WIP, firmware.bin asset) + `firmware` branch pushed. Flash 82.6%. (Update-check feed is MOOT — the on-device check was removed in step 3; updates are the web `/update` page only.)
+**v0.0.2 (2026-07-01):** post-v0.0.1 tidy-ups (below) + removed the Smooth Text (AA) feature (`2e07370b`) — on this e-ink panel the black→grey glyph-edge shift was imperceptible yet forced the slow greyscale refresh every page; the image-page greyscale overlay stays. Merged `chore/lector-tidyup`→`main`, tag+release `v0.0.2` + `firmware` branch. Flash 81.4%. **Lector has NO OTA — updates are the web `/update` page only (pulls firmware.bin from the `firmware` branch).**
 
-### Lector tidy-up jobs (post-v0.0.1) — DONE on branch `chore/lector-tidyup` (build green, 284/284 host tests, Flash 82.6%→81.4%); pending device smoke-test before merge to `main`
+**v0.0.1 (2026-07-01):** all 10 build steps + font-trim to 11-16 + dead-code cleanup (Bionic, kRenderStyle constants/migration, `#ifdef CROSSPOINT_SD_FONTS` blocks, `/fonts` mkdir all removed). GitHub repo **renamed `crosspoint-reader-DX34`→`lector`**; REPO string in CrossPointWebServer.cpp → `diogo7dias/lector`; tag+release `v0.0.1` (WIP) + `firmware` branch. Flash 82.6%.
+
+### Lector tidy-up jobs (post-v0.0.1) — DONE, merged to `main`, shipped in v0.0.2 (build green, 284/284 host tests, Flash 82.6%→81.4%)
 - [x] **Theme preview buttons** — user chose to KEEP the 3rd "Options" button (Back/Apply/Options); no code change.
 - [x] **Web-server AP strip** (`6563606a`) — `apMode` is now `static constexpr false`; the `isInApMode` probe/assignment is gone and the optimizer drops the dead AP/captive-portal branches. *Device-validate STA web page + `/update`.*
 - [x] **Remove opds settings fields** (`9143e0be`) — dropped opdsServerUrl/Username/Password from CrossPointSettings + SettingsCodec (JSON key-value, no version bump) + SettingsList; binary-migration reader now read-and-discards them to keep positional alignment; deleted dead `lib/OpdsParser`; neutralised HttpDownloader's opds auth. *Device-validate settings load/save.*
