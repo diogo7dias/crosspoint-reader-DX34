@@ -379,6 +379,8 @@ unsigned long CrossPointSettings::getSleepTimeoutMs() const {
       return 15UL * 60 * 1000;
     case SLEEP_30_MIN:
       return 30UL * 60 * 1000;
+    case SLEEP_NEVER:
+      return 0;  // 0 = never auto-sleep (guarded at the trigger)
   }
 }
 
