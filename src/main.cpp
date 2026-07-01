@@ -1553,6 +1553,12 @@ void setup() {
   setupDisplayAndFonts();
   logHeapStage("after_display_fonts");
 
+  // Bootstrap the sleep-wallpaper folders so the feature is discoverable on a
+  // fresh card and the browser uploader always has a target: /sleep holds the
+  // wallpapers, "/sleep pause" the overflow set. Both are no-ops if present.
+  Storage.mkdir("/sleep");
+  Storage.mkdir("/sleep pause");
+
 #ifdef CROSSPOINT_SD_FONTS
   // SD-backed reader fonts. SD is mounted (Storage.begin above) and every family
   // is registered with the renderer (pointer-based, so the manager repointing an
