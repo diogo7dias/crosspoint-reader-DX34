@@ -4,10 +4,14 @@
 #include <I18n.h>
 #include <Logging.h>
 
+#include <esp_heap_caps.h>
+
 #include <algorithm>
 #include <new>
 
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "ReaderSamplePreview.h"
 #include "ReaderSettingsActivity.h"
 #include "ReadingThemeStore.h"
 #include "activities/util/ConfirmDialogActivity.h"
@@ -219,6 +223,37 @@ void ReadingThemesActivity::loop() {
     return;
   }
 
+  if (previewPopupOpen) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      previewPopupOpen = false;
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      // Apply the theme — same path as the action menu's Apply (index 0).
+      previewPopupOpen = false;
+      TransitionFeedback::show(renderer, tr(STR_LOADING));
+      if (!READING_THEMES.applyTheme(previewPopupThemeIndex, bookCachePath)) {
+        TransitionFeedback::dismiss(renderer);
+        showMessage(tr(STR_APPLY_THEME_FAILED));
+        return;
+      }
+      settingsDirty = true;
+      TransitionFeedback::dismiss(renderer);
+      onClose(true);
+      return;
+    }
+    // Options (down/next button): open the Rename/Overwrite/Delete menu.
+    buttonNavigator.onNextRelease([this] {
+      previewPopupOpen = false;
+      actionPopupOpen = true;
+      actionPopupThemeIndex = previewPopupThemeIndex;
+      actionPopupSelectedIndex = 0;
+      requestUpdate();
+    });
+    return;
+  }
+
   if (actionPopupOpen) {
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       actionPopupOpen = false;
@@ -278,9 +313,8 @@ void ReadingThemesActivity::loop() {
       return;
     }
     if (isThemeRow(selectedRowIndex)) {
-      actionPopupOpen = true;
-      actionPopupThemeIndex = themeIndexForRow(selectedRowIndex);
-      actionPopupSelectedIndex = 0;
+      previewPopupOpen = true;
+      previewPopupThemeIndex = themeIndexForRow(selectedRowIndex);
       requestUpdate();
     }
     return;
@@ -379,8 +413,36 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
     renderer.drawText(UI_10_FONT_ID, pageWidth - metrics.contentSidePadding - counterW, counterY, counter.c_str());
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = previewPopupOpen
+                          ? mappedInput.mapLabels(tr(STR_BACK), tr(STR_THEME_APPLY), "", tr(STR_THEME_ACTIONS))
+                          : mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+
+  if (previewPopupOpen) {
+    const int popupW = pageWidth * 8 / 10;
+    const int popupX = (pageWidth - popupW) / 2;
+    const int popupY = pageHeight / 10;
+    const int popupBottomMax = pageHeight - metrics.buttonHintsHeight - 6;
+    const int popupH = std::min(pageHeight * 8 / 10, popupBottomMax - popupY);
+    renderer.fillRect(popupX - 2, popupY - 2, popupW + 4, popupH + 4, true);  // border
+    renderer.fillRect(popupX, popupY, popupW, popupH, false);                 // fill
+    const ReadingTheme* theme = READING_THEMES.getTheme(previewPopupThemeIndex);
+    const std::string title = theme ? theme->name : std::string(tr(STR_THEME));
+    renderer.drawCenteredText(UI_12_FONT_ID, popupY + 8,
+                              renderer.truncatedText(UI_12_FONT_ID, title.c_str(), popupW - 24).c_str(), true,
+                              EpdFontFamily::REGULAR);
+    const int sepY = popupY + 12 + renderer.getLineHeight(UI_12_FONT_ID);
+    renderer.drawLine(popupX + 8, sepY, popupX + popupW - 8, sepY, true);
+    const int sampleY = sepY + 6;
+    const int sampleH = (popupY + popupH) - sampleY - 8;
+    if (theme != nullptr && heap_caps_get_free_size(MALLOC_CAP_8BIT) >= 40 * 1024) {
+      CrossPointSettings temp = SETTINGS;
+      ReadingThemeStore::applyThemeToSettings(*theme, temp);
+      reader::drawReaderSamplePreview(renderer, temp, popupX, sampleY, popupW, sampleH);
+    } else {
+      renderer.drawCenteredText(UI_10_FONT_ID, sampleY + sampleH / 2 - 8, "Preview unavailable (low memory)");
+    }
+  }
 
   if (actionPopupOpen) {
     const int popupW = pageWidth - 60;

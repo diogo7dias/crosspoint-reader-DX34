@@ -27,6 +27,10 @@ class ReadingThemesActivity final : public ActivityWithSubactivity {
   bool actionPopupOpen = false;
   int actionPopupThemeIndex = -1;
   int actionPopupSelectedIndex = 0;
+  // Selecting a saved theme opens an 80% preview popup (Back / Apply); the
+  // Rename/Overwrite/Delete menu (actionPopup) is reached from it via Options.
+  bool previewPopupOpen = false;
+  int previewPopupThemeIndex = -1;
   bool messagePopupOpen = false;
   std::string messagePopupText;
   bool settingsDirty = false;
