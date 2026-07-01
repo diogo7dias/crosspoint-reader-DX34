@@ -206,20 +206,15 @@ void CrossPointWebServer::begin() {
     return;
   }
 
-  // Check if we have a valid network connection (either STA connected or AP mode)
+  // Lector is STA-only, so the web server needs a connected station link.
   const wifi_mode_t wifiMode = WiFi.getMode();
   const bool isStaConnected = (wifiMode & WIFI_MODE_STA) && (WiFi.status() == WL_CONNECTED);
-  const bool isInApMode = (wifiMode & WIFI_MODE_AP) && (WiFi.softAPgetStationNum() >= 0);  // AP is running
-
-  if (!isStaConnected && !isInApMode) {
-    LOG_DBG("WEB", "Cannot start webserver - no valid network (mode=%d, status=%d)", wifiMode, WiFi.status());
+  if (!isStaConnected) {
+    LOG_DBG("WEB", "Cannot start webserver - no STA connection (mode=%d, status=%d)", wifiMode, WiFi.status());
     return;
   }
 
-  // Store AP mode flag for later use (e.g., in handleStatus)
-  apMode = isInApMode;
-
-  LOG_DBG("WEB", "Network mode: %s", apMode ? "AP" : "STA");
+  LOG_DBG("WEB", "Network mode: STA");
 
   // Drop font-decompressor hot buffers before the WebServer allocation.
   // Same rationale as the OTA path (dbc8f0f): on ESP32-C3 with ~27 KB free,

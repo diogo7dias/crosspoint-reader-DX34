@@ -89,7 +89,10 @@ class CrossPointWebServer {
   std::unique_ptr<WebServer> server = nullptr;
   std::unique_ptr<WebSocketsServer> wsServer = nullptr;
   bool running = false;
-  bool apMode = false;  // true when running in AP mode, false for STA mode
+  // Lector is STA-only (hotspot / AP support was removed). apMode is a
+  // compile-time constant so the optimizer drops every runtime-dead AP and
+  // captive-portal branch that still reads it below.
+  static constexpr bool apMode = false;
   uint16_t port = 80;
   uint16_t wsPort = 81;  // WebSocket port
   WiFiUDP udp;
