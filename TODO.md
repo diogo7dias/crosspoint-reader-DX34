@@ -2,7 +2,11 @@
 
 Open follow-ups for this firmware. Prioritised top-down. Workflow per item: build → flash → user tests on device → ship in next release. No soak windows, no waiting periods — this is a hobby project, not a paid product.
 
-## LECTOR v0.0.1 — fork in progress (branch `lector`, off `main` 2026-07-01)
+## LECTOR v0.0.1 — fork (branch `lector`, off `main` 2026-07-01)
+
+**STATUS 2026-07-01: all 10 build-order steps implemented, built (flash ~90.9%, 284/284 host tests) and flashed on `lector`.** Device-validation of the later steps ongoing.
+**Deferred / open:** theme-preview has a 3rd "Options" button (user wanted 2) — awaiting call; `ReaderSamplePreview` duplicates ReaderSettingsActivity's inline preview (dedupe); **2b** = rip Bionic (TextBlock.cpp) + kRenderStyle constants/migration + STR_RENDER_* i18n; **4b** = strip runtime-dead AP/captive-portal in CrossPointWebServer.cpp + drop neutered `opds*` settings fields (+golden) + leftover `#ifdef CROSSPOINT_SD_FONTS` blocks + `/fonts` mkdir in main.cpp + dead i18n keys (CALIBRE/HOTSPOT/OPDS/BOOK_PAGE_COUNTER) + web REPO string still `crosspoint-reader-DX34`; Reading-Cache orphan-prune omitted (content-fingerprint cache names, unsafe); wire a Lector release feed for the update-check.
+**Next:** finish device-validation → decide merge `lector` → main vs keep as its own line → cut a Lector release.
 
 Major fork: a clean **EPUB-only** reader for the X4 that restores mom's familiar **Cozette** UI on top of the current feature set. Renamed from `CrossPoint-Mod-DX34` → version string **`Lector-v0.0.1`**. Solo-dev brain-dump (no RFC). Build order = small revertable commits; build + flash + on-device test each; branch stays flashable at every commit. Snappy-input LAW + daily-driver guardrail apply.
 
