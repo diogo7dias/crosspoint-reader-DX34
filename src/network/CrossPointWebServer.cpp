@@ -1995,7 +1995,7 @@ progress { width: 100%; height: 20px; }
 <p><a href="/">Back to Home</a></p>
 
 <script>
-const REPO = 'diogo7dias/crosspoint-reader-DX34';
+const REPO = 'diogo7dias/lector';
 // raw.githubusercontent.com serves the `firmware` branch with
 // Access-Control-Allow-Origin: *, so the browser can fetch the binary
 // directly (GitHub release CDN does NOT send CORS headers).

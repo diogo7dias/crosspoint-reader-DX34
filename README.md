@@ -1,12 +1,14 @@
-# CrossPoint-Mod-DX34
+# Lector
 
-Firmware for the **Xteink X4 / DX34-class ESP32-C3 e-paper reader** — a DX34-focused fork of CrossPoint.
+> ⚠️ **WORK IN PROGRESS.** Lector is an in-development fork — expect bugs and rough edges. It is **not** a stable daily-driver yet. Back up your SD card and use at your own risk.
+
+Firmware for the **Xteink X4 / DX34-class ESP32-C3 e-paper reader** — an EPUB-only reader forked from CrossPoint-Mod-DX34, restoring the compact Cozette UI.
 
 ![](./docs/images/cover.jpg)
 
 ## What this is
 
-A reading-first custom firmware for the X4/DX34: faster book access, richer EPUB controls, managed sleep wallpapers, Wi-Fi transfer, and OTA updates. Prioritises DX34 UX over upstream parity — see [docs/differences-from-upstream.md](./docs/differences-from-upstream.md).
+A reading-first, EPUB-only custom firmware for the X4: five in-flash reader fonts (Bookerly / Georgia / Helvetica / Verdana / Merriweather, sizes 11–16), a live appearance preview, managed sleep wallpapers, and browser-based Wi-Fi transfer + firmware updates (no OTA). See [docs/differences-from-upstream.md](./docs/differences-from-upstream.md).
 
 ## Install
 
