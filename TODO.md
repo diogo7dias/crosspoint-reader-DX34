@@ -6,13 +6,18 @@ Open follow-ups for this firmware. Prioritised top-down. Workflow per item: buil
 
 **DONE + SHIPPED:** all 10 build steps + font-trim to 11-16 + dead-code cleanup (Bionic, kRenderStyle constants/migration, `#ifdef CROSSPOINT_SD_FONTS` blocks, `/fonts` mkdir all removed). Merged `lector`→`main` (ff `369b3f6c`), pushed. GitHub repo **renamed `crosspoint-reader-DX34`→`lector`**; REPO string in CrossPointWebServer.cpp → `diogo7dias/lector`; tag+release `v0.0.1` (WIP, firmware.bin asset) + `firmware` branch pushed. Flash 82.6%. (Update-check feed is MOOT — the on-device check was removed in step 3; updates are the web `/update` page only.)
 
-### Lector tidy-up jobs (post-v0.0.1) — "do all tidy up jobs" maps here
-- [ ] **Theme preview: 2 buttons only.** Remove the 3rd "Options" button in ReadingThemesActivity (user wanted just Back/Apply). Decide where Rename/Update/Delete go (separate management entry, or drop on-device theme management).
-- [ ] **Web-server AP strip.** In CrossPointWebServer.cpp make `apMode` a compile-time `false` (remove the runtime `isInApMode` computation/assignment) so the optimizer drops the runtime-dead AP/captive-portal branches. Device-validate the STA web page/update still work.
-- [ ] **Remove opds settings fields.** `opdsServerUrl/Username/Password` in CrossPointSettings + JsonSettingsIO + SettingsCodec (+ update golden) — careful: still touched by HttpDownloader, the web SettingsList, and HomeActivity's ctor (`onOpdsBrowserOpen`/`hasOpdsUrl`); a multi-file change.
-- [ ] **Dead i18n keys.** Remove STR_CALIBRE_* / STR_HOTSPOT_* / STR_CREATE_HOTSPOT / STR_STATUS_BOOK_PAGE_COUNTER(+_POSITION) / STR_RENDER_THIN/MEDIUM/BIONIC (and STR_OPDS_* once the opds fields are gone) from english.yaml + I18nKeys.h; `python3 scripts/gen_i18n.py`. Grep each StrId first.
-- [ ] **Dedupe ReaderSamplePreview.** Make ReaderSettingsActivity's inline live-preview call `drawReaderSamplePreview` (single source of truth).
-- [ ] **fontIds.h dead constants.** Drop the now-unreferenced `*_17_FONT_ID` defines + the dead getReaderFontId PLAYFAIR_17/VOLLKORN_17 cases (regenerate).
+### Lector tidy-up jobs (post-v0.0.1) — DONE on branch `chore/lector-tidyup` (build green, 284/284 host tests, Flash 82.6%→81.4%); pending device smoke-test before merge to `main`
+- [x] **Theme preview buttons** — user chose to KEEP the 3rd "Options" button (Back/Apply/Options); no code change.
+- [x] **Web-server AP strip** (`6563606a`) — `apMode` is now `static constexpr false`; the `isInApMode` probe/assignment is gone and the optimizer drops the dead AP/captive-portal branches. *Device-validate STA web page + `/update`.*
+- [x] **Remove opds settings fields** (`9143e0be`) — dropped opdsServerUrl/Username/Password from CrossPointSettings + SettingsCodec (JSON key-value, no version bump) + SettingsList; binary-migration reader now read-and-discards them to keep positional alignment; deleted dead `lib/OpdsParser`; neutralised HttpDownloader's opds auth. *Device-validate settings load/save.*
+- [x] **Dead i18n keys** (`1c493032`) — stripped 35 unreferenced keys (STR_CALIBRE_*, STR_CREATE_HOTSPOT/STR_HOTSPOT_DESC, STR_RENDER_THIN/MEDIUM/BIONIC, STR_STATUS_BOOK_PAGE_COUNTER(+_POSITION), STR_OPDS_SERVER_URL) across all 9 YAMLs + regen. Kept STR_HOTSPOT_MODE / STR_STARTING_HOTSPOT / STR_OPDS_BROWSER (still referenced).
+- [x] **Dedupe ReaderSamplePreview** (`36d0044b`) — the reader-settings live preview + theme popup now share `reader::drawReaderSamplePreview` (column-based signature); both callers reproduce their prior geometry byte-for-byte. *Device-validate both previews.*
+- [x] **fontIds.h dead constants** (`0ba1c02e`) — hand-removed the 9 dead `*_17_FONT_ID` defines (cache-safe, no regen) and pointed the BOOKERLY/PLAYFAIR/VOLLKORN LARGE fallbacks at `*_16`.
+
+**Follow-up (found during the sweep, not blocking):**
+- `HttpDownloader` now has ZERO callers in `src` — fully dead, candidate for deletion.
+- 31 orphan size-17 headers still sit in `lib/EpdFont/builtinFonts/` (uncompiled, zero flash) + `build-font-ids.sh` still lists size 17. A future clean font-id regen must drop 17 AND bump `SECTION_FILE_VERSION`.
+- HomeActivity's `OpdsBrowser` menu action + `onOpdsBrowserOpen` callback are dead scaffolding (hasOpdsUrl hardcoded false); removing them means reshaping the ctor + main.cpp wiring.
 
 Major fork: a clean **EPUB-only** reader for the X4 that restores mom's familiar **Cozette** UI on top of the current feature set. Renamed from `CrossPoint-Mod-DX34` → version string **`Lector-v0.0.1`**. Solo-dev brain-dump (no RFC). Build order = small revertable commits; build + flash + on-device test each; branch stays flashable at every commit. Snappy-input LAW + daily-driver guardrail apply.
 
