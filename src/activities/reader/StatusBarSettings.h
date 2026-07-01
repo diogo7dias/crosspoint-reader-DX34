@@ -31,8 +31,6 @@ struct StatusBarSettings {
   uint8_t bookPercentagePosition = 0;
   bool showChapterPercentage = false;
   uint8_t chapterPercentagePosition = 0;
-  bool showBookPageCounter = false;
-  uint8_t bookPageCounterPosition = 0;
   bool showPagesLeft = false;
   uint8_t pagesLeftPosition = 0;
 

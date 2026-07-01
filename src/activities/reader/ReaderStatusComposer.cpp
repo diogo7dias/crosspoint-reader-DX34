@@ -81,14 +81,12 @@ ReserveResult ReaderStatusComposer::reserve(const StatusBarSettings& s, const Re
                                     (s.showPageCounter && statusTextPositionIsTop(s.pageCounterPosition)) ||
                                     (s.showBookPercentage && statusTextPositionIsTop(s.bookPercentagePosition)) ||
                                     (s.showChapterPercentage && statusTextPositionIsTop(s.chapterPercentagePosition)) ||
-                                    (s.showBookPageCounter && statusTextPositionIsTop(s.bookPageCounterPosition)) ||
                                     (s.showPagesLeft && statusTextPositionIsTop(s.pagesLeftPosition));
   const bool showBottomStatusTextRow =
       (s.showBattery && !statusTextPositionIsTop(s.batteryPosition)) ||
       (s.showPageCounter && !statusTextPositionIsTop(s.pageCounterPosition)) ||
       (s.showBookPercentage && !statusTextPositionIsTop(s.bookPercentagePosition)) ||
       (s.showChapterPercentage && !statusTextPositionIsTop(s.chapterPercentagePosition)) ||
-      (s.showBookPageCounter && !statusTextPositionIsTop(s.bookPageCounterPosition)) ||
       (s.showPagesLeft && !statusTextPositionIsTop(s.pagesLeftPosition));
 
   int titleLineCount = s.showChapterTitle ? 1 : 0;
@@ -151,10 +149,6 @@ ReaderStatusBar::StatusBarLayout ReaderStatusComposer::build(const StatusBarSett
     snprintf(buf, sizeof(buf), "C:%.0f%%", layout.chapterProgress);
     layout.chapterPercentageText = buf;
     layout.chapterPercentageTextWidth = measure_.getTextWidth(s.fontId, buf);
-  }
-  if (s.showBookPageCounter && !values.bookPageCounterText.empty()) {
-    layout.bookPageCounterText = values.bookPageCounterText;
-    layout.bookPageCounterTextWidth = measure_.getTextWidth(s.fontId, layout.bookPageCounterText.c_str());
   }
   if (s.showPagesLeft && values.pageCount > 0) {
     // Pages remaining to the end of the current chapter/file. currentPage0 is

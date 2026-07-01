@@ -193,14 +193,6 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Enum(StrId::STR_STATUS_BAR_THICKNESS, &CrossPointSettings::statusBarBarThickness,
                                   {StrId::STR_STATUS_BAR_THICKNESS_NORMAL, StrId::STR_STATUS_BAR_THICKNESS_DOUBLE},
                                   "statusBarBarThickness", StrId::STR_STATUS_BAR));
-    s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_BOOK_PAGE_COUNTER,
-                                    &CrossPointSettings::statusBarShowBookPageCounter, "statusBarShowBookPageCounter",
-                                    StrId::STR_STATUS_BAR));
-    s.push_back(SettingInfo::Enum(
-        StrId::STR_STATUS_BOOK_PAGE_COUNTER_POSITION, &CrossPointSettings::statusBarBookPageCounterPosition,
-        {StrId::STR_STATUS_POS_TOP_LEFT, StrId::STR_STATUS_POS_TOP_CENTER, StrId::STR_STATUS_POS_TOP_RIGHT,
-         StrId::STR_STATUS_POS_BOTTOM_LEFT, StrId::STR_STATUS_POS_BOTTOM_CENTER, StrId::STR_STATUS_POS_BOTTOM_RIGHT},
-        "statusBarBookPageCounterPosition", StrId::STR_STATUS_BAR));
     s.push_back(SettingInfo::Toggle(StrId::STR_STATUS_CHAPTER_PAGES_LEFT, &CrossPointSettings::statusBarShowPagesLeft,
                                     "statusBarShowPagesLeft", StrId::STR_STATUS_BAR));
     s.push_back(SettingInfo::Enum(

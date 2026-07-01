@@ -73,8 +73,6 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["statusBarTextAlignment"] = s.statusBarTextAlignment;
   doc["statusBarProgressStyle"] = s.statusBarProgressStyle;
   doc["statusBarBarThickness"] = s.statusBarBarThickness;
-  doc["statusBarShowBookPageCounter"] = s.statusBarShowBookPageCounter;
-  doc["statusBarBookPageCounterPosition"] = s.statusBarBookPageCounterPosition;
   doc["statusBarShowPagesLeft"] = s.statusBarShowPagesLeft;
   doc["statusBarPagesLeftPosition"] = s.statusBarPagesLeftPosition;
   doc["statusBarTitleContent"] = s.statusBarTitleContent;
@@ -298,10 +296,6 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
                                         S::STATUS_BAR_BAR_THICKNESS_COUNT, S::STATUS_BAR_THICKNESS_NORMAL);
     // v6.0.0 granular status-bar items (see populateSettingsDoc). Absent from files
     // written before this fix -> fall back to struct defaults; persisted on next save.
-    s.statusBarShowBookPageCounter = doc["statusBarShowBookPageCounter"] | (uint8_t)0;
-    s.statusBarBookPageCounterPosition =
-        clampEnum(doc["statusBarBookPageCounterPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_CENTER,
-                  S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_CENTER);
     s.statusBarShowPagesLeft = doc["statusBarShowPagesLeft"] | (uint8_t)0;
     s.statusBarPagesLeftPosition = clampEnum(doc["statusBarPagesLeftPosition"] | (uint8_t)S::STATUS_TEXT_BOTTOM_RIGHT,
                                              S::STATUS_BAR_TEXT_POSITION_COUNT, S::STATUS_TEXT_BOTTOM_RIGHT);

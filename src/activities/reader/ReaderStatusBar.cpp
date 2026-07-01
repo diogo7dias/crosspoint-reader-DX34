@@ -132,9 +132,6 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
     const bool showBandChapterPercentage =
         !statusBarLayout.chapterPercentageText.empty() &&
         (statusTextPositionIsTop(SETTINGS.statusBarChapterPercentagePosition) == renderTopBand);
-    const bool showBandBookPageCounter =
-        !statusBarLayout.bookPageCounterText.empty() &&
-        (statusTextPositionIsTop(SETTINGS.statusBarBookPageCounterPosition) == renderTopBand);
     const bool showBandPagesLeft = !statusBarLayout.pagesLeftText.empty() &&
                                    (statusTextPositionIsTop(SETTINGS.statusBarPagesLeftPosition) == renderTopBand);
     const bool showBandChapterNumber =
@@ -145,8 +142,8 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
     const bool showBandFreeHeap = !statusBarLayout.freeHeapText.empty() &&
                                   (statusTextPositionIsTop(SETTINGS.statusBarFreeHeapPosition) == renderTopBand);
     const bool showBandProgressText = showBandPageCounter || showBandBookPercentage || showBandChapterPercentage ||
-                                      showBandBookPageCounter || showBandPagesLeft || showBandChapterNumber ||
-                                      showBandQuoteCount || showBandFreeHeap;
+                                      showBandPagesLeft || showBandChapterNumber || showBandQuoteCount ||
+                                      showBandFreeHeap;
     const bool showBandTitle = SETTINGS.statusBarShowChapterTitle && !statusBarLayout.titleLines.empty() &&
                                (statusBarItemIsTop(SETTINGS.statusBarTitlePosition) == renderTopBand);
     const bool showBandBookBar =
@@ -256,8 +253,6 @@ void renderStatusBar(GfxRenderer& renderer, const StatusBarLayout& statusBarLayo
               SETTINGS.statusBarBookPercentagePosition);
       addItem(showBandChapterPercentage, &statusBarLayout.chapterPercentageText,
               statusBarLayout.chapterPercentageTextWidth, SETTINGS.statusBarChapterPercentagePosition);
-      addItem(showBandBookPageCounter, &statusBarLayout.bookPageCounterText, statusBarLayout.bookPageCounterTextWidth,
-              SETTINGS.statusBarBookPageCounterPosition);
       addItem(showBandPagesLeft, &statusBarLayout.pagesLeftText, statusBarLayout.pagesLeftTextWidth,
               SETTINGS.statusBarPagesLeftPosition);
       addItem(showBandChapterNumber, &statusBarLayout.chapterNumberText, statusBarLayout.chapterNumberTextWidth,

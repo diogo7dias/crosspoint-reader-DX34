@@ -71,8 +71,6 @@ void writeReadingThemeObject(JsonObject obj, const ReadingTheme& theme) {
   obj["statusBarTextAlignment"] = theme.statusBarTextAlignment;
   obj["statusBarProgressStyle"] = theme.statusBarProgressStyle;
   obj["statusBarBarThickness"] = theme.statusBarBarThickness;
-  obj["statusBarShowBookPageCounter"] = theme.statusBarShowBookPageCounter;
-  obj["statusBarBookPageCounterPosition"] = theme.statusBarBookPageCounterPosition;
   obj["statusBarShowPagesLeft"] = theme.statusBarShowPagesLeft;
   obj["statusBarPagesLeftPosition"] = theme.statusBarPagesLeftPosition;
   obj["statusBarTitleContent"] = theme.statusBarTitleContent;
@@ -189,9 +187,6 @@ void readReadingThemeObject(JsonObject obj, ReadingTheme& theme) {
   theme.statusBarTextAlignment = obj["statusBarTextAlignment"] | (uint8_t)CrossPointSettings::STATUS_TEXT_RIGHT;
   theme.statusBarProgressStyle = obj["statusBarProgressStyle"] | (uint8_t)CrossPointSettings::STATUS_BAR_THICK;
   theme.statusBarBarThickness = obj["statusBarBarThickness"] | (uint8_t)CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL;
-  theme.statusBarShowBookPageCounter = obj["statusBarShowBookPageCounter"] | (uint8_t)0;
-  theme.statusBarBookPageCounterPosition =
-      obj["statusBarBookPageCounterPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER;
   theme.statusBarShowPagesLeft = obj["statusBarShowPagesLeft"] | (uint8_t)0;
   theme.statusBarPagesLeftPosition =
       obj["statusBarPagesLeftPosition"] | (uint8_t)CrossPointSettings::STATUS_TEXT_BOTTOM_RIGHT;

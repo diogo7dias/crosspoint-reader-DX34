@@ -141,18 +141,15 @@ void test_build_reader_resolved_gated_on_nonempty() {
   StatusBarSettings s = enabledSettings();
   s.showChapterNumber = true;
   s.showQuoteCount = true;
-  s.showBookPageCounter = true;
   s.showPageCounter = true;
   StatusValues v;
   // chapterNumber empty -> hidden even though shown; the rest provided.
   v.chapterNumberText = "";
   v.quoteCountText = "3 quotes";
-  v.bookPageCounterText = "5/100";
   v.pageCounterText = "3/10";
   const Layout l = c.build(s, 400, ReserveResult{0, 0, 0}, v);
   TEST_ASSERT_TRUE(l.chapterNumberText.empty());
   TEST_ASSERT_EQUAL_STRING("3 quotes", l.quoteCountText.c_str());
-  TEST_ASSERT_EQUAL_STRING("5/100", l.bookPageCounterText.c_str());
   TEST_ASSERT_EQUAL_STRING("3/10", l.pageCounterText.c_str());
 }
 

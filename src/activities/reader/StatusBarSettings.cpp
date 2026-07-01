@@ -21,8 +21,6 @@ StatusBarSettings snapshotStatusBarSettings() {
   out.bookPercentagePosition = s.statusBarBookPercentagePosition;
   out.showChapterPercentage = s.statusBarShowChapterPercentage;
   out.chapterPercentagePosition = s.statusBarChapterPercentagePosition;
-  out.showBookPageCounter = s.statusBarShowBookPageCounter;
-  out.bookPageCounterPosition = s.statusBarBookPageCounterPosition;
   out.showPagesLeft = s.statusBarShowPagesLeft;
   out.pagesLeftPosition = s.statusBarPagesLeftPosition;
 

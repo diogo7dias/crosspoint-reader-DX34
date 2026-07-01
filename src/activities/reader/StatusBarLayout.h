@@ -25,8 +25,6 @@ struct StatusBarLayout {
   int bookPercentageTextWidth = 0;
   std::string chapterPercentageText;
   int chapterPercentageTextWidth = 0;
-  std::string bookPageCounterText;
-  int bookPageCounterTextWidth = 0;
   std::string pagesLeftText;
   int pagesLeftTextWidth = 0;
   std::string chapterNumberText;

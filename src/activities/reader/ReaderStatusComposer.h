@@ -54,7 +54,6 @@ struct StatusValues {
   uint32_t freeHeapBytes = 0;
   const char* pagesLeftLabel = "";  // i18n label, resolved reader-side
   std::string pageCounterText;      // ReaderCommon::formatPageCounterText (shared helper)
-  std::string bookPageCounterText;  // EPUB extrapolation / TXT "cur/total"
   std::string chapterNumberText;    // EPUB only
   std::string quoteCountText;       // EPUB only
 };

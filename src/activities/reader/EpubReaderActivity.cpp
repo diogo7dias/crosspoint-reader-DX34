@@ -1624,26 +1624,6 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
   statusValues.pagesLeftLabel = tr(STR_STATUS_PAGES_LEFT_LABEL);
   statusValues.pageCounterText =
       ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode, section->currentPage, section->pageCount);
-  // Book-page counter: extrapolate total book pages from this chapter's pages-per-byte ratio
-  // (was populateBookPageCounterText). Approximate by design (chapter density varies); empty
-  // when the size data isn't available.
-  if (section && epub && section->pageCount > 0) {
-    const size_t bookSize = epub->getBookSize();
-    const size_t prevChapterSize =
-        (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
-    const size_t curChapterSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevChapterSize;
-    if (curChapterSize != 0 && bookSize != 0) {
-      const float pagesPerByte = static_cast<float>(section->pageCount) / static_cast<float>(curChapterSize);
-      const int totalEstimatedPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
-      const int currentAbsPage = std::max(
-          1, std::min(totalEstimatedPages,
-                      static_cast<int>(statusValues.bookProgress / 100.0f * static_cast<float>(totalEstimatedPages) +
-                                       0.5f)));
-      char buf[32];
-      snprintf(buf, sizeof(buf), "%d/%d", currentAbsPage, totalEstimatedPages);
-      statusValues.bookPageCounterText = buf;
-    }
-  }
   // Chapter number (EPUB only).
   if (section && epub) {
     const int total = epub->getTocItemsCount();

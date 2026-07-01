@@ -139,8 +139,6 @@ ReadingTheme ReadingThemeStore::fromSettings(const std::string& name, const Cros
   theme.statusBarTextAlignment = settings.statusBarTextAlignment;
   theme.statusBarProgressStyle = settings.statusBarProgressStyle;
   theme.statusBarBarThickness = settings.statusBarBarThickness;
-  theme.statusBarShowBookPageCounter = settings.statusBarShowBookPageCounter;
-  theme.statusBarBookPageCounterPosition = settings.statusBarBookPageCounterPosition;
   theme.statusBarShowPagesLeft = settings.statusBarShowPagesLeft;
   theme.statusBarPagesLeftPosition = settings.statusBarPagesLeftPosition;
   theme.statusBarTitleContent = settings.statusBarTitleContent;
@@ -227,10 +225,6 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
   settings.statusBarBarThickness =
       clampRange(theme.statusBarBarThickness, 0, CrossPointSettings::STATUS_BAR_BAR_THICKNESS_COUNT - 1,
                  CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL);
-  settings.statusBarShowBookPageCounter = theme.statusBarShowBookPageCounter ? 1 : 0;
-  settings.statusBarBookPageCounterPosition =
-      clampRange(theme.statusBarBookPageCounterPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
-                 CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER);
   settings.statusBarShowPagesLeft = theme.statusBarShowPagesLeft ? 1 : 0;
   settings.statusBarPagesLeftPosition =
       clampRange(theme.statusBarPagesLeftPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
@@ -285,8 +279,6 @@ bool ReadingThemeStore::matchesCurrent(const ReadingTheme& theme) const {
          current.statusBarTextAlignment == theme.statusBarTextAlignment &&
          current.statusBarProgressStyle == theme.statusBarProgressStyle &&
          current.statusBarBarThickness == theme.statusBarBarThickness &&
-         current.statusBarShowBookPageCounter == theme.statusBarShowBookPageCounter &&
-         current.statusBarBookPageCounterPosition == theme.statusBarBookPageCounterPosition &&
          current.statusBarShowPagesLeft == theme.statusBarShowPagesLeft &&
          current.statusBarPagesLeftPosition == theme.statusBarPagesLeftPosition &&
          current.statusBarTitleContent == theme.statusBarTitleContent &&
@@ -596,10 +588,6 @@ ReadingTheme ReadingThemeStore::normalizeTheme(const ReadingTheme& theme) {
   normalized.statusBarBarThickness =
       clampRange(theme.statusBarBarThickness, 0, CrossPointSettings::STATUS_BAR_BAR_THICKNESS_COUNT - 1,
                  CrossPointSettings::STATUS_BAR_THICKNESS_NORMAL);
-  normalized.statusBarShowBookPageCounter = theme.statusBarShowBookPageCounter ? 1 : 0;
-  normalized.statusBarBookPageCounterPosition =
-      clampRange(theme.statusBarBookPageCounterPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,
-                 CrossPointSettings::STATUS_TEXT_BOTTOM_CENTER);
   normalized.statusBarShowPagesLeft = theme.statusBarShowPagesLeft ? 1 : 0;
   normalized.statusBarPagesLeftPosition =
       clampRange(theme.statusBarPagesLeftPosition, 0, CrossPointSettings::STATUS_BAR_TEXT_POSITION_COUNT - 1,

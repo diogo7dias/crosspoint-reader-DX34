@@ -81,7 +81,6 @@ void test_round_trip_identity() {
 void test_drift_parity_granular_status_bar() {
   CrossPointSettings a;
   a.statusBarShowFreeHeap = 1;
-  a.statusBarShowBookPageCounter = 1;
   a.statusBarShowPagesLeft = 1;
   a.statusBarShowChapterNumber = 1;
   a.statusBarShowQuoteCount = 1;
@@ -93,7 +92,6 @@ void test_drift_parity_granular_status_bar() {
   TEST_ASSERT_TRUE(decodeSettings(b, json.c_str(), testEnv(), &needsResave));
 
   TEST_ASSERT_EQUAL_UINT8(1, b.statusBarShowFreeHeap);
-  TEST_ASSERT_EQUAL_UINT8(1, b.statusBarShowBookPageCounter);
   TEST_ASSERT_EQUAL_UINT8(1, b.statusBarShowPagesLeft);
   TEST_ASSERT_EQUAL_UINT8(1, b.statusBarShowChapterNumber);
   TEST_ASSERT_EQUAL_UINT8(1, b.statusBarShowQuoteCount);
@@ -157,7 +155,7 @@ void test_golden_default_snapshot() {
       "\"statusBarProgressTextPosition\":1,\"statusBarPageCounterPosition\":4,\"statusBarBookPercentagePosition\":4,"
       "\"statusBarChapterPercentagePosition\":4,\"statusBarBookBarPosition\":1,\"statusBarChapterBarPosition\":1,"
       "\"statusBarTitlePosition\":1,\"statusBarTextAlignment\":0,\"statusBarProgressStyle\":1,"
-      "\"statusBarBarThickness\":0,\"statusBarShowBookPageCounter\":0,\"statusBarBookPageCounterPosition\":4,"
+      "\"statusBarBarThickness\":0,"
       "\"statusBarShowPagesLeft\":0,\"statusBarPagesLeftPosition\":5,\"statusBarTitleContent\":0,"
       "\"statusBarShowChapterNumber\":0,\"statusBarChapterNumberPosition\":3,\"statusBarShowQuoteCount\":0,"
       "\"statusBarQuoteCountPosition\":5,\"statusBarShowFreeHeap\":0,\"statusBarFreeHeapPosition\":2,"

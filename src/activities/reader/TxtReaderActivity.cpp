@@ -871,9 +871,6 @@ bool TxtReaderActivity::renderPage() {
   statusValues.pagesLeftLabel = tr(STR_STATUS_PAGES_LEFT_LABEL);
   statusValues.pageCounterText =
       ReaderCommon::formatPageCounterText(SETTINGS.statusBarPageCounterMode, currentPage, totalPages);
-  if (totalPages > 0) {
-    statusValues.bookPageCounterText = std::to_string(currentPage + 1) + "/" + std::to_string(totalPages);
-  }
   const StatusBarLayout statusBarLayout = statusBar_.build(statusSettings, usableWidth, reserved, statusValues);
   renderer.setRenderMode(GfxRenderer::BW);
   renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(SETTINGS.textRenderMode));
