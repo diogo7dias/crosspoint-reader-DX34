@@ -2,11 +2,17 @@
 
 Open follow-ups for this firmware. Prioritised top-down. Workflow per item: build → flash → user tests on device → ship in next release. No soak windows, no waiting periods — this is a hobby project, not a paid product.
 
-## LECTOR v0.0.1 — fork (branch `lector`, off `main` 2026-07-01)
+## LECTOR — RELEASED v0.0.1 (2026-07-01)
 
-**STATUS 2026-07-01: all 10 build-order steps implemented, built (flash ~90.9%, 284/284 host tests) and flashed on `lector`.** Device-validation of the later steps ongoing.
-**Deferred / open:** theme-preview has a 3rd "Options" button (user wanted 2) — awaiting call; `ReaderSamplePreview` duplicates ReaderSettingsActivity's inline preview (dedupe); **2b** = rip Bionic (TextBlock.cpp) + kRenderStyle constants/migration + STR_RENDER_* i18n; **4b** = strip runtime-dead AP/captive-portal in CrossPointWebServer.cpp + drop neutered `opds*` settings fields (+golden) + leftover `#ifdef CROSSPOINT_SD_FONTS` blocks + `/fonts` mkdir in main.cpp + dead i18n keys (CALIBRE/HOTSPOT/OPDS/BOOK_PAGE_COUNTER) + web REPO string still `crosspoint-reader-DX34`; Reading-Cache orphan-prune omitted (content-fingerprint cache names, unsafe); wire a Lector release feed for the update-check.
-**Next:** finish device-validation → decide merge `lector` → main vs keep as its own line → cut a Lector release.
+**DONE + SHIPPED:** all 10 build steps + font-trim to 11-16 + dead-code cleanup (Bionic, kRenderStyle constants/migration, `#ifdef CROSSPOINT_SD_FONTS` blocks, `/fonts` mkdir all removed). Merged `lector`→`main` (ff `369b3f6c`), pushed. GitHub repo **renamed `crosspoint-reader-DX34`→`lector`**; REPO string in CrossPointWebServer.cpp → `diogo7dias/lector`; tag+release `v0.0.1` (WIP, firmware.bin asset) + `firmware` branch pushed. Flash 82.6%. (Update-check feed is MOOT — the on-device check was removed in step 3; updates are the web `/update` page only.)
+
+### Lector tidy-up jobs (post-v0.0.1) — "do all tidy up jobs" maps here
+- [ ] **Theme preview: 2 buttons only.** Remove the 3rd "Options" button in ReadingThemesActivity (user wanted just Back/Apply). Decide where Rename/Update/Delete go (separate management entry, or drop on-device theme management).
+- [ ] **Web-server AP strip.** In CrossPointWebServer.cpp make `apMode` a compile-time `false` (remove the runtime `isInApMode` computation/assignment) so the optimizer drops the runtime-dead AP/captive-portal branches. Device-validate the STA web page/update still work.
+- [ ] **Remove opds settings fields.** `opdsServerUrl/Username/Password` in CrossPointSettings + JsonSettingsIO + SettingsCodec (+ update golden) — careful: still touched by HttpDownloader, the web SettingsList, and HomeActivity's ctor (`onOpdsBrowserOpen`/`hasOpdsUrl`); a multi-file change.
+- [ ] **Dead i18n keys.** Remove STR_CALIBRE_* / STR_HOTSPOT_* / STR_CREATE_HOTSPOT / STR_STATUS_BOOK_PAGE_COUNTER(+_POSITION) / STR_RENDER_THIN/MEDIUM/BIONIC (and STR_OPDS_* once the opds fields are gone) from english.yaml + I18nKeys.h; `python3 scripts/gen_i18n.py`. Grep each StrId first.
+- [ ] **Dedupe ReaderSamplePreview.** Make ReaderSettingsActivity's inline live-preview call `drawReaderSamplePreview` (single source of truth).
+- [ ] **fontIds.h dead constants.** Drop the now-unreferenced `*_17_FONT_ID` defines + the dead getReaderFontId PLAYFAIR_17/VOLLKORN_17 cases (regenerate).
 
 Major fork: a clean **EPUB-only** reader for the X4 that restores mom's familiar **Cozette** UI on top of the current feature set. Renamed from `CrossPoint-Mod-DX34` → version string **`Lector-v0.0.1`**. Solo-dev brain-dump (no RFC). Build order = small revertable commits; build + flash + on-device test each; branch stays flashable at every commit. Snappy-input LAW + daily-driver guardrail apply.
 
