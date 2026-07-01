@@ -45,7 +45,6 @@
 #include "SilentRestart.h"
 #include "activities/boot_sleep/BootActivity.h"
 #include "activities/boot_sleep/SleepActivity.h"
-#include "activities/browser/OpdsBookBrowserActivity.h"
 #include "activities/home/HomeActivity.h"
 #include "activities/home/MyLibraryActivity.h"
 #include "activities/home/RecentBooksActivity.h"
@@ -56,11 +55,6 @@
 #include "boot/BootSequenceOrchestrator.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
-#ifdef CROSSPOINT_SD_FONTS
-#include "fonts/HalSdFontIo.h"
-#include "fonts/ReaderFontActivation.h"
-#include "fonts/SdFontManager.h"
-#endif  // CROSSPOINT_SD_FONTS
 
 // The 5 flash reader families' in-between sizes 11/13/15. Baked into flash in the
 // flash-extra build (default) so the size picker offers {11,12,13,14,15,16,17};
@@ -950,10 +944,9 @@ void onGoToMyLibraryWithPath(const std::string& path) {
 }
 
 static void openBrowserInline() {
-  TransitionFeedback::resetStacking();
-  TransitionFeedback::show(renderer, tr(STR_LOADING_BROWSER));
-  exitActivity();
-  enterNewActivity(new (std::nothrow) OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
+  // OPDS browser removed in Lector; the home menu item that reached it is gone, so
+  // this route is unreachable in practice. Route home if it is ever requested.
+  lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Home, ""});
 }
 
 void onGoToBrowser() { lifecycle::ActivityRouter::instance().request({lifecycle::RouteId::Browser, ""}); }

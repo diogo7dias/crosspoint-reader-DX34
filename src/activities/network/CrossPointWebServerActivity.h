@@ -5,7 +5,6 @@
 #include <string>
 
 #include "HalDisplay.h"
-#include "NetworkModeSelectionActivity.h"
 #include "activities/ActivityWithSubactivity.h"
 #include "network/CrossPointWebServer.h"
 
@@ -29,12 +28,12 @@ enum class WebServerActivityState {
  * - Cleans up the server and shuts down WiFi on exit
  */
 class CrossPointWebServerActivity final : public ActivityWithSubactivity {
-  WebServerActivityState state = WebServerActivityState::MODE_SELECTION;
+  WebServerActivityState state = WebServerActivityState::WIFI_SELECTION;
   const std::function<void()> onGoBack;
 
-  // Network mode
-  NetworkMode networkMode = NetworkMode::JOIN_NETWORK;
-  bool isApMode = false;
+  // Lector is station-mode only (hotspot/AP removed). Kept as a const false so the
+  // few remaining STA/AP-shared render helpers read cleanly; never set true.
+  static constexpr bool isApMode = false;
 
   // Web server - owned by this activity
   std::unique_ptr<CrossPointWebServer> webServer;
@@ -61,9 +60,7 @@ class CrossPointWebServerActivity final : public ActivityWithSubactivity {
   void renderServerRunning() const;
   void renderWifiIndicator(int subHeaderTop) const;
 
-  void onNetworkModeSelected(NetworkMode mode);
   void onWifiSelectionComplete(bool connected);
-  void startAccessPoint();
   void startWebServer();
   void stopWebServer();
 

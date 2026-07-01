@@ -7,7 +7,6 @@
 #include <algorithm>
 
 #include "ButtonRemapActivity.h"
-#include "CalibreSettingsActivity.h"
 #include "CleanupStorageActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
@@ -266,7 +265,6 @@ void SettingsActivity::buildSettingsList() {
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEANUP_STORAGE, SettingAction::CleanupStorage));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
@@ -639,9 +637,6 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::KOReaderSync:
         enterSubActivity(new (std::nothrow) KOReaderSettingsActivity(renderer, mappedInput, onComplete));
-        break;
-      case SettingAction::OPDSBrowser:
-        enterSubActivity(new (std::nothrow) CalibreSettingsActivity(renderer, mappedInput, onComplete));
         break;
       case SettingAction::Network:
         enterSubActivity(new (std::nothrow) WifiSelectionActivity(renderer, mappedInput, onCompleteBool, false));

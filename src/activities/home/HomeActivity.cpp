@@ -226,8 +226,10 @@ void HomeActivity::onEnter() {
   refreshSleepFavoriteWarning();
   refreshSleepOverLimit();
 
-  // Check if OPDS browser URL is configured
-  hasOpdsUrl = strlen(SETTINGS.opdsServerUrl) > 0;
+  // OPDS browser removed in Lector: the home menu item never appears. (The
+  // opdsServerUrl setting field is retained but unused pending a settings-schema
+  // cleanup.)
+  hasOpdsUrl = false;
 
   selectorIndex = 1;  // Default focus on first recent book
   scrollOffset = 0;

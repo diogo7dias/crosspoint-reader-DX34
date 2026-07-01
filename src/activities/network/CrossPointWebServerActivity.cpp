@@ -13,9 +13,7 @@
 #include <new>
 
 #include "MappedInputManager.h"
-#include "NetworkModeSelectionActivity.h"
 #include "WifiSelectionActivity.h"
-#include "activities/network/CalibreConnectActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
 #include "network/WifiTeardown.h"
@@ -46,21 +44,19 @@ int barsForRssi(int rssi, int currentBars) {
 void CrossPointWebServerActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
-  // Reset state
-  state = WebServerActivityState::MODE_SELECTION;
-  networkMode = NetworkMode::JOIN_NETWORK;
-  isApMode = false;
+  // Lector is station-mode only (hotspot/Calibre removed): skip the old
+  // network-mode menu and go straight to Wi-Fi selection. The browser web page is
+  // the file-transfer + firmware-update path.
+  state = WebServerActivityState::WIFI_SELECTION;
   connectedIP.clear();
   connectedSSID.clear();
   lastHandleClientTime = 0;
   requestUpdate();
 
-  // Launch network mode selection subactivity
-  LOG_DBG("WEBACT", "Launching NetworkModeSelectionActivity...");
-  enterNewActivity(new (std::nothrow) NetworkModeSelectionActivity(
-      renderer, mappedInput, [this](const NetworkMode mode) { onNetworkModeSelected(mode); },
-      [this]() { onGoBack(); }  // Cancel goes back to home
-      ));
+  LOG_DBG("WEBACT", "Turning on WiFi (STA mode)...");
+  WiFi.mode(WIFI_STA);
+  enterNewActivity(new (std::nothrow) WifiSelectionActivity(
+      renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
 }
 
 void CrossPointWebServerActivity::onExit() {
@@ -91,50 +87,6 @@ void CrossPointWebServerActivity::onExit() {
   net::teardownAndReclaim(wifiWasUp, net::WifiRestartTarget::Home, "wifi-exit-CrossPointWebServer", isApMode);
 }
 
-void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) {
-  const char* modeName = "Join Network";
-  if (mode == NetworkMode::CONNECT_CALIBRE) {
-    modeName = "Connect to Calibre";
-  } else if (mode == NetworkMode::CREATE_HOTSPOT) {
-    modeName = "Create Hotspot";
-  }
-  LOG_DBG("WEBACT", "Network mode selected: %s", modeName);
-
-  networkMode = mode;
-  isApMode = (mode == NetworkMode::CREATE_HOTSPOT);
-
-  // Exit mode selection subactivity
-  exitActivity();
-
-  if (mode == NetworkMode::CONNECT_CALIBRE) {
-    exitActivity();
-    enterNewActivity(new (std::nothrow) CalibreConnectActivity(renderer, mappedInput, [this] {
-      exitActivity();
-      state = WebServerActivityState::MODE_SELECTION;
-      enterNewActivity(new (std::nothrow) NetworkModeSelectionActivity(
-          renderer, mappedInput, [this](const NetworkMode nextMode) { onNetworkModeSelected(nextMode); },
-          [this]() { onGoBack(); }));
-    }));
-    return;
-  }
-
-  if (mode == NetworkMode::JOIN_NETWORK) {
-    // STA mode - launch WiFi selection
-    LOG_DBG("WEBACT", "Turning on WiFi (STA mode)...");
-    WiFi.mode(WIFI_STA);
-
-    state = WebServerActivityState::WIFI_SELECTION;
-    LOG_DBG("WEBACT", "Launching WifiSelectionActivity...");
-    enterNewActivity(new (std::nothrow) WifiSelectionActivity(
-        renderer, mappedInput, [this](const bool connected) { onWifiSelectionComplete(connected); }));
-  } else {
-    // AP mode - start access point
-    state = WebServerActivityState::AP_STARTING;
-    requestUpdate();
-    startAccessPoint();
-  }
-}
-
 void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) {
   LOG_DBG("WEBACT", "WifiSelectionActivity completed, connected=%d", connected);
 
@@ -142,7 +94,6 @@ void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) 
     // Get connection info before exiting subactivity
     connectedIP = static_cast<WifiSelectionActivity*>(subActivity.get())->getConnectedIP();
     connectedSSID = WiFi.SSID().c_str();
-    isApMode = false;
 
     exitActivity();
 
@@ -154,68 +105,10 @@ void CrossPointWebServerActivity::onWifiSelectionComplete(const bool connected) 
     // Start the web server
     startWebServer();
   } else {
-    // User cancelled - go back to mode selection
+    // User cancelled Wi-Fi selection — return home.
     exitActivity();
-    state = WebServerActivityState::MODE_SELECTION;
-    enterNewActivity(new (std::nothrow) NetworkModeSelectionActivity(
-        renderer, mappedInput, [this](const NetworkMode mode) { onNetworkModeSelected(mode); },
-        [this]() { onGoBack(); }));
-  }
-}
-
-void CrossPointWebServerActivity::startAccessPoint() {
-  LOG_DBG("WEBACT", "Starting Access Point mode...");
-  LOG_DBG("WEBACT", "Free heap before AP start: %d bytes", ESP.getFreeHeap());
-
-  // Configure and start the AP
-  WiFi.mode(WIFI_AP);
-  delay(100);
-
-  // Start soft AP
-  bool apStarted;
-  if (AP_PASSWORD && strlen(AP_PASSWORD) >= 8) {
-    apStarted = WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  } else {
-    // Open network (no password)
-    apStarted = WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  }
-
-  if (!apStarted) {
-    LOG_ERR("WEBACT", "ERROR: Failed to start Access Point!");
     onGoBack();
-    return;
   }
-
-  delay(100);  // Wait for AP to fully initialize
-
-  // Get AP IP address
-  const IPAddress apIP = WiFi.softAPIP();
-  char ipStr[16];
-  snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", apIP[0], apIP[1], apIP[2], apIP[3]);
-  connectedIP = ipStr;
-  connectedSSID = AP_SSID;
-
-  LOG_DBG("WEBACT", "Access Point started!");
-  LOG_DBG("WEBACT", "SSID: %s", AP_SSID);
-  LOG_DBG("WEBACT", "IP: %s", connectedIP.c_str());
-
-  // Skip mDNS in AP mode: the DNS captive portal below already redirects every
-  // hostname to apIP, so the MDNS responder is dead weight (~6.5 KB heap) on a
-  // chip whose AP-mode baseline is already tight. Phones type the IP or land
-  // via captive-portal probe regardless.
-
-  // Start DNS server for captive portal behavior
-  // This redirects all DNS queries to our IP, making any domain typed resolve to us
-  dnsServer.reset(new (std::nothrow) DNSServer());
-  if (!dnsServer) {
-    LOG_ERR("WEBACT", "OOM new DNSServer — captive portal DNS disabled");
-  } else {
-    dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
-    dnsServer->start(DNS_PORT, "*", apIP);
-  }
-
-  // Start the web server
-  startWebServer();
 }
 
 void CrossPointWebServerActivity::startWebServer() {
