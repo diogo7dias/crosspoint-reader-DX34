@@ -179,7 +179,7 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
     case SIZE_16:
       return SIZE_16;
     case LARGE:
-      return LARGE;  // 17pt
+      return SIZE_16;  // 17 removed -> 16
     case SIZE_11:
       return extra ? SIZE_11 : SIZE_12;  // extra: real 11; else -> 12
     case SIZE_13:
@@ -187,11 +187,11 @@ uint8_t CrossPointSettings::normalizeFontSizeForFamily(const uint8_t family, con
     case SIZE_15:
       return extra ? SIZE_15 : SIZE_16;  // extra: real 15; else -> 16
     case SIZE_18:
-      return (extra && kSdExtraSizes) ? SIZE_18 : LARGE;  // SD-only real 18; else -> 17
+      return (extra && kSdExtraSizes) ? SIZE_18 : SIZE_16;  // SD-only real 18; else -> 16
     case MEDIUM:
       return SIZE_14;  // legacy 15pt MEDIUM -> 14 (preserve existing user size)
     case X_LARGE:
     default:
-      return LARGE;  // legacy 19 -> 17
+      return SIZE_16;  // legacy -> 16
   }
 }

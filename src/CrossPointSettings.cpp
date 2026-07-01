@@ -465,7 +465,7 @@ uint8_t CrossPointSettings::fontSizeToPointSize(const uint8_t family, const uint
       return 18;
     case LARGE:
     default:
-      return 17;
+      return 16;
   }
 }
 
@@ -486,7 +486,7 @@ uint8_t CrossPointSettings::fontSizeOptionCount(const uint8_t family) {
   if (!familyHasExtraSizes(family)) {
     return 5;
   }
-  return kSdExtraSizes ? 9 : 7;
+  return kSdExtraSizes ? 9 : 6;
 }
 
 uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const uint8_t fontSize) {
@@ -531,9 +531,8 @@ uint8_t CrossPointSettings::fontSizeToDisplayIndex(const uint8_t family, const u
         return 4;
       case SIZE_16:
         return 5;
-      case LARGE:
       default:
-        return 6;  // 17pt
+        return 5;  // 17 removed -> fold to SIZE_16
     }
   }
   // 5-size set: normalize already folded 11/13/15/18 to a kept size.
@@ -592,9 +591,8 @@ uint8_t CrossPointSettings::displayIndexToFontSize(const uint8_t family, const u
         return SIZE_15;
       case 5:
         return SIZE_16;
-      case 6:
       default:
-        return LARGE;  // 17pt
+        return SIZE_16;  // 17 removed
     }
   }
   switch (displayIndex) {
@@ -667,7 +665,7 @@ int CrossPointSettings::getReaderFontId() const {
         return BOOKERLY_18_FONT_ID;
       case LARGE:
       default:
-        return BOOKERLY_17_FONT_ID;
+        return BOOKERLY_16_FONT_ID;
     }
   }
   if (normalizedFamily == GEORGIA) {
@@ -690,7 +688,7 @@ int CrossPointSettings::getReaderFontId() const {
         return GEORGIA_18_FONT_ID;
       case LARGE:
       default:
-        return GEORGIA_17_FONT_ID;
+        return GEORGIA_16_FONT_ID;
     }
   }
   // Lato removed (Lector) — folds to Bookerly via normalizeFontFamily.
@@ -714,7 +712,7 @@ int CrossPointSettings::getReaderFontId() const {
         return HELVETICA_18_FONT_ID;
       case LARGE:
       default:
-        return HELVETICA_17_FONT_ID;
+        return HELVETICA_16_FONT_ID;
     }
   }
   if (normalizedFamily == VERDANA) {
@@ -737,7 +735,7 @@ int CrossPointSettings::getReaderFontId() const {
         return VERDANA_18_FONT_ID;
       case LARGE:
       default:
-        return VERDANA_17_FONT_ID;
+        return VERDANA_16_FONT_ID;
     }
   }
   // Lector: Merriweather is a baked flash family (sizes 11..17). Playfair/Galmuri/
@@ -763,7 +761,7 @@ int CrossPointSettings::getReaderFontId() const {
         return MERRIWEATHER_18_FONT_ID;
       case LARGE:
       default:
-        return MERRIWEATHER_17_FONT_ID;
+        return MERRIWEATHER_16_FONT_ID;
     }
   }
 #ifdef CROSSPOINT_SD_FONTS

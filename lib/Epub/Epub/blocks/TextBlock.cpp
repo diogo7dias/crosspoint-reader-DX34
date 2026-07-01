@@ -12,71 +12,6 @@
 #include <esp_heap_caps.h>
 #endif
 
-// Returns the byte offset into a UTF-8 string at which the bionic bold prefix
-// ends.  The prefix covers roughly half the visible codepoints (rounded up).
-// Leading em-space (U+2003) is skipped so the prefix starts at the first real
-// character.
-static size_t bionicSplitOffset(const char* s, const size_t len) {
-  // Count total codepoints (skip leading em-space)
-  size_t pos = 0;
-  // Skip leading em-space (\xe2\x80\x83 = U+2003)
-  size_t leadingBytes = 0;
-  if (len >= 3 && static_cast<uint8_t>(s[0]) == 0xE2 && static_cast<uint8_t>(s[1]) == 0x80 &&
-      static_cast<uint8_t>(s[2]) == 0x83) {
-    leadingBytes = 3;
-    pos = 3;
-  }
-
-  // Count visible codepoints
-  size_t cpCount = 0;
-  size_t tmpPos = pos;
-  while (tmpPos < len) {
-    const uint8_t b = static_cast<uint8_t>(s[tmpPos]);
-    if (b < 0x80)
-      tmpPos += 1;
-    else if ((b & 0xE0) == 0xC0)
-      tmpPos += 2;
-    else if ((b & 0xF0) == 0xE0)
-      tmpPos += 3;
-    else
-      tmpPos += 4;
-    cpCount++;
-  }
-
-  if (cpCount <= 1) return len;  // 0-1 char words: whole word bold
-
-  // Graduated bold prefix: shorter words get less bold for a subtler effect.
-  //   2-3 chars: bold first letter only
-  //   4-6 chars: bold first 2 chars (~40%)
-  //   7+  chars: bold first ~40% (rounded up)
-  size_t prefixCps;
-  if (cpCount <= 3) {
-    prefixCps = 1;
-  } else if (cpCount <= 6) {
-    prefixCps = 2;
-  } else {
-    prefixCps = (cpCount * 2 + 4) / 5;  // ceil(cpCount * 0.4)
-  }
-
-  // Advance pos by prefixCps codepoints to find byte offset
-  size_t counted = 0;
-  size_t splitPos = pos;
-  while (splitPos < len && counted < prefixCps) {
-    const uint8_t b = static_cast<uint8_t>(s[splitPos]);
-    if (b < 0x80)
-      splitPos += 1;
-    else if ((b & 0xE0) == 0xC0)
-      splitPos += 2;
-    else if ((b & 0xF0) == 0xE0)
-      splitPos += 3;
-    else
-      splitPos += 4;
-    counted++;
-  }
-
-  return splitPos;
-}
-
 void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y) const {
   // Validate iterator bounds before rendering
   if (words.size() != wordXpos.size() || words.size() != wordStyles.size()) {
@@ -85,45 +20,10 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     return;
   }
 
-  // textRenderStyle weight order (CrossPointSettings::TEXT_RENDER_MODE):
-  // 0=thin 1=crisp 2=medium 3=dark 4=bionic. Bionic is 4 — value 2 is Medium.
-  // (This check read == 2 under the old Bionic=2 numbering, which made Medium
-  // wrongly trigger bionic after the weight-order renumber.)
-  const bool bionicMode = renderer.getTextRenderStyle() == 4;
-
   for (size_t i = 0; i < words.size(); i++) {
     const int wordX = wordXpos[i] + x;
     const EpdFontFamily::Style currentStyle = wordStyles[i];
-
-    // Bionic reading: bold the first half of each word (skip if already bold)
-    if (bionicMode && !(currentStyle & EpdFontFamily::BOLD) && !words[i].empty()) {
-      const char* text = words[i].c_str();
-      const size_t len = words[i].size();
-      const size_t splitAt = bionicSplitOffset(text, len);
-
-      if (splitAt >= len) {
-        // Whole word bold
-        const auto boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-        renderer.drawTextSpaced(fontId, wordX, y, text, blockStyle.letterSpacing, true, boldStyle);
-      } else {
-        // Draw bold prefix
-        char prefixBuf[64];
-        const size_t copyLen = (splitAt < sizeof(prefixBuf) - 1) ? splitAt : sizeof(prefixBuf) - 1;
-        memcpy(prefixBuf, text, copyLen);
-        prefixBuf[copyLen] = '\0';
-
-        const auto boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-        renderer.drawTextSpaced(fontId, wordX, y, prefixBuf, blockStyle.letterSpacing, true, boldStyle);
-        const int prefixAdvance =
-            renderer.getTextAdvanceXSpaced(fontId, prefixBuf, blockStyle.letterSpacing, boldStyle);
-
-        // Draw regular suffix
-        renderer.drawTextSpaced(fontId, wordX + prefixAdvance, y, text + splitAt, blockStyle.letterSpacing, true,
-                                currentStyle);
-      }
-    } else {
-      renderer.drawTextSpaced(fontId, wordX, y, words[i].c_str(), blockStyle.letterSpacing, true, currentStyle);
-    }
+    renderer.drawTextSpaced(fontId, wordX, y, words[i].c_str(), blockStyle.letterSpacing, true, currentStyle);
 
     // Skip during the font-cache scan pass: getTextWidthSpaced below forces
     // glyph lookups that miss the warming cache and thrash the SD card, and the

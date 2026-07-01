@@ -225,11 +225,8 @@ class CrossPointSettings {
   // which only Crisp + Dark are now reachable (via renderStyleForTextMode). Kept as
   // named constants so the status bar + OOM recovery can force plain (crisp) text,
   // and so old persisted values migrate through the same numbering.
-  static constexpr uint8_t kRenderStyleThin = 0;
   static constexpr uint8_t kRenderStyleCrisp = 1;
-  static constexpr uint8_t kRenderStyleMedium = 2;
   static constexpr uint8_t kRenderStyleDark = 3;
-  static constexpr uint8_t kRenderStyleBionic = 4;
   // Translate a user render mode to the engine render style passed to the renderer.
   static constexpr uint8_t renderStyleForTextMode(const uint8_t mode) {
     return mode == TEXT_RENDER_DARK ? kRenderStyleDark : kRenderStyleCrisp;
@@ -237,18 +234,9 @@ class CrossPointSettings {
   // Maps a pre-weight-order render-mode value (Crisp=0,Dark=1,Bionic=2,Thin=3) to
   // the weight-order STYLE palette. Pure + header-inline. Unknown input -> Crisp.
   static constexpr uint8_t migrateTextRenderModeToWeightOrder(const uint8_t legacy) {
-    switch (legacy) {
-      case 0:
-        return kRenderStyleCrisp;  // old Crisp(0)  -> 1
-      case 1:
-        return kRenderStyleDark;  // old Dark(1)   -> 3
-      case 2:
-        return kRenderStyleBionic;  // old Bionic(2) -> 4
-      case 3:
-        return kRenderStyleThin;  // old Thin(3)   -> 0
-      default:
-        return kRenderStyleCrisp;
-    }
+    // Legacy v2 numbering was Crisp=0, Dark=1, Bionic=2, Thin=3. Lector keeps only
+    // Crisp/Dark, so old Dark collapses to dark; everything else to crisp.
+    return legacy == 1 ? kRenderStyleDark : kRenderStyleCrisp;
   }
   // Collapse a weight-order STYLE value (0..4) to the 2-way user mode: only the
   // Dark style maps to Dark; every other style is Normal.
@@ -540,11 +528,8 @@ class CrossPointSettings {
 // order and the legacy->weight-order migration map so a future renumber can't
 // silently desync the picker, the renderer literals (GfxRenderer.cpp), or the
 // JsonSettingsIO migration.
-static_assert(CrossPointSettings::kRenderStyleThin == 0, "render-style weight order");
 static_assert(CrossPointSettings::kRenderStyleCrisp == 1, "render-style weight order");
-static_assert(CrossPointSettings::kRenderStyleMedium == 2, "render-style weight order");
 static_assert(CrossPointSettings::kRenderStyleDark == 3, "render-style weight order");
-static_assert(CrossPointSettings::kRenderStyleBionic == 4, "render-style weight order");
 static_assert(CrossPointSettings::TEXT_RENDER_NORMAL == 0, "user render mode order");
 static_assert(CrossPointSettings::TEXT_RENDER_DARK == 1, "user render mode order");
 static_assert(CrossPointSettings::TEXT_RENDER_MODE_COUNT == 2, "render-mode count");
@@ -558,8 +543,6 @@ static_assert(CrossPointSettings::renderStyleForTextMode(CrossPointSettings::TEX
 // Legacy (Crisp=0,Dark=1,Bionic=2,Thin=3) -> weight-order STYLE palette.
 static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(0) == CrossPointSettings::kRenderStyleCrisp, "");
 static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(1) == CrossPointSettings::kRenderStyleDark, "");
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(2) == CrossPointSettings::kRenderStyleBionic, "");
-static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(3) == CrossPointSettings::kRenderStyleThin, "");
 static_assert(CrossPointSettings::migrateTextRenderModeToWeightOrder(99) == CrossPointSettings::kRenderStyleCrisp,
               "unknown legacy render mode -> crisp");
 // Weight-order STYLE -> 2-way user mode collapse (only Dark stays Dark).

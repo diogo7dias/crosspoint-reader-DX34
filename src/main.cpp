@@ -113,140 +113,6 @@
 #include <builtinFonts/verdana_15_regular.h>
 #endif  // flash extra sizes 11/13/15
 
-#ifdef CROSSPOINT_SD_FONTS
-// SD-only Tier-1: size 18 of the 5 flash families + (after these) the SD-only
-// reader families. Never baked into the flash build — the picker tops out at 17.
-#include <builtinFonts/bookerly_18_bold.h>
-#include <builtinFonts/bookerly_18_italic.h>
-#include <builtinFonts/bookerly_18_regular.h>
-#include <builtinFonts/galmuri_14_bold.h>
-#include <builtinFonts/galmuri_14_italic.h>
-#include <builtinFonts/galmuri_14_regular.h>
-#include <builtinFonts/galmuri_28_bold.h>
-#include <builtinFonts/galmuri_28_italic.h>
-#include <builtinFonts/galmuri_28_regular.h>
-#include <builtinFonts/georgia_18_bold.h>
-#include <builtinFonts/georgia_18_italic.h>
-#include <builtinFonts/georgia_18_regular.h>
-#include <builtinFonts/helvetica_18_bold.h>
-#include <builtinFonts/helvetica_18_italic.h>
-#include <builtinFonts/helvetica_18_regular.h>
-#include <builtinFonts/lato_18_bold.h>
-#include <builtinFonts/lato_18_bolditalic.h>
-#include <builtinFonts/lato_18_italic.h>
-#include <builtinFonts/lato_18_regular.h>
-#include <builtinFonts/merriweather_10_bold.h>
-#include <builtinFonts/merriweather_10_bolditalic.h>
-#include <builtinFonts/merriweather_10_italic.h>
-#include <builtinFonts/merriweather_10_regular.h>
-#include <builtinFonts/merriweather_11_bold.h>
-#include <builtinFonts/merriweather_11_bolditalic.h>
-#include <builtinFonts/merriweather_11_italic.h>
-#include <builtinFonts/merriweather_11_regular.h>
-#include <builtinFonts/merriweather_12_bold.h>
-#include <builtinFonts/merriweather_12_bolditalic.h>
-#include <builtinFonts/merriweather_12_italic.h>
-#include <builtinFonts/merriweather_12_regular.h>
-#include <builtinFonts/merriweather_13_bold.h>
-#include <builtinFonts/merriweather_13_bolditalic.h>
-#include <builtinFonts/merriweather_13_italic.h>
-#include <builtinFonts/merriweather_13_regular.h>
-#include <builtinFonts/merriweather_14_bold.h>
-#include <builtinFonts/merriweather_14_bolditalic.h>
-#include <builtinFonts/merriweather_14_italic.h>
-#include <builtinFonts/merriweather_14_regular.h>
-#include <builtinFonts/merriweather_15_bold.h>
-#include <builtinFonts/merriweather_15_bolditalic.h>
-#include <builtinFonts/merriweather_15_italic.h>
-#include <builtinFonts/merriweather_15_regular.h>
-#include <builtinFonts/merriweather_16_bold.h>
-#include <builtinFonts/merriweather_16_bolditalic.h>
-#include <builtinFonts/merriweather_16_italic.h>
-#include <builtinFonts/merriweather_16_regular.h>
-#include <builtinFonts/merriweather_17_bold.h>
-#include <builtinFonts/merriweather_17_bolditalic.h>
-#include <builtinFonts/merriweather_17_italic.h>
-#include <builtinFonts/merriweather_17_regular.h>
-#include <builtinFonts/merriweather_18_bold.h>
-#include <builtinFonts/merriweather_18_bolditalic.h>
-#include <builtinFonts/merriweather_18_italic.h>
-#include <builtinFonts/merriweather_18_regular.h>
-#include <builtinFonts/playfair_10_bold.h>
-#include <builtinFonts/playfair_10_bolditalic.h>
-#include <builtinFonts/playfair_10_italic.h>
-#include <builtinFonts/playfair_10_regular.h>
-#include <builtinFonts/playfair_11_bold.h>
-#include <builtinFonts/playfair_11_bolditalic.h>
-#include <builtinFonts/playfair_11_italic.h>
-#include <builtinFonts/playfair_11_regular.h>
-#include <builtinFonts/playfair_12_bold.h>
-#include <builtinFonts/playfair_12_bolditalic.h>
-#include <builtinFonts/playfair_12_italic.h>
-#include <builtinFonts/playfair_12_regular.h>
-#include <builtinFonts/playfair_13_bold.h>
-#include <builtinFonts/playfair_13_bolditalic.h>
-#include <builtinFonts/playfair_13_italic.h>
-#include <builtinFonts/playfair_13_regular.h>
-#include <builtinFonts/playfair_14_bold.h>
-#include <builtinFonts/playfair_14_bolditalic.h>
-#include <builtinFonts/playfair_14_italic.h>
-#include <builtinFonts/playfair_14_regular.h>
-#include <builtinFonts/playfair_15_bold.h>
-#include <builtinFonts/playfair_15_bolditalic.h>
-#include <builtinFonts/playfair_15_italic.h>
-#include <builtinFonts/playfair_15_regular.h>
-#include <builtinFonts/playfair_16_bold.h>
-#include <builtinFonts/playfair_16_bolditalic.h>
-#include <builtinFonts/playfair_16_italic.h>
-#include <builtinFonts/playfair_16_regular.h>
-#include <builtinFonts/playfair_17_bold.h>
-#include <builtinFonts/playfair_17_bolditalic.h>
-#include <builtinFonts/playfair_17_italic.h>
-#include <builtinFonts/playfair_17_regular.h>
-#include <builtinFonts/playfair_18_bold.h>
-#include <builtinFonts/playfair_18_bolditalic.h>
-#include <builtinFonts/playfair_18_italic.h>
-#include <builtinFonts/playfair_18_regular.h>
-#include <builtinFonts/verdana_18_bold.h>
-#include <builtinFonts/verdana_18_italic.h>
-#include <builtinFonts/verdana_18_regular.h>
-#include <builtinFonts/vollkorn_10_bold.h>
-#include <builtinFonts/vollkorn_10_bolditalic.h>
-#include <builtinFonts/vollkorn_10_italic.h>
-#include <builtinFonts/vollkorn_10_regular.h>
-#include <builtinFonts/vollkorn_11_bold.h>
-#include <builtinFonts/vollkorn_11_bolditalic.h>
-#include <builtinFonts/vollkorn_11_italic.h>
-#include <builtinFonts/vollkorn_11_regular.h>
-#include <builtinFonts/vollkorn_12_bold.h>
-#include <builtinFonts/vollkorn_12_bolditalic.h>
-#include <builtinFonts/vollkorn_12_italic.h>
-#include <builtinFonts/vollkorn_12_regular.h>
-#include <builtinFonts/vollkorn_13_bold.h>
-#include <builtinFonts/vollkorn_13_bolditalic.h>
-#include <builtinFonts/vollkorn_13_italic.h>
-#include <builtinFonts/vollkorn_13_regular.h>
-#include <builtinFonts/vollkorn_14_bold.h>
-#include <builtinFonts/vollkorn_14_bolditalic.h>
-#include <builtinFonts/vollkorn_14_italic.h>
-#include <builtinFonts/vollkorn_14_regular.h>
-#include <builtinFonts/vollkorn_15_bold.h>
-#include <builtinFonts/vollkorn_15_bolditalic.h>
-#include <builtinFonts/vollkorn_15_italic.h>
-#include <builtinFonts/vollkorn_15_regular.h>
-#include <builtinFonts/vollkorn_16_bold.h>
-#include <builtinFonts/vollkorn_16_bolditalic.h>
-#include <builtinFonts/vollkorn_16_italic.h>
-#include <builtinFonts/vollkorn_16_regular.h>
-#include <builtinFonts/vollkorn_17_bold.h>
-#include <builtinFonts/vollkorn_17_bolditalic.h>
-#include <builtinFonts/vollkorn_17_italic.h>
-#include <builtinFonts/vollkorn_17_regular.h>
-#include <builtinFonts/vollkorn_18_bold.h>
-#include <builtinFonts/vollkorn_18_bolditalic.h>
-#include <builtinFonts/vollkorn_18_italic.h>
-#include <builtinFonts/vollkorn_18_regular.h>
-#endif
 
 // Lector UI font = Cozette, reproducing mom's DX34 v11.0.0 look exactly: three
 // distinct sizes baked by convert-ui-only.sh with v11's default flags (dpi 150,
@@ -277,9 +143,6 @@
 #include <builtinFonts/merriweather_16_bold.h>
 #include <builtinFonts/merriweather_16_italic.h>
 #include <builtinFonts/merriweather_16_regular.h>
-#include <builtinFonts/merriweather_17_bold.h>
-#include <builtinFonts/merriweather_17_italic.h>
-#include <builtinFonts/merriweather_17_regular.h>
 #endif
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
@@ -327,10 +190,6 @@ EpdFont bookerly16RegularFont(&bookerly_16_regular);
 EpdFont bookerly16BoldFont(&bookerly_16_bold);
 EpdFont bookerly16ItalicFont(&bookerly_16_italic);
 EpdFontFamily bookerly16FontFamily(&bookerly16RegularFont, &bookerly16BoldFont, &bookerly16ItalicFont, nullptr);
-EpdFont bookerly17RegularFont(&bookerly_17_regular);
-EpdFont bookerly17BoldFont(&bookerly_17_bold);
-EpdFont bookerly17ItalicFont(&bookerly_17_italic);
-EpdFontFamily bookerly17FontFamily(&bookerly17RegularFont, &bookerly17BoldFont, &bookerly17ItalicFont, nullptr);
 // Georgia: serif reader font. Regular, Bold, Italic (no BoldItalic source --
 // slot nullptr, renderer synthesises bold-italic). Sizes 10, 12, 14, 16, 17. Ships full
 // prose punctuation, so no source patching needed (unlike F25).
@@ -352,10 +211,6 @@ EpdFont georgia_16RegularFont(&georgia_16_regular);
 EpdFont georgia_16BoldFont(&georgia_16_bold);
 EpdFont georgia_16ItalicFont(&georgia_16_italic);
 EpdFontFamily georgia_16FontFamily(&georgia_16RegularFont, &georgia_16BoldFont, &georgia_16ItalicFont, nullptr);
-EpdFont georgia_17RegularFont(&georgia_17_regular);
-EpdFont georgia_17BoldFont(&georgia_17_bold);
-EpdFont georgia_17ItalicFont(&georgia_17_italic);
-EpdFontFamily georgia_17FontFamily(&georgia_17RegularFont, &georgia_17BoldFont, &georgia_17ItalicFont, nullptr);
 
 // Lato removed (Lector) — no longer a reader font; UI font is now Cozette.
 
@@ -380,10 +235,6 @@ EpdFont helvetica_16RegularFont(&helvetica_16_regular);
 EpdFont helvetica_16BoldFont(&helvetica_16_bold);
 EpdFont helvetica_16ItalicFont(&helvetica_16_italic);
 EpdFontFamily helvetica_16FontFamily(&helvetica_16RegularFont, &helvetica_16BoldFont, &helvetica_16ItalicFont, nullptr);
-EpdFont helvetica_17RegularFont(&helvetica_17_regular);
-EpdFont helvetica_17BoldFont(&helvetica_17_bold);
-EpdFont helvetica_17ItalicFont(&helvetica_17_italic);
-EpdFontFamily helvetica_17FontFamily(&helvetica_17RegularFont, &helvetica_17BoldFont, &helvetica_17ItalicFont, nullptr);
 
 // Verdana: humanist sans-serif reader font (wide, screen-legible). Regular,
 // Bold, Italic. No BoldItalic source -> nullptr slot, renderer synthesises
@@ -406,10 +257,6 @@ EpdFont verdana_16RegularFont(&verdana_16_regular);
 EpdFont verdana_16BoldFont(&verdana_16_bold);
 EpdFont verdana_16ItalicFont(&verdana_16_italic);
 EpdFontFamily verdana_16FontFamily(&verdana_16RegularFont, &verdana_16BoldFont, &verdana_16ItalicFont, nullptr);
-EpdFont verdana_17RegularFont(&verdana_17_regular);
-EpdFont verdana_17BoldFont(&verdana_17_bold);
-EpdFont verdana_17ItalicFont(&verdana_17_italic);
-EpdFontFamily verdana_17FontFamily(&verdana_17RegularFont, &verdana_17BoldFont, &verdana_17ItalicFont, nullptr);
 
 // Reader sizes 11/13/15 — real flash fonts (tables in flash; bitmaps streamed from
 // SD in SD builds). Baked into the flash build via CROSSPOINT_FLASH_EXTRA_SIZES so
@@ -506,213 +353,8 @@ EpdFont merriweather_16BoldFont(&merriweather_16_bold);
 EpdFont merriweather_16ItalicFont(&merriweather_16_italic);
 EpdFontFamily merriweather_16FontFamily(&merriweather_16RegularFont, &merriweather_16BoldFont,
                                         &merriweather_16ItalicFont, nullptr);
-EpdFont merriweather_17RegularFont(&merriweather_17_regular);
-EpdFont merriweather_17BoldFont(&merriweather_17_bold);
-EpdFont merriweather_17ItalicFont(&merriweather_17_italic);
-EpdFontFamily merriweather_17FontFamily(&merriweather_17RegularFont, &merriweather_17BoldFont,
-                                        &merriweather_17ItalicFont, nullptr);
 #endif  // flash Merriweather 11..17
 
-#ifdef CROSSPOINT_SD_FONTS
-// SD-only Tier-1: size 18 of the 5 flash families + (below) the SD-only families.
-// Never baked into the flash build (picker tops out at 17 there).
-EpdFont bookerly_18RegularFont(&bookerly_18_regular);
-EpdFont bookerly_18BoldFont(&bookerly_18_bold);
-EpdFont bookerly_18ItalicFont(&bookerly_18_italic);
-EpdFontFamily bookerly_18FontFamily(&bookerly_18RegularFont, &bookerly_18BoldFont, &bookerly_18ItalicFont, nullptr);
-EpdFont georgia_18RegularFont(&georgia_18_regular);
-EpdFont georgia_18BoldFont(&georgia_18_bold);
-EpdFont georgia_18ItalicFont(&georgia_18_italic);
-EpdFontFamily georgia_18FontFamily(&georgia_18RegularFont, &georgia_18BoldFont, &georgia_18ItalicFont, nullptr);
-EpdFont lato_18RegularFont(&lato_18_regular);
-EpdFont lato_18BoldFont(&lato_18_bold);
-EpdFont lato_18ItalicFont(&lato_18_italic);
-EpdFont lato_18BoldItalicFont(&lato_18_bolditalic);
-EpdFontFamily lato_18FontFamily(&lato_18RegularFont, &lato_18BoldFont, &lato_18ItalicFont, &lato_18BoldItalicFont);
-EpdFont helvetica_18RegularFont(&helvetica_18_regular);
-EpdFont helvetica_18BoldFont(&helvetica_18_bold);
-EpdFont helvetica_18ItalicFont(&helvetica_18_italic);
-EpdFontFamily helvetica_18FontFamily(&helvetica_18RegularFont, &helvetica_18BoldFont, &helvetica_18ItalicFont, nullptr);
-EpdFont verdana_18RegularFont(&verdana_18_regular);
-EpdFont verdana_18BoldFont(&verdana_18_bold);
-EpdFont verdana_18ItalicFont(&verdana_18_italic);
-EpdFontFamily verdana_18FontFamily(&verdana_18RegularFont, &verdana_18BoldFont, &verdana_18ItalicFont, nullptr);
-// Merriweather: serif reader font (SD-only Tier-1, 4 real weights). Sizes 10..18.
-EpdFont merriweather_10RegularFont(&merriweather_10_regular);
-EpdFont merriweather_10BoldFont(&merriweather_10_bold);
-EpdFont merriweather_10ItalicFont(&merriweather_10_italic);
-EpdFont merriweather_10BoldItalicFont(&merriweather_10_bolditalic);
-EpdFontFamily merriweather_10FontFamily(&merriweather_10RegularFont, &merriweather_10BoldFont,
-                                        &merriweather_10ItalicFont, &merriweather_10BoldItalicFont);
-EpdFont merriweather_11RegularFont(&merriweather_11_regular);
-EpdFont merriweather_11BoldFont(&merriweather_11_bold);
-EpdFont merriweather_11ItalicFont(&merriweather_11_italic);
-EpdFont merriweather_11BoldItalicFont(&merriweather_11_bolditalic);
-EpdFontFamily merriweather_11FontFamily(&merriweather_11RegularFont, &merriweather_11BoldFont,
-                                        &merriweather_11ItalicFont, &merriweather_11BoldItalicFont);
-EpdFont merriweather_12RegularFont(&merriweather_12_regular);
-EpdFont merriweather_12BoldFont(&merriweather_12_bold);
-EpdFont merriweather_12ItalicFont(&merriweather_12_italic);
-EpdFont merriweather_12BoldItalicFont(&merriweather_12_bolditalic);
-EpdFontFamily merriweather_12FontFamily(&merriweather_12RegularFont, &merriweather_12BoldFont,
-                                        &merriweather_12ItalicFont, &merriweather_12BoldItalicFont);
-EpdFont merriweather_13RegularFont(&merriweather_13_regular);
-EpdFont merriweather_13BoldFont(&merriweather_13_bold);
-EpdFont merriweather_13ItalicFont(&merriweather_13_italic);
-EpdFont merriweather_13BoldItalicFont(&merriweather_13_bolditalic);
-EpdFontFamily merriweather_13FontFamily(&merriweather_13RegularFont, &merriweather_13BoldFont,
-                                        &merriweather_13ItalicFont, &merriweather_13BoldItalicFont);
-EpdFont merriweather_14RegularFont(&merriweather_14_regular);
-EpdFont merriweather_14BoldFont(&merriweather_14_bold);
-EpdFont merriweather_14ItalicFont(&merriweather_14_italic);
-EpdFont merriweather_14BoldItalicFont(&merriweather_14_bolditalic);
-EpdFontFamily merriweather_14FontFamily(&merriweather_14RegularFont, &merriweather_14BoldFont,
-                                        &merriweather_14ItalicFont, &merriweather_14BoldItalicFont);
-EpdFont merriweather_15RegularFont(&merriweather_15_regular);
-EpdFont merriweather_15BoldFont(&merriweather_15_bold);
-EpdFont merriweather_15ItalicFont(&merriweather_15_italic);
-EpdFont merriweather_15BoldItalicFont(&merriweather_15_bolditalic);
-EpdFontFamily merriweather_15FontFamily(&merriweather_15RegularFont, &merriweather_15BoldFont,
-                                        &merriweather_15ItalicFont, &merriweather_15BoldItalicFont);
-EpdFont merriweather_16RegularFont(&merriweather_16_regular);
-EpdFont merriweather_16BoldFont(&merriweather_16_bold);
-EpdFont merriweather_16ItalicFont(&merriweather_16_italic);
-EpdFont merriweather_16BoldItalicFont(&merriweather_16_bolditalic);
-EpdFontFamily merriweather_16FontFamily(&merriweather_16RegularFont, &merriweather_16BoldFont,
-                                        &merriweather_16ItalicFont, &merriweather_16BoldItalicFont);
-EpdFont merriweather_17RegularFont(&merriweather_17_regular);
-EpdFont merriweather_17BoldFont(&merriweather_17_bold);
-EpdFont merriweather_17ItalicFont(&merriweather_17_italic);
-EpdFont merriweather_17BoldItalicFont(&merriweather_17_bolditalic);
-EpdFontFamily merriweather_17FontFamily(&merriweather_17RegularFont, &merriweather_17BoldFont,
-                                        &merriweather_17ItalicFont, &merriweather_17BoldItalicFont);
-EpdFont merriweather_18RegularFont(&merriweather_18_regular);
-EpdFont merriweather_18BoldFont(&merriweather_18_bold);
-EpdFont merriweather_18ItalicFont(&merriweather_18_italic);
-EpdFont merriweather_18BoldItalicFont(&merriweather_18_bolditalic);
-EpdFontFamily merriweather_18FontFamily(&merriweather_18RegularFont, &merriweather_18BoldFont,
-                                        &merriweather_18ItalicFont, &merriweather_18BoldItalicFont);
-// Playfair Display: high-contrast serif (SD-only Tier-1, 4 real weights). Sizes 10..18.
-EpdFont playfair_10RegularFont(&playfair_10_regular);
-EpdFont playfair_10BoldFont(&playfair_10_bold);
-EpdFont playfair_10ItalicFont(&playfair_10_italic);
-EpdFont playfair_10BoldItalicFont(&playfair_10_bolditalic);
-EpdFontFamily playfair_10FontFamily(&playfair_10RegularFont, &playfair_10BoldFont, &playfair_10ItalicFont,
-                                    &playfair_10BoldItalicFont);
-EpdFont playfair_11RegularFont(&playfair_11_regular);
-EpdFont playfair_11BoldFont(&playfair_11_bold);
-EpdFont playfair_11ItalicFont(&playfair_11_italic);
-EpdFont playfair_11BoldItalicFont(&playfair_11_bolditalic);
-EpdFontFamily playfair_11FontFamily(&playfair_11RegularFont, &playfair_11BoldFont, &playfair_11ItalicFont,
-                                    &playfair_11BoldItalicFont);
-EpdFont playfair_12RegularFont(&playfair_12_regular);
-EpdFont playfair_12BoldFont(&playfair_12_bold);
-EpdFont playfair_12ItalicFont(&playfair_12_italic);
-EpdFont playfair_12BoldItalicFont(&playfair_12_bolditalic);
-EpdFontFamily playfair_12FontFamily(&playfair_12RegularFont, &playfair_12BoldFont, &playfair_12ItalicFont,
-                                    &playfair_12BoldItalicFont);
-EpdFont playfair_13RegularFont(&playfair_13_regular);
-EpdFont playfair_13BoldFont(&playfair_13_bold);
-EpdFont playfair_13ItalicFont(&playfair_13_italic);
-EpdFont playfair_13BoldItalicFont(&playfair_13_bolditalic);
-EpdFontFamily playfair_13FontFamily(&playfair_13RegularFont, &playfair_13BoldFont, &playfair_13ItalicFont,
-                                    &playfair_13BoldItalicFont);
-EpdFont playfair_14RegularFont(&playfair_14_regular);
-EpdFont playfair_14BoldFont(&playfair_14_bold);
-EpdFont playfair_14ItalicFont(&playfair_14_italic);
-EpdFont playfair_14BoldItalicFont(&playfair_14_bolditalic);
-EpdFontFamily playfair_14FontFamily(&playfair_14RegularFont, &playfair_14BoldFont, &playfair_14ItalicFont,
-                                    &playfair_14BoldItalicFont);
-EpdFont playfair_15RegularFont(&playfair_15_regular);
-EpdFont playfair_15BoldFont(&playfair_15_bold);
-EpdFont playfair_15ItalicFont(&playfair_15_italic);
-EpdFont playfair_15BoldItalicFont(&playfair_15_bolditalic);
-EpdFontFamily playfair_15FontFamily(&playfair_15RegularFont, &playfair_15BoldFont, &playfair_15ItalicFont,
-                                    &playfair_15BoldItalicFont);
-EpdFont playfair_16RegularFont(&playfair_16_regular);
-EpdFont playfair_16BoldFont(&playfair_16_bold);
-EpdFont playfair_16ItalicFont(&playfair_16_italic);
-EpdFont playfair_16BoldItalicFont(&playfair_16_bolditalic);
-EpdFontFamily playfair_16FontFamily(&playfair_16RegularFont, &playfair_16BoldFont, &playfair_16ItalicFont,
-                                    &playfair_16BoldItalicFont);
-EpdFont playfair_17RegularFont(&playfair_17_regular);
-EpdFont playfair_17BoldFont(&playfair_17_bold);
-EpdFont playfair_17ItalicFont(&playfair_17_italic);
-EpdFont playfair_17BoldItalicFont(&playfair_17_bolditalic);
-EpdFontFamily playfair_17FontFamily(&playfair_17RegularFont, &playfair_17BoldFont, &playfair_17ItalicFont,
-                                    &playfair_17BoldItalicFont);
-EpdFont playfair_18RegularFont(&playfair_18_regular);
-EpdFont playfair_18BoldFont(&playfair_18_bold);
-EpdFont playfair_18ItalicFont(&playfair_18_italic);
-EpdFont playfair_18BoldItalicFont(&playfair_18_bolditalic);
-EpdFontFamily playfair_18FontFamily(&playfair_18RegularFont, &playfair_18BoldFont, &playfair_18ItalicFont,
-                                    &playfair_18BoldItalicFont);
-// Galmuri: SD-only pixel font. Native crisp sizes 14px (1x) + 28px (2x), 3 weights
-// (bold-italic synthesised). Reader maps the 10..18 scale onto these two sizes.
-EpdFont galmuri_14RegularFont(&galmuri_14_regular);
-EpdFont galmuri_14BoldFont(&galmuri_14_bold);
-EpdFont galmuri_14ItalicFont(&galmuri_14_italic);
-EpdFontFamily galmuri_14FontFamily(&galmuri_14RegularFont, &galmuri_14BoldFont, &galmuri_14ItalicFont, nullptr);
-EpdFont galmuri_28RegularFont(&galmuri_28_regular);
-EpdFont galmuri_28BoldFont(&galmuri_28_bold);
-EpdFont galmuri_28ItalicFont(&galmuri_28_italic);
-EpdFontFamily galmuri_28FontFamily(&galmuri_28RegularFont, &galmuri_28BoldFont, &galmuri_28ItalicFont, nullptr);
-// Vollkorn: serif reader font (SD-only Tier-1, 4 real weights, real kerning). Sizes 10..18.
-EpdFont vollkorn_10RegularFont(&vollkorn_10_regular);
-EpdFont vollkorn_10BoldFont(&vollkorn_10_bold);
-EpdFont vollkorn_10ItalicFont(&vollkorn_10_italic);
-EpdFont vollkorn_10BoldItalicFont(&vollkorn_10_bolditalic);
-EpdFontFamily vollkorn_10FontFamily(&vollkorn_10RegularFont, &vollkorn_10BoldFont, &vollkorn_10ItalicFont,
-                                    &vollkorn_10BoldItalicFont);
-EpdFont vollkorn_11RegularFont(&vollkorn_11_regular);
-EpdFont vollkorn_11BoldFont(&vollkorn_11_bold);
-EpdFont vollkorn_11ItalicFont(&vollkorn_11_italic);
-EpdFont vollkorn_11BoldItalicFont(&vollkorn_11_bolditalic);
-EpdFontFamily vollkorn_11FontFamily(&vollkorn_11RegularFont, &vollkorn_11BoldFont, &vollkorn_11ItalicFont,
-                                    &vollkorn_11BoldItalicFont);
-EpdFont vollkorn_12RegularFont(&vollkorn_12_regular);
-EpdFont vollkorn_12BoldFont(&vollkorn_12_bold);
-EpdFont vollkorn_12ItalicFont(&vollkorn_12_italic);
-EpdFont vollkorn_12BoldItalicFont(&vollkorn_12_bolditalic);
-EpdFontFamily vollkorn_12FontFamily(&vollkorn_12RegularFont, &vollkorn_12BoldFont, &vollkorn_12ItalicFont,
-                                    &vollkorn_12BoldItalicFont);
-EpdFont vollkorn_13RegularFont(&vollkorn_13_regular);
-EpdFont vollkorn_13BoldFont(&vollkorn_13_bold);
-EpdFont vollkorn_13ItalicFont(&vollkorn_13_italic);
-EpdFont vollkorn_13BoldItalicFont(&vollkorn_13_bolditalic);
-EpdFontFamily vollkorn_13FontFamily(&vollkorn_13RegularFont, &vollkorn_13BoldFont, &vollkorn_13ItalicFont,
-                                    &vollkorn_13BoldItalicFont);
-EpdFont vollkorn_14RegularFont(&vollkorn_14_regular);
-EpdFont vollkorn_14BoldFont(&vollkorn_14_bold);
-EpdFont vollkorn_14ItalicFont(&vollkorn_14_italic);
-EpdFont vollkorn_14BoldItalicFont(&vollkorn_14_bolditalic);
-EpdFontFamily vollkorn_14FontFamily(&vollkorn_14RegularFont, &vollkorn_14BoldFont, &vollkorn_14ItalicFont,
-                                    &vollkorn_14BoldItalicFont);
-EpdFont vollkorn_15RegularFont(&vollkorn_15_regular);
-EpdFont vollkorn_15BoldFont(&vollkorn_15_bold);
-EpdFont vollkorn_15ItalicFont(&vollkorn_15_italic);
-EpdFont vollkorn_15BoldItalicFont(&vollkorn_15_bolditalic);
-EpdFontFamily vollkorn_15FontFamily(&vollkorn_15RegularFont, &vollkorn_15BoldFont, &vollkorn_15ItalicFont,
-                                    &vollkorn_15BoldItalicFont);
-EpdFont vollkorn_16RegularFont(&vollkorn_16_regular);
-EpdFont vollkorn_16BoldFont(&vollkorn_16_bold);
-EpdFont vollkorn_16ItalicFont(&vollkorn_16_italic);
-EpdFont vollkorn_16BoldItalicFont(&vollkorn_16_bolditalic);
-EpdFontFamily vollkorn_16FontFamily(&vollkorn_16RegularFont, &vollkorn_16BoldFont, &vollkorn_16ItalicFont,
-                                    &vollkorn_16BoldItalicFont);
-EpdFont vollkorn_17RegularFont(&vollkorn_17_regular);
-EpdFont vollkorn_17BoldFont(&vollkorn_17_bold);
-EpdFont vollkorn_17ItalicFont(&vollkorn_17_italic);
-EpdFont vollkorn_17BoldItalicFont(&vollkorn_17_bolditalic);
-EpdFontFamily vollkorn_17FontFamily(&vollkorn_17RegularFont, &vollkorn_17BoldFont, &vollkorn_17ItalicFont,
-                                    &vollkorn_17BoldItalicFont);
-EpdFont vollkorn_18RegularFont(&vollkorn_18_regular);
-EpdFont vollkorn_18BoldFont(&vollkorn_18_bold);
-EpdFont vollkorn_18ItalicFont(&vollkorn_18_italic);
-EpdFont vollkorn_18BoldItalicFont(&vollkorn_18_bolditalic);
-EpdFontFamily vollkorn_18FontFamily(&vollkorn_18RegularFont, &vollkorn_18BoldFont, &vollkorn_18ItalicFont,
-                                    &vollkorn_18BoldItalicFont);
-#endif  // CROSSPOINT_SD_FONTS
 
 // Lector UI font = Cozette at v11.0.0's three distinct sizes: ui_8 = status bar
 // (SMALL_FONT_ID), ui_10 = body/menus (UI_10_FONT_ID), ui_12 = titles/headers
@@ -1040,171 +682,6 @@ extern "C" void onHeapAllocFailed(size_t requested, uint32_t caps, const char* f
   crosspoint::mem::shedUnderPressure();
 }
 
-#ifdef CROSSPOINT_SD_FONTS
-// Registers every offloadable reader-font family/size with the SD font manager.
-// Each live EpdFont is paired with its same-size ChareInk regular as the fallback
-// used only if an SD pack fails to load in a slim build (where the flash bitmap is
-// gone), so the renderer never dereferences a dropped bitmap. The path stem mirrors
-// the header basename, so e.g. BOOKERLY_17 -> /fonts/bookerly_17_<weight>.bin.
-static void registerSdReaderFonts() {
-  auto& m = crosspoint::fonts::sdFonts();
-  m.registerFont(BOOKERLY_10_FONT_ID, 10, "bookerly", &bookerly10RegularFont, &bookerly10BoldFont,
-                 &bookerly10ItalicFont, nullptr, &chareink_10_regular);
-  m.registerFont(BOOKERLY_12_FONT_ID, 12, "bookerly", &bookerly12RegularFont, &bookerly12BoldFont,
-                 &bookerly12ItalicFont, nullptr, &chareink_12_regular);
-  m.registerFont(BOOKERLY_14_FONT_ID, 14, "bookerly", &bookerly14RegularFont, &bookerly14BoldFont,
-                 &bookerly14ItalicFont, nullptr, &chareink_14_regular);
-  m.registerFont(BOOKERLY_16_FONT_ID, 16, "bookerly", &bookerly16RegularFont, &bookerly16BoldFont,
-                 &bookerly16ItalicFont, nullptr, &chareink_16_regular);
-  m.registerFont(BOOKERLY_17_FONT_ID, 17, "bookerly", &bookerly17RegularFont, &bookerly17BoldFont,
-                 &bookerly17ItalicFont, nullptr, &chareink_17_regular);
-
-  m.registerFont(GEORGIA_10_FONT_ID, 10, "georgia", &georgia_10RegularFont, &georgia_10BoldFont, &georgia_10ItalicFont,
-                 nullptr, &chareink_10_regular);
-  m.registerFont(GEORGIA_12_FONT_ID, 12, "georgia", &georgia_12RegularFont, &georgia_12BoldFont, &georgia_12ItalicFont,
-                 nullptr, &chareink_12_regular);
-  m.registerFont(GEORGIA_14_FONT_ID, 14, "georgia", &georgia_14RegularFont, &georgia_14BoldFont, &georgia_14ItalicFont,
-                 nullptr, &chareink_14_regular);
-  m.registerFont(GEORGIA_16_FONT_ID, 16, "georgia", &georgia_16RegularFont, &georgia_16BoldFont, &georgia_16ItalicFont,
-                 nullptr, &chareink_16_regular);
-  m.registerFont(GEORGIA_17_FONT_ID, 17, "georgia", &georgia_17RegularFont, &georgia_17BoldFont, &georgia_17ItalicFont,
-                 nullptr, &chareink_17_regular);
-
-  m.registerFont(LATO_10_FONT_ID, 10, "lato", &lato_10RegularFont, &lato_10BoldFont, &lato_10ItalicFont,
-                 &lato_10BoldItalicFont, &chareink_10_regular);
-  m.registerFont(LATO_12_FONT_ID, 12, "lato", &lato_12RegularFont, &lato_12BoldFont, &lato_12ItalicFont,
-                 &lato_12BoldItalicFont, &chareink_12_regular);
-  m.registerFont(LATO_14_FONT_ID, 14, "lato", &lato_14RegularFont, &lato_14BoldFont, &lato_14ItalicFont,
-                 &lato_14BoldItalicFont, &chareink_14_regular);
-  m.registerFont(LATO_16_FONT_ID, 16, "lato", &lato_16RegularFont, &lato_16BoldFont, &lato_16ItalicFont,
-                 &lato_16BoldItalicFont, &chareink_16_regular);
-  m.registerFont(LATO_17_FONT_ID, 17, "lato", &lato_17RegularFont, &lato_17BoldFont, &lato_17ItalicFont,
-                 &lato_17BoldItalicFont, &chareink_17_regular);
-
-  m.registerFont(HELVETICA_10_FONT_ID, 10, "helvetica", &helvetica_10RegularFont, &helvetica_10BoldFont,
-                 &helvetica_10ItalicFont, nullptr, &chareink_10_regular);
-  m.registerFont(HELVETICA_12_FONT_ID, 12, "helvetica", &helvetica_12RegularFont, &helvetica_12BoldFont,
-                 &helvetica_12ItalicFont, nullptr, &chareink_12_regular);
-  m.registerFont(HELVETICA_14_FONT_ID, 14, "helvetica", &helvetica_14RegularFont, &helvetica_14BoldFont,
-                 &helvetica_14ItalicFont, nullptr, &chareink_14_regular);
-  m.registerFont(HELVETICA_16_FONT_ID, 16, "helvetica", &helvetica_16RegularFont, &helvetica_16BoldFont,
-                 &helvetica_16ItalicFont, nullptr, &chareink_16_regular);
-  m.registerFont(HELVETICA_17_FONT_ID, 17, "helvetica", &helvetica_17RegularFont, &helvetica_17BoldFont,
-                 &helvetica_17ItalicFont, nullptr, &chareink_17_regular);
-
-  m.registerFont(VERDANA_10_FONT_ID, 10, "verdana", &verdana_10RegularFont, &verdana_10BoldFont, &verdana_10ItalicFont,
-                 nullptr, &chareink_10_regular);
-  m.registerFont(VERDANA_12_FONT_ID, 12, "verdana", &verdana_12RegularFont, &verdana_12BoldFont, &verdana_12ItalicFont,
-                 nullptr, &chareink_12_regular);
-  m.registerFont(VERDANA_14_FONT_ID, 14, "verdana", &verdana_14RegularFont, &verdana_14BoldFont, &verdana_14ItalicFont,
-                 nullptr, &chareink_14_regular);
-  m.registerFont(VERDANA_16_FONT_ID, 16, "verdana", &verdana_16RegularFont, &verdana_16BoldFont, &verdana_16ItalicFont,
-                 nullptr, &chareink_16_regular);
-  m.registerFont(VERDANA_17_FONT_ID, 17, "verdana", &verdana_17RegularFont, &verdana_17BoldFont, &verdana_17ItalicFont,
-                 nullptr, &chareink_17_regular);
-
-  // SD-only Tier-1 extra sizes 11/13/15/18 (tables in flash, bitmaps streamed from
-  // SD packs — same path as the existing sizes, zero added heap).
-  m.registerFont(BOOKERLY_11_FONT_ID, 11, "bookerly", &bookerly_11RegularFont, &bookerly_11BoldFont,
-                 &bookerly_11ItalicFont, nullptr, &chareink_12_regular);
-  m.registerFont(BOOKERLY_13_FONT_ID, 13, "bookerly", &bookerly_13RegularFont, &bookerly_13BoldFont,
-                 &bookerly_13ItalicFont, nullptr, &chareink_14_regular);
-  m.registerFont(BOOKERLY_15_FONT_ID, 15, "bookerly", &bookerly_15RegularFont, &bookerly_15BoldFont,
-                 &bookerly_15ItalicFont, nullptr, &chareink_16_regular);
-  m.registerFont(BOOKERLY_18_FONT_ID, 18, "bookerly", &bookerly_18RegularFont, &bookerly_18BoldFont,
-                 &bookerly_18ItalicFont, nullptr, &chareink_17_regular);
-  m.registerFont(GEORGIA_11_FONT_ID, 11, "georgia", &georgia_11RegularFont, &georgia_11BoldFont, &georgia_11ItalicFont,
-                 nullptr, &chareink_12_regular);
-  m.registerFont(GEORGIA_13_FONT_ID, 13, "georgia", &georgia_13RegularFont, &georgia_13BoldFont, &georgia_13ItalicFont,
-                 nullptr, &chareink_14_regular);
-  m.registerFont(GEORGIA_15_FONT_ID, 15, "georgia", &georgia_15RegularFont, &georgia_15BoldFont, &georgia_15ItalicFont,
-                 nullptr, &chareink_16_regular);
-  m.registerFont(GEORGIA_18_FONT_ID, 18, "georgia", &georgia_18RegularFont, &georgia_18BoldFont, &georgia_18ItalicFont,
-                 nullptr, &chareink_17_regular);
-  m.registerFont(LATO_11_FONT_ID, 11, "lato", &lato_11RegularFont, &lato_11BoldFont, &lato_11ItalicFont,
-                 &lato_11BoldItalicFont, &chareink_12_regular);
-  m.registerFont(LATO_13_FONT_ID, 13, "lato", &lato_13RegularFont, &lato_13BoldFont, &lato_13ItalicFont,
-                 &lato_13BoldItalicFont, &chareink_14_regular);
-  m.registerFont(LATO_15_FONT_ID, 15, "lato", &lato_15RegularFont, &lato_15BoldFont, &lato_15ItalicFont,
-                 &lato_15BoldItalicFont, &chareink_16_regular);
-  m.registerFont(LATO_18_FONT_ID, 18, "lato", &lato_18RegularFont, &lato_18BoldFont, &lato_18ItalicFont,
-                 &lato_18BoldItalicFont, &chareink_17_regular);
-  m.registerFont(HELVETICA_11_FONT_ID, 11, "helvetica", &helvetica_11RegularFont, &helvetica_11BoldFont,
-                 &helvetica_11ItalicFont, nullptr, &chareink_12_regular);
-  m.registerFont(HELVETICA_13_FONT_ID, 13, "helvetica", &helvetica_13RegularFont, &helvetica_13BoldFont,
-                 &helvetica_13ItalicFont, nullptr, &chareink_14_regular);
-  m.registerFont(HELVETICA_15_FONT_ID, 15, "helvetica", &helvetica_15RegularFont, &helvetica_15BoldFont,
-                 &helvetica_15ItalicFont, nullptr, &chareink_16_regular);
-  m.registerFont(HELVETICA_18_FONT_ID, 18, "helvetica", &helvetica_18RegularFont, &helvetica_18BoldFont,
-                 &helvetica_18ItalicFont, nullptr, &chareink_17_regular);
-  m.registerFont(VERDANA_11_FONT_ID, 11, "verdana", &verdana_11RegularFont, &verdana_11BoldFont, &verdana_11ItalicFont,
-                 nullptr, &chareink_12_regular);
-  m.registerFont(VERDANA_13_FONT_ID, 13, "verdana", &verdana_13RegularFont, &verdana_13BoldFont, &verdana_13ItalicFont,
-                 nullptr, &chareink_14_regular);
-  m.registerFont(VERDANA_15_FONT_ID, 15, "verdana", &verdana_15RegularFont, &verdana_15BoldFont, &verdana_15ItalicFont,
-                 nullptr, &chareink_16_regular);
-  m.registerFont(VERDANA_18_FONT_ID, 18, "verdana", &verdana_18RegularFont, &verdana_18BoldFont, &verdana_18ItalicFont,
-                 nullptr, &chareink_17_regular);
-  m.registerFont(MERRIWEATHER_10_FONT_ID, 10, "merriweather", &merriweather_10RegularFont, &merriweather_10BoldFont,
-                 &merriweather_10ItalicFont, &merriweather_10BoldItalicFont, &chareink_10_regular);
-  m.registerFont(MERRIWEATHER_11_FONT_ID, 11, "merriweather", &merriweather_11RegularFont, &merriweather_11BoldFont,
-                 &merriweather_11ItalicFont, &merriweather_11BoldItalicFont, &chareink_12_regular);
-  m.registerFont(MERRIWEATHER_12_FONT_ID, 12, "merriweather", &merriweather_12RegularFont, &merriweather_12BoldFont,
-                 &merriweather_12ItalicFont, &merriweather_12BoldItalicFont, &chareink_12_regular);
-  m.registerFont(MERRIWEATHER_13_FONT_ID, 13, "merriweather", &merriweather_13RegularFont, &merriweather_13BoldFont,
-                 &merriweather_13ItalicFont, &merriweather_13BoldItalicFont, &chareink_14_regular);
-  m.registerFont(MERRIWEATHER_14_FONT_ID, 14, "merriweather", &merriweather_14RegularFont, &merriweather_14BoldFont,
-                 &merriweather_14ItalicFont, &merriweather_14BoldItalicFont, &chareink_14_regular);
-  m.registerFont(MERRIWEATHER_15_FONT_ID, 15, "merriweather", &merriweather_15RegularFont, &merriweather_15BoldFont,
-                 &merriweather_15ItalicFont, &merriweather_15BoldItalicFont, &chareink_16_regular);
-  m.registerFont(MERRIWEATHER_16_FONT_ID, 16, "merriweather", &merriweather_16RegularFont, &merriweather_16BoldFont,
-                 &merriweather_16ItalicFont, &merriweather_16BoldItalicFont, &chareink_16_regular);
-  m.registerFont(MERRIWEATHER_17_FONT_ID, 17, "merriweather", &merriweather_17RegularFont, &merriweather_17BoldFont,
-                 &merriweather_17ItalicFont, &merriweather_17BoldItalicFont, &chareink_17_regular);
-  m.registerFont(MERRIWEATHER_18_FONT_ID, 18, "merriweather", &merriweather_18RegularFont, &merriweather_18BoldFont,
-                 &merriweather_18ItalicFont, &merriweather_18BoldItalicFont, &chareink_17_regular);
-  m.registerFont(PLAYFAIR_10_FONT_ID, 10, "playfair", &playfair_10RegularFont, &playfair_10BoldFont,
-                 &playfair_10ItalicFont, &playfair_10BoldItalicFont, &chareink_10_regular);
-  m.registerFont(PLAYFAIR_11_FONT_ID, 11, "playfair", &playfair_11RegularFont, &playfair_11BoldFont,
-                 &playfair_11ItalicFont, &playfair_11BoldItalicFont, &chareink_12_regular);
-  m.registerFont(PLAYFAIR_12_FONT_ID, 12, "playfair", &playfair_12RegularFont, &playfair_12BoldFont,
-                 &playfair_12ItalicFont, &playfair_12BoldItalicFont, &chareink_12_regular);
-  m.registerFont(PLAYFAIR_13_FONT_ID, 13, "playfair", &playfair_13RegularFont, &playfair_13BoldFont,
-                 &playfair_13ItalicFont, &playfair_13BoldItalicFont, &chareink_14_regular);
-  m.registerFont(PLAYFAIR_14_FONT_ID, 14, "playfair", &playfair_14RegularFont, &playfair_14BoldFont,
-                 &playfair_14ItalicFont, &playfair_14BoldItalicFont, &chareink_14_regular);
-  m.registerFont(PLAYFAIR_15_FONT_ID, 15, "playfair", &playfair_15RegularFont, &playfair_15BoldFont,
-                 &playfair_15ItalicFont, &playfair_15BoldItalicFont, &chareink_16_regular);
-  m.registerFont(PLAYFAIR_16_FONT_ID, 16, "playfair", &playfair_16RegularFont, &playfair_16BoldFont,
-                 &playfair_16ItalicFont, &playfair_16BoldItalicFont, &chareink_16_regular);
-  m.registerFont(PLAYFAIR_17_FONT_ID, 17, "playfair", &playfair_17RegularFont, &playfair_17BoldFont,
-                 &playfair_17ItalicFont, &playfair_17BoldItalicFont, &chareink_17_regular);
-  m.registerFont(PLAYFAIR_18_FONT_ID, 18, "playfair", &playfair_18RegularFont, &playfair_18BoldFont,
-                 &playfair_18ItalicFont, &playfair_18BoldItalicFont, &chareink_17_regular);
-  m.registerFont(GALMURI_14_FONT_ID, 14, "galmuri", &galmuri_14RegularFont, &galmuri_14BoldFont, &galmuri_14ItalicFont,
-                 nullptr, &chareink_14_regular);
-  m.registerFont(GALMURI_28_FONT_ID, 28, "galmuri", &galmuri_28RegularFont, &galmuri_28BoldFont, &galmuri_28ItalicFont,
-                 nullptr, &chareink_17_regular);
-  m.registerFont(VOLLKORN_10_FONT_ID, 10, "vollkorn", &vollkorn_10RegularFont, &vollkorn_10BoldFont,
-                 &vollkorn_10ItalicFont, &vollkorn_10BoldItalicFont, &chareink_10_regular);
-  m.registerFont(VOLLKORN_11_FONT_ID, 11, "vollkorn", &vollkorn_11RegularFont, &vollkorn_11BoldFont,
-                 &vollkorn_11ItalicFont, &vollkorn_11BoldItalicFont, &chareink_12_regular);
-  m.registerFont(VOLLKORN_12_FONT_ID, 12, "vollkorn", &vollkorn_12RegularFont, &vollkorn_12BoldFont,
-                 &vollkorn_12ItalicFont, &vollkorn_12BoldItalicFont, &chareink_12_regular);
-  m.registerFont(VOLLKORN_13_FONT_ID, 13, "vollkorn", &vollkorn_13RegularFont, &vollkorn_13BoldFont,
-                 &vollkorn_13ItalicFont, &vollkorn_13BoldItalicFont, &chareink_14_regular);
-  m.registerFont(VOLLKORN_14_FONT_ID, 14, "vollkorn", &vollkorn_14RegularFont, &vollkorn_14BoldFont,
-                 &vollkorn_14ItalicFont, &vollkorn_14BoldItalicFont, &chareink_14_regular);
-  m.registerFont(VOLLKORN_15_FONT_ID, 15, "vollkorn", &vollkorn_15RegularFont, &vollkorn_15BoldFont,
-                 &vollkorn_15ItalicFont, &vollkorn_15BoldItalicFont, &chareink_16_regular);
-  m.registerFont(VOLLKORN_16_FONT_ID, 16, "vollkorn", &vollkorn_16RegularFont, &vollkorn_16BoldFont,
-                 &vollkorn_16ItalicFont, &vollkorn_16BoldItalicFont, &chareink_16_regular);
-  m.registerFont(VOLLKORN_17_FONT_ID, 17, "vollkorn", &vollkorn_17RegularFont, &vollkorn_17BoldFont,
-                 &vollkorn_17ItalicFont, &vollkorn_17BoldItalicFont, &chareink_17_regular);
-  m.registerFont(VOLLKORN_18_FONT_ID, 18, "vollkorn", &vollkorn_18RegularFont, &vollkorn_18BoldFont,
-                 &vollkorn_18ItalicFont, &vollkorn_18BoldItalicFont, &chareink_17_regular);
-}
-#endif  // CROSSPOINT_SD_FONTS
 
 void setupDisplayAndFonts() {
   display.begin();
@@ -1217,14 +694,12 @@ void setupDisplayAndFonts() {
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
   renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
   renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
-  renderer.insertFont(BOOKERLY_17_FONT_ID, bookerly17FontFamily);
 #if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
   renderer.insertFont(GEORGIA_10_FONT_ID, georgia_10FontFamily);
 #endif
   renderer.insertFont(GEORGIA_12_FONT_ID, georgia_12FontFamily);
   renderer.insertFont(GEORGIA_14_FONT_ID, georgia_14FontFamily);
   renderer.insertFont(GEORGIA_16_FONT_ID, georgia_16FontFamily);
-  renderer.insertFont(GEORGIA_17_FONT_ID, georgia_17FontFamily);
   // Lato removed (Lector).
 #if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
   renderer.insertFont(HELVETICA_10_FONT_ID, helvetica_10FontFamily);
@@ -1232,14 +707,12 @@ void setupDisplayAndFonts() {
   renderer.insertFont(HELVETICA_12_FONT_ID, helvetica_12FontFamily);
   renderer.insertFont(HELVETICA_14_FONT_ID, helvetica_14FontFamily);
   renderer.insertFont(HELVETICA_16_FONT_ID, helvetica_16FontFamily);
-  renderer.insertFont(HELVETICA_17_FONT_ID, helvetica_17FontFamily);
 #if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
   renderer.insertFont(VERDANA_10_FONT_ID, verdana_10FontFamily);
 #endif
   renderer.insertFont(VERDANA_12_FONT_ID, verdana_12FontFamily);
   renderer.insertFont(VERDANA_14_FONT_ID, verdana_14FontFamily);
   renderer.insertFont(VERDANA_16_FONT_ID, verdana_16FontFamily);
-  renderer.insertFont(VERDANA_17_FONT_ID, verdana_17FontFamily);
 #if defined(CROSSPOINT_SD_FONTS) || defined(CROSSPOINT_FLASH_EXTRA_SIZES)
   // Sizes 11/13/15 of the 5 flash families — registered in the flash-extra build.
   renderer.insertFont(BOOKERLY_11_FONT_ID, bookerly_11FontFamily);
@@ -1263,45 +736,7 @@ void setupDisplayAndFonts() {
   renderer.insertFont(MERRIWEATHER_14_FONT_ID, merriweather_14FontFamily);
   renderer.insertFont(MERRIWEATHER_15_FONT_ID, merriweather_15FontFamily);
   renderer.insertFont(MERRIWEATHER_16_FONT_ID, merriweather_16FontFamily);
-  renderer.insertFont(MERRIWEATHER_17_FONT_ID, merriweather_17FontFamily);
 #endif  // flash Merriweather 11..17
-#ifdef CROSSPOINT_SD_FONTS
-  // Size 18 of the 5 flash families + the SD-only families — SD builds only.
-  renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly_18FontFamily);
-  renderer.insertFont(GEORGIA_18_FONT_ID, georgia_18FontFamily);
-  renderer.insertFont(LATO_18_FONT_ID, lato_18FontFamily);
-  renderer.insertFont(HELVETICA_18_FONT_ID, helvetica_18FontFamily);
-  renderer.insertFont(VERDANA_18_FONT_ID, verdana_18FontFamily);
-  renderer.insertFont(MERRIWEATHER_10_FONT_ID, merriweather_10FontFamily);
-  renderer.insertFont(MERRIWEATHER_11_FONT_ID, merriweather_11FontFamily);
-  renderer.insertFont(MERRIWEATHER_12_FONT_ID, merriweather_12FontFamily);
-  renderer.insertFont(MERRIWEATHER_13_FONT_ID, merriweather_13FontFamily);
-  renderer.insertFont(MERRIWEATHER_14_FONT_ID, merriweather_14FontFamily);
-  renderer.insertFont(MERRIWEATHER_15_FONT_ID, merriweather_15FontFamily);
-  renderer.insertFont(MERRIWEATHER_16_FONT_ID, merriweather_16FontFamily);
-  renderer.insertFont(MERRIWEATHER_17_FONT_ID, merriweather_17FontFamily);
-  renderer.insertFont(MERRIWEATHER_18_FONT_ID, merriweather_18FontFamily);
-  renderer.insertFont(PLAYFAIR_10_FONT_ID, playfair_10FontFamily);
-  renderer.insertFont(PLAYFAIR_11_FONT_ID, playfair_11FontFamily);
-  renderer.insertFont(PLAYFAIR_12_FONT_ID, playfair_12FontFamily);
-  renderer.insertFont(PLAYFAIR_13_FONT_ID, playfair_13FontFamily);
-  renderer.insertFont(PLAYFAIR_14_FONT_ID, playfair_14FontFamily);
-  renderer.insertFont(PLAYFAIR_15_FONT_ID, playfair_15FontFamily);
-  renderer.insertFont(PLAYFAIR_16_FONT_ID, playfair_16FontFamily);
-  renderer.insertFont(PLAYFAIR_17_FONT_ID, playfair_17FontFamily);
-  renderer.insertFont(PLAYFAIR_18_FONT_ID, playfair_18FontFamily);
-  renderer.insertFont(GALMURI_14_FONT_ID, galmuri_14FontFamily);
-  renderer.insertFont(GALMURI_28_FONT_ID, galmuri_28FontFamily);
-  renderer.insertFont(VOLLKORN_10_FONT_ID, vollkorn_10FontFamily);
-  renderer.insertFont(VOLLKORN_11_FONT_ID, vollkorn_11FontFamily);
-  renderer.insertFont(VOLLKORN_12_FONT_ID, vollkorn_12FontFamily);
-  renderer.insertFont(VOLLKORN_13_FONT_ID, vollkorn_13FontFamily);
-  renderer.insertFont(VOLLKORN_14_FONT_ID, vollkorn_14FontFamily);
-  renderer.insertFont(VOLLKORN_15_FONT_ID, vollkorn_15FontFamily);
-  renderer.insertFont(VOLLKORN_16_FONT_ID, vollkorn_16FontFamily);
-  renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn_17FontFamily);
-  renderer.insertFont(VOLLKORN_18_FONT_ID, vollkorn_18FontFamily);
-#endif  // CROSSPOINT_SD_FONTS
   // Cozette UI (v11.0.0 sizes): SMALL = ui_8 status bar, UI_10 = ui_10 body/menus,
   // UI_12 = ui_12 titles (distinct size, not aliased).
   renderer.insertFont(UI_10_FONT_ID, uiFontFamily);
@@ -1559,21 +994,6 @@ void setup() {
   Storage.mkdir("/sleep");
   Storage.mkdir("/sleep pause");
 
-#ifdef CROSSPOINT_SD_FONTS
-  // SD-backed reader fonts. SD is mounted (Storage.begin above) and every family
-  // is registered with the renderer (pointer-based, so the manager repointing an
-  // EpdFont propagates into the already-inserted family). On a fat/export build
-  // exportAllMissing() writes any missing /fonts/*.bin from the in-flash bitmaps;
-  // on a slim build those bitmaps are gone and the glyphs stream from the packs.
-  // The active reader font is backed immediately; renderContents()/renderPage()
-  // re-affirm whenever the selection changes.
-  static crosspoint::fonts::HalSdFontIo g_sdFontIo;
-  crosspoint::fonts::sdFonts().setIo(&g_sdFontIo);
-  registerSdReaderFonts();
-  Storage.mkdir("/fonts");  // ensure the dir exists so the browser pack-upload lands (slim never exports)
-  crosspoint::fonts::sdFonts().exportAllMissing();
-  crosspoint::fonts::activateReaderFont(SETTINGS.getReaderFontId());
-#endif
 
   exitActivity();
   // Silent-reboot path skips the splash entirely — the screen state from the
