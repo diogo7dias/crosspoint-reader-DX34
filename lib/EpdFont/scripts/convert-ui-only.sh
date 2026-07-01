@@ -3,7 +3,7 @@
 # convert-builtin-fonts.sh or touch any reader font.
 #
 # UI font = Cozette (https://github.com/slavfox/Cozette, MIT), vector build.
-# Lector restores Cozette as the UI face (mom's DX34 v11.0.0 look) in place of
+# Lector restores Cozette as the UI face (the DX34 v11.0.0 look) in place of
 # Pixel Operator. Three distinct sizes at v11's ppem (dpi 150 default -> ppem =
 # size * 150/72):
 #

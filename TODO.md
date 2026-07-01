@@ -21,7 +21,23 @@ Open follow-ups for this firmware. Prioritised top-down. Workflow per item: buil
 - 31 orphan size-17 headers still sit in `lib/EpdFont/builtinFonts/` (uncompiled, zero flash) + `build-font-ids.sh` still lists size 17. A future clean font-id regen must drop 17 AND bump `SECTION_FILE_VERSION`.
 - HomeActivity's `OpdsBrowser` menu action + `onOpdsBrowserOpen` callback are dead scaffolding (hasOpdsUrl hardcoded false); removing them means reshaping the ctor + main.cpp wiring.
 
-Major fork: a clean **EPUB-only** reader for the X4 that restores mom's familiar **Cozette** UI on top of the current feature set. Renamed from `CrossPoint-Mod-DX34` → version string **`Lector-v0.0.1`**. Solo-dev brain-dump (no RFC). Build order = small revertable commits; build + flash + on-device test each; branch stays flashable at every commit. Snappy-input LAW + daily-driver guardrail apply.
+## X3 readiness (four-reviewer code audit 2026-07-01) — NOT flawless yet; needs the physical X3
+
+Xteink X3 support is a single binary, runtime-detected. The SDK submodule is committed + pushed (`setDisplayX3` + X3 waveforms + `MAX_BUFFER_SIZE=52272` buffers); it builds + links; the X4 is unaffected (battery/clock/tilt all gated on `deviceIsX3()`/`isAvailable()`, tilt `update()` early-returns on X4 so the snappy-input baseline is preserved). Foundations (HAL geometry getters, renderer core, status bar, menus, reader viewport, default sleep screen, Cozette fonts) already adapt to 528×792.
+
+**Done — X4-safe, committed `fee8c393`:** DirectPixelWriter (image/cover hot path) now reads runtime physical panel dims via new `GfxRenderer::getPanelWidth/Height/WidthBytes()` — it had hardcoded the X4 stride (100) + Y-flip origin (479/799), which sheared/offset/clipped every embedded image, JPEG, PNG cover, and PXC render on the X3. Also: web-server QR centering → `getScreenWidth()`; debug SCREENSHOT → `display.getBufferSize()`.
+
+**Deferred until an X3 is in hand:**
+- **Side-button hint geometry (phase 7):** `BaseTheme.cpp:615,618` (`buttonHeight=80`, `topButtonY=345`) is a frozen vertical anchor — scale from `getScreenHeight()` and validate against the X3's physical side-button positions (horizontal edge already adapts).
+- **X3 grayscale ghosting-resync:** `HalDisplay.cpp:17-20` has no `displayGrayscaleBase` seam; the SDK provides `displayGrayscaleBase()/preconditionGrayscale()/requestResync()` — wire them through HalDisplay + `GfxRenderer::renderGrayscale` to scrub cover-transition ghosting.
+- **Detection cold-boot mis-cache (highest detection risk):** `HalGPIO.cpp:157-176` — if the BQ27220/DS3231/QMI8658 rail is slow to power up, both passes score 0 → permanently caches "X4" (recovery only via the `dev_ovr` NVS override). Validate the rail ACKs that early after cold boot; if not, add a settling delay / more passes / don't cache a *derived* (non-overridden) X4.
+- **USB-detect false-negative:** X3 `isUsbConnected()` reads BQ27220 `Current()>0`, so "plugged in but fully charged" reads as unplugged (affects charge-bolt UI + wake classification). Consider a voltage/flags heuristic.
+- **Custom sleep wallpapers:** `.pxc` authored at X4 480×800 are (correctly) rejected on X3 528×792 by the `PxcRenderer` size guard — do NOT loosen the guard (it would draw corrupted pixels); the X3 needs X3-authored wallpapers. Asset issue.
+- **Cosmetic/dead:** `PngToBmpConverter` cover-downscale target 480×800 is X4-tuned; dead `BaseMetrics::versionTextY=738`/`versionTextRightX=20` and write-only `clockHasBeenSynced` (latent — never wire up unscaled).
+
+**Overarching:** the entire X3 path has NEVER run on real X3 hardware — detection thresholds, waveforms, clock, tilt, fuel-gauge, and hotspot uploads are all unproven. The "STAGED" block below is stale: the X3 port IS committed on `main` (`80a239ce`); only on-device validation remains.
+
+Major fork: a clean **EPUB-only** reader for the X4 that restores the familiar **Cozette** UI on top of the current feature set. Renamed from `CrossPoint-Mod-DX34` → version string **`Lector-v0.0.1`**. Solo-dev brain-dump (no RFC). Build order = small revertable commits; build + flash + on-device test each; branch stays flashable at every commit. Snappy-input LAW + daily-driver guardrail apply.
 
 **Approved decisions (2026-07-01):** branch off `main` (NOT `feat/arch-followups` — those 2 commits can merge separately); identity rename to Lector; all current main features inherited.
 
@@ -30,7 +46,7 @@ Major fork: a clean **EPUB-only** reader for the X4 that restores mom's familiar
    - Reader set, FLASH-only, **no SD reads**: Bookerly / Verdana / Helvetica / Merriweather / Georgia × sizes **11–16** × reg/bold/italic (no bolditalic). Default reader = **Bookerly**.
    - **ChareInk fully deleted** (~48 refs); Bookerly becomes missing-glyph fallback + OOM emergency-degrade (Bookerly-11).
    - Delete unused faces: Lato-reader, Playfair, ET Book, Rosarivo, Galmuri, Merriweather-bolditalic.
-   - **UI font Lato → Cozette:** restore `v11.0.0` `ui_10_regular.h` + `ui_12_regular.h` (sizes **10 + 12 only, NO ui_8**); remap `SMALL_FONT_ID` (8px) → ui_10; status-bar font = Cozette hub size. Main currently uses Lato as `ui_16`(small)+`ui_32`(reg/bold) → replace. UI text renders smaller (mom's look) — device-validate no clip/overflow. Cozette is tiny → frees flash.
+   - **UI font Lato → Cozette:** restore `v11.0.0` `ui_10_regular.h` + `ui_12_regular.h` (sizes **10 + 12 only, NO ui_8**); remap `SMALL_FONT_ID` (8px) → ui_10; status-bar font = Cozette hub size. Main currently uses Lato as `ui_16`(small)+`ui_32`(reg/bold) → replace. UI text renders smaller (the v11 look) — device-validate no clip/overflow. Cozette is tiny → frees flash.
    - All reader headers already exist → **pure rewire, no baking.** PROVE fit in the 6.25 MB app slot via `pio run -e default`. Overflow → STOP, escalate repartition (shrink 3.4 MB spiffs, grow both app slots; brick-risk, confirm with user).
 2. **Render-mode strip:** Crisp + Dark only (relabel "Normal"→"Crisp"); remove Thin/Medium/Bionic migration constants + engine weight-pass code → zero flash.
 3. **OTA:** remove `installUpdate` (esp_ota) + on-device install UI; keep `checkForUpdate` (informational only); settings bordered text-box note "update via WiFi web server — no OTA here". (Check needs a Lector release feed to be meaningful.)

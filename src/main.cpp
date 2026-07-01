@@ -114,7 +114,7 @@
 #endif  // flash extra sizes 11/13/15
 
 
-// Lector UI font = Cozette, reproducing mom's DX34 v11.0.0 look exactly: three
+// Lector UI font = Cozette, reproducing the DX34 v11.0.0 look exactly: three
 // distinct sizes baked by convert-ui-only.sh with v11's default flags (dpi 150,
 // bw-threshold 2). ui_8=status (~21px), ui_10=body/menus (~25px), ui_12=titles
 // (~29px). Regular only — hierarchy comes from size, not weight.
