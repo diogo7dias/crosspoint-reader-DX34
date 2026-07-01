@@ -11,6 +11,7 @@
 #include "FontFamilyApply.h"
 #include "ReaderLayoutSafety.h"
 #include "MappedInputManager.h"
+#include "ReaderSamplePreview.h"
 #include "ReadingThemeStore.h"
 #include "ValueEditStep.h"
 #include "components/themes/BaseTheme.h"
@@ -18,14 +19,6 @@
 
 namespace {
 const StrId kCategoryNames[] = {StrId::STR_CAT_READER, StrId::STR_STATUS_BAR};
-
-// Neutral ~40-word sample for the live appearance preview at the top of the
-// reader-settings screen (caps, descenders, punctuation to exercise the face).
-constexpr const char* kPreviewSample =
-    "The morning light fell across the quiet room, and for a moment the whole "
-    "world seemed to pause.\n"
-    "She turned the page slowly, savoring each word, while the old clock ticked "
-    "on and the rain traced soft lines down the glass.";
 
 std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
   return std::to_string(CrossPointSettings::fontSizeToPointSize(family, fontSize));
@@ -690,119 +683,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
         const int insetL = rm.left;
         const int insetR = rm.right;
         const int colW = std::max(1, pageWidth - insetL - insetR);
-
-        // First-line indent px, mirroring ParsedText::applyParagraphIndent.
-        int em = renderer.hasGlyph(fontId, 0x2003) ? renderer.getTextAdvanceX(fontId, "\xE2\x80\x83") : 0;
-        if (em <= 0) em = renderer.getLineHeight(fontId);
-        int indent = em;  // Book (0) / default ≈ 1 em
-        switch (SETTINGS.firstLineIndentMode) {
-          case 1: indent = 0; break;                            // Off
-          case 2: indent = static_cast<int>(em * 0.6f); break;  // Small
-          case 3: indent = em; break;                           // Medium
-          case 4: indent = static_cast<int>(em * 1.4f); break;  // Large
-          case 5:                                               // Mega = colW/4, clamped
-            indent = std::min(std::max(colW / 4, em), colW * 3 / 5);
-            break;
-          default: break;
-        }
-
-        // Paragraph alignment: 0 Justify, 1 Left, 2 Center, 3 Right, 4 Book(=justify).
-        const uint8_t align = SETTINGS.paragraphAlignment;
-        const uint8_t prevStyle = renderer.getTextRenderStyle();
-        renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(SETTINGS.textRenderMode));
-
-        const int bandBottom = contentY + previewH - 6;
-        // Space width includes the user's word-spacing setting (mirrors
-        // ParsedText::wordSpacingSettingToPixelDelta). Justify distributes extra
-        // on top of this base gap.
-        const int baseSpaceW = std::max(1, renderer.getTextWidth(fontId, " "));
-        int wsDelta = 0;
-        switch (SETTINGS.wordSpacingPercent) {
-          case 0: wsDelta = -(baseSpaceW * 3 / 10); break;  // Tight -30%
-          case 2: wsDelta = baseSpaceW * 2 / 5; break;      // +40%
-          case 3: wsDelta = baseSpaceW * 4 / 5; break;      // +80%
-          case 4: wsDelta = baseSpaceW * 23 / 20; break;    // +115%
-          case 5: wsDelta = baseSpaceW * 3 / 2; break;      // +150%
-          case 6: wsDelta = baseSpaceW * 39 / 20; break;    // +195%
-          case 7: wsDelta = baseSpaceW * 12 / 5; break;     // +240%
-          case 8: wsDelta = baseSpaceW * 3; break;          // +300%
-          default: break;                                   // 1 = Normal
-        }
-        const int spaceW = std::max(1, baseSpaceW + wsDelta);
-        // Extra paragraph gap between the sample's two paragraphs, as a fraction
-        // of line height keyed by extraParagraphSpacingLevel (OFF..XXXL).
-        static constexpr float kParaFrac[] = {0.f, 0.20f, 0.30f, 0.42f, 0.55f, 0.68f, 0.80f};
-        const int paraGap = static_cast<int>(renderer.getLineHeight(fontId) *
-                                             kParaFrac[std::min<int>(SETTINGS.extraParagraphSpacingLevel, 6)]);
-        int y = contentY + 2;
-        int lineIndent = indent;
-        std::vector<std::string> lineWords;
-        std::string word;
-
-        // Draw the accumulated line words with the active alignment. Full lines
-        // (isLast=false) justify when alignment is Justify/Book; the paragraph's
-        // final line never justifies.
-        auto drawLine = [&](bool isLast) {
-          if (lineWords.empty()) return;
-          const int avail = colW - lineIndent;
-          int wordsW = 0;
-          for (const auto& w : lineWords) wordsW += renderer.getTextWidth(fontId, w.c_str());
-          const int gaps = static_cast<int>(lineWords.size()) - 1;
-          const int naturalW = wordsW + spaceW * gaps;
-          const bool justify = (align == 0 || align == 4) && !isLast && gaps > 0;
-          int x = insetL + lineIndent;
-          if (align == 2) x += std::max(0, (avail - naturalW) / 2);  // center
-          else if (align == 3) x += std::max(0, avail - naturalW);   // right
-          const int extra = justify ? std::max(0, avail - naturalW) : 0;
-          for (size_t i = 0; i < lineWords.size(); ++i) {
-            renderer.drawText(fontId, x, y, lineWords[i].c_str(), true, EpdFontFamily::REGULAR);
-            x += renderer.getTextWidth(fontId, lineWords[i].c_str());
-            if (static_cast<int>(i) < gaps) {
-              x += spaceW;
-              if (justify) x += extra / gaps + (static_cast<int>(i) < extra % gaps ? 1 : 0);
-            }
-          }
-        };
-        auto emit = [&](const std::string& w) {
-          std::string cand;
-          for (const auto& lw : lineWords) {
-            cand += lw;
-            cand += ' ';
-          }
-          cand += w;
-          if (lineWords.empty() || renderer.getTextWidth(fontId, cand.c_str()) <= colW - lineIndent) {
-            lineWords.push_back(w);
-          } else {
-            drawLine(false);
-            y += lineAdv;
-            lineIndent = 0;
-            lineWords.clear();
-            lineWords.push_back(w);
-          }
-        };
-        for (const char* p = kPreviewSample; *p && y <= bandBottom; ++p) {
-          if (*p == '\n') {  // paragraph break
-            if (!word.empty()) {
-              emit(word);
-              word.clear();
-            }
-            if (y <= bandBottom) drawLine(true);  // last line of the paragraph — never justified
-            y += lineAdv + paraGap;
-            lineIndent = indent;  // next paragraph's first line indents again
-            lineWords.clear();
-          } else if (*p == ' ') {
-            if (!word.empty()) {
-              emit(word);
-              word.clear();
-            }
-          } else {
-            word += *p;
-          }
-        }
-        if (!word.empty() && y <= bandBottom) emit(word);
-        if (y <= bandBottom) drawLine(true);
-
-        renderer.setTextRenderStyle(prevStyle);
+        reader::drawReaderSamplePreview(renderer, SETTINGS, insetL, colW, contentY + 2, contentY + previewH - 6);
         renderer.drawLine(insetL, contentY + previewH, pageWidth - insetR, contentY + previewH, true);
       }
     }

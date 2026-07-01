@@ -5,18 +5,24 @@ class CrossPointSettings;
 
 namespace reader {
 
-// Renders the ~40-word appearance sample inside [boxX, boxY, boxW, boxH] using
-// the given settings' reader appearance: reader font (getReaderFontId), line
-// spacing, first-line indent (incl. Mega), paragraph alignment (justify / left /
-// center / right), word spacing, paragraph spacing and render style (crisp /
-// dark). The theme's horizontal margin is applied as a capped box inset (exact
-// px margins do not translate into a scaled preview box). Text is clipped to the
-// box height. The CALLER draws the surrounding box/border and MUST heap-gate the
+// Renders the ~40-word appearance sample inside the content column
+// [insetL, insetL + colW], flowing from y = top and clipped at y = bottom,
+// using the given settings' reader appearance: reader font (getReaderFontId),
+// line spacing, first-line indent (incl. Mega), paragraph alignment (justify /
+// left / center / right), word spacing, paragraph spacing and render style
+// (crisp / dark). The render style is saved and restored internally.
+//
+// The CALLER resolves the column geometry, because the two callers want
+// different margin policies: the full-screen reader-settings preview passes the
+// reader's real content column (ReaderLayoutSafety::resolveBaseReaderMargins) so
+// margins read exactly as the page will; the theme preview popup passes a capped
+// box inset (exact px margins do not translate into a scaled popup box). The
+// caller also draws any surrounding box/border/separator and MUST heap-gate the
 // call (rendering the reader font decompresses its glyph group).
 //
-// Shared by the reader-settings live preview concept and the theme preview popup
-// so a theme can be previewed exactly as it will read.
-void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s, int boxX, int boxY, int boxW,
-                             int boxH);
+// Single source of truth for the sample-text flow, shared by the reader-settings
+// live preview and the theme preview popup so a theme reads exactly as saved.
+void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s, int insetL, int colW, int top,
+                             int bottom);
 
 }  // namespace reader

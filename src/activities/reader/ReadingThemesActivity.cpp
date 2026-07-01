@@ -438,7 +438,14 @@ void ReadingThemesActivity::render(Activity::RenderLock&&) {
     if (theme != nullptr && heap_caps_get_free_size(MALLOC_CAP_8BIT) >= 40 * 1024) {
       CrossPointSettings temp = SETTINGS;
       ReadingThemeStore::applyThemeToSettings(*theme, temp);
-      reader::drawReaderSamplePreview(renderer, temp, popupX, sampleY, popupW, sampleH);
+      // Capped box inset: exact px margins don't translate into a scaled popup
+      // box, so wider-margin themes just read a little narrower here.
+      constexpr int kPad = 8;
+      const int usableW = std::max(1, popupW - 2 * kPad);
+      const int margin = std::clamp<int>(temp.screenMarginHorizontal, 0, usableW / 3);
+      const int insetL = popupX + kPad + margin;
+      const int colW = std::max(1, popupW - 2 * (kPad + margin));
+      reader::drawReaderSamplePreview(renderer, temp, insetL, colW, sampleY + kPad, sampleY + sampleH - kPad);
     } else {
       renderer.drawCenteredText(UI_10_FONT_ID, sampleY + sampleH / 2 - 8, "Preview unavailable (low memory)");
     }

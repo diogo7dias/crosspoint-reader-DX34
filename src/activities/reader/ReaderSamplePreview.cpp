@@ -19,19 +19,12 @@ constexpr const char* kSample =
     "on and the rain traced soft lines down the glass.";
 }  // namespace
 
-void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s, const int boxX, const int boxY,
-                             const int boxW, const int boxH) {
+void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s, const int insetL, const int colW,
+                             const int top, const int bottom) {
   const int fontId = s.getReaderFontId();
   const int lineAdv = std::max(1, renderer.getLineHeight(fontId) * s.lineSpacingPercent / 100);
 
-  constexpr int kPad = 8;
-  // Apply the theme's horizontal margin as a capped inset so wider-margin themes
-  // read visibly narrower inside the box.
-  const int usableW = std::max(1, boxW - 2 * kPad);
-  const int margin = std::clamp<int>(s.screenMarginHorizontal, 0, usableW / 3);
-  const int insetL = boxX + kPad + margin;
-  const int colW = std::max(1, boxW - 2 * (kPad + margin));
-
+  // First-line indent px, mirroring ParsedText::applyParagraphIndent.
   int em = renderer.hasGlyph(fontId, 0x2003) ? renderer.getTextAdvanceX(fontId, "\xE2\x80\x83") : 0;
   if (em <= 0) em = renderer.getLineHeight(fontId);
   int indent = em;  // Book (0) / default ~ 1 em
@@ -40,7 +33,7 @@ void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s,
     case 2: indent = static_cast<int>(em * 0.6f); break;  // Small
     case 3: indent = em; break;                           // Medium
     case 4: indent = static_cast<int>(em * 1.4f); break;  // Large
-    case 5: indent = std::min(std::max(colW / 4, em), colW * 3 / 5); break;  // Mega
+    case 5: indent = std::min(std::max(colW / 4, em), colW * 3 / 5); break;  // Mega = colW/4, clamped
     default: break;
   }
 
@@ -48,30 +41,38 @@ void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s,
   const uint8_t prevStyle = renderer.getTextRenderStyle();
   renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(s.textRenderMode));
 
-  const int bandBottom = boxY + boxH - kPad;
+  const int bandBottom = bottom;
+  // Space width includes the user's word-spacing setting (mirrors
+  // ParsedText::wordSpacingSettingToPixelDelta). Justify distributes extra on
+  // top of this base gap.
   const int baseSpaceW = std::max(1, renderer.getTextWidth(fontId, " "));
   int wsDelta = 0;
   switch (s.wordSpacingPercent) {
-    case 0: wsDelta = -(baseSpaceW * 3 / 10); break;
-    case 2: wsDelta = baseSpaceW * 2 / 5; break;
-    case 3: wsDelta = baseSpaceW * 4 / 5; break;
-    case 4: wsDelta = baseSpaceW * 23 / 20; break;
-    case 5: wsDelta = baseSpaceW * 3 / 2; break;
-    case 6: wsDelta = baseSpaceW * 39 / 20; break;
-    case 7: wsDelta = baseSpaceW * 12 / 5; break;
-    case 8: wsDelta = baseSpaceW * 3; break;
-    default: break;  // 1 = Normal
+    case 0: wsDelta = -(baseSpaceW * 3 / 10); break;  // Tight -30%
+    case 2: wsDelta = baseSpaceW * 2 / 5; break;      // +40%
+    case 3: wsDelta = baseSpaceW * 4 / 5; break;      // +80%
+    case 4: wsDelta = baseSpaceW * 23 / 20; break;    // +115%
+    case 5: wsDelta = baseSpaceW * 3 / 2; break;      // +150%
+    case 6: wsDelta = baseSpaceW * 39 / 20; break;    // +195%
+    case 7: wsDelta = baseSpaceW * 12 / 5; break;     // +240%
+    case 8: wsDelta = baseSpaceW * 3; break;          // +300%
+    default: break;                                   // 1 = Normal
   }
   const int spaceW = std::max(1, baseSpaceW + wsDelta);
+  // Extra paragraph gap between the sample's two paragraphs, as a fraction of
+  // line height keyed by extraParagraphSpacingLevel (OFF..XXXL).
   static constexpr float kParaFrac[] = {0.f, 0.20f, 0.30f, 0.42f, 0.55f, 0.68f, 0.80f};
   const int paraGap =
       static_cast<int>(renderer.getLineHeight(fontId) * kParaFrac[std::min<int>(s.extraParagraphSpacingLevel, 6)]);
 
-  int y = boxY + kPad;
+  int y = top;
   int lineIndent = indent;
   std::vector<std::string> lineWords;
   std::string word;
 
+  // Draw the accumulated line words with the active alignment. Full lines
+  // (isLast=false) justify when alignment is Justify/Book; the paragraph's final
+  // line never justifies.
   auto drawLine = [&](bool isLast) {
     if (lineWords.empty()) return;
     const int avail = colW - lineIndent;
@@ -116,9 +117,9 @@ void drawReaderSamplePreview(GfxRenderer& renderer, const CrossPointSettings& s,
         emit(word);
         word.clear();
       }
-      if (y <= bandBottom) drawLine(true);
+      if (y <= bandBottom) drawLine(true);  // last line of the paragraph — never justified
       y += lineAdv + paraGap;
-      lineIndent = indent;
+      lineIndent = indent;  // next paragraph's first line indents again
       lineWords.clear();
     } else if (*p == ' ') {
       if (!word.empty()) {
