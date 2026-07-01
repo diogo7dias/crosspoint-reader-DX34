@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 
@@ -16,6 +17,13 @@
 
 namespace {
 const StrId kCategoryNames[] = {StrId::STR_CAT_READER, StrId::STR_STATUS_BAR};
+
+// Neutral ~40-word sample for the live appearance preview at the top of the
+// reader-settings screen (caps, descenders, punctuation to exercise the face).
+constexpr const char* kPreviewSample =
+    "The morning light fell across the quiet room, and for a moment the whole "
+    "world seemed to pause. She turned the page slowly, savoring each word, while "
+    "the old clock ticked on and the rain traced soft lines down the glass.";
 
 std::string fontSizeValueLabel(const uint8_t family, const uint8_t fontSize) {
   return std::to_string(CrossPointSettings::fontSizeToPointSize(family, fontSize));
@@ -661,6 +669,84 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
   const int wrapGap = metrics.contentSidePadding;
   constexpr int kChipPad = 1;
 
+  // --- Live preview band (top): render a sample paragraph with the current
+  // reader appearance settings (font, size, line-spacing, first-line indent,
+  // render style) so a change shows immediately — render() re-runs after every
+  // setting update. Gated on free heap because rendering the just-selected
+  // reader font decompresses its glyph group, which can OOM on a large open book
+  // (the same reason the font-size popup renders no font preview); below the gate
+  // the band is dropped and the list gets the whole screen.
+  int previewH = 0;
+  {
+    constexpr size_t kPreviewHeapGate = 40 * 1024;
+    if (heap_caps_get_free_size(MALLOC_CAP_8BIT) >= kPreviewHeapGate) {
+      const int fontId = SETTINGS.getReaderFontId();
+      const int lineAdv = std::max(1, renderer.getLineHeight(fontId) * SETTINGS.lineSpacingPercent / 100);
+      const int band = std::min(pageHeight * 38 / 100, contentHeight / 2);
+      if (band >= lineAdv + 10) {
+        previewH = band;
+        const int inset = metrics.contentSidePadding;
+        const int colW = pageWidth - 2 * inset;
+
+        // First-line indent px, mirroring ParsedText::applyParagraphIndent.
+        int em = renderer.hasGlyph(fontId, 0x2003) ? renderer.getTextAdvanceX(fontId, "\xE2\x80\x83") : 0;
+        if (em <= 0) em = renderer.getLineHeight(fontId);
+        int indent = em;  // Book (0) / default ≈ 1 em
+        switch (SETTINGS.firstLineIndentMode) {
+          case 1: indent = 0; break;                            // Off
+          case 2: indent = static_cast<int>(em * 0.6f); break;  // Small
+          case 3: indent = em; break;                           // Medium
+          case 4: indent = static_cast<int>(em * 1.4f); break;  // Large
+          case 5:                                               // Mega = colW/3, clamped
+            indent = std::min(std::max(colW / 3, em), colW * 3 / 5);
+            break;
+          default: break;
+        }
+
+        const uint8_t prevStyle = renderer.getTextRenderStyle();
+        renderer.setTextRenderStyle(CrossPointSettings::renderStyleForTextMode(SETTINGS.textRenderMode));
+
+        const int bandBottom = contentY + previewH - 6;
+        int y = contentY + 2;
+        int lineIndent = indent;
+        std::string line;
+        std::string word;
+        auto drawCurrent = [&]() {
+          if (!line.empty())
+            renderer.drawText(fontId, inset + lineIndent, y, line.c_str(), true, EpdFontFamily::REGULAR);
+        };
+        auto emit = [&](const std::string& w) {
+          const std::string cand = line.empty() ? w : line + " " + w;
+          if (renderer.getTextWidth(fontId, cand.c_str()) <= colW - lineIndent) {
+            line = cand;
+          } else {
+            drawCurrent();
+            y += lineAdv;
+            lineIndent = 0;
+            line = w;
+          }
+        };
+        for (const char* p = kPreviewSample; *p && y <= bandBottom; ++p) {
+          if (*p == ' ') {
+            if (!word.empty()) {
+              emit(word);
+              word.clear();
+            }
+          } else {
+            word += *p;
+          }
+        }
+        if (!word.empty() && y <= bandBottom) emit(word);
+        if (y <= bandBottom) drawCurrent();
+
+        renderer.setTextRenderStyle(prevStyle);
+        renderer.drawLine(inset, contentY + previewH, pageWidth - inset, contentY + previewH, true);
+      }
+    }
+  }
+  const int listTop = contentY + previewH;
+  const int listHeight = contentHeight - previewH;
+
   // Helper lambdas mirror SettingsActivity — split a label into up to two
   // lines with greedy word-wrap and a codepoint-wrap fallback for very long
   // single words (some custom font family names are one big word).
@@ -808,7 +894,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
     int curPage = 0;
     int usedH = 0;
     for (int i = 0; i < rowCount; i++) {
-      if (usedH > 0 && usedH + rowHeights[i] > contentHeight) {
+      if (usedH > 0 && usedH + rowHeights[i] > listHeight) {
         curPage++;
         usedH = 0;
       }
@@ -827,7 +913,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
   const int renderPage = (rowCount > 0) ? pageOfRow[pageStartIndex] : 0;
   int rowYOffset = 0;
   for (int i = pageStartIndex; i < rowCount && pageOfRow[i] == renderPage; i++) {
-    const int rowY = contentY + rowYOffset;
+    const int rowY = listTop + rowYOffset;
     const auto& row = flatRows[i];
     const int thisRowHeight = rowHeights[i];
 
