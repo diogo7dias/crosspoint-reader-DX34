@@ -222,7 +222,6 @@ void ReaderSettingsActivity::buildSettingsList() {
   // selected option index as the persisted value.
   pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
                                      {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK}));
-  pushReader(ReaderSettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));
   pushReader(ReaderSettingInfo::Value(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacingPercent, {35, 150, 5}));

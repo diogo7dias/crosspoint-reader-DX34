@@ -71,7 +71,6 @@ void test_round_trip_identity() {
   TEST_ASSERT_EQUAL_UINT8(a.orientation, b.orientation);
   TEST_ASSERT_EQUAL_UINT8(a.sleepTimeout, b.sleepTimeout);
   TEST_ASSERT_EQUAL_UINT8(a.imageDither, b.imageDither);
-  TEST_ASSERT_EQUAL_UINT8(a.smoothText, b.smoothText);
 }
 
 // 2. Drift-parity regression (v6.0.0): the granular status-bar toggles must
@@ -166,7 +165,7 @@ void test_golden_default_snapshot() {
       "\"clockUtcOffsetQ\":48,\"clockFormat\":0,\"clockHasBeenSynced\":0,\"sideButtonLayout\":0,\"frontButtonBack\":0,"
       "\"frontButtonConfirm\":1,\"frontButtonLeft\":2,\"frontButtonRight\":3,\"fontFamily\":1,\"fontSize\":4,"
       "\"lineSpacing\":1,\"lineSpacingPercent\":110,\"paragraphAlignment\":0,\"sleepTimeout\":2,\"showHiddenFiles\":0,"
-      "\"randomBookOnBoot\":0,\"refreshFrequency\":3,\"screenMargin\":20,\"smoothText\":0,\"uniformMargins\":0,"
+      "\"randomBookOnBoot\":0,\"refreshFrequency\":3,\"screenMargin\":20,\"uniformMargins\":0,"
       "\"dynamicMargins\":0,\"screenMarginHorizontal\":20,\"screenMarginTop\":20,\"screenMarginBottom\":20,"
       "\"hideBatteryPercentage\":0,"
       "\"longPressChapterSkip\":1,\"hyphenationEnabled\":0,\"uiLanguage\":0,\"fadingFix\":0,\"embeddedStyle\":false,"

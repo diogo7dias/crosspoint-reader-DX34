@@ -2450,22 +2450,15 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
     pagesUntilFullRefresh--;
   }
 
-  // Differential grayscale overlay. For image pages the image area always gets
-  // the 2-bit overlay over the BW text/status base. With Smooth Text (AA) on, the
-  // glyphs are also re-drawn in the grey pass: the BW base keeps the crisp black
-  // core, and this overlay lightens the glyph EDGE pixels (bmpVal 1/2) to grey →
-  // anti-aliased text. Costs the slow greyscale refresh every page (Snappy LAW),
-  // which is why it is an opt-in toggle, off by default.
-  const bool smoothText = SETTINGS.smoothText != 0;
-  if ((pageHasImages || smoothText) && renderer.storeBwBuffer()) {
+  // Differential grayscale overlay for image pages: the image area gets the 2-bit
+  // overlay over the BW text/status base. (The former Smooth Text / AA glyph pass
+  // was removed — on this e-ink panel the black→grey edge shift was not visibly
+  // worth the slow greyscale refresh it forced on every page turn.)
+  if (pageHasImages && renderer.storeBwBuffer()) {
     const Page* pagePtr = &page;
     const int ml = orientedMarginLeft;
     const int cy = contentY;
-    const int aaFontId = SETTINGS.getReaderFontId();
-    auto drawGrey = [&, pagePtr, ml, cy, aaFontId, smoothText]() {
-      pagePtr->renderImages(renderer, ml, cy);
-      if (smoothText) pagePtr->render(renderer, aaFontId, ml, cy);
-    };
+    auto drawGrey = [&, pagePtr, ml, cy]() { pagePtr->renderImages(renderer, ml, cy); };
     renderer.renderGrayscale(GfxRenderer::GrayscaleMode::Differential, drawGrey);
     renderer.restoreBwBuffer();
     // Force the next page after an image page to take the HALF_REFRESH branch

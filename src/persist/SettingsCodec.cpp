@@ -125,10 +125,10 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["lineSpacingPercent"] = s.lineSpacingPercent;
 
   // run F: paragraphAlignment .. refreshFrequency
-  emitMechUntil("smoothText");
+  emitMechUntil("uniformMargins");
   doc["screenMargin"] = s.screenMargin;  // split-margin fallback source
 
-  // run G: smoothText, uniformMargins
+  // run G: uniformMargins
   emitMechUntil("hideBatteryPercentage");
 
   // Defensive clamp: field is 0/1/2 in the UI, but a bad in-memory value

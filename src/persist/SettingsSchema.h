@@ -73,7 +73,6 @@ inline constexpr FieldDesc kFields[] = {
     {"randomBookOnBoot", &SS::randomBookOnBoot, 0, 0, 0},
     {"refreshFrequency", &SS::refreshFrequency, SS::REFRESH_15, SS::REFRESH_FREQUENCY_COUNT, 0},
     // --- run G (after screenMargin irregular emit) ---
-    {"smoothText", &SS::smoothText, 0, 0, 1},
     {"uniformMargins", &SS::uniformMargins, 0, 0, 1},
     // --- run H (after dynamicMargins/split-margin irregular block) ---
     {"hideBatteryPercentage", &SS::hideBatteryPercentage, SS::HIDE_NEVER, SS::HIDE_BATTERY_PERCENTAGE_COUNT, 0},
