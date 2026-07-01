@@ -26,15 +26,25 @@ struct DirectPixelWriter {
   // Row-precomputed: the Y-dependent portion of the physical coords
   int rowPhyXBase, rowPhyYBase;
 
+  // Physical panel stride (bytes per row); taken at runtime so X3 (99) and X4
+  // (100) both render correctly. Cached in init() so writePixel() stays branchless.
+  int strideBytes;
+
   void init(GfxRenderer& renderer) {
     fb = renderer.getFrameBuffer();
     mode = renderer.getRenderMode();
+    // Physical panel geometry at runtime (X4 800x480, X3 792x528). Using the
+    // compile-time HalDisplay::DISPLAY_* constants here baked in the X4 stride
+    // and Y-flip origin and sheared/clipped every image on the X3.
+    strideBytes = renderer.getPanelWidthBytes();
+    const int physW = renderer.getPanelWidth();
+    const int physH = renderer.getPanelHeight();
 
     switch (renderer.getOrientation()) {
       case GfxRenderer::Portrait:
         // phyX = y, phyY = (DISPLAY_HEIGHT-1) - x
         phyXBase = 0;
-        phyYBase = HalDisplay::DISPLAY_HEIGHT - 1;
+        phyYBase = physH - 1;
         phyXStepX = 0;
         phyYStepX = -1;
         phyXStepY = 1;
@@ -42,8 +52,8 @@ struct DirectPixelWriter {
         break;
       case GfxRenderer::LandscapeClockwise:
         // phyX = (DISPLAY_WIDTH-1) - x, phyY = (DISPLAY_HEIGHT-1) - y
-        phyXBase = HalDisplay::DISPLAY_WIDTH - 1;
-        phyYBase = HalDisplay::DISPLAY_HEIGHT - 1;
+        phyXBase = physW - 1;
+        phyYBase = physH - 1;
         phyXStepX = -1;
         phyYStepX = 0;
         phyXStepY = 0;
@@ -51,7 +61,7 @@ struct DirectPixelWriter {
         break;
       case GfxRenderer::PortraitInverted:
         // phyX = (DISPLAY_WIDTH-1) - y, phyY = x
-        phyXBase = HalDisplay::DISPLAY_WIDTH - 1;
+        phyXBase = physW - 1;
         phyYBase = 0;
         phyXStepX = 0;
         phyYStepX = 1;
@@ -126,7 +136,7 @@ struct DirectPixelWriter {
     const int phyX = rowPhyXBase + logicalX * phyXStepX;
     const int phyY = rowPhyYBase + logicalX * phyYStepX;
 
-    const uint16_t byteIndex = phyY * HalDisplay::DISPLAY_WIDTH_BYTES + (phyX >> 3);
+    const uint16_t byteIndex = phyY * strideBytes + (phyX >> 3);
     const uint8_t bitMask = 1 << (7 - (phyX & 7));
 
     if (state) {

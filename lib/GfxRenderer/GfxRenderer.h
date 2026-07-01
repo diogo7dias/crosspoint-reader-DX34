@@ -113,6 +113,13 @@ class GfxRenderer {
   // transforms)
   void setOrientation(const Orientation o) { orientation = o; }
   Orientation getOrientation() const { return orientation; }
+  // Physical panel geometry (runtime: X4 800x480 / 100 bytes-per-row, X3 792x528
+  // / 99). Distinct from getScreenWidth/Height, which are the oriented LOGICAL
+  // dims. Used by the direct image-writer hot path, which works in physical
+  // framebuffer coordinates.
+  uint16_t getPanelWidth() const { return panelWidth; }
+  uint16_t getPanelHeight() const { return panelHeight; }
+  uint16_t getPanelWidthBytes() const { return panelWidthBytes; }
 
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }

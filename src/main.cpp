@@ -1161,9 +1161,10 @@ void loop() {
       String cmd = line.substring(4);
       cmd.trim();
       if (cmd == "SCREENSHOT") {
-        logSerial.printf("SCREENSHOT_START:%d\n", HalDisplay::BUFFER_SIZE);
+        const size_t shotSize = display.getBufferSize();  // runtime panel buffer (X4 48000, X3 52272)
+        logSerial.printf("SCREENSHOT_START:%d\n", (int)shotSize);
         uint8_t* buf = display.getFrameBuffer();
-        logSerial.write(buf, HalDisplay::BUFFER_SIZE);
+        logSerial.write(buf, shotSize);
         logSerial.printf("SCREENSHOT_END\n");
       }
     }
