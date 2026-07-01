@@ -234,9 +234,11 @@ bool CrossPointSettings::loadFromBinaryFile() {
     readAndValidate(inputFile, sleepScreenCoverMode, SLEEP_SCREEN_COVER_MODE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
     {
-      std::string urlStr;
-      serialization::readString(inputFile, urlStr);
-      StringUtils::safeStrncpy(opdsServerUrl, urlStr.c_str());
+      // Legacy OPDS server URL: read to keep the positional stream aligned for
+      // devices migrating from the old binary format, then discard — the opds*
+      // fields were removed in Lector.
+      std::string discardStr;
+      serialization::readString(inputFile, discardStr);
     }
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, textAntiAliasing);
@@ -248,15 +250,15 @@ bool CrossPointSettings::loadFromBinaryFile() {
     serialization::readPod(inputFile, hyphenationEnabled);
     if (++settingsRead >= fileSettingsCount) break;
     {
-      std::string usernameStr;
-      serialization::readString(inputFile, usernameStr);
-      StringUtils::safeStrncpy(opdsUsername, usernameStr.c_str());
+      // Legacy OPDS username: read-and-discard (positional alignment only).
+      std::string discardStr;
+      serialization::readString(inputFile, discardStr);
     }
     if (++settingsRead >= fileSettingsCount) break;
     {
-      std::string passwordStr;
-      serialization::readString(inputFile, passwordStr);
-      StringUtils::safeStrncpy(opdsPassword, passwordStr.c_str());
+      // Legacy OPDS password: read-and-discard (positional alignment only).
+      std::string discardStr;
+      serialization::readString(inputFile, discardStr);
     }
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, sleepScreenCoverFilter, SLEEP_SCREEN_COVER_FILTER_COUNT);

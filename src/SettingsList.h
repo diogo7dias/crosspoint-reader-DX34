@@ -298,14 +298,6 @@ inline const std::vector<SettingInfo>& getSettingsList() {
         },
         "koMatchMethod", StrId::STR_KOREADER_SYNC));
 
-    // --- OPDS Browser (web-only, uses CrossPointSettings char arrays) ---
-    s.push_back(SettingInfo::String(StrId::STR_OPDS_SERVER_URL, SETTINGS.opdsServerUrl, sizeof(SETTINGS.opdsServerUrl),
-                                    "opdsServerUrl", StrId::STR_OPDS_BROWSER));
-    s.push_back(SettingInfo::String(StrId::STR_USERNAME, SETTINGS.opdsUsername, sizeof(SETTINGS.opdsUsername),
-                                    "opdsUsername", StrId::STR_OPDS_BROWSER));
-    s.push_back(SettingInfo::String(StrId::STR_PASSWORD, SETTINGS.opdsPassword, sizeof(SETTINGS.opdsPassword),
-                                    "opdsPassword", StrId::STR_OPDS_BROWSER));
-
     return s;
   }();
   return kCached;

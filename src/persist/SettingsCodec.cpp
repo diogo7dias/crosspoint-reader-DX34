@@ -137,10 +137,6 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   doc["screenMarginHorizontal"] = s.screenMarginHorizontal;
   doc["screenMarginTop"] = s.screenMarginTop;
   doc["screenMarginBottom"] = s.screenMarginBottom;
-  doc["opdsServerUrl"] = s.opdsServerUrl;
-  doc["opdsUsername"] = s.opdsUsername;
-  doc["opdsPassword_obf"] = env.obfuscate(s.opdsPassword);
-
   // run H: hideBatteryPercentage, longPressChapterSkip, hyphenationEnabled
   emitMechUntil("fadingFix");
   doc["uiLanguage"] = s.uiLanguage;  // decode clamps against env.languageCount()
@@ -451,19 +447,6 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
   // embeddedStyle: derived from readerStyleMode (legacy compat field).
   s.embeddedStyle = s.readerStyleMode == S::READER_STYLE_HYBRID ? (uint8_t)1 : (uint8_t)0;
 
-  const char* url = doc["opdsServerUrl"] | "";
-  copyCStr(s.opdsServerUrl, url);
-
-  const char* user = doc["opdsUsername"] | "";
-  copyCStr(s.opdsUsername, user);
-
-  bool passOk = false;
-  std::string pass = env.deobfuscate(doc["opdsPassword_obf"] | "", &passOk);
-  if (!passOk || pass.empty()) {
-    pass = doc["opdsPassword"] | "";
-    if (!pass.empty() && needsResave) *needsResave = true;
-  }
-  copyCStr(s.opdsPassword, pass.c_str());
   LOG_DIAG("CPS", "loadSettings: ff=%u fs=%u lsp=%u", (unsigned)s.fontFamily, (unsigned)s.fontSize,
            (unsigned)s.lineSpacingPercent);
   return true;

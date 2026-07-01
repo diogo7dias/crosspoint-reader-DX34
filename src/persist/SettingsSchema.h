@@ -75,7 +75,7 @@ inline constexpr FieldDesc kFields[] = {
     // --- run G (after screenMargin irregular emit) ---
     {"smoothText", &SS::smoothText, 0, 0, 1},
     {"uniformMargins", &SS::uniformMargins, 0, 0, 1},
-    // --- run H (after dynamicMargins/split-margin/opds irregular block) ---
+    // --- run H (after dynamicMargins/split-margin irregular block) ---
     {"hideBatteryPercentage", &SS::hideBatteryPercentage, SS::HIDE_NEVER, SS::HIDE_BATTERY_PERCENTAGE_COUNT, 0},
     {"longPressChapterSkip", &SS::longPressChapterSkip, 1, 0, 0},
     {"hyphenationEnabled", &SS::hyphenationEnabled, 0, 0, 0},

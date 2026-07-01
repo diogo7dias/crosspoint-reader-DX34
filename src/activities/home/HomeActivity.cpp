@@ -226,9 +226,10 @@ void HomeActivity::onEnter() {
   refreshSleepFavoriteWarning();
   refreshSleepOverLimit();
 
-  // OPDS browser removed in Lector: the home menu item never appears. (The
-  // opdsServerUrl setting field is retained but unused pending a settings-schema
-  // cleanup.)
+  // OPDS browser removed in Lector: the opds* settings fields are gone and the
+  // home menu item never appears. hasOpdsUrl stays false; the OpdsBrowser menu
+  // action + onOpdsBrowserOpen callback are dead scaffolding kept only to avoid
+  // reshaping the HomeActivity ctor.
   hasOpdsUrl = false;
 
   selectorIndex = 1;  // Default focus on first recent book

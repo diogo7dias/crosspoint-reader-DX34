@@ -5,7 +5,6 @@
 #include <StreamString.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
-#include <base64.h>
 
 #include <cstring>
 #include <memory>
@@ -41,13 +40,6 @@ std::unique_ptr<WiFiClient> HttpDownloader::createClient(const std::string& url,
   http.setTimeout(15000);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.addHeader("User-Agent", "CrossPoint-Mod-DX34-ESP32-" CROSSPOINT_VERSION);
-
-  // Add Basic HTTP auth if credentials are configured
-  if (strlen(SETTINGS.opdsUsername) > 0 && strlen(SETTINGS.opdsPassword) > 0) {
-    std::string credentials = std::string(SETTINGS.opdsUsername) + ":" + SETTINGS.opdsPassword;
-    String encoded = base64::encode(credentials.c_str());
-    http.addHeader("Authorization", "Basic " + encoded);
-  }
 
   return client;
 }

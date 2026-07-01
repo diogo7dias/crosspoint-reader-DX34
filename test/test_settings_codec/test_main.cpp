@@ -168,7 +168,7 @@ void test_golden_default_snapshot() {
       "\"lineSpacing\":1,\"lineSpacingPercent\":110,\"paragraphAlignment\":0,\"sleepTimeout\":2,\"showHiddenFiles\":0,"
       "\"randomBookOnBoot\":0,\"refreshFrequency\":3,\"screenMargin\":20,\"smoothText\":0,\"uniformMargins\":0,"
       "\"dynamicMargins\":0,\"screenMarginHorizontal\":20,\"screenMarginTop\":20,\"screenMarginBottom\":20,"
-      "\"opdsServerUrl\":\"\",\"opdsUsername\":\"\",\"opdsPassword_obf\":\"\",\"hideBatteryPercentage\":0,"
+      "\"hideBatteryPercentage\":0,"
       "\"longPressChapterSkip\":1,\"hyphenationEnabled\":0,\"uiLanguage\":0,\"fadingFix\":0,\"embeddedStyle\":false,"
       "\"debugBorders\":0,\"highlightMode\":0,\"darkMode\":0,\"booksFolderOrder\":0,\"imageDither\":1}";
   TEST_ASSERT_EQUAL_STRING(expected, json.c_str());
