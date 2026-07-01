@@ -33,22 +33,36 @@ void OtaUpdateActivity::render(Activity::RenderLock&&) {
 
   const bool connected = WiFi.status() == WL_CONNECTED;
 
-  int y = static_cast<int>(renderer.getScreenHeight() * 0.22f);
-  renderer.drawCenteredText(UI_10_FONT_ID, y, "Update from your browser", true, EpdFontFamily::REGULAR);
-  y += 60;
-  renderer.drawCenteredText(SMALL_FONT_ID, y, "Open Settings > WiFi to start the web");
-  y += 26;
-  renderer.drawCenteredText(SMALL_FONT_ID, y, "page, then open this address in a browser:");
-  y += 56;
+  // Bordered notice: Lector has no over-the-air update. The whole message lives
+  // inside one framed box; the box height is derived from the final text cursor
+  // so it always wraps the content exactly.
+  const int boxX = 18;
+  const int boxW = renderer.getScreenWidth() - 2 * boxX;
+  const int boxY = static_cast<int>(renderer.getScreenHeight() * 0.16f);
+  int y = boxY + 22;
+
+  renderer.drawCenteredText(UI_10_FONT_ID, y, "No over-the-air (OTA) update", true, EpdFontFamily::REGULAR);
+  y += 34;
+  renderer.drawCenteredText(UI_10_FONT_ID, y, "in this firmware.", true, EpdFontFamily::REGULAR);
+  y += 46;
+  renderer.drawCenteredText(SMALL_FONT_ID, y, "Update from a browser:");
+  y += 34;
   renderer.drawCenteredText(UI_10_FONT_ID, y, kWebUpdateHostUrl, true, EpdFontFamily::REGULAR);
-  y += 36;
+  y += 32;
   if (connected) {
     const std::string ipUrl = std::string("or http://") + WiFi.localIP().toString().c_str() + "/update";
     renderer.drawCenteredText(SMALL_FONT_ID, y, ipUrl.c_str());
     y += 30;
   }
-  y += 40;
-  renderer.drawCenteredText(SMALL_FONT_ID, y, (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
+  y += 8;
+  renderer.drawCenteredText(SMALL_FONT_ID, y, "Start the page in Settings > WiFi.");
+  y += 30;
+
+  const int boxH = (y + 12) - boxY;
+  renderer.drawRect(boxX, boxY, boxW, boxH, 2, true);
+
+  renderer.drawCenteredText(SMALL_FONT_ID, boxY + boxH + 24,
+                            (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
