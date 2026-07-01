@@ -14,14 +14,66 @@
 #include "fontIds.h"
 #include "util/StatusPopup.h"
 
+namespace {
+// Integer-only byte formatter (avoids pulling in float printf on the C3).
+std::string formatBytes(uint64_t b) {
+  if (b >= 1024ull * 1024) {
+    const uint64_t tenths = (b * 10) / (1024ull * 1024);
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " MB";
+  }
+  return std::to_string(b / 1024) + " KB";
+}
+}  // namespace
+
 void ClearCacheActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
 
+  scanCacheSize();
   state = WARNING;
   requestUpdate();
 }
 
 void ClearCacheActivity::onExit() { ActivityWithSubactivity::onExit(); }
+
+// Stream-scan the reading-cache dirs (/.crosspoint/{epub_,xtc_,txt_}*) and sum
+// their file sizes for the "how much will this free" display. Two-pass like
+// clearCache(): collect dir names, close root, then sum each dir's files. Bounded
+// RAM (just the dir-name list + a running total).
+void ClearCacheActivity::scanCacheSize() {
+  cacheBytes = 0;
+  cacheBooks = 0;
+
+  auto root = Storage.open(Paths::kDataDir);
+  if (!root || !root.isDirectory()) {
+    if (root) root.close();
+    return;
+  }
+  char name[128];
+  std::vector<std::string> cacheDirs;
+  for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
+    file.getName(name, sizeof(name));
+    const std::string itemName(name);
+    const bool isCacheDir = file.isDirectory() && (itemName.rfind("epub_", 0) == 0 || itemName.rfind("xtc_", 0) == 0 ||
+                                                   itemName.rfind("txt_", 0) == 0);
+    file.close();
+    if (isCacheDir) cacheDirs.push_back(std::string(Paths::kDataDir) + "/" + itemName);
+  }
+  root.close();
+
+  cacheBooks = static_cast<int>(cacheDirs.size());
+  for (const auto& dirPath : cacheDirs) {
+    auto dir = Storage.open(dirPath.c_str());
+    if (!dir || !dir.isDirectory()) {
+      if (dir) dir.close();
+      continue;
+    }
+    for (auto f = dir.openNextFile(); f; f = dir.openNextFile()) {
+      if (!f.isDirectory()) cacheBytes += static_cast<uint64_t>(f.size());
+      f.close();
+    }
+    dir.close();
+  }
+}
 
 void ClearCacheActivity::render(Activity::RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
@@ -30,6 +82,9 @@ void ClearCacheActivity::render(Activity::RenderLock&&) {
   renderer.drawCenteredText(UI_12_FONT_ID, 15, tr(STR_CLEAR_READING_CACHE), true, EpdFontFamily::REGULAR);
 
   if (state == WARNING) {
+    const std::string sizeLine = "Reading cache: " + formatBytes(cacheBytes) + ", " + std::to_string(cacheBooks) +
+                                 (cacheBooks == 1 ? " book" : " books");
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 90, sizeLine.c_str(), true, EpdFontFamily::REGULAR);
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 60, "Clears generated cache files", true);
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 30, "for EPUB/XTC/TXT books.", true);
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10, "Reading progress is preserved.", true,
@@ -55,6 +110,8 @@ void ClearCacheActivity::render(Activity::RenderLock&&) {
       resultText += ", " + std::to_string(failedCount) + " " + std::string(tr(STR_FAILED_LOWER));
     }
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10, resultText.c_str());
+    const std::string freedLine = "Freed " + formatBytes(cacheBytes);
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 40, freedLine.c_str(), true, EpdFontFamily::REGULAR);
 
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

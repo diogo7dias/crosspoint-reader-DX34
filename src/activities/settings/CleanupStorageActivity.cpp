@@ -40,7 +40,7 @@ struct CleanupResult {
   uint32_t bytesFreed = 0;
 };
 
-void cleanupOrphansInDir(const char* dirPath, CleanupResult& result) {
+void cleanupOrphansInDir(const char* dirPath, CleanupResult& result, bool dryRun) {
   FsFile dir = Storage.open(dirPath, O_RDONLY);
   if (!dir || !dir.isDirectory()) {
     if (dir) dir.close();
@@ -70,6 +70,17 @@ void cleanupOrphansInDir(const char* dirPath, CleanupResult& result) {
     victims.push_back({std::move(path), sz});
   }
   dir.close();
+
+  // Dry-run: just tally what WOULD be removed (skip tombstoned files no SdFat
+  // path can delete), no mutation.
+  if (dryRun) {
+    for (const auto& v : victims) {
+      if (v.size == UINT32_MAX) continue;
+      result.removed++;
+      result.bytesFreed += v.size;
+    }
+    return;
+  }
 
   // Pass 2: delete. SdFat sometimes refuses Storage.remove() on a file whose
   // directory entry is in an odd state (interrupted prior write, FAT
@@ -118,7 +129,7 @@ void cleanupOrphansInDir(const char* dirPath, CleanupResult& result) {
 // /CRASH_INFO.TXT. On an upgraded SD card the old files are dead weight — remove
 // them. /CRASH_INFO.TXT itself is the live diagnostics file (bounded by its own
 // cap) and is intentionally NOT removed here.
-void cleanupLegacyReports(CleanupResult& result) {
+void cleanupLegacyReports(CleanupResult& result, bool dryRun) {
   constexpr const char* kLegacyReports[] = {"/wifi_report.txt", "/crash_report.txt", "/diag_report.txt",
                                             "/heap_report.txt"};
   for (const char* path : kLegacyReports) {
@@ -129,6 +140,11 @@ void cleanupLegacyReports(CleanupResult& result) {
     if (Storage.openFileForRead("CLEANUP", path, f)) {
       sz = static_cast<uint32_t>(f.size());
       f.close();
+    }
+    if (dryRun) {
+      result.removed++;
+      result.bytesFreed += sz;
+      continue;
     }
     if (Storage.remove(path)) {
       result.removed++;
@@ -141,10 +157,91 @@ void cleanupLegacyReports(CleanupResult& result) {
   }
 }
 
+// Empty the deleted-books trash (/.crosspoint/trash). Scoped STRICTLY to that
+// folder — never touches books, progress, bookmarks, settings, or CRASH_INFO.
+// Handles top-level files and one level of subdirectories.
+void cleanupTrash(CleanupResult& result, bool dryRun) {
+  constexpr const char* kTrash = "/.crosspoint/trash";
+  FsFile dir = Storage.open(kTrash, O_RDONLY);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return;
+  }
+  struct Item {
+    std::string path;
+    bool isDir;
+    uint32_t size;
+  };
+  std::vector<Item> items;
+  char nameBuf[128];
+  for (auto f = dir.openNextFile(); f; f = dir.openNextFile()) {
+    f.getName(nameBuf, sizeof(nameBuf));
+    const std::string name(nameBuf);
+    const bool isDir = f.isDirectory();
+    const uint32_t sz = isDir ? 0u : static_cast<uint32_t>(f.size());
+    f.close();
+    items.push_back({std::string(kTrash) + "/" + name, isDir, sz});
+  }
+  dir.close();
+
+  for (const auto& it : items) {
+    if (it.isDir) {
+      uint32_t subBytes = 0;  // one level of contained files, for the size estimate
+      FsFile sub = Storage.open(it.path.c_str(), O_RDONLY);
+      if (sub && sub.isDirectory()) {
+        for (auto sf = sub.openNextFile(); sf; sf = sub.openNextFile()) {
+          if (!sf.isDirectory()) subBytes += static_cast<uint32_t>(sf.size());
+          sf.close();
+        }
+      }
+      if (sub) sub.close();
+      if (dryRun || Storage.removeDir(it.path.c_str())) {
+        result.removed++;
+        result.bytesFreed += subBytes;
+      } else {
+        result.failed++;
+      }
+    } else {
+      if (it.size == UINT32_MAX) continue;
+      if (dryRun || Storage.remove(it.path.c_str())) {
+        result.removed++;
+        result.bytesFreed += it.size;
+      } else {
+        result.failed++;
+      }
+    }
+  }
+}
+
+// Integer-only byte formatter (avoids float printf on the C3).
+std::string formatBytes(uint32_t b) {
+  if (b >= 1024u * 1024) {
+    const uint32_t tenths = static_cast<uint32_t>((static_cast<uint64_t>(b) * 10) / (1024u * 1024));
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " MB";
+  }
+  if (b >= 1024) return std::to_string(b / 1024) + " KB";
+  return std::to_string(b) + " B";
+}
+
 }  // namespace
+
+void CleanupStorageActivity::scanCleanup() {
+  CleanupResult tmp, rep, trash;
+  cleanupOrphansInDir("/", tmp, true);
+  cleanupOrphansInDir("/.crosspoint", tmp, true);
+  cleanupLegacyReports(rep, true);
+  cleanupTrash(trash, true);
+  tmpCount = tmp.removed;
+  tmpBytes = tmp.bytesFreed;
+  reportCount = rep.removed;
+  reportBytes = rep.bytesFreed;
+  trashCount = trash.removed;
+  trashBytes = trash.bytesFreed;
+}
 
 void CleanupStorageActivity::onEnter() {
   ActivityWithSubactivity::onEnter();
+  scanCleanup();
   state = WARNING;
   requestUpdate();
 }
@@ -155,9 +252,10 @@ void CleanupStorageActivity::runCleanup() {
   LOG_DBG("CLEANUP", "Scanning SD for orphan tmp/junk files...");
   CleanupResult result;
 
-  cleanupOrphansInDir("/", result);
-  cleanupOrphansInDir("/.crosspoint", result);
-  cleanupLegacyReports(result);
+  cleanupOrphansInDir("/", result, false);
+  cleanupOrphansInDir("/.crosspoint", result, false);
+  cleanupLegacyReports(result, false);
+  cleanupTrash(result, false);
 
   removedCount = result.removed;
   failedCount = result.failed;
@@ -182,12 +280,25 @@ void CleanupStorageActivity::render(Activity::RenderLock&&) {
   renderer.drawCenteredText(UI_12_FONT_ID, 15, tr(STR_CLEANUP_STORAGE), true, EpdFontFamily::REGULAR);
 
   if (state == WARNING) {
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 60, tr(STR_CLEANUP_STORAGE_DESC1), true);
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 30, tr(STR_CLEANUP_STORAGE_DESC2), true);
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10, tr(STR_CLEANUP_STORAGE_DESC3), true,
-                              EpdFontFamily::REGULAR);
+    const int total = tmpCount + reportCount + trashCount;
+    const uint32_t totalBytes = tmpBytes + reportBytes + trashBytes;
+    int y = pageHeight / 2 - 90;
+    renderer.drawCenteredText(UI_10_FONT_ID, y, "Will remove (books & progress kept):", true, EpdFontFamily::REGULAR);
+    y += 34;
+    const std::string l1 = "Temp files: " + std::to_string(tmpCount) + " (" + formatBytes(tmpBytes) + ")";
+    renderer.drawCenteredText(UI_10_FONT_ID, y, l1.c_str(), true);
+    y += 28;
+    const std::string l2 = "Old reports: " + std::to_string(reportCount) + " (" + formatBytes(reportBytes) + ")";
+    renderer.drawCenteredText(UI_10_FONT_ID, y, l2.c_str(), true);
+    y += 28;
+    const std::string l3 = "Trash: " + std::to_string(trashCount) + " (" + formatBytes(trashBytes) + ")";
+    renderer.drawCenteredText(UI_10_FONT_ID, y, l3.c_str(), true);
+    y += 34;
+    const std::string lt = "Total: " + std::to_string(total) + " items, " + formatBytes(totalBytes);
+    renderer.drawCenteredText(UI_10_FONT_ID, y, lt.c_str(), true, EpdFontFamily::REGULAR);
 
-    const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_CLEAR_BUTTON), "", "");
+    const auto labels = (total == 0) ? mappedInput.mapLabels(tr(STR_BACK), "", "", "")
+                                     : mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_CLEAR_BUTTON), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();
     return;

@@ -34,5 +34,14 @@ class CleanupStorageActivity final : public ActivityWithSubactivity {
   int failedCount = 0;
   uint32_t bytesFreed = 0;
 
+  // Dry-run preview counts + sizes, computed on enter (before any deletion).
+  int tmpCount = 0;
+  uint32_t tmpBytes = 0;
+  int reportCount = 0;
+  uint32_t reportBytes = 0;
+  int trashCount = 0;
+  uint32_t trashBytes = 0;
+
+  void scanCleanup();
   void runCleanup();
 };

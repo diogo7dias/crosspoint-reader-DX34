@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 
 #include "activities/ActivityWithSubactivity.h"
@@ -24,5 +25,8 @@ class ClearCacheActivity final : public ActivityWithSubactivity {
 
   int clearedCount = 0;
   int failedCount = 0;
+  uint64_t cacheBytes = 0;  // total bytes across all reading-cache dirs (scanned on enter)
+  int cacheBooks = 0;       // number of cached books found
+  void scanCacheSize();
   void clearCache();
 };
