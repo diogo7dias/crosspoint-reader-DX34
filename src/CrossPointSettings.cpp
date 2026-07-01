@@ -401,58 +401,39 @@ int CrossPointSettings::getRefreshFrequency() const {
 }
 
 uint8_t CrossPointSettings::fontFamilyToDisplayIndex(const uint8_t family) {
+  // Lector picker order: Bookerly, Georgia, Helvetica, Verdana, Merriweather.
+  // Keep in sync with the three StrId label lists (SettingsList, ReaderSettings,
+  // FontFamilyPicker) and displayIndexToFontFamily.
   switch (normalizeFontFamily(family)) {
     case BOOKERLY:
-      return 1;
-    case GEORGIA:
-      return 2;
-    case LATO:
-      return 3;
-    case HELVETICA:
-      return 4;
-    case VERDANA:
-      return 5;
-#ifdef CROSSPOINT_SD_FONTS
-    case MERRIWEATHER:
-      return 6;
-    case PLAYFAIR:
-      return 7;
-    case GALMURI:
-      return 8;
-    case VOLLKORN:
-      return 9;
-#endif
-    case CHAREINK:
-    default:
       return 0;
+    case GEORGIA:
+      return 1;
+    case HELVETICA:
+      return 2;
+    case VERDANA:
+      return 3;
+    case MERRIWEATHER:
+      return 4;
+    default:
+      return 0;  // removed families fold to Bookerly
   }
 }
 
 uint8_t CrossPointSettings::displayIndexToFontFamily(const uint8_t displayIndex) {
   switch (displayIndex) {
-    case 1:
-      return BOOKERLY;
-    case 2:
-      return GEORGIA;
-    case 3:
-      return LATO;
-    case 4:
-      return HELVETICA;
-    case 5:
-      return VERDANA;
-#ifdef CROSSPOINT_SD_FONTS
-    case 6:
-      return MERRIWEATHER;
-    case 7:
-      return PLAYFAIR;
-    case 8:
-      return GALMURI;
-    case 9:
-      return VOLLKORN;
-#endif
     case 0:
+      return BOOKERLY;
+    case 1:
+      return GEORGIA;
+    case 2:
+      return HELVETICA;
+    case 3:
+      return VERDANA;
+    case 4:
+      return MERRIWEATHER;
     default:
-      return CHAREINK;
+      return BOOKERLY;
   }
 }
 
@@ -660,7 +641,7 @@ int CrossPointSettings::getReaderFontId() const {
   // latch is transient and never persisted, so the user's real font returns on
   // the next open. See EpubReaderActivity render-OOM recovery + onExit clear.
   if (emergencyRenderFontDowngrade) {
-    return CHAREINK_12_FONT_ID;
+    return BOOKERLY_11_FONT_ID;  // Lector: smallest shipped font = OOM-degrade floor (was ChareInk 12).
   }
   const uint8_t normalizedFontSize = normalizeFontSizeForFamily(fontFamily, fontSize);
   const uint8_t normalizedFamily = normalizeFontFamily(fontFamily);
@@ -710,29 +691,7 @@ int CrossPointSettings::getReaderFontId() const {
         return GEORGIA_17_FONT_ID;
     }
   }
-  if (normalizedFamily == LATO) {
-    switch (normalizedFontSize) {
-      case SIZE_10:
-        return LATO_10_FONT_ID;
-      case SIZE_12:
-        return LATO_12_FONT_ID;
-      case SIZE_14:
-        return LATO_14_FONT_ID;
-      case SIZE_16:
-        return LATO_16_FONT_ID;
-      case SIZE_11:
-        return LATO_11_FONT_ID;
-      case SIZE_13:
-        return LATO_13_FONT_ID;
-      case SIZE_15:
-        return LATO_15_FONT_ID;
-      case SIZE_18:
-        return LATO_18_FONT_ID;
-      case LARGE:
-      default:
-        return LATO_17_FONT_ID;
-    }
-  }
+  // Lato removed (Lector) — folds to Bookerly via normalizeFontFamily.
   if (normalizedFamily == HELVETICA) {
     switch (normalizedFontSize) {
       case SIZE_10:
@@ -779,10 +738,9 @@ int CrossPointSettings::getReaderFontId() const {
         return VERDANA_17_FONT_ID;
     }
   }
-#ifdef CROSSPOINT_SD_FONTS
-  // Merriweather + Playfair are SD-only families (normalizeFontFamily keeps them
-  // only in CROSSPOINT_SD_FONTS builds), so these blocks are unreachable in the
-  // default build where the family folds to CHAREINK above.
+  // Lector: Merriweather is a baked flash family (sizes 11..17). Playfair/Galmuri/
+  // Vollkorn remain SD-only below (unreachable in the flash build — those families
+  // fold to Bookerly via normalizeFontFamily).
   if (normalizedFamily == MERRIWEATHER) {
     switch (normalizedFontSize) {
       case SIZE_10:
@@ -806,6 +764,7 @@ int CrossPointSettings::getReaderFontId() const {
         return MERRIWEATHER_17_FONT_ID;
     }
   }
+#ifdef CROSSPOINT_SD_FONTS
   if (normalizedFamily == PLAYFAIR) {
     switch (normalizedFontSize) {
       case SIZE_10:
@@ -865,18 +824,24 @@ int CrossPointSettings::getReaderFontId() const {
     }
   }
 #endif  // CROSSPOINT_SD_FONTS
+  // Lector fallback: any unmatched family folds to Bookerly (also the
+  // normalizeFontFamily default), so no path can return a removed ChareInk id.
   switch (normalizedFontSize) {
-    case SIZE_10:
-      return CHAREINK_10_FONT_ID;
     case SIZE_12:
-      return CHAREINK_12_FONT_ID;
+      return BOOKERLY_12_FONT_ID;
     case SIZE_14:
-      return CHAREINK_14_FONT_ID;
+      return BOOKERLY_14_FONT_ID;
     case SIZE_16:
-      return CHAREINK_16_FONT_ID;
+      return BOOKERLY_16_FONT_ID;
+    case SIZE_11:
+      return BOOKERLY_11_FONT_ID;
+    case SIZE_13:
+      return BOOKERLY_13_FONT_ID;
+    case SIZE_15:
+      return BOOKERLY_15_FONT_ID;
     case LARGE:
     default:
-      return CHAREINK_17_FONT_ID;
+      return BOOKERLY_17_FONT_ID;
   }
 }
 

@@ -38,8 +38,10 @@
 #define VERDANA_17_FONT_ID (-171562463)
 
 
+// Lector: UI_10 and UI_12 are now DISTINCT Cozette sizes (was aliased to one Lato
+// family). UI_10 = Cozette 10 (body/rows + status bar), UI_12 = Cozette 12 (titles).
 #define UI_10_FONT_ID (-551108662)
-#define UI_12_FONT_ID UI_10_FONT_ID
+#define UI_12_FONT_ID (821453973)
 #define SMALL_FONT_ID (-698893830)
 
 // --- Extra reader sizes 11/13/15/18 (SD-only Tier-1: tables in flash, bitmaps in SD packs) ---

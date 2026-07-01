@@ -1732,8 +1732,8 @@ void EpubReaderActivity::render(Activity::RenderLock&& lock) {
       // book opens in place instead of reboot-looping. The latch is never
       // persisted and is cleared on book exit (onExit), so the user's real font
       // returns on the next open and only re-degrades if it OOMs again.
-      if (!SETTINGS.emergencyRenderFontDowngrade && SETTINGS.getReaderFontId() != CHAREINK_12_FONT_ID) {
-        LOG_DIAG("ERS", "render-oom: latching emergency font downgrade -> CHAREINK 12, re-laying out");
+      if (!SETTINGS.emergencyRenderFontDowngrade && SETTINGS.getReaderFontId() != BOOKERLY_11_FONT_ID) {
+        LOG_DIAG("ERS", "render-oom: latching emergency font downgrade -> Bookerly 11, re-laying out");
         SETTINGS.emergencyRenderFontDowngrade = true;
         // Flash a brief notice. Mirrors giveUpOpenToHome's OOM-path draw and
         // uses the already-resident UI font, not the book font that just OOMed.

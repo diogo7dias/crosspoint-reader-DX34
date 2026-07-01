@@ -617,7 +617,7 @@ void SleepActivity::renderQuotesSleepScreen() const {
   const int lineSpacing = 28;
 
   // Determine quote font: use smaller font if quote is long
-  int quoteFontId = CHAREINK_14_FONT_ID;
+  int quoteFontId = BOOKERLY_14_FONT_ID;  // Lector: ChareInk removed.
   {
     auto testLines = ReaderLayoutSafety::wrapText(renderer, quoteFontId, entry.text, contentWidth);
     const int maxLines = quoteAreaH / lineSpacing;

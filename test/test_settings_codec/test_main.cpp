@@ -166,7 +166,7 @@ void test_golden_default_snapshot() {
       "\"textRenderModeV2\":true,\"textRenderModeWeightOrder\":true,\"textRenderModeNormalDark\":true,"
       "\"useFactoryLUT\":1,\"shortPwrBtn\":0,\"orientation\":0,\"tiltPageTurn\":0,\"statusBarClock\":0,"
       "\"clockUtcOffsetQ\":48,\"clockFormat\":0,\"clockHasBeenSynced\":0,\"sideButtonLayout\":0,\"frontButtonBack\":0,"
-      "\"frontButtonConfirm\":1,\"frontButtonLeft\":2,\"frontButtonRight\":3,\"fontFamily\":0,\"fontSize\":4,"
+      "\"frontButtonConfirm\":1,\"frontButtonLeft\":2,\"frontButtonRight\":3,\"fontFamily\":1,\"fontSize\":4,"
       "\"lineSpacing\":1,\"lineSpacingPercent\":110,\"paragraphAlignment\":0,\"sleepTimeout\":2,\"showHiddenFiles\":0,"
       "\"randomBookOnBoot\":0,\"refreshFrequency\":3,\"screenMargin\":20,\"smoothText\":0,\"uniformMargins\":0,"
       "\"dynamicMargins\":0,\"screenMarginHorizontal\":20,\"screenMarginTop\":20,\"screenMarginBottom\":20,"

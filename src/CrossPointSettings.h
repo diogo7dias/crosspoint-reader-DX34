@@ -427,7 +427,7 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
-  uint8_t fontFamily = CHAREINK;
+  uint8_t fontFamily = BOOKERLY;  // Lector: Bookerly is the default reader font (ChareInk removed).
   uint8_t fontSize = SIZE_16;
   // Transient (NEVER serialized) emergency render-degrade latch. When the
   // reader exhausts the heap mid-render on a fragmented heap, it sets this so

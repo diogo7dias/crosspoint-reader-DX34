@@ -103,19 +103,19 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
       return BOOKERLY;
     case GEORGIA:
       return GEORGIA;
-    case LATO:
-      return LATO;
     case HELVETICA:
       return HELVETICA;
     case VERDANA:
       return VERDANA;
-#ifdef CROSSPOINT_SD_FONTS
-    // Merriweather + Playfair are SD-only families (no in-flash fallback). They
-    // exist only in CROSSPOINT_SD_FONTS builds; in the default build a persisted
-    // value falls through to CHAREINK below, so old settings never select a font
-    // that was not compiled in.
+#if defined(CROSSPOINT_SD_FONTS) || defined(CROSSPOINT_FLASH_EXTRA_SIZES)
+    // Lector: Merriweather is baked into flash (5th reader family) in the
+    // flash-extra build, and remains available in SD builds.
     case MERRIWEATHER:
       return MERRIWEATHER;
+#endif
+#ifdef CROSSPOINT_SD_FONTS
+    // Playfair/Galmuri/Vollkorn stay SD-only; in the flash build they fold to
+    // Bookerly below (never selected because the picker omits them).
     case PLAYFAIR:
       return PLAYFAIR;
     case GALMURI:
@@ -123,13 +123,13 @@ uint8_t CrossPointSettings::normalizeFontFamily(const uint8_t family) {
     case VOLLKORN:
       return VOLLKORN;
 #endif
-    // Removed families (VOLLKORN 2, GALMURI 9, TT2020 10, BITTER 11, CUSTOM 12,
-    // F25_BANK_PRINTER 13, PIXEL32 15, ETBB 16, ROSARIVO 17, COZETTE 19) and any
-    // other legacy value collapse to CHAREINK so old settings.json migrates. A
-    // user who had a removed font selected lands on ChareInk.
+    // Lector: ChareInk (removed), Lato (removed as a reader font), and every other
+    // legacy value collapse to BOOKERLY — the new default — so old settings.json
+    // migrates onto a font that is actually compiled in.
     case CHAREINK:
+    case LATO:
     default:
-      return CHAREINK;
+      return BOOKERLY;
   }
 }
 

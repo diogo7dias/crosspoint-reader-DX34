@@ -2,6 +2,29 @@
 
 Open follow-ups for this firmware. Prioritised top-down. Workflow per item: build → flash → user tests on device → ship in next release. No soak windows, no waiting periods — this is a hobby project, not a paid product.
 
+## LECTOR v0.0.1 — fork in progress (branch `lector`, off `main` 2026-07-01)
+
+Major fork: a clean **EPUB-only** reader for the X4 that restores mom's familiar **Cozette** UI on top of the current feature set. Renamed from `CrossPoint-Mod-DX34` → version string **`Lector-v0.0.1`**. Solo-dev brain-dump (no RFC). Build order = small revertable commits; build + flash + on-device test each; branch stays flashable at every commit. Snappy-input LAW + daily-driver guardrail apply.
+
+**Approved decisions (2026-07-01):** branch off `main` (NOT `feat/arch-followups` — those 2 commits can merge separately); identity rename to Lector; all current main features inherited.
+
+**Build order:**
+1. **FONT FLASH-FIT GATE (make-or-break):**
+   - Reader set, FLASH-only, **no SD reads**: Bookerly / Verdana / Helvetica / Merriweather / Georgia × sizes **11–16** × reg/bold/italic (no bolditalic). Default reader = **Bookerly**.
+   - **ChareInk fully deleted** (~48 refs); Bookerly becomes missing-glyph fallback + OOM emergency-degrade (Bookerly-11).
+   - Delete unused faces: Lato-reader, Playfair, ET Book, Rosarivo, Galmuri, Merriweather-bolditalic.
+   - **UI font Lato → Cozette:** restore `v11.0.0` `ui_10_regular.h` + `ui_12_regular.h` (sizes **10 + 12 only, NO ui_8**); remap `SMALL_FONT_ID` (8px) → ui_10; status-bar font = Cozette hub size. Main currently uses Lato as `ui_16`(small)+`ui_32`(reg/bold) → replace. UI text renders smaller (mom's look) — device-validate no clip/overflow. Cozette is tiny → frees flash.
+   - All reader headers already exist → **pure rewire, no baking.** PROVE fit in the 6.25 MB app slot via `pio run -e default`. Overflow → STOP, escalate repartition (shrink 3.4 MB spiffs, grow both app slots; brick-risk, confirm with user).
+2. **Render-mode strip:** Crisp + Dark only (relabel "Normal"→"Crisp"); remove Thin/Medium/Bionic migration constants + engine weight-pass code → zero flash.
+3. **OTA:** remove `installUpdate` (esp_ota) + on-device install UI; keep `checkForUpdate` (informational only); settings bordered text-box note "update via WiFi web server — no OTA here". (Check needs a Lector release feed to be meaningful.)
+4. **Network cleanup:** remove hotspot + Calibre wireless + OPDS → File Transfer collapses to Join Network → web server. Remove SD-font system (SdFontManager/CPBN), `/fonts` bootstrap, "Get Font Packs" button.
+5. **Reader UX:** remove quote banner; chapter selector drops next-chapter estimate (keep exact current-chapter count); in-book menu shows full title + full author header (menu below, ≤8 rows ok); reader-settings live-preview (top half = first ~6–8 lines of current chapter, menu starts mid-screen, re-render on appearance change); add **Mega** first-line indent (= 1/3 column width, clamped); rename misleading labels (reader "UI Font Size"→"Font Size", sweep all).
+6. **Status bar:** remove Book Page Counter (whole-book extrapolation); rename "Chapter Pages Left"→"Pages Left in Chapter", "Page Counter"→"Page in Chapter (X/Y)".
+7. **Sleep:** add "Never" option (30 min already exists).
+8. **Themes:** saved-theme select → 80% preview popup with [Back] / [Apply].
+9. **Wallpaper (keep, harden):** bootstrap `/sleep` + `/sleep pause` at first boot; audit `sleep_order.txt` heap, frag-gate/reservoir on big collections, OOM-abort-on-lock direct-pick path.
+10. **Cache/SD v2:** Reading Cache (size display + orphan-prune + clear-all-keep-progress + freed report); SD Cleanup (preview-by-category + confirm + freed report + Empty Trash). No per-book picker. Preview-before-delete, preserve-list sacred, streamed scan (no OOM).
+
 ## Next release inclusions
 
 Items already merged to `main` that should be called out in the release notes for the next version. Move into the release body when cutting the tag, then clear this section.

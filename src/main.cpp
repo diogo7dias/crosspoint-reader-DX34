@@ -253,6 +253,37 @@
 #include <builtinFonts/vollkorn_18_italic.h>
 #include <builtinFonts/vollkorn_18_regular.h>
 #endif
+
+// Lector: Cozette UI font (ui_10 + ui_12) — all.h ships the Lato ui_16/ui_32 UI
+// faces, not these, so include them explicitly. Regular-only (no bold face).
+#include <builtinFonts/ui_10_regular.h>
+#include <builtinFonts/ui_12_regular.h>
+
+// Lector: Merriweather bitmaps baked into flash (SD builds pull these via the SD
+// include block above; the flash build needs them explicitly for sizes 11..17).
+#if defined(CROSSPOINT_FLASH_EXTRA_SIZES) && !defined(CROSSPOINT_SD_FONTS)
+#include <builtinFonts/merriweather_11_bold.h>
+#include <builtinFonts/merriweather_11_italic.h>
+#include <builtinFonts/merriweather_11_regular.h>
+#include <builtinFonts/merriweather_12_bold.h>
+#include <builtinFonts/merriweather_12_italic.h>
+#include <builtinFonts/merriweather_12_regular.h>
+#include <builtinFonts/merriweather_13_bold.h>
+#include <builtinFonts/merriweather_13_italic.h>
+#include <builtinFonts/merriweather_13_regular.h>
+#include <builtinFonts/merriweather_14_bold.h>
+#include <builtinFonts/merriweather_14_italic.h>
+#include <builtinFonts/merriweather_14_regular.h>
+#include <builtinFonts/merriweather_15_bold.h>
+#include <builtinFonts/merriweather_15_italic.h>
+#include <builtinFonts/merriweather_15_regular.h>
+#include <builtinFonts/merriweather_16_bold.h>
+#include <builtinFonts/merriweather_16_italic.h>
+#include <builtinFonts/merriweather_16_regular.h>
+#include <builtinFonts/merriweather_17_bold.h>
+#include <builtinFonts/merriweather_17_italic.h>
+#include <builtinFonts/merriweather_17_regular.h>
+#endif
 #include "lifecycle/ActivityRouter.h"
 #include "network/WifiDiagReport.h"
 #include "persist/AppStateStore.h"
@@ -272,26 +303,9 @@ FontDecompressor fontDecompressor;
 Activity* currentActivity = nullptr;
 
 // Fonts
-EpdFont chareink10RegularFont(&chareink_10_regular);
-EpdFont chareink10BoldFont(&chareink_10_bold);
-EpdFont chareink10ItalicFont(&chareink_10_italic);
-EpdFontFamily chareink10FontFamily(&chareink10RegularFont, &chareink10BoldFont, &chareink10ItalicFont, nullptr);
-EpdFont chareink12RegularFont(&chareink_12_regular);
-EpdFont chareink12BoldFont(&chareink_12_bold);
-EpdFont chareink12ItalicFont(&chareink_12_italic);
-EpdFontFamily chareink12FontFamily(&chareink12RegularFont, &chareink12BoldFont, &chareink12ItalicFont, nullptr);
-EpdFont chareink14RegularFont(&chareink_14_regular);
-EpdFont chareink14BoldFont(&chareink_14_bold);
-EpdFont chareink14ItalicFont(&chareink_14_italic);
-EpdFontFamily chareink14FontFamily(&chareink14RegularFont, &chareink14BoldFont, &chareink14ItalicFont, nullptr);
-EpdFont chareink16RegularFont(&chareink_16_regular);
-EpdFont chareink16BoldFont(&chareink_16_bold);
-EpdFont chareink16ItalicFont(&chareink_16_italic);
-EpdFontFamily chareink16FontFamily(&chareink16RegularFont, &chareink16BoldFont, &chareink16ItalicFont, nullptr);
-EpdFont chareink17RegularFont(&chareink_17_regular);
-EpdFont chareink17BoldFont(&chareink_17_bold);
-EpdFont chareink17ItalicFont(&chareink_17_italic);
-EpdFontFamily chareink17FontFamily(&chareink17RegularFont, &chareink17BoldFont, &chareink17ItalicFont, nullptr);
+// Lector: ChareInk fully removed. Bookerly is the reader default + the missing-glyph
+// fallback + the OOM emergency-degrade floor (Bookerly-11). Its glyph arrays from
+// all.h are now unreferenced and GC'd by --gc-sections.
 // Size 10 of the 5 flash families is dropped from the picker in the flash-extra
 // build (smallest selectable size becomes 11), so its bitmaps are not baked there
 // — reclaims ~358 KB of flash across the 5 families (the static glyph arrays from
@@ -346,36 +360,7 @@ EpdFont georgia_17BoldFont(&georgia_17_bold);
 EpdFont georgia_17ItalicFont(&georgia_17_italic);
 EpdFontFamily georgia_17FontFamily(&georgia_17RegularFont, &georgia_17BoldFont, &georgia_17ItalicFont, nullptr);
 
-// Lato: humanist sans-serif reader font. Regular, Bold, Italic, BoldItalic --
-// all four real faces baked. Sizes 10, 12, 14, 16, 17. Ships full prose
-// punctuation incl. pipe.
-#if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
-EpdFont lato_10RegularFont(&lato_10_regular);
-EpdFont lato_10BoldFont(&lato_10_bold);
-EpdFont lato_10ItalicFont(&lato_10_italic);
-EpdFont lato_10BoldItalicFont(&lato_10_bolditalic);
-EpdFontFamily lato_10FontFamily(&lato_10RegularFont, &lato_10BoldFont, &lato_10ItalicFont, &lato_10BoldItalicFont);
-#endif  // !CROSSPOINT_FLASH_EXTRA_SIZES
-EpdFont lato_12RegularFont(&lato_12_regular);
-EpdFont lato_12BoldFont(&lato_12_bold);
-EpdFont lato_12ItalicFont(&lato_12_italic);
-EpdFont lato_12BoldItalicFont(&lato_12_bolditalic);
-EpdFontFamily lato_12FontFamily(&lato_12RegularFont, &lato_12BoldFont, &lato_12ItalicFont, &lato_12BoldItalicFont);
-EpdFont lato_14RegularFont(&lato_14_regular);
-EpdFont lato_14BoldFont(&lato_14_bold);
-EpdFont lato_14ItalicFont(&lato_14_italic);
-EpdFont lato_14BoldItalicFont(&lato_14_bolditalic);
-EpdFontFamily lato_14FontFamily(&lato_14RegularFont, &lato_14BoldFont, &lato_14ItalicFont, &lato_14BoldItalicFont);
-EpdFont lato_16RegularFont(&lato_16_regular);
-EpdFont lato_16BoldFont(&lato_16_bold);
-EpdFont lato_16ItalicFont(&lato_16_italic);
-EpdFont lato_16BoldItalicFont(&lato_16_bolditalic);
-EpdFontFamily lato_16FontFamily(&lato_16RegularFont, &lato_16BoldFont, &lato_16ItalicFont, &lato_16BoldItalicFont);
-EpdFont lato_17RegularFont(&lato_17_regular);
-EpdFont lato_17BoldFont(&lato_17_bold);
-EpdFont lato_17ItalicFont(&lato_17_italic);
-EpdFont lato_17BoldItalicFont(&lato_17_bolditalic);
-EpdFontFamily lato_17FontFamily(&lato_17RegularFont, &lato_17BoldFont, &lato_17ItalicFont, &lato_17BoldItalicFont);
+// Lato removed (Lector) — no longer a reader font; UI font is now Cozette.
 
 // Helvetica: grotesque sans-serif reader font. Regular, Bold, Italic (the
 // macOS Helvetica Oblique face). No BoldItalic source -> nullptr slot, renderer
@@ -460,22 +445,7 @@ EpdFont georgia_15RegularFont(&georgia_15_regular);
 EpdFont georgia_15BoldFont(&georgia_15_bold);
 EpdFont georgia_15ItalicFont(&georgia_15_italic);
 EpdFontFamily georgia_15FontFamily(&georgia_15RegularFont, &georgia_15BoldFont, &georgia_15ItalicFont, nullptr);
-// Lato extra sizes.
-EpdFont lato_11RegularFont(&lato_11_regular);
-EpdFont lato_11BoldFont(&lato_11_bold);
-EpdFont lato_11ItalicFont(&lato_11_italic);
-EpdFont lato_11BoldItalicFont(&lato_11_bolditalic);
-EpdFontFamily lato_11FontFamily(&lato_11RegularFont, &lato_11BoldFont, &lato_11ItalicFont, &lato_11BoldItalicFont);
-EpdFont lato_13RegularFont(&lato_13_regular);
-EpdFont lato_13BoldFont(&lato_13_bold);
-EpdFont lato_13ItalicFont(&lato_13_italic);
-EpdFont lato_13BoldItalicFont(&lato_13_bolditalic);
-EpdFontFamily lato_13FontFamily(&lato_13RegularFont, &lato_13BoldFont, &lato_13ItalicFont, &lato_13BoldItalicFont);
-EpdFont lato_15RegularFont(&lato_15_regular);
-EpdFont lato_15BoldFont(&lato_15_bold);
-EpdFont lato_15ItalicFont(&lato_15_italic);
-EpdFont lato_15BoldItalicFont(&lato_15_bolditalic);
-EpdFontFamily lato_15FontFamily(&lato_15RegularFont, &lato_15BoldFont, &lato_15ItalicFont, &lato_15BoldItalicFont);
+// Lato extra sizes removed (Lector).
 // Helvetica extra sizes.
 EpdFont helvetica_11RegularFont(&helvetica_11_regular);
 EpdFont helvetica_11BoldFont(&helvetica_11_bold);
@@ -503,6 +473,48 @@ EpdFont verdana_15BoldFont(&verdana_15_bold);
 EpdFont verdana_15ItalicFont(&verdana_15_italic);
 EpdFontFamily verdana_15FontFamily(&verdana_15RegularFont, &verdana_15BoldFont, &verdana_15ItalicFont, nullptr);
 #endif  // flash extra sizes 11/13/15
+
+// Lector: Merriweather baked into flash as a 5th reader family, sizes 11..17,
+// Regular/Bold/Italic (no BoldItalic — renderer synthesises it). In SD builds
+// Merriweather lives in the CROSSPOINT_SD_FONTS block below instead, so gate this
+// to the flash-only regime to avoid a double definition.
+#if defined(CROSSPOINT_FLASH_EXTRA_SIZES) && !defined(CROSSPOINT_SD_FONTS)
+EpdFont merriweather_11RegularFont(&merriweather_11_regular);
+EpdFont merriweather_11BoldFont(&merriweather_11_bold);
+EpdFont merriweather_11ItalicFont(&merriweather_11_italic);
+EpdFontFamily merriweather_11FontFamily(&merriweather_11RegularFont, &merriweather_11BoldFont,
+                                        &merriweather_11ItalicFont, nullptr);
+EpdFont merriweather_12RegularFont(&merriweather_12_regular);
+EpdFont merriweather_12BoldFont(&merriweather_12_bold);
+EpdFont merriweather_12ItalicFont(&merriweather_12_italic);
+EpdFontFamily merriweather_12FontFamily(&merriweather_12RegularFont, &merriweather_12BoldFont,
+                                        &merriweather_12ItalicFont, nullptr);
+EpdFont merriweather_13RegularFont(&merriweather_13_regular);
+EpdFont merriweather_13BoldFont(&merriweather_13_bold);
+EpdFont merriweather_13ItalicFont(&merriweather_13_italic);
+EpdFontFamily merriweather_13FontFamily(&merriweather_13RegularFont, &merriweather_13BoldFont,
+                                        &merriweather_13ItalicFont, nullptr);
+EpdFont merriweather_14RegularFont(&merriweather_14_regular);
+EpdFont merriweather_14BoldFont(&merriweather_14_bold);
+EpdFont merriweather_14ItalicFont(&merriweather_14_italic);
+EpdFontFamily merriweather_14FontFamily(&merriweather_14RegularFont, &merriweather_14BoldFont,
+                                        &merriweather_14ItalicFont, nullptr);
+EpdFont merriweather_15RegularFont(&merriweather_15_regular);
+EpdFont merriweather_15BoldFont(&merriweather_15_bold);
+EpdFont merriweather_15ItalicFont(&merriweather_15_italic);
+EpdFontFamily merriweather_15FontFamily(&merriweather_15RegularFont, &merriweather_15BoldFont,
+                                        &merriweather_15ItalicFont, nullptr);
+EpdFont merriweather_16RegularFont(&merriweather_16_regular);
+EpdFont merriweather_16BoldFont(&merriweather_16_bold);
+EpdFont merriweather_16ItalicFont(&merriweather_16_italic);
+EpdFontFamily merriweather_16FontFamily(&merriweather_16RegularFont, &merriweather_16BoldFont,
+                                        &merriweather_16ItalicFont, nullptr);
+EpdFont merriweather_17RegularFont(&merriweather_17_regular);
+EpdFont merriweather_17BoldFont(&merriweather_17_bold);
+EpdFont merriweather_17ItalicFont(&merriweather_17_italic);
+EpdFontFamily merriweather_17FontFamily(&merriweather_17RegularFont, &merriweather_17BoldFont,
+                                        &merriweather_17ItalicFont, nullptr);
+#endif  // flash Merriweather 11..17
 
 #ifdef CROSSPOINT_SD_FONTS
 // SD-only Tier-1: size 18 of the 5 flash families + (below) the SD-only families.
@@ -705,16 +717,15 @@ EpdFontFamily vollkorn_18FontFamily(&vollkorn_18RegularFont, &vollkorn_18BoldFon
                                     &vollkorn_18BoldItalicFont);
 #endif  // CROSSPOINT_SD_FONTS
 
-// UI font = Pixel Operator (CC0). 16px for the status bar (SMALL_FONT_ID,
-// pixel-perfect on its native grid); one 32px family for body, menus and titles
-// (UI_10_FONT_ID, with UI_12_FONT_ID aliased to it in fontIds.h). The 32px family
-// carries a real bold face, so EpdFontFamily::BOLD call sites (book titles,
-// footnote headers, selected rows) render true bold.
-EpdFont smallFont(&ui_16_regular);
-EpdFontFamily smallFontFamily(&smallFont, nullptr, nullptr, nullptr, 0, 0, false);
-EpdFont uiRegularFont(&ui_32_regular);
-EpdFont uiBoldFont(&ui_32_bold);
-EpdFontFamily uiFontFamily(&uiRegularFont, &uiBoldFont, nullptr, nullptr, 0, 0, false);
+// Lector UI font = Cozette (pixel font, restored from mom's DX34 v11.0.0). Two
+// sizes only: ui_10 (SMALL_FONT_ID = status bar + UI_10_FONT_ID = body/rows) and
+// ui_12 (UI_12_FONT_ID = titles/headers). Cozette ships regular only — there is no
+// bold face, so EpdFontFamily::BOLD call sites fold to the regular glyphs.
+EpdFont uiCozette10Font(&ui_10_regular);
+EpdFont uiCozette12Font(&ui_12_regular);
+EpdFontFamily smallFontFamily(&uiCozette10Font, nullptr, nullptr, nullptr, 0, 0, false);
+EpdFontFamily uiFontFamily(&uiCozette10Font, nullptr, nullptr, nullptr, 0, 0, false);
+EpdFontFamily ui12FontFamily(&uiCozette12Font, nullptr, nullptr, nullptr, 0, 0, false);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -1203,11 +1214,7 @@ void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
   LOG_DBG("MAIN", "Display initialized");
-  renderer.insertFont(CHAREINK_10_FONT_ID, chareink10FontFamily);
-  renderer.insertFont(CHAREINK_12_FONT_ID, chareink12FontFamily);
-  renderer.insertFont(CHAREINK_14_FONT_ID, chareink14FontFamily);
-  renderer.insertFont(CHAREINK_16_FONT_ID, chareink16FontFamily);
-  renderer.insertFont(CHAREINK_17_FONT_ID, chareink17FontFamily);
+  // ChareInk removed (Lector).
 #if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
   renderer.insertFont(BOOKERLY_10_FONT_ID, bookerly10FontFamily);
 #endif
@@ -1222,13 +1229,7 @@ void setupDisplayAndFonts() {
   renderer.insertFont(GEORGIA_14_FONT_ID, georgia_14FontFamily);
   renderer.insertFont(GEORGIA_16_FONT_ID, georgia_16FontFamily);
   renderer.insertFont(GEORGIA_17_FONT_ID, georgia_17FontFamily);
-#if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
-  renderer.insertFont(LATO_10_FONT_ID, lato_10FontFamily);
-#endif
-  renderer.insertFont(LATO_12_FONT_ID, lato_12FontFamily);
-  renderer.insertFont(LATO_14_FONT_ID, lato_14FontFamily);
-  renderer.insertFont(LATO_16_FONT_ID, lato_16FontFamily);
-  renderer.insertFont(LATO_17_FONT_ID, lato_17FontFamily);
+  // Lato removed (Lector).
 #if !defined(CROSSPOINT_FLASH_EXTRA_SIZES)  // size 10 dropped from flash-extra picker
   renderer.insertFont(HELVETICA_10_FONT_ID, helvetica_10FontFamily);
 #endif
@@ -1251,9 +1252,6 @@ void setupDisplayAndFonts() {
   renderer.insertFont(GEORGIA_11_FONT_ID, georgia_11FontFamily);
   renderer.insertFont(GEORGIA_13_FONT_ID, georgia_13FontFamily);
   renderer.insertFont(GEORGIA_15_FONT_ID, georgia_15FontFamily);
-  renderer.insertFont(LATO_11_FONT_ID, lato_11FontFamily);
-  renderer.insertFont(LATO_13_FONT_ID, lato_13FontFamily);
-  renderer.insertFont(LATO_15_FONT_ID, lato_15FontFamily);
   renderer.insertFont(HELVETICA_11_FONT_ID, helvetica_11FontFamily);
   renderer.insertFont(HELVETICA_13_FONT_ID, helvetica_13FontFamily);
   renderer.insertFont(HELVETICA_15_FONT_ID, helvetica_15FontFamily);
@@ -1261,6 +1259,16 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VERDANA_13_FONT_ID, verdana_13FontFamily);
   renderer.insertFont(VERDANA_15_FONT_ID, verdana_15FontFamily);
 #endif  // flash extra sizes 11/13/15
+#if defined(CROSSPOINT_FLASH_EXTRA_SIZES) && !defined(CROSSPOINT_SD_FONTS)
+  // Lector: Merriweather (5th flash family), sizes 11..17.
+  renderer.insertFont(MERRIWEATHER_11_FONT_ID, merriweather_11FontFamily);
+  renderer.insertFont(MERRIWEATHER_12_FONT_ID, merriweather_12FontFamily);
+  renderer.insertFont(MERRIWEATHER_13_FONT_ID, merriweather_13FontFamily);
+  renderer.insertFont(MERRIWEATHER_14_FONT_ID, merriweather_14FontFamily);
+  renderer.insertFont(MERRIWEATHER_15_FONT_ID, merriweather_15FontFamily);
+  renderer.insertFont(MERRIWEATHER_16_FONT_ID, merriweather_16FontFamily);
+  renderer.insertFont(MERRIWEATHER_17_FONT_ID, merriweather_17FontFamily);
+#endif  // flash Merriweather 11..17
 #ifdef CROSSPOINT_SD_FONTS
   // Size 18 of the 5 flash families + the SD-only families — SD builds only.
   renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly_18FontFamily);
@@ -1298,9 +1306,10 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn_17FontFamily);
   renderer.insertFont(VOLLKORN_18_FONT_ID, vollkorn_18FontFamily);
 #endif  // CROSSPOINT_SD_FONTS
-  // UI_12_FONT_ID is an alias of UI_10_FONT_ID (same 16px Pixel Operator family),
-  // so a single registration serves both the body/menu and title call sites.
+  // Lector: distinct Cozette sizes — UI_10 (body/rows), UI_12 (titles), SMALL (status
+  // bar) all share the ui_10 face except titles which use the ui_12 face.
   renderer.insertFont(UI_10_FONT_ID, uiFontFamily);
+  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   if (!fontDecompressor.init()) {
     LOG_ERR("MAIN", "Font decompressor init failed");

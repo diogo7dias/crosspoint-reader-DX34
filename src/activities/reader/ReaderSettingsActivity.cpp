@@ -207,17 +207,12 @@ void ReaderSettingsActivity::buildSettingsList() {
   };
 
   // --- Build reader settings directly (no intermediate vector) ---
-  // Built-in reader fonts (order matches fontFamilyToDisplayIndex: CHAREINK,
-  // BOOKERLY, GEORGIA, LATO, HELVETICA, VERDANA, then the SD-only MERRIWEATHER,
-  // PLAYFAIR). Keep in sync with FontFamilyPicker's kBuiltinFamilyLabels.
+  // Lector built-in reader fonts (order matches fontFamilyToDisplayIndex: Bookerly,
+  // Georgia, Helvetica, Verdana, Merriweather). Keep in sync with FontFamilyPicker's
+  // kBuiltinFamilyLabels and SettingsList.
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                                     {StrId::STR_CHAREINK, StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_LATO,
-                                      StrId::STR_HELVETICA, StrId::STR_VERDANA,
-#ifdef CROSSPOINT_SD_FONTS
-                                      StrId::STR_MERRIWEATHER, StrId::STR_PLAYFAIR, StrId::STR_GALMURI,
-                                      StrId::STR_VOLLKORN,
-#endif
-                                     }));
+                                     {StrId::STR_BOOKERLY, StrId::STR_GEORGIA, StrId::STR_HELVETICA,
+                                      StrId::STR_VERDANA, StrId::STR_MERRIWEATHER}));
   // Text render mode sits directly under Font Family (2nd row) per user pref.
   // Two options only: Normal (no weight effect) and Dark. Option order MUST match
   // the TEXT_RENDER_MODE enum (Normal=0, Dark=1) — generic ENUM settings store the

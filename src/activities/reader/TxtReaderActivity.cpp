@@ -749,8 +749,8 @@ void TxtReaderActivity::render(Activity::RenderLock&&) {
     // largest free block that defeated the user's heavier font. The latch is
     // never persisted and clears on book exit, so the real font returns next
     // open and only re-degrades if it OOMs again.
-    if (!SETTINGS.emergencyRenderFontDowngrade && SETTINGS.getReaderFontId() != CHAREINK_12_FONT_ID) {
-      LOG_DIAG("TRS", "render-oom: latching emergency font downgrade -> CHAREINK 12, re-laying out");
+    if (!SETTINGS.emergencyRenderFontDowngrade && SETTINGS.getReaderFontId() != BOOKERLY_11_FONT_ID) {
+      LOG_DIAG("TRS", "render-oom: latching emergency font downgrade -> Bookerly 11, re-laying out");
       SETTINGS.emergencyRenderFontDowngrade = true;
       renderer.clearScreen();
       renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_LAYOUT_LOW_MEMORY_TITLE), true, EpdFontFamily::REGULAR);
