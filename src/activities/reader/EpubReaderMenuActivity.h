@@ -37,7 +37,8 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
   };
 
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
-                                  const std::string& bookPath, const int currentPage, const int totalPages,
+                                  const std::string& author, const std::string& bookPath, const int currentPage,
+                                  const int totalPages,
                                   const int bookProgressPercent, const uint8_t currentOrientation,
                                   const bool hasFootnotes, const bool isPageBookmarked, const int bookmarkCount,
                                   const bool hasQuotes, const std::function<void(uint8_t)>& onBack,
@@ -66,6 +67,7 @@ class EpubReaderMenuActivity final : public ActivityWithSubactivity {
 
   ButtonNavigator buttonNavigator;
   std::string title = "Reader Menu";
+  std::string author;  // full author name, shown under the title in the menu header
   // Path of the book currently open in the reader. Used as the key for the
   // per-book Bold Swap preference stored in RecentBooksStore.
   std::string bookPath;

@@ -200,7 +200,7 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   }
 
   // Apply fixed transforms before any per-line layout work.
-  applyParagraphIndent(renderer, fontId);
+  applyParagraphIndent(renderer, fontId, viewportWidth);
 
   const int pageWidth = viewportWidth;
   const int baseSpaceWidth = renderer.getSpaceWidth(fontId);
@@ -597,7 +597,7 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
   return lineBreakIndices;
 }
 
-void ParsedText::applyParagraphIndent(const GfxRenderer& renderer, const int fontId) {
+void ParsedText::applyParagraphIndent(const GfxRenderer& renderer, const int fontId, const int viewportWidth) {
   if (isEmpty()) {  // arena path keeps words in arenaWords_, not the vector
     return;
   }
@@ -619,6 +619,19 @@ void ParsedText::applyParagraphIndent(const GfxRenderer& renderer, const int fon
   }
   if (emWidth <= 0) {
     emWidth = renderer.getLineHeight(fontId);
+  }
+
+  // INDENT_MEGA (5): first line starts ~1/3 of the way across the text column.
+  // Clamp so the indent never eats more than 60% of the column (leaves >=40% for
+  // text) and is never smaller than a normal one-em indent.
+  if (firstLineIndentMode == 5) {
+    int mega = viewportWidth / 3;
+    const int maxIndent = (viewportWidth * 3) / 5;
+    if (mega > maxIndent) mega = maxIndent;
+    if (mega < emWidth) mega = emWidth;
+    blockStyle.textIndent = static_cast<int16_t>(mega);
+    blockStyle.textIndentDefined = true;
+    return;
   }
 
   const float forcedIndentMultiplier = indentMultiplierForMode(firstLineIndentMode);
@@ -899,7 +912,7 @@ bool ParsedText::layoutArenaWords(const GfxRenderer& renderer, const int fontId,
   if (hyphenationEnabled) return false;
   if (arenaCount_ == 0) return false;
 
-  applyParagraphIndent(renderer, fontId);
+  applyParagraphIndent(renderer, fontId, viewportWidth);
 
   const int pageWidth = viewportWidth;
   const int baseSpaceWidth = renderer.getSpaceWidth(fontId);

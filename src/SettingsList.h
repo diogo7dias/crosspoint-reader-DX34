@@ -99,7 +99,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
         "paragraphAlignment", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::firstLineIndentMode,
                                   {StrId::STR_BOOK_STYLE_OPT, StrId::STR_NONE_OPT, StrId::STR_INDENT_SMALL,
-                                   StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE},
+                                   StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE, StrId::STR_INDENT_MEGA},
                                   "firstLineIndentMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_READER_STYLE_MODE, &CrossPointSettings::readerStyleMode,
                                   {StrId::STR_READER_STYLE_USER, StrId::STR_READER_STYLE_HYBRID}, "readerStyleMode",

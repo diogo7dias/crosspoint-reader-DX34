@@ -57,7 +57,7 @@ class ParsedText {
   // bad_alloc -> terminate -> abort -> reset.
   bool oom_ = false;
 
-  void applyParagraphIndent(const GfxRenderer& renderer, int fontId);
+  void applyParagraphIndent(const GfxRenderer& renderer, int fontId, int viewportWidth);
   void expandHyphenationBreaks(const GfxRenderer& renderer, int fontId, std::vector<uint16_t>& wordWidths,
                                std::vector<bool>& canBreakBefore, std::vector<bool>& wordNeedsHyphenAtBreak);
   void splitOversizedTokens(const GfxRenderer& renderer, int fontId, int maxTokenWidth, int firstLineMaxTokenWidth,

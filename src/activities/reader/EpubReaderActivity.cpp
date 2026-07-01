@@ -890,7 +890,7 @@ void EpubReaderActivity::openReaderMenu() {
   }
   exitActivity();
   enterNewActivity(new (std::nothrow) EpubReaderMenuActivity(
-      this->renderer, this->mappedInput, epub->getTitle(), epub->getPath(), currentPage, totalPages,
+      this->renderer, this->mappedInput, epub->getTitle(), epub->getAuthor(), epub->getPath(), currentPage, totalPages,
       bookProgressPercent, SETTINGS.orientation, !currentPageFootnotes.empty(), isBookmarked, bmCount, hasQuotes,
       [this](const uint8_t orientation) { onReaderMenuBack(orientation); },
       [this](EpubReaderMenuActivity::MenuAction action) { onReaderMenuConfirm(action); }));
@@ -2438,34 +2438,9 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
       drawDashedRect(renderer, bx, by, bw, bh, frameThickness);
     }
 
-    // Banner: inverted strip just above the button hints showing how long the
-    // selection is and which chapter it's from. Shared by both styles.
-    const int screenW = renderer.getScreenWidth();
-    const int screenH = renderer.getScreenHeight();
-    constexpr int bannerH = 26;
-    const int bannerY = screenH - 40 - bannerH;  // 40px reserved for button hints
-    int selWords = 0;
-    const auto hlState = highlights_.state();
-    if ((hlState == HighlightState::SELECT_END || hlState == HighlightState::SHOW_UNDERLINE) &&
-        highlights_.startPage() == section->currentPage) {
-      const int endIdx =
-          (hlState == HighlightState::SHOW_UNDERLINE) ? highlights_.endWordIndex() : highlights_.cursorIndex();
-      const int start = highlights_.startWordIndex();
-      selWords = (endIdx >= start ? endIdx - start : start - endIdx) + 1;
-    }
-    std::string banner = "QUOTE";
-    if (selWords > 0) {
-      banner += "   " + std::to_string(selWords) + (selWords == 1 ? " word" : " words");
-    }
-    const std::string chap = getChapterTitle();
-    if (!chap.empty()) {
-      banner += "   -   " + chap;
-    }
-    const int bannerFont = SETTINGS.getStatusBarFontId();
-    const std::string shown = renderer.truncatedText(bannerFont, banner.c_str(), screenW - 16);
-    const int bannerTextW = renderer.getTextWidth(bannerFont, shown.c_str());
-    renderer.fillRect(0, bannerY, screenW, bannerH, true);
-    renderer.drawText(bannerFont, (screenW - bannerTextW) / 2, bannerY + 6, shown.c_str(), false);
+    // (Lector) The old "QUOTE  N words - chapter" banner strip was removed: it
+    // covered the bottom lines of text during selection. The selection frame and
+    // save flow are unchanged.
   }
 
   if (SETTINGS.debugBorders) {

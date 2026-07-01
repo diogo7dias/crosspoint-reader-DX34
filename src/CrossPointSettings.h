@@ -205,6 +205,7 @@ class CrossPointSettings {
     INDENT_SMALL = 2,
     INDENT_MEDIUM = 3,
     INDENT_LARGE = 4,
+    INDENT_MEGA = 5,  // first line starts ~1/3 of the way across the column
     FIRST_LINE_INDENT_MODE_COUNT
   };
   enum READER_STYLE_MODE { READER_STYLE_USER = 0, READER_STYLE_HYBRID = 1, READER_STYLE_MODE_COUNT };

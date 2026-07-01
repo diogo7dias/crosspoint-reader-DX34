@@ -239,7 +239,7 @@ void ReaderSettingsActivity::buildSettingsList() {
       {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER, StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::firstLineIndentMode,
                                      {StrId::STR_BOOK_STYLE_OPT, StrId::STR_NONE_OPT, StrId::STR_INDENT_SMALL,
-                                      StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE}));
+                                      StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE, StrId::STR_INDENT_MEGA}));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_READER_STYLE_MODE, &CrossPointSettings::readerStyleMode,
                                      {StrId::STR_READER_STYLE_USER, StrId::STR_READER_STYLE_HYBRID}));
   // Highlight mode removed — word-based selection is the only mode

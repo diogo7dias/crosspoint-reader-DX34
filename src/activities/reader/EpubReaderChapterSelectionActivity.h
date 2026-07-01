@@ -17,10 +17,6 @@ class EpubReaderChapterSelectionActivity final : public ActivityWithSubactivity 
   int selectorIndex = 0;
   int resolvedCurrentTocIndex = 0;  // Resolved reading position in TOC, preserved during navigation
 
-  // Pages-per-byte ratio derived from the current chapter's layout, used to estimate the
-  // page length of every chapter at the active font/settings. <= 0 means "cannot estimate".
-  float pagesPerByte = 0.0f;
-
   // Double-tap Up/Down detection (jump to current chapter)
   unsigned long lastNavReleaseMs = 0;
   int lastNavDirection = 0;  // +1 for next, -1 for previous
@@ -33,26 +29,13 @@ class EpubReaderChapterSelectionActivity final : public ActivityWithSubactivity 
   static constexpr unsigned long kDoubleTapMs = 350;
   // Width reserved on the right of each row for the chapter page-count badge.
   static constexpr int kPageCountReserve = 52;
-  // How many chapters AFTER the current one show a page-count badge. The badge is
-  // only drawn for the current chapter (exact count) plus this many following
-  // chapters (estimated), because the byte-size extrapolation is a weak proxy
-  // that grows unreliable the further it reaches from the measured chapter.
-  static constexpr int kPageCountLookahead = 3;
-  // Sanity ceiling on an estimated chapter length. The estimate scales the
-  // current chapter's pages-per-byte onto another chapter's byte size; an
-  // asset-heavy chapter (large bytes, few visible pages) can blow that up into
-  // an absurd value. Anything above this is treated as untrustworthy and the
-  // badge is hidden rather than rendering a nonsense number.
-  static constexpr int kMaxPlausibleChapterPages = 5000;
 
   // Whether the row at `tocIndex` should display a page-count badge: only the
-  // current chapter and the next kPageCountLookahead chapters, and only when a
-  // ratio is available.
+  // chapter currently being read (which has an exact count).
   bool rowShowsPageCount(int tocIndex) const;
 
-  // Estimate the page length of the chapter at `tocIndex` for the active font/settings.
-  // Returns the exact count for the chapter currently being read, an extrapolated estimate
-  // for the others (clamped to a plausible range), or 0 when no trustworthy estimate exists.
+  // Returns the exact page count for the chapter currently being read, or 0 for
+  // any other chapter (no estimate is shown).
   int estimateChapterPages(int tocIndex) const;
 
   // Compute wrapped line count for a single TOC item given available width.

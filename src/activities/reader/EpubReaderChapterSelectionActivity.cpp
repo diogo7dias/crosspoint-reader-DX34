@@ -17,8 +17,10 @@ constexpr int kButtonHintsReserve = 50;
 int EpubReaderChapterSelectionActivity::getTotalItems() const { return epub->getTocItemsCount(); }
 
 bool EpubReaderChapterSelectionActivity::rowShowsPageCount(int tocIndex) const {
-  if (pagesPerByte <= 0.0f) return false;
-  return tocIndex >= resolvedCurrentTocIndex && tocIndex <= resolvedCurrentTocIndex + kPageCountLookahead;
+  // Lector: only the chapter currently being read shows a page count (its exact,
+  // already-paginated length). The old byte-ratio estimate for other chapters was
+  // too unreliable on image/code-heavy chapters, so it was removed.
+  return currentSectionPageCount > 0 && tocIndex == resolvedCurrentTocIndex;
 }
 
 int EpubReaderChapterSelectionActivity::estimateChapterPages(int tocIndex) const {
@@ -26,35 +28,12 @@ int EpubReaderChapterSelectionActivity::estimateChapterPages(int tocIndex) const
   const int spineIndex = epub->getTocItem(tocIndex).spineIndex;
   if (spineIndex < 0) return 0;
 
-  // The chapter currently being read has an exact, already-paginated count — use it directly.
+  // Only the chapter currently being read has an exact, already-paginated count.
+  // Every other chapter returns 0 (no count shown).
   if (spineIndex == currentSpineIndex && currentSectionPageCount > 0) {
     return currentSectionPageCount;
   }
-
-  // Otherwise extrapolate from the current chapter's pages-per-byte ratio. This mirrors the
-  // status bar's book-page-counter estimate: approximate by design (image/code-heavy chapters
-  // have a different density than prose) but avoids laying out every chapter on open.
-  if (pagesPerByte <= 0.0f) return 0;
-  const size_t prevSize = (spineIndex >= 1) ? epub->getCumulativeSpineItemSize(spineIndex - 1) : 0;
-  const size_t chapterSize = epub->getCumulativeSpineItemSize(spineIndex) - prevSize;
-  if (chapterSize == 0) return 0;
-
-  int pages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(chapterSize) + 0.5f));
-
-  // A chapter cannot be longer than the whole book — clamp to the book-wide
-  // estimate. This is the principled bound; it catches a single chapter whose
-  // byte size is anomalously large (e.g. an embedded full-page image) producing
-  // a page count far beyond anything real.
-  const size_t bookSize = epub->getBookSize();
-  if (bookSize > 0) {
-    const int bookPages = std::max(1, static_cast<int>(pagesPerByte * static_cast<float>(bookSize) + 0.5f));
-    if (pages > bookPages) pages = bookPages;
-  }
-
-  // Backstop: if the estimate is still implausibly large the inputs can't be
-  // trusted, so hide the badge entirely rather than render a nonsense number.
-  if (pages > kMaxPlausibleChapterPages) return 0;
-  return pages;
+  return 0;
 }
 
 int EpubReaderChapterSelectionActivity::getItemLineCount(int itemIndex, int maxTextWidth) const {
@@ -104,17 +83,6 @@ void EpubReaderChapterSelectionActivity::onEnter() {
     selectorIndex = 0;
   }
   resolvedCurrentTocIndex = selectorIndex;
-
-  // Derive the pages-per-byte ratio from the chapter currently being read so we can estimate
-  // the page length of the other chapters at the active font/settings.
-  pagesPerByte = 0.0f;
-  if (currentSectionPageCount > 0) {
-    const size_t prevSize = (currentSpineIndex >= 1) ? epub->getCumulativeSpineItemSize(currentSpineIndex - 1) : 0;
-    const size_t curSize = epub->getCumulativeSpineItemSize(currentSpineIndex) - prevSize;
-    if (curSize > 0) {
-      pagesPerByte = static_cast<float>(currentSectionPageCount) / static_cast<float>(curSize);
-    }
-  }
 
   lastNavReleaseMs = 0;
   lastNavDirection = 0;

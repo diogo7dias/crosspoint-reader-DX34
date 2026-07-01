@@ -15,13 +15,14 @@
 #include "util/FavoriteImage.h"
 
 EpubReaderMenuActivity::EpubReaderMenuActivity(
-    GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title, const std::string& bookPath,
-    const int currentPage, const int totalPages, const int bookProgressPercent, const uint8_t currentOrientation,
-    const bool hasFootnotes, const bool isPageBookmarked, const int bookmarkCount, const bool hasQuotes,
-    const std::function<void(uint8_t)>& onBack, const std::function<void(MenuAction)>& onAction)
+    GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title, const std::string& author,
+    const std::string& bookPath, const int currentPage, const int totalPages, const int bookProgressPercent,
+    const uint8_t currentOrientation, const bool hasFootnotes, const bool isPageBookmarked, const int bookmarkCount,
+    const bool hasQuotes, const std::function<void(uint8_t)>& onBack, const std::function<void(MenuAction)>& onAction)
     : ActivityWithSubactivity("EpubReaderMenu", renderer, mappedInput),
       menuItems(buildMenuItems(hasFootnotes, isPageBookmarked, bookmarkCount, hasQuotes)),
       title(title),
+      author(author),
       bookPath(bookPath),
       pendingOrientation(currentOrientation),
       currentPage(currentPage),
@@ -190,13 +191,57 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
   const int hintGutterHeight = isPortraitInverted ? 50 : 0;
   const int contentY = hintGutterHeight;
 
-  // Title
-  const std::string truncTitle =
-      renderer.truncatedText(UI_12_FONT_ID, title.c_str(), contentWidth - 40, EpdFontFamily::REGULAR);
-  // Manual centering so we can respect the content gutter.
-  const int titleX =
-      contentX + (contentWidth - renderer.getTextWidth(UI_12_FONT_ID, truncTitle.c_str(), EpdFontFamily::REGULAR)) / 2;
-  renderer.drawText(UI_12_FONT_ID, titleX, 15 + contentY, truncTitle.c_str(), true, EpdFontFamily::REGULAR);
+  // Header: the FULL book title (wrapped, never truncated to a single line) and
+  // "by <author>" below it, then the progress line. The menu list starts below
+  // the header, whatever its height (up to a few rows).
+  const int titleLh = renderer.getLineHeight(UI_12_FONT_ID);
+  const int bodyLh = renderer.getLineHeight(UI_10_FONT_ID);
+  const int wrapW = contentWidth - 24;
+
+  // Greedy word-wrap; draws each line centred within the content area. Caps at
+  // maxLines (over-long text is ellipsised on the final line) so a huge title
+  // can't push the menu off screen.
+  auto drawWrapped = [&](int fontId, const std::string& text, int yTop, int lh, int maxLines) -> int {
+    int y = yTop;
+    int lines = 0;
+    std::string line;
+    auto flush = [&]() {
+      const int w = renderer.getTextWidth(fontId, line.c_str(), EpdFontFamily::REGULAR);
+      renderer.drawText(fontId, contentX + (contentWidth - w) / 2, y, line.c_str(), true, EpdFontFamily::REGULAR);
+      y += lh;
+      lines++;
+    };
+    size_t i = 0;
+    while (i < text.size()) {
+      const size_t sp = text.find(' ', i);
+      const std::string word = text.substr(i, (sp == std::string::npos ? text.size() : sp) - i);
+      i = (sp == std::string::npos ? text.size() : sp + 1);
+      if (word.empty()) continue;
+      const std::string cand = line.empty() ? word : line + " " + word;
+      if (renderer.getTextWidth(fontId, cand.c_str(), EpdFontFamily::REGULAR) <= wrapW) {
+        line = cand;
+      } else if (!line.empty()) {
+        if (lines + 1 >= maxLines) {
+          line = renderer.truncatedText(fontId, cand.c_str(), wrapW, EpdFontFamily::REGULAR);
+          flush();
+          return y;
+        }
+        flush();
+        line = word;
+      } else {
+        line = renderer.truncatedText(fontId, word.c_str(), wrapW, EpdFontFamily::REGULAR);
+      }
+    }
+    if (!line.empty()) flush();
+    return y;
+  };
+
+  int headerY = 12 + contentY;
+  headerY = drawWrapped(UI_12_FONT_ID, title, headerY, titleLh, 5);
+  if (!author.empty()) {
+    headerY += 2;
+    headerY = drawWrapped(UI_10_FONT_ID, std::string("by ") + author, headerY, bodyLh, 2);
+  }
 
   // Progress summary
   std::string progressLine;
@@ -205,10 +250,12 @@ void EpubReaderMenuActivity::render(Activity::RenderLock&&) {
                    std::to_string(totalPages) + std::string(tr(STR_PAGES_SEPARATOR));
   }
   progressLine += std::string(tr(STR_BOOK_PREFIX)) + std::to_string(bookProgressPercent) + "%";
-  renderer.drawCenteredText(UI_10_FONT_ID, 45, progressLine.c_str());
+  headerY += 6;
+  renderer.drawCenteredText(UI_10_FONT_ID, headerY, progressLine.c_str());
+  headerY += bodyLh;
 
-  // Menu Items
-  const int startY = 75 + contentY;
+  // Menu Items — start below the (variable-height) header.
+  const int startY = headerY + 6;
   constexpr int lineHeight = 30;
   const int footerReserve = metrics.buttonHintsHeight + metrics.verticalSpacing;
   const int contentHeight = std::max(lineHeight, pageHeight - (startY + footerReserve));
