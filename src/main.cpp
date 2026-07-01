@@ -254,8 +254,11 @@
 #include <builtinFonts/vollkorn_18_regular.h>
 #endif
 
-// Lector: Cozette UI font (ui_10 + ui_12) — all.h ships the Lato ui_16/ui_32 UI
-// faces, not these, so include them explicitly. Regular-only (no bold face).
+// Lector UI font = Cozette, reproducing mom's DX34 v11.0.0 look exactly: three
+// distinct sizes baked by convert-ui-only.sh with v11's default flags (dpi 150,
+// bw-threshold 2). ui_8=status (~21px), ui_10=body/menus (~25px), ui_12=titles
+// (~29px). Regular only — hierarchy comes from size, not weight.
+#include <builtinFonts/ui_8_regular.h>
 #include <builtinFonts/ui_10_regular.h>
 #include <builtinFonts/ui_12_regular.h>
 
@@ -717,15 +720,15 @@ EpdFontFamily vollkorn_18FontFamily(&vollkorn_18RegularFont, &vollkorn_18BoldFon
                                     &vollkorn_18BoldItalicFont);
 #endif  // CROSSPOINT_SD_FONTS
 
-// Lector UI font = Cozette (pixel font, restored from mom's DX34 v11.0.0). Two
-// sizes only: ui_10 (SMALL_FONT_ID = status bar + UI_10_FONT_ID = body/rows) and
-// ui_12 (UI_12_FONT_ID = titles/headers). Cozette ships regular only — there is no
-// bold face, so EpdFontFamily::BOLD call sites fold to the regular glyphs.
-EpdFont uiCozette10Font(&ui_10_regular);
-EpdFont uiCozette12Font(&ui_12_regular);
-EpdFontFamily smallFontFamily(&uiCozette10Font, nullptr, nullptr, nullptr, 0, 0, false);
-EpdFontFamily uiFontFamily(&uiCozette10Font, nullptr, nullptr, nullptr, 0, 0, false);
-EpdFontFamily ui12FontFamily(&uiCozette12Font, nullptr, nullptr, nullptr, 0, 0, false);
+// Lector UI font = Cozette at v11.0.0's three distinct sizes: ui_8 = status bar
+// (SMALL_FONT_ID), ui_10 = body/menus (UI_10_FONT_ID), ui_12 = titles/headers
+// (UI_12_FONT_ID, distinct). Regular only — visual hierarchy is size, not weight.
+EpdFont smallFont(&ui_8_regular);
+EpdFontFamily smallFontFamily(&smallFont, nullptr, nullptr, nullptr, 0, 0, false);
+EpdFont uiRegularFont(&ui_10_regular);
+EpdFontFamily uiFontFamily(&uiRegularFont, nullptr, nullptr, nullptr, 0, 0, false);
+EpdFont uiTitleFont(&ui_12_regular);
+EpdFontFamily ui12FontFamily(&uiTitleFont, nullptr, nullptr, nullptr, 0, 0, false);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -1306,8 +1309,8 @@ void setupDisplayAndFonts() {
   renderer.insertFont(VOLLKORN_17_FONT_ID, vollkorn_17FontFamily);
   renderer.insertFont(VOLLKORN_18_FONT_ID, vollkorn_18FontFamily);
 #endif  // CROSSPOINT_SD_FONTS
-  // Lector: distinct Cozette sizes — UI_10 (body/rows), UI_12 (titles), SMALL (status
-  // bar) all share the ui_10 face except titles which use the ui_12 face.
+  // Cozette UI (v11.0.0 sizes): SMALL = ui_8 status bar, UI_10 = ui_10 body/menus,
+  // UI_12 = ui_12 titles (distinct size, not aliased).
   renderer.insertFont(UI_10_FONT_ID, uiFontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);

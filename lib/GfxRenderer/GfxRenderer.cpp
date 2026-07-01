@@ -207,8 +207,15 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             for (uint8_t pass = 1; pass <= extraBoldPasses; ++pass) {
               renderer.drawPixel(screenX + pass, screenY, s);
             }
-            if (textStyle == 1) {  // Dark: +1 right, +1 down
+            // Weight smear, mirroring the 2-bit path: Medium(2) and Dark(3) add
+            // +1 right; Dark also adds +1 down. Crisp(1)/Thin(0) add nothing, so
+            // 1-bit UI text stays thin — the old `== 1` here fattened every UI
+            // glyph at the crisp default (the "bold UI" regression vs v11, which
+            // had no render-style dilation at all).
+            if (textStyle == 2 || textStyle == 3) {  // Medium / Dark: +1 right
               renderer.drawPixel(screenX + 1, screenY, s);
+            }
+            if (textStyle == 3) {  // Dark: +1 down
               renderer.drawPixel(screenX, screenY + 1, s);
             }
           }
