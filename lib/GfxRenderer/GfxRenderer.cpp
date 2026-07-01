@@ -94,10 +94,10 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   // (Mirrors CrossPointSettings::TEXT_RENDER_MODE; kept as literals because lib/
   // must not depend on src/.) Style 1 (crisp) is the renderer default.
   const uint8_t textStyle = renderMode == GfxRenderer::BW ? renderer.getTextRenderStyle() : 1;
-  // Thin (0) drops the lightest AA edge: only black(0)+dark-grey(1) become ink,
-  // light-grey(2) stays white. Every other style promotes all non-white to black
-  // (threshold 3). bmpVal: 0=black 1=dark-grey 2=light-grey 3=white.
-  const uint8_t bwShadeThreshold = (textStyle == 0) ? 2 : 3;
+  // All non-white shades promote to black (threshold 3). bmpVal: 0=black
+  // 1=dark-grey 2=light-grey 3=white. (Lector exposes only Crisp + Dark; the old
+  // Thin style's lighter threshold-2 path is gone.)
+  const uint8_t bwShadeThreshold = 3;
   const uint8_t extraBoldPasses = renderMode == GfxRenderer::BW ? fontFamily.getSyntheticBoldPasses(style) : 0;
   const uint8_t width = glyph->width;
   const uint8_t height = glyph->height;
@@ -154,12 +154,10 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             for (uint8_t pass = 1; pass <= extraBoldPasses; ++pass) {
               renderer.drawPixel(screenX + pass, screenY, pixelState);
             }
-            // Medium (2) and Dark (3) both smear +1 right; Dark also smears +1
-            // down. Medium is the deliberate middle weight between Crisp and Dark.
-            if (textStyle == 2 || textStyle == 3) {
-              renderer.drawPixel(screenX + 1, screenY, pixelState);
-            }
+            // Dark (3) smears +1 right and +1 down for a heavier weight. Crisp adds
+            // nothing. (Lector has only Crisp + Dark; the Medium mid-weight is gone.)
             if (textStyle == 3) {
+              renderer.drawPixel(screenX + 1, screenY, pixelState);
               renderer.drawPixel(screenX, screenY + 1, pixelState);
             }
           } else if (renderMode == GfxRenderer::GRAYSCALE_MSB && (bmpVal == 1 || bmpVal == 2)) {
@@ -207,15 +205,11 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             for (uint8_t pass = 1; pass <= extraBoldPasses; ++pass) {
               renderer.drawPixel(screenX + pass, screenY, s);
             }
-            // Weight smear, mirroring the 2-bit path: Medium(2) and Dark(3) add
-            // +1 right; Dark also adds +1 down. Crisp(1)/Thin(0) add nothing, so
-            // 1-bit UI text stays thin — the old `== 1` here fattened every UI
-            // glyph at the crisp default (the "bold UI" regression vs v11, which
-            // had no render-style dilation at all).
-            if (textStyle == 2 || textStyle == 3) {  // Medium / Dark: +1 right
+            // Only Dark (3) smears (+1 right, +1 down). Crisp adds nothing, so 1-bit
+            // UI text stays thin — the old `== 1` here fattened every UI glyph at the
+            // crisp default (the "bold UI" regression vs v11, which never dilated).
+            if (textStyle == 3) {  // Dark: +1 right, +1 down
               renderer.drawPixel(screenX + 1, screenY, s);
-            }
-            if (textStyle == 3) {  // Dark: +1 down
               renderer.drawPixel(screenX, screenY + 1, s);
             }
           }

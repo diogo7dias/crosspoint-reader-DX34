@@ -218,7 +218,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   // the TEXT_RENDER_MODE enum (Normal=0, Dark=1) — generic ENUM settings store the
   // selected option index as the persisted value.
   pushReader(ReaderSettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                     {StrId::STR_RENDER_NORMAL, StrId::STR_RENDER_DARK}));
+                                     {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK}));
   pushReader(ReaderSettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText));
   pushReader(ReaderSettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                                      {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}));

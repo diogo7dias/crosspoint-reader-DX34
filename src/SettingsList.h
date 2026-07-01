@@ -121,7 +121,7 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                    StrId::STR_PARA_SPACING_80},
                                   "extraParagraphSpacingLevel", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
-                                  {StrId::STR_RENDER_NORMAL, StrId::STR_RENDER_DARK},
+                                  {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK},
                                   "textRenderMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Toggle(StrId::STR_SMOOTH_TEXT, &CrossPointSettings::smoothText, "smoothText",
                                     StrId::STR_CAT_READER));
