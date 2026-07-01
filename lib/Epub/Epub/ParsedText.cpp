@@ -621,11 +621,11 @@ void ParsedText::applyParagraphIndent(const GfxRenderer& renderer, const int fon
     emWidth = renderer.getLineHeight(fontId);
   }
 
-  // INDENT_MEGA (5): first line starts ~1/3 of the way across the text column.
+  // INDENT_MEGA (5): first line starts ~1/4 of the way across the text column.
   // Clamp so the indent never eats more than 60% of the column (leaves >=40% for
   // text) and is never smaller than a normal one-em indent.
   if (firstLineIndentMode == 5) {
-    int mega = viewportWidth / 3;
+    int mega = viewportWidth / 4;
     const int maxIndent = (viewportWidth * 3) / 5;
     if (mega > maxIndent) mega = maxIndent;
     if (mega < emWidth) mega = emWidth;
