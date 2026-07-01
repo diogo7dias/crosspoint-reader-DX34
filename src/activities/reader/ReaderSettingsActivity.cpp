@@ -9,6 +9,7 @@
 
 #include "CrossPointSettings.h"
 #include "FontFamilyApply.h"
+#include "ReaderLayoutSafety.h"
 #include "MappedInputManager.h"
 #include "ReadingThemeStore.h"
 #include "ValueEditStep.h"
@@ -686,10 +687,15 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
       const int band = std::min(pageHeight * 38 / 100, contentHeight / 2);
       if (band >= lineAdv + 10) {
         previewH = band;
-        // Match the reader's content column: horizontal margin per side is
-        // screenMarginHorizontal px (viewportWidth = screenW - 2*margin).
-        const int inset = std::clamp<int>(SETTINGS.screenMarginHorizontal, 0, pageWidth / 3);
-        const int colW = pageWidth - 2 * inset;
+        // Match the reader's real content column exactly: hardware viewable inset
+        // + user horizontal margin, or the dynamic-margin auto-widen. Using the
+        // same resolver the reader does keeps the preview column identical.
+        const ReaderLayoutSafety::ReaderMargins rm = ReaderLayoutSafety::resolveBaseReaderMargins(
+            renderer, SETTINGS.screenMarginTop, SETTINGS.screenMarginBottom, SETTINGS.screenMarginHorizontal,
+            SETTINGS.dynamicMargins, fontId);
+        const int insetL = rm.left;
+        const int insetR = rm.right;
+        const int colW = std::max(1, pageWidth - insetL - insetR);
 
         // First-line indent px, mirroring ParsedText::applyParagraphIndent.
         int em = renderer.hasGlyph(fontId, 0x2003) ? renderer.getTextAdvanceX(fontId, "\xE2\x80\x83") : 0;
@@ -750,7 +756,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
           const int gaps = static_cast<int>(lineWords.size()) - 1;
           const int naturalW = wordsW + spaceW * gaps;
           const bool justify = (align == 0 || align == 4) && !isLast && gaps > 0;
-          int x = inset + lineIndent;
+          int x = insetL + lineIndent;
           if (align == 2) x += std::max(0, (avail - naturalW) / 2);  // center
           else if (align == 3) x += std::max(0, avail - naturalW);   // right
           const int extra = justify ? std::max(0, avail - naturalW) : 0;
@@ -803,7 +809,7 @@ void ReaderSettingsActivity::render(Activity::RenderLock&&) {
         if (y <= bandBottom) drawLine(true);
 
         renderer.setTextRenderStyle(prevStyle);
-        renderer.drawLine(inset, contentY + previewH, pageWidth - inset, contentY + previewH, true);
+        renderer.drawLine(insetL, contentY + previewH, pageWidth - insetR, contentY + previewH, true);
       }
     }
   }

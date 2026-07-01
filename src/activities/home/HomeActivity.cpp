@@ -52,7 +52,7 @@ std::string getHomeHeaderVersionLabel() {
   const size_t dashPos = rawVersion.find_last_of('-');
   const std::string semver =
       (dashPos != std::string::npos && dashPos + 1 < rawVersion.size()) ? rawVersion.substr(dashPos + 1) : rawVersion;
-  return "DX34 [" + semver + "]";
+  return "Lector [" + semver + "]";
 }
 
 std::vector<HomeMenuItem> buildHomeMenuItems(bool hasOpdsUrl) {

@@ -25,12 +25,12 @@ constexpr int kDynamicRegionPadding = 6;
 int clampPercent(const int percent) { return std::max(0, std::min(100, percent)); }
 
 std::string bootVersionText() {
-  constexpr const char* kPrefix = "CrossPoint-Mod-DX34-";
+  constexpr const char* kPrefix = "Lector-";
   std::string version = CROSSPOINT_VERSION;
   if (version.rfind(kPrefix, 0) == 0) {
     version.erase(0, std::char_traits<char>::length(kPrefix));
   }
-  return "[MOD] DX34 " + version;
+  return "[MOD] Lector " + version;
 }
 
 }  // namespace
