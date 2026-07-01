@@ -785,7 +785,7 @@ int CrossPointSettings::getReaderFontId() const {
         return PLAYFAIR_18_FONT_ID;
       case LARGE:
       default:
-        return PLAYFAIR_17_FONT_ID;
+        return PLAYFAIR_16_FONT_ID;
     }
   }
   if (normalizedFamily == GALMURI) {
@@ -820,7 +820,7 @@ int CrossPointSettings::getReaderFontId() const {
         return VOLLKORN_18_FONT_ID;
       case LARGE:
       default:
-        return VOLLKORN_17_FONT_ID;
+        return VOLLKORN_16_FONT_ID;
     }
   }
 #endif  // CROSSPOINT_SD_FONTS
@@ -841,7 +841,7 @@ int CrossPointSettings::getReaderFontId() const {
       return BOOKERLY_15_FONT_ID;
     case LARGE:
     default:
-      return BOOKERLY_17_FONT_ID;
+      return BOOKERLY_16_FONT_ID;
   }
 }
 
