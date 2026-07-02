@@ -6,6 +6,7 @@
 #include <deque>
 #include <functional>
 #include <string>
+#include <vector>
 
 #ifndef UNIT_TEST_HOST
 #include <freertos/FreeRTOS.h>
@@ -60,6 +61,11 @@ class BookMetadataCache {
   // Temp file handles during build
   FsFile spineFile;
   FsFile tocFile;
+
+  // Cumulative spine sizes, cached in RAM at load() so progress/percent lookups are
+  // O(1) instead of 2 seeks + a heap-allocating SpineEntry read per access (4 bytes
+  // per spine item; <1KB for typical books).
+  std::vector<uint32_t> cumulativeSizes;
 
   // Serialises the seek+read sequence on the single shared `bookFile` cursor.
   // load()/getSpineEntry()/getTocEntry() all move one shared file position. The
@@ -138,6 +144,9 @@ class BookMetadataCache {
   bool load(const std::function<void(int)>& progressCallback = nullptr);
   SpineEntry getSpineEntry(int index);
   TocEntry getTocEntry(int index);
+  // Cumulative byte size up to and including the given spine item (0 if out of range
+  // or not loaded). Backed by the in-RAM cumulativeSizes cache populated in load().
+  uint32_t getCumulativeSize(int index) const;
   int getSpineCount() const { return spineCount; }
   int getTocCount() const { return tocCount; }
   bool isLoaded() const { return loaded; }
