@@ -14,6 +14,22 @@ Deferred (not blocking, follow-ups):
 - Orphan `_q.pxc` sweep: quality-mode users left `_q.pxc` cache files next to EPUB images; harmless + hidden from the wallpaper picker, but a storage-cleanup sweep could reclaim the space.
 - First-open-from-elsewhere still does `moveBookToRecents`'s 2 sync `saveToFile()` writes before first paint (only the common re-open path is fully async). Could route those through AsyncWriter too.
 
+## In flight — branch `feat/upstream-perf-backports` (stacked on `images-crosspoint-parity`, NOT merged)
+
+Upstream open-speed backports from the 2026-07-02 sweep (user picked the "perf speed batch"). Build clean Flash 81.4% / RAM 48.1%; host tests all green (test_host 284, layout 19, sim 6, sim_zip 5, sim_parse 45). All six PRs are `lib/Epub/*` only → no collision with the `images-crosspoint-parity` reader changes. Flash + device-test before merge.
+
+- **`c001ba95` fix(test).** Pre-existing CI-red: X3 commit `fee8c393` added `GfxRenderer::getPanelWidth/Height/WidthBytes` but the parse-sim shadow lagged → `test_reader_sim_parse` was unbuildable. Added shadow stubs; test_sim_parse now 45/45.
+- **`8b48882e` #2438** — `XML_CONTEXT_BYTES=0` (nothing calls `XML_GetInputContext`); frees ~1KB/parser every OPF/NCX/nav parse.
+- **`07570cc8` #2433** — always binary-search idref in content.opf (drop the 400-item threshold; small/medium books were doing an O(spine×manifest) linear rescan).
+- **`9bfa388e` #2434** — drop per-`<img>` `delay(50)` on chapter build → 3-attempt getDimensions retry; also fixes a silent image-drop.
+- **`9aee8953` #2440** — stream NCX/NAV TOC straight into the parser, drop the temp-file round-trip (write→reopen→reread→delete + a 1KB malloc gone). Drops the fork's per-chunk TOC progress ticks (consistent with the OPF path).
+- **`885b5ace` #2442** — RAII `Epub::ZipSession` reuses one open ZipFile for a whole chapter build (fewer SD opens + central-dir rescans on image-heavy books). *Device-validate focus: the session shares one ZipFile cursor while open; section builds run on the render task and the status bar reads book.bin not the ZipFile, so no expected shared-cursor overlap — confirm image-heavy chapters build fine and no read corruption.*
+- **`66fa5b71` #2441** — cache cumulative spine sizes in RAM at `load()` (progress bar hit `getSpineItem` = 2 seeks + heap alloc per render). O(1) now; no book.bin format change.
+
+*Device-validate overall: open speed (esp. large-manifest + image-heavy books) feels same-or-faster, page turns not regressed, images still render correctly. Then merge both this and `images-crosspoint-parity` to main + cut a release.*
+
+Remaining grab-list picks (not started, ranked): **#2209 Portuguese hyphenation** (bullseye), **#1068** URL hyphenation, **#2503**+**#2386** image-decode fixes, **#2508** footnote-when-hyphenating (pairs with #2209). See memory `upstream_backport_sweep_2026_07_02`.
+
 ## LECTOR — RELEASED v0.0.2 (2026-07-01)
 
 **v0.0.2 (2026-07-01):** post-v0.0.1 tidy-ups (below) + removed the Smooth Text (AA) feature (`2e07370b`) — on this e-ink panel the black→grey glyph-edge shift was imperceptible yet forced the slow greyscale refresh every page; the image-page greyscale overlay stays. Merged `chore/lector-tidyup`→`main`, tag+release `v0.0.2` + `firmware` branch. Flash 81.4%. **Lector has NO OTA — updates are the web `/update` page only (pulls firmware.bin from the `firmware` branch).**
