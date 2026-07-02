@@ -28,6 +28,12 @@ class GfxRenderer {
   bool hasGlyph(int fontId, uint32_t cp, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   int getScreenWidth() const;
   int getScreenHeight() const;
+  // Physical panel dims (real class returns HalDisplay::DISPLAY_*). DirectPixelWriter
+  // reads these to compute image stride. Sim panel is 600x800; parse assertions don't
+  // check pixel placement, so fixed values suffice.
+  uint16_t getPanelWidth() const { return 600; }
+  uint16_t getPanelHeight() const { return 800; }
+  uint16_t getPanelWidthBytes() const { return 600 / 8; }
   uint8_t getTextRenderStyle() const;
 
   // Render-path gates referenced by TextBlock/ImageBlock/Page::render. Linked via
