@@ -2,7 +2,10 @@
 
 Open follow-ups for this firmware. Prioritised top-down. Workflow per item: build → flash → user tests on device → ship in next release. No soak windows, no waiting periods — this is a hobby project, not a paid product.
 
-## In flight — branch `images-crosspoint-parity` (NOT merged, NOT released)
+## MERGED to main (pending release) — `images-crosspoint-parity`
+
+> 2026-07-02: this branch + the two stacked below are all fast-forward MERGED to local `main` (tip `42306c58`) and device-flashed. `main` is 16 commits ahead of `origin/main` — NOT pushed, NOT released. Next release drains these three sections into the notes.
+
 
 Two changes staged on the branch; `main` untouched + flashable. Flash 81.4%, RAM 48.1%, host tests 284/284. Flash + device-test before merge.
 
@@ -14,7 +17,7 @@ Deferred (not blocking, follow-ups):
 - Orphan `_q.pxc` sweep: quality-mode users left `_q.pxc` cache files next to EPUB images; harmless + hidden from the wallpaper picker, but a storage-cleanup sweep could reclaim the space.
 - First-open-from-elsewhere still does `moveBookToRecents`'s 2 sync `saveToFile()` writes before first paint (only the common re-open path is fully async). Could route those through AsyncWriter too.
 
-## In flight — branch `feat/upstream-perf-backports` (stacked on `images-crosspoint-parity`, NOT merged)
+## MERGED to main (pending release) — `feat/upstream-perf-backports`
 
 Upstream open-speed backports from the 2026-07-02 sweep (user picked the "perf speed batch"). Build clean Flash 81.4% / RAM 48.1%; host tests all green (test_host 284, layout 19, sim 6, sim_zip 5, sim_parse 45). All six PRs are `lib/Epub/*` only → no collision with the `images-crosspoint-parity` reader changes. Flash + device-test before merge.
 
@@ -30,7 +33,7 @@ Upstream open-speed backports from the 2026-07-02 sweep (user picked the "perf s
 
 Remaining grab-list picks (not started, ranked): **#2209 Portuguese hyphenation** (bullseye), **#1068** URL hyphenation, **#2508** footnote-when-hyphenating (pairs with #2209). See memory `upstream_backport_sweep_2026_07_02`.
 
-## In flight — branch `feat/image-decode-fixes` (stacked on `feat/upstream-perf-backports`, NOT merged)
+## MERGED to main (pending release) — `feat/image-decode-fixes`
 
 Image-decode robustness backports (user picked these after the perf batch). Build clean Flash 81.4%; host tests green (test_host 284, sim_parse 45). Both `lib/Epub`/`lib/FsHelpers` only. Flash + device-test before merge.
 
@@ -38,6 +41,12 @@ Image-decode robustness backports (user picked these after the perf batch). Buil
 - **`d85eb6ba` #2503 (partial)** — decode low-bit-depth PNGs (1/2/4-bit grayscale/indexed were rendered as garbage after a warn-and-continue; now properly unpacked via `readPackedSample`/`expandSampleToByte`, gated by `isSupportedBitDepth`) + render SVG `<image>` (tag + `href`/`xlink:href` + fragment strip). **Deliberately dropped:** the upstream upscale row-emission fix (N/A — our converter clamps scale ≤1.0, never upscales; also built on a band-cache model we lack) and the img CSS-resolution refactor (touches our diverged style path). Verified PNGdec `getBpp()`=`ucBpp`=per-sample bit depth, so 8-bit truecolor stays supported.
 
 *Device-validate: open EPUBs with (a) low-color/1-4-bit PNG images (icons, diagrams, scanned mono pages) — should render properly now, not garbage; (b) an SVG-wrapped cover/image — should appear; (c) an FB2-origin EPUB with extension-less images — should render. Then merge the whole stack (images-crosspoint-parity → perf-backports → image-decode-fixes) to main + release.*
+
+## In flight — branch `feat/pt-hyphenation` (off `main`, NOT merged)
+
+- **`527818a1` #2209 Portuguese hyphenation.** The Liang framework was already present (English-only). Added the generated `hyph-pt` trie (~2.2 KB flash, 0 RAM) + registered a Portuguese hyphenator; primary-tag normalisation maps pt/pt-PT/pt-BR automatically (no `Hyphenator.cpp` change — fork has no ISO 639-2 table). Registered at Liang 2/2 (upstream default; denser hyphenation = tighter justification on the narrow column). **Validated via the standalone eval tool: precision/recall/F1 = 99.39% across 5000 real PT words.** Firmware Flash 81.4%, test_host 284/284. *Device-validate: open a Portuguese (pt/pt-PT) EPUB with justified text — long words should now break with hyphens at line ends; confirm no odd breaks.*
+
+Remaining grab-list picks (ranked): **#1068** URL hyphenation, **#2508** footnote-when-hyphenating, **#2326** watermark-span suppression, `<sup>`/`<sub>` (#2131), fr/it/es tries. See memory `upstream_backport_sweep_2026_07_02`.
 
 ## LECTOR — RELEASED v0.0.2 (2026-07-01)
 
