@@ -2,6 +2,17 @@
 
 Open follow-ups for this firmware. Prioritised top-down. Workflow per item: build → flash → user tests on device → ship in next release. No soak windows, no waiting periods — this is a hobby project, not a paid product.
 
+## In flight — branch `images-crosspoint-parity` (NOT merged, NOT released)
+
+Two changes staged on the branch; `main` untouched + flashable. Flash 81.4%, RAM 48.1%, host tests 284/284. Flash + device-test before merge.
+
+- **`a9cac61d` EPUB images = upstream CrossPoint.** Removed the fork-only `(255-gray)/6` brightness boost (it washed out photos on the 4-level panel) + the Floyd-Steinberg "quality" dither path + the `imageDither` setting entirely (schema/codec/web/i18n). One image quality now, plain Bayer, matches upstream. `.pxc` cache kept (upstream's own mechanism); `_q.pxc` variant gone (orphans stay hidden by LibraryListingFilter). Wallpaper/PxcRenderer untouched. *Device-validate: open an image-heavy EPUB, confirm photos look like upstream (no longer faded); confirm re-bake happens (quality users' `_q.pxc` ignored, fresh `.pxc` written).*
+- **`c76c338e` faster open/close.** (A) `registerRecentBook` moved after `requestUpdate()` + persists recent.json async → the ~120 ms rewrite no longer serialises ahead of page 1 (common re-open case). (B) `onExit` enqueues progress + recent.json-percent writes then drains ONCE before section/epub reset (overlaps the render-task join) instead of draining up front. *Device-validate: open/close feel snappier AND no FreeRTOS SPI-mutex assert on close (the deferred drain is the sensitive part) — test close-from-menu, close-to-home, sleep, and close mid-footnote.*
+
+Deferred (not blocking, follow-ups):
+- Orphan `_q.pxc` sweep: quality-mode users left `_q.pxc` cache files next to EPUB images; harmless + hidden from the wallpaper picker, but a storage-cleanup sweep could reclaim the space.
+- First-open-from-elsewhere still does `moveBookToRecents`'s 2 sync `saveToFile()` writes before first paint (only the common re-open path is fully async). Could route those through AsyncWriter too.
+
 ## LECTOR — RELEASED v0.0.2 (2026-07-01)
 
 **v0.0.2 (2026-07-01):** post-v0.0.1 tidy-ups (below) + removed the Smooth Text (AA) feature (`2e07370b`) — on this e-ink panel the black→grey glyph-edge shift was imperceptible yet forced the slow greyscale refresh every page; the image-page greyscale overlay stays. Merged `chore/lector-tidyup`→`main`, tag+release `v0.0.2` + `firmware` branch. Flash 81.4%. **Lector has NO OTA — updates are the web `/update` page only (pulls firmware.bin from the `firmware` branch).**
