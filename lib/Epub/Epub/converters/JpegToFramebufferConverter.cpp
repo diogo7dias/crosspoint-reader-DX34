@@ -44,10 +44,6 @@ struct JpegContext {
   PixelCache cache;
   bool caching;
 
-  // Floyd-Steinberg ditherer (used when ditherMode == 1)
-  EpubFloydSteinbergDitherer fsDitherer;
-  int lastFsRow;  // Track row transitions for FS beginRow()
-
   JpegContext()
       : renderer(nullptr),
         config(nullptr),
@@ -61,8 +57,7 @@ struct JpegContext {
         invScaleFPX(1 << 16),
         fineScaleFPY(1 << 16),
         invScaleFPY(1 << 16),
-        caching(false),
-        lastFsRow(-1) {}
+        caching(false) {}
 };
 
 // File I/O callbacks use pFile->fHandle to access the FsFile*,
@@ -150,8 +145,6 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
   if (stride <= 0 || blockH <= 0 || validW <= 0) return 1;
 
   const bool useDithering = ctx->config->useDithering;
-  const uint8_t ditherMode = ctx->config->ditherMode;
-  const bool useFS = useDithering && (ditherMode == 1);
   const bool caching = ctx->caching;
   const int32_t fineScaleFPX = ctx->fineScaleFPX;
   const int32_t invScaleFPX = ctx->invScaleFPX;
@@ -200,17 +193,13 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
       const int outY = cfgY + dstY;
       pw.beginRow(outY);
       if (caching) cw.beginRow(outY, ctx->config->y);
-      if (useFS && outY != ctx->lastFsRow) {
-        ctx->fsDitherer.beginRow();
-        ctx->lastFsRow = outY;
-      }
       const uint8_t* row = &pixels[(dstY - blockY) * stride];
       for (int dstX = dstXStart; dstX < dstXEnd; dstX++) {
         const int outX = cfgX + dstX;
         uint8_t gray = row[dstX - blockX];
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
+          dithered = applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -238,10 +227,6 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
       const int outY = cfgY + dstY;
       pw.beginRow(outY);
       if (caching) cw.beginRow(outY, ctx->config->y);
-      if (useFS && outY != ctx->lastFsRow) {
-        ctx->fsDitherer.beginRow();
-        ctx->lastFsRow = outY;
-      }
       const int32_t srcFyFP = dstY * invScaleFPY;
       const int32_t fy = srcFyFP & FP_MASK;
       const int32_t fyInv = FP_ONE - fy;
@@ -273,7 +258,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
+          dithered = applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -296,7 +281,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
+          dithered = applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -322,7 +307,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
         uint8_t dithered;
         if (useDithering) {
-          dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
+          dithered = applyBayerDither4Level(gray, outX, outY);
         } else {
           dithered = gray / 85;
           if (dithered > 3) dithered = 3;
@@ -339,10 +324,6 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
     const int outY = cfgY + dstY;
     pw.beginRow(outY);
     if (caching) cw.beginRow(outY, ctx->config->y);
-    if (useFS && outY != ctx->lastFsRow) {
-      ctx->fsDitherer.beginRow();
-      ctx->lastFsRow = outY;
-    }
     const int32_t srcFyFP = dstY * invScaleFPY;
     int ly = (srcFyFP >> FP_SHIFT) - blockY;
     if (ly < 0) ly = 0;
@@ -359,7 +340,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
       uint8_t dithered;
       if (useDithering) {
-        dithered = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
+        dithered = applyBayerDither4Level(gray, outX, outY);
       } else {
         dithered = gray / 85;
         if (dithered > 3) dithered = 3;
@@ -513,11 +494,6 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
       LOG_ERR("JPG", "Failed to allocate cache buffer, continuing without caching");
       ctx.caching = false;
     }
-  }
-
-  // Initialize Floyd-Steinberg ditherer if quality mode selected
-  if (config.ditherMode == 1 && config.useDithering) {
-    ctx.fsDitherer.init(destWidth);
   }
 
   unsigned long decodeStart = millis();

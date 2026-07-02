@@ -445,9 +445,6 @@ STR_QUOTES_CUSTOM: "Citati + po meri"
 STR_VIEW_QUOTES: "Ogled citatov"
 STR_FREEZE: "Zamrzni"
 
-STR_IMAGE_DITHER: "Pretakanje slik (Dithering)"
-STR_IMAGE_DITHER_FAST: "Hitro"
-STR_IMAGE_DITHER_QUALITY: "Kakovostno"
 STR_UI_LANGUAGE: "Jezik"
 
 STR_REMOVE_BUTTON: "Odstrani"

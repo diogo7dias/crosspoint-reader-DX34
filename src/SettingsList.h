@@ -52,9 +52,6 @@ inline const std::vector<SettingInfo>& getSettingsList() {
                                     StrId::STR_CAT_DISPLAY));
     s.push_back(SettingInfo::Toggle(StrId::STR_USE_FACTORY_LUT, &CrossPointSettings::useFactoryLUT, "useFactoryLUT",
                                     StrId::STR_CAT_DISPLAY));
-    s.push_back(SettingInfo::Enum(StrId::STR_IMAGE_DITHER, &CrossPointSettings::imageDither,
-                                  {StrId::STR_IMAGE_DITHER_FAST, StrId::STR_IMAGE_DITHER_QUALITY}, "imageDither",
-                                  StrId::STR_CAT_DISPLAY));
     s.push_back(SettingInfo::Enum(StrId::STR_HOME_LAYOUT, &CrossPointSettings::homeLayout,
                                   {StrId::STR_HOME_LAYOUT_CLASSIC, StrId::STR_HOME_LAYOUT_SINGLE_COVER}, "homeLayout",
                                   StrId::STR_CAT_DISPLAY));

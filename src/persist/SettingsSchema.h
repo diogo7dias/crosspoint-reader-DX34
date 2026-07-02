@@ -85,7 +85,6 @@ inline constexpr FieldDesc kFields[] = {
     {"highlightMode", &SS::highlightMode, 0, SS::HIGHLIGHT_MODE_COUNT, 0},
     {"darkMode", &SS::darkMode, 0, 0, 1},
     {"booksFolderOrder", &SS::booksFolderOrder, 0, 0, 1},
-    {"imageDither", &SS::imageDither, SS::IMAGE_DITHER_QUALITY, SS::IMAGE_DITHER_COUNT, 0},
 };
 
 inline constexpr size_t kFieldCount = sizeof(kFields) / sizeof(kFields[0]);

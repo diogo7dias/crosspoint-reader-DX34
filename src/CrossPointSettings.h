@@ -287,13 +287,6 @@ class CrossPointSettings {
 
   enum HIGHLIGHT_MODE { HIGHLIGHT_WORD = 0, HIGHLIGHT_PAGE = 1, HIGHLIGHT_MODE_COUNT };
 
-  // Image dithering algorithm
-  enum IMAGE_DITHER {
-    IMAGE_DITHER_FAST = 0,     // Bayer ordered dither (default, fast)
-    IMAGE_DITHER_QUALITY = 1,  // Floyd-Steinberg error diffusion (better photos)
-    IMAGE_DITHER_COUNT
-  };
-
   // Auto-sleep timeout options (in minutes)
   enum SLEEP_TIMEOUT {
     SLEEP_1_MIN = 0,
@@ -468,8 +461,6 @@ class CrossPointSettings {
   uint8_t darkMode = 0;
   // Books folder display order: 0 = alphabetical (default), 1 = random
   uint8_t booksFolderOrder = 0;
-  // Image dithering algorithm: 0=fast (Bayer), 1=quality (Floyd-Steinberg)
-  uint8_t imageDither = IMAGE_DITHER_QUALITY;
 
   ~CrossPointSettings() = default;
 

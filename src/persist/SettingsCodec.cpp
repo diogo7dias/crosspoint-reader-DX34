@@ -145,7 +145,7 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   emitMechUntil("debugBorders");
   doc["embeddedStyle"] = s.readerStyleMode == S::READER_STYLE_HYBRID;  // derived
 
-  // run J: debugBorders .. imageDither
+  // run J: debugBorders .. booksFolderOrder
   emitMechRest();
 }
 

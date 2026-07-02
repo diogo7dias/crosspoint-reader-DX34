@@ -70,7 +70,6 @@ void test_round_trip_identity() {
   TEST_ASSERT_EQUAL_UINT8(a.statusBarShowBattery, b.statusBarShowBattery);
   TEST_ASSERT_EQUAL_UINT8(a.orientation, b.orientation);
   TEST_ASSERT_EQUAL_UINT8(a.sleepTimeout, b.sleepTimeout);
-  TEST_ASSERT_EQUAL_UINT8(a.imageDither, b.imageDither);
 }
 
 // 2. Drift-parity regression (v6.0.0): the granular status-bar toggles must
@@ -169,7 +168,7 @@ void test_golden_default_snapshot() {
       "\"dynamicMargins\":0,\"screenMarginHorizontal\":20,\"screenMarginTop\":20,\"screenMarginBottom\":20,"
       "\"hideBatteryPercentage\":0,"
       "\"longPressChapterSkip\":1,\"hyphenationEnabled\":0,\"uiLanguage\":0,\"fadingFix\":0,\"embeddedStyle\":false,"
-      "\"debugBorders\":0,\"highlightMode\":0,\"darkMode\":0,\"booksFolderOrder\":0,\"imageDither\":1}";
+      "\"debugBorders\":0,\"highlightMode\":0,\"darkMode\":0,\"booksFolderOrder\":0}";
   TEST_ASSERT_EQUAL_STRING(expected, json.c_str());
 }
 

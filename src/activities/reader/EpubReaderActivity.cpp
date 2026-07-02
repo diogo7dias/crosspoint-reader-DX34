@@ -192,7 +192,6 @@ void EpubReaderActivity::onEnter() {
   // NOTE: This affects layout math and must be applied before any render calls.
   ReaderCommon::applyReaderOrientation(renderer, SETTINGS.orientation);
   EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
-  ImageBlock::setDitherMode(SETTINGS.imageDither);
 
   epub->setupCacheDir();
 

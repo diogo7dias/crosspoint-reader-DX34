@@ -501,9 +501,6 @@ STR_QUOTES_CUSTOM: "Quotes + Custom"
 STR_VIEW_QUOTES: "View Quotes"
 STR_FREEZE: "Freeze"
 
-STR_IMAGE_DITHER: "Image Dithering"
-STR_IMAGE_DITHER_FAST: "Fast"
-STR_IMAGE_DITHER_QUALITY: "Quality"
 
 STR_REMOVE_BUTTON: "Remove"
 STR_QUOTE_SAVED: "Quote saved!"

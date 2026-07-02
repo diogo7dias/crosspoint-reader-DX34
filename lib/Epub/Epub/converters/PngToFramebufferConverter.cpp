@@ -37,9 +37,6 @@ struct PngContext {
 
   uint8_t* grayLineBuffer;
 
-  // Floyd-Steinberg ditherer (used when ditherMode == 1)
-  EpubFloydSteinbergDitherer fsDitherer;
-
   PngContext()
       : renderer(nullptr),
         config(nullptr),
@@ -210,8 +207,6 @@ int pngDrawCallback(PNGDRAW* pDraw) {
   int outXBase = ctx->config->x;
   int screenWidth = ctx->screenWidth;
   bool useDithering = ctx->config->useDithering;
-  const uint8_t ditherMode = ctx->config->ditherMode;
-  const bool useFS = useDithering && (ditherMode == 1);
   bool caching = ctx->caching;
 
   // Pre-compute orientation and render-mode state once per row
@@ -225,8 +220,6 @@ int pngDrawCallback(PNGDRAW* pDraw) {
     cw.beginRow(outY, ctx->config->y);
   }
 
-  if (useFS) ctx->fsDitherer.beginRow();
-
   int srcX = 0;
   int error = 0;
 
@@ -237,7 +230,7 @@ int pngDrawCallback(PNGDRAW* pDraw) {
 
       uint8_t ditheredGray;
       if (useDithering) {
-        ditheredGray = useFS ? ctx->fsDitherer.dither4Level(gray, dstX) : applyBayerDither4Level(gray, outX, outY);
+        ditheredGray = applyBayerDither4Level(gray, outX, outY);
       } else {
         ditheredGray = gray / 85;
         if (ditheredGray > 3) ditheredGray = 3;
@@ -393,11 +386,6 @@ bool PngToFramebufferConverter::decodeToFramebuffer(const std::string& imagePath
       LOG_ERR("PNG", "Failed to allocate cache buffer, continuing without caching");
       ctx.caching = false;
     }
-  }
-
-  // Initialize Floyd-Steinberg ditherer if quality mode selected
-  if (config.ditherMode == 1 && config.useDithering) {
-    ctx.fsDitherer.init(ctx.dstWidth);
   }
 
   unsigned long decodeStart = millis();
