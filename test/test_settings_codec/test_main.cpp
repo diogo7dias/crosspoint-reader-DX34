@@ -168,7 +168,7 @@ void test_golden_default_snapshot() {
       "\"dynamicMargins\":0,\"screenMarginHorizontal\":20,\"screenMarginTop\":20,\"screenMarginBottom\":20,"
       "\"hideBatteryPercentage\":0,"
       "\"longPressChapterSkip\":1,\"hyphenationEnabled\":0,\"uiLanguage\":0,\"fadingFix\":0,\"embeddedStyle\":false,"
-      "\"debugBorders\":0,\"highlightMode\":0,\"darkMode\":0,\"booksFolderOrder\":0}";
+      "\"debugBorders\":0,\"highlightMode\":0,\"darkMode\":0,\"booksFolderOrder\":0,\"textAntiAliasing\":0}";
   TEST_ASSERT_EQUAL_STRING(expected, json.c_str());
 }
 

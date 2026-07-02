@@ -145,7 +145,7 @@ void crosspoint::persist::encodeSettings(const CrossPointSettings& s, JsonDocume
   emitMechUntil("debugBorders");
   doc["embeddedStyle"] = s.readerStyleMode == S::READER_STYLE_HYBRID;  // derived
 
-  // run J: debugBorders .. booksFolderOrder
+  // run J: debugBorders .. textAntiAliasing
   emitMechRest();
 }
 
@@ -375,7 +375,6 @@ bool crosspoint::persist::decodeSettings(CrossPointSettings& s, const char* json
       }
     }
   }
-  s.textAntiAliasing = 0;
   s.useFactoryLUT = (doc["useFactoryLUT"] | 0) ? 1 : 0;
   env.applyFactoryLut(s.useFactoryLUT != 0);
   s.statusBarClock = (doc["statusBarClock"] | 0) ? 1 : 0;

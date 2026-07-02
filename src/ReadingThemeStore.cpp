@@ -179,7 +179,8 @@ void ReadingThemeStore::applyThemeToSettings(const ReadingTheme& theme, CrossPoi
   settings.orientation =
       clampRange(theme.orientation, 0, CrossPointSettings::ORIENTATION_COUNT - 1, CrossPointSettings::PORTRAIT);
   settings.embeddedStyle = settings.readerStyleMode == CrossPointSettings::READER_STYLE_HYBRID ? 1 : 0;
-  settings.textAntiAliasing = 0;
+  // textAntiAliasing is a GLOBAL setting, not a per-book theme field — leave it
+  // untouched here so opening a book doesn't reset the user's global AA choice.
   settings.hyphenationEnabled = theme.hyphenationEnabled ? 1 : 0;
   settings.statusBarEnabled = theme.statusBarEnabled ? 1 : 0;
   settings.statusBarShowBattery = theme.statusBarShowBattery ? 1 : 0;

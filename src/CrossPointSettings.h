@@ -375,7 +375,11 @@ class CrossPointSettings {
   uint8_t firstLineIndentMode = INDENT_BOOK;
   uint8_t readerStyleMode = READER_STYLE_USER;
   uint8_t textRenderMode = TEXT_RENDER_NORMAL;
-  // Legacy binary-compat field; always 0. Do not remove (breaks serialization).
+  // Text anti-aliasing: 0 = off (crisp 1-bit, fast — default). 1 = render glyph
+  // grey edges via the greyscale overlay → smoother text (like upstream
+  // CrossPoint), at the cost of the slow greyscale refresh on every page turn
+  // (Snappy LAW). Opt-in GLOBAL toggle. Also read by the legacy binary migration
+  // (readPod), so keep its byte position in that layout.
   uint8_t textAntiAliasing = 0;
   // Factory LUT grayscale (off-by-default; ships behind a settings toggle for first release).
   // When 1: image-bearing pages, BMP viewer, and sleep covers render via the panel's factory
