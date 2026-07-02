@@ -28,7 +28,16 @@ Upstream open-speed backports from the 2026-07-02 sweep (user picked the "perf s
 
 *Device-validate overall: open speed (esp. large-manifest + image-heavy books) feels same-or-faster, page turns not regressed, images still render correctly. Then merge both this and `images-crosspoint-parity` to main + cut a release.*
 
-Remaining grab-list picks (not started, ranked): **#2209 Portuguese hyphenation** (bullseye), **#1068** URL hyphenation, **#2503**+**#2386** image-decode fixes, **#2508** footnote-when-hyphenating (pairs with #2209). See memory `upstream_backport_sweep_2026_07_02`.
+Remaining grab-list picks (not started, ranked): **#2209 Portuguese hyphenation** (bullseye), **#1068** URL hyphenation, **#2508** footnote-when-hyphenating (pairs with #2209). See memory `upstream_backport_sweep_2026_07_02`.
+
+## In flight — branch `feat/image-decode-fixes` (stacked on `feat/upstream-perf-backports`, NOT merged)
+
+Image-decode robustness backports (user picked these after the perf batch). Build clean Flash 81.4%; host tests green (test_host 284, sim_parse 45). Both `lib/Epub`/`lib/FsHelpers` only. Flash + device-test before merge.
+
+- **`6c272d07` #2386** — decode images with a missing/wrong file extension. Added `FsHelpers::detectImageExtFromMagic` (JPEG/PNG magic-byte sniff) + an `ImageDecoderFactory` fallback that sniffs the extracted file when the extension matches no decoder. Only the factory+FsHelpers halves needed (our parser already dropped the pre-extraction gate). Fork adaptations: FsHelpers is a class (static method), file handle is `HalFile`.
+- **`d85eb6ba` #2503 (partial)** — decode low-bit-depth PNGs (1/2/4-bit grayscale/indexed were rendered as garbage after a warn-and-continue; now properly unpacked via `readPackedSample`/`expandSampleToByte`, gated by `isSupportedBitDepth`) + render SVG `<image>` (tag + `href`/`xlink:href` + fragment strip). **Deliberately dropped:** the upstream upscale row-emission fix (N/A — our converter clamps scale ≤1.0, never upscales; also built on a band-cache model we lack) and the img CSS-resolution refactor (touches our diverged style path). Verified PNGdec `getBpp()`=`ucBpp`=per-sample bit depth, so 8-bit truecolor stays supported.
+
+*Device-validate: open EPUBs with (a) low-color/1-4-bit PNG images (icons, diagrams, scanned mono pages) — should render properly now, not garbage; (b) an SVG-wrapped cover/image — should appear; (c) an FB2-origin EPUB with extension-less images — should render. Then merge the whole stack (images-crosspoint-parity → perf-backports → image-decode-fixes) to main + release.*
 
 ## LECTOR — RELEASED v0.0.2 (2026-07-01)
 
