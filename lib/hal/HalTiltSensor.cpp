@@ -55,36 +55,14 @@ bool HalTiltSensor::readGyro(float& gx, float& gy, float& gz) const {
 }
 
 void HalTiltSensor::begin() {
-  if (!gpio.deviceIsX3()) {
-    _available = false;
-    return;
-  }
-
-  // Try primary address, then alternate
-  uint8_t whoami = 0;
-  _i2cAddr = I2C_ADDR_QMI8658;
-  if (!readReg(QMI8658_WHO_AM_I_REG, &whoami) || whoami != QMI8658_WHO_AM_I_VALUE) {
-    _i2cAddr = I2C_ADDR_QMI8658_ALT;
-    if (!readReg(QMI8658_WHO_AM_I_REG, &whoami) || whoami != QMI8658_WHO_AM_I_VALUE) {
-      LOG_ERR("GYR", "QMI8658 IMU not found");
-      _available = false;
-      return;
-    }
-  }
-
-  LOG_INF("GYR", "QMI8658 IMU found at 0x%02X", _i2cAddr);
-
-  if (!writeReg(REG_CTRL7, CTRL7_DISABLE_ALL) || !writeReg(REG_CTRL3, CTRL3_FS_512DPS | CTRL3_ODR_28HZ) ||
-      !writeReg(REG_CTRL1, CTRL1_BASE | CTRL1_SENSOR_DISABLE)) {
-    LOG_ERR("GYR", "QMI8658 register configuration failed");
-    _available = false;
-    return;
-  }
-
-  _available = true;
-  _initMs = millis();
-  _lastPollMs = millis();
-  LOG_INF("GYR", "QMI8658 gyro initialized and put to sleep");
+  // Gyro tilt page-turn is DISABLED entirely (user request 2026-07-02). The
+  // QMI8658 IMU is deliberately never brought up, so isAvailable() stays false.
+  // That (a) removes the "Tilt Page Turn" settings entry — it is gated on
+  // halTiltSensor.isAvailable() in SettingsList — and (b) makes every tilt code
+  // path inert (update(), wasTiltedForward/Back(), wake(), deepSleep() all
+  // early-return on !_available). To re-enable, restore the QMI8658 WHO_AM_I
+  // probe + CTRL register config from git history.
+  _available = false;
 }
 
 bool HalTiltSensor::wake() {

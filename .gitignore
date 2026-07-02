@@ -27,3 +27,5 @@ logs/
 # assertions are coupled to this exact public-domain Gutenberg book).
 test/test_reader_sim/fixtures/*
 !test/test_reader_sim/fixtures/book.epub
+
+platformio.local.ini

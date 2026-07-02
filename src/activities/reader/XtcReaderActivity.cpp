@@ -438,14 +438,10 @@ void XtcReaderActivity::renderPage() {
     }
     esp_task_wdt_reset();
 
-    // Display BW with conditional refresh based on pagesUntilFullRefresh. X3
-    // (UC8253) needs a COMPLETE (FULL) waveform for the periodic clean pass to
-    // DC-balance the panel; a HALF partial leaves net charge that blooms over a
-    // session. X4 (SSD1677) stays on HALF. See EpubReaderActivity for the full
-    // rationale (byte-identical X3 driver/LUTs to freeink-sdk; policy is the fix).
-    const bool isX3Panel = renderer.getPanelWidth() == 528;
+    // Conditional refresh — identical on X3 and X4 (user request: X3 on the X4
+    // path). Fast differential most turns, HALF clear every N pages.
     if (pagesUntilFullRefresh <= 1) {
-      renderer.displayBuffer(isX3Panel ? HalDisplay::FULL_REFRESH : HalDisplay::HALF_REFRESH);
+      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
       pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
     } else {
       renderer.displayBuffer();
@@ -519,11 +515,9 @@ void XtcReaderActivity::renderPage() {
 
   // XTC pages already have status bar pre-rendered, no need to add our own
 
-  // Display with appropriate refresh. X3 promotes the periodic clean pass to a
-  // COMPLETE (FULL) waveform to DC-balance the UC8253 (see above); X4 keeps HALF.
-  const bool isX3Panel = renderer.getPanelWidth() == 528;
+  // Display with appropriate refresh — identical on X3 and X4 (user request).
   if (pagesUntilFullRefresh <= 1) {
-    renderer.displayBuffer(isX3Panel ? HalDisplay::FULL_REFRESH : HalDisplay::HALF_REFRESH);
+    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else {
     renderer.displayBuffer();

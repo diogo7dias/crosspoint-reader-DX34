@@ -1103,13 +1103,56 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 // unused
 // void GfxRenderer::grayscaleRevert() const { display.grayscaleRevert(); }
 
+#ifdef FREEINK_DISPLAY
+// freeink's UC8253 (X3) grayscale plane path renders our plane polarity
+// INVERTED (black<->white). community-sdk's EInkDisplay applied an XOR 0xFF
+// internally for _x3Mode; freeink keeps its driver pristine, so we reconcile
+// here in the adapter instead of patching vendored freeink. Flipping BOTH the
+// LSB and MSB plane bytes inverts the 2-bit level (pv -> 3 - pv). X3 only
+// (getPanelWidth()==792); X4 (SSD1677) grayscale is correct as-is. The flip is
+// undone after the send so the framebuffer the MSB pass reuses is unchanged.
+void GfxRenderer::copyGrayscaleLsbBuffers() const {
+  if (getPanelWidth() == 792) {
+    const uint32_t n = display.getBufferSize();
+    for (uint32_t i = 0; i < n; i++) frameBuffer[i] ^= 0xFF;
+    display.copyGrayscaleLsbBuffers(frameBuffer);
+    for (uint32_t i = 0; i < n; i++) frameBuffer[i] ^= 0xFF;
+    return;
+  }
+  display.copyGrayscaleLsbBuffers(frameBuffer);
+}
+
+void GfxRenderer::copyGrayscaleMsbBuffers() const {
+  if (getPanelWidth() == 792) {
+    const uint32_t n = display.getBufferSize();
+    for (uint32_t i = 0; i < n; i++) frameBuffer[i] ^= 0xFF;
+    display.copyGrayscaleMsbBuffers(frameBuffer);
+    for (uint32_t i = 0; i < n; i++) frameBuffer[i] ^= 0xFF;
+    return;
+  }
+  display.copyGrayscaleMsbBuffers(frameBuffer);
+}
+#else
 void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuffers(frameBuffer); }
 
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
+#endif
 
 void GfxRenderer::displayGrayBuffer(const uint8_t* lut, bool factoryMode) const {
   display.displayGrayBuffer(fadingFix, lut, factoryMode);
 }
+
+#ifdef FREEINK_DISPLAY
+// freeink-sdk's drivers supply their own factory grayscale LUTs internally and,
+// when passed a null `lut`, fall back to their OEM factory bank (see
+// Ssd1677Driver / Uc8253X3Driver displayGray). community-sdk instead EXPORTED
+// lut_factory_fast/quality from EInkDisplay.h; freeink's compat header does not.
+// Alias them to nullptr so renderGrayscale passes null and freeink drives its
+// own LUTs (the whole point of the swap — 1:1 with CrossPoint). On the community
+// build these names resolve to the real exported arrays, unchanged.
+static const unsigned char* const lut_factory_fast = nullptr;
+static const unsigned char* const lut_factory_quality = nullptr;
+#endif
 
 void GfxRenderer::renderGrayscale(GrayscaleMode mode, const std::function<void()>& drawFn) {
   const bool factory = (mode != GrayscaleMode::Differential);
@@ -1126,8 +1169,13 @@ void GfxRenderer::renderGrayscale(GrayscaleMode mode, const std::function<void()
     msbMode = GRAY2_MSB;
   }
 
-  // Factory absolute drive: pre-flash to white via HALF_REFRESH so the panel starts
-  // from a known state. Differential mode skips this — caller must own prior BW state.
+  // Factory absolute drive: pre-flash to white so the panel starts from a known
+  // clean state. Differential mode skips this — caller must own prior BW state.
+  // Pre-flash mode is HALF on both X3 and X4 (user request: X3 uses the exact X4
+  // wallpaper display path). NOTE: on X3 a HALF pre-flash may not fully clear the
+  // UC8253, so content under the wallpaper (e.g. a menu) can ghost through — that
+  // is the X4-identical behaviour being tried. (The X3 grayscale colour-flip in
+  // copyGrayscale*Buffers is kept — without it the panel renders inverted.)
   if (factory) {
     display.clearScreen(0xFF);
     display.displayBuffer(HalDisplay::HALF_REFRESH);
