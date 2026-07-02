@@ -251,9 +251,9 @@ void EpubReaderActivity::onEnter() {
   // Load bookmarks for this book
   bookmarkStore.load(epub->getCachePath());
 
-  // Save current epub as last opened epub and add to recent books
-  ReaderCommon::registerRecentBook(epub->getPath(), epub->getTitle(), epub->getAuthor(), epub->getThumbBmpPath());
-  // Generate cover thumbnail for home screen cover layouts
+  // Generate cover thumbnail for home screen cover layouts (no-op if it already
+  // exists — its cover decode reads the EPUB zip, so it stays before the render
+  // task starts to avoid a concurrent read of the same file).
   epub->generateThumbBmp(400);
 
   // Move book to /recents/ folder on first open from another location
@@ -279,21 +279,31 @@ void EpubReaderActivity::onEnter() {
 
   // Trigger first update
   requestUpdate();
+
+  // Record this book as recently-opened AFTER the first paint has been kicked
+  // off. registerRecentBook persists recent.json asynchronously (see
+  // ReaderCommon.h), so the ~120 ms atomic rewrite no longer serialises ahead
+  // of page 1. Runs after the /recents move above so it records the final path.
+  ReaderCommon::registerRecentBook(epub->getPath(), epub->getTitle(), epub->getAuthor(), epub->getThumbBmpPath());
 }
 
 void EpubReaderActivity::onExit() {
-  flushProgressIfNeeded(true);
+  // Enqueue the progress + recent.json percent writes now but DON'T block yet
+  // (drainNow=false). They process on the AsyncWriter task while the teardown
+  // below runs; the single drainBlocking() before section/epub reset waits out
+  // only the remainder. This overlaps the ~120 ms recent.json rewrite with the
+  // render-task join instead of stalling the whole close up front.
+  flushProgressIfNeeded(true, /*drainNow=*/false);
   // If we're leaving mid-footnote, the in-RAM return stack (savedPositions[])
-  // dies on exit/deep-sleep. flushProgressIfNeeded above just persisted the
+  // dies on exit/deep-sleep. flushProgressIfNeeded above just enqueued the
   // current endnote page; overwrite it with the pre-footnote ORIGIN
   // (savedPositions[0], the outermost link the reader followed from) so the book
   // reopens at the link, not buried in the notes. (Upstream #2394.) saveProgress
-  // enqueues an async sink write, so drain it here before the later epub.reset()
-  // closes the SD handles — see the AsyncWriter-race note in flushProgressIfNeeded.
+  // enqueues an async sink write; it lands after the endnote write (FIFO) and is
+  // caught by the single drainBlocking() before epub.reset() below.
   if (footnoteDepth > 0 && epub) {
     const auto& origin = savedPositions[0];
     saveProgress(origin.spineIndex, origin.pageNumber, 0);
-    ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
   }
   inputDispatcher_.clearPendingTap();
   highlights_.exit();
@@ -320,6 +330,13 @@ void EpubReaderActivity::onExit() {
   // on-disk font was never touched — this just restores the live SETTINGS global.
   SETTINGS.emergencyRenderFontDowngrade = false;
   clearPageCache();
+  // Drain the progress + recent.json writes enqueued at the top of onExit (plus
+  // anything queued by highlights_.exit()). They've been processing on the
+  // AsyncWriter task throughout the teardown above, so this waits out only the
+  // remainder rather than the full ~120 ms up front. MUST complete before the
+  // resets below close the SD handles — a still-queued write would race the SD
+  // teardown (the FreeRTOS SPI-mutex assertion the old up-front drain avoided).
+  ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
   section.reset();
   epub.reset();
   layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
@@ -1823,7 +1840,7 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
     RECENT_BOOKS.setPercent(epub->getPath(), percent);
   }
 }
-void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
+void EpubReaderActivity::flushProgressIfNeeded(const bool force, const bool drainNow) {
   if (!epub || !section || section->pageCount == 0) {
     return;
   }
@@ -1865,7 +1882,9 @@ void EpubReaderActivity::flushProgressIfNeeded(const bool force) {
     // page loads during reading); enqueue that write now, then drain LAST so
     // the drain catches both the progress write and the recent.json percent.
     RECENT_BOOKS.flushPercentIfDirty();
-    ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
+    if (drainNow) {
+      ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
+    }
   }
 }
 

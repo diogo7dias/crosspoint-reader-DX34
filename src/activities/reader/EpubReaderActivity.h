@@ -181,7 +181,12 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
                        int orientedMarginLeft);
   void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
   void saveProgress(int spineIndex, int currentPage, int pageCount);
-  void flushProgressIfNeeded(bool force);
+  // force=true persists progress + the recent.json percent. drainNow=true (the
+  // default) blocks on AsyncWriter until those writes hit SD; pass drainNow=false
+  // to only enqueue them and let a later drainBlocking() catch them — used by
+  // onExit so the ~120 ms recent.json write overlaps the render-task teardown
+  // instead of stalling the close up front.
+  void flushProgressIfNeeded(bool force, bool drainNow = true);
   // Synchronously persist the last-good position right before a recovery
   // reboot (silentRestartToReader reboots without flushing, and page-turn
   // writes are deferred to lifecycle events).

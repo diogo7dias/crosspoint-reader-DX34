@@ -40,8 +40,10 @@ bool shouldFullRefreshOnEnter(const std::string& bookPath);
 inline void registerRecentBook(const std::string& path, const std::string& title, const std::string& author,
                                const std::string& thumbPath) {
   APP_STATE.openEpubPath = path;
-  APP_STATE.saveToFile();
-  RECENT_BOOKS.addBook(path, title, author, thumbPath);
+  APP_STATE.saveToFile();  // debounced (flushSoon) — non-blocking
+  // deferPersist: the recent.json rewrite goes through AsyncWriter so opening a
+  // book doesn't block on the ~120 ms atomic write before the first page paints.
+  RECENT_BOOKS.addBook(path, title, author, thumbPath, /*deferPersist=*/true);
 }
 
 }  // namespace ReaderCommon

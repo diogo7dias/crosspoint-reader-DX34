@@ -44,9 +44,12 @@ class RecentBooksStore {
   // Get singleton instance
   static RecentBooksStore& getInstance() { return instance; }
 
-  // Add a book to the recent list (moves to front if already exists)
+  // Add a book to the recent list (moves to front if already exists).
+  // deferPersist=true routes the SD write through AsyncWriter (saveToFileAsync)
+  // instead of the blocking saveToFile(), so the book-open hot path doesn't
+  // stall the ~120 ms recent.json rewrite before the first page paints.
   void addBook(const std::string& path, const std::string& title, const std::string& author,
-               const std::string& coverBmpPath);
+               const std::string& coverBmpPath, bool deferPersist = false);
 
   void updateBook(const std::string& path, const std::string& title, const std::string& author,
                   const std::string& coverBmpPath);

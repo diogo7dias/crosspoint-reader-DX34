@@ -87,7 +87,7 @@ bool RecentBooksStore::pruneMissing() {
 }
 
 void RecentBooksStore::addBook(const std::string& path, const std::string& title, const std::string& author,
-                               const std::string& coverBmpPath) {
+                               const std::string& coverBmpPath, bool deferPersist) {
   // Note: upstream PR #1959 also calls pruneMissing() here so a new add
   // can't evict a valid book when MAX_RECENT_BOOKS is reached by a slot
   // that's actually a deleted file. Skipped on DX34 because addBook is
@@ -125,7 +125,11 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
 
   dedupeRecentBooks(recentBooks);
 
-  saveToFile();
+  if (deferPersist) {
+    saveToFileAsync();
+  } else {
+    saveToFile();
+  }
 }
 
 void RecentBooksStore::updateBook(const std::string& path, const std::string& title, const std::string& author,
