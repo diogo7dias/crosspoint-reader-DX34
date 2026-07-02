@@ -42,7 +42,7 @@ Image-decode robustness backports (user picked these after the perf batch). Buil
 
 *Device-validate: open EPUBs with (a) low-color/1-4-bit PNG images (icons, diagrams, scanned mono pages) — should render properly now, not garbage; (b) an SVG-wrapped cover/image — should appear; (c) an FB2-origin EPUB with extension-less images — should render. Then merge the whole stack (images-crosspoint-parity → perf-backports → image-decode-fixes) to main + release.*
 
-## In flight — branch `feat/pt-hyphenation` (off `main`, NOT merged)
+## MERGED to main (pending release) — `feat/pt-hyphenation`
 
 - **`527818a1` #2209 Portuguese hyphenation.** The Liang framework was already present (English-only). Added the generated `hyph-pt` trie (~2.2 KB flash, 0 RAM) + registered a Portuguese hyphenator; primary-tag normalisation maps pt/pt-PT/pt-BR automatically (no `Hyphenator.cpp` change — fork has no ISO 639-2 table). Registered at Liang 2/2 (upstream default; denser hyphenation = tighter justification on the narrow column). **Validated via the standalone eval tool: precision/recall/F1 = 99.39% across 5000 real PT words.** Firmware Flash 81.4%, test_host 284/284. *Device-validate: open a Portuguese (pt/pt-PT) EPUB with justified text — long words should now break with hyphens at line ends; confirm no odd breaks.*
 
