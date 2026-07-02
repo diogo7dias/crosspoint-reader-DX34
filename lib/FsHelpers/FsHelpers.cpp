@@ -1,6 +1,7 @@
 #include "FsHelpers.h"
 
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace {
@@ -65,4 +66,20 @@ std::string FsHelpers::normalisePath(const std::string& path) {
   }
 
   return result;
+}
+
+std::string FsHelpers::detectImageExtFromMagic(const uint8_t* data, const size_t len) {
+  if (data == nullptr) {
+    return "";
+  }
+  // JPEG: FF D8 FF. PNG: 89 50 4E 47 0D 0A 1A 0A. Only formats the reader decodes.
+  static constexpr uint8_t JPEG_SIG[] = {0xFF, 0xD8, 0xFF};
+  static constexpr uint8_t PNG_SIG[] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+  if (len >= sizeof(JPEG_SIG) && memcmp(data, JPEG_SIG, sizeof(JPEG_SIG)) == 0) {
+    return ".jpg";
+  }
+  if (len >= sizeof(PNG_SIG) && memcmp(data, PNG_SIG, sizeof(PNG_SIG)) == 0) {
+    return ".png";
+  }
+  return "";
 }
