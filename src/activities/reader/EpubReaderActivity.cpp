@@ -2460,11 +2460,27 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
 
   const bool pageHasImages = page.hasImages();
 
+  // Periodic ghost-clear / DC-balance cadence, shared by X3 and X4. Most page
+  // turns use the fast differential (snappy, no flash); every N pages (N =
+  // getRefreshFrequency, default 15) and on image pages we promote to a clean
+  // refresh. This is exactly CrossPoint's reading policy (fast turns + periodic
+  // complete pass); our X3 driver + LUTs are byte-identical to freeink-sdk's.
+  //
+  // The clean-refresh MODE differs by panel because the panel technology does:
+  //   X4 (SSD1677) -> HALF: a fast full-ish refresh clears it and stays snappy.
+  //   X3 (UC8253)  -> FULL: the UC8253 partial waveforms (fast/half) are not
+  //     DC-balanced — each leaves a small net charge that accumulates over a
+  //     reading session and blooms the page into gray noise. Only a COMPLETE
+  //     waveform (FULL) DC-balances and clears the panel. Doing partial-only
+  //     refreshes with no periodic complete pass was the whole bug (see
+  //     freeink-sdk README, "DC balance — schedule periodic complete waveforms").
+  const bool isX3Panel = renderer.getPanelWidth() == 528;
+
   if (pagesUntilFullRefresh <= 1 || pageHasImages) {
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    renderer.displayBuffer(isX3Panel ? HalDisplay::FULL_REFRESH : HalDisplay::HALF_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else {
-    renderer.displayBuffer();
+    renderer.displayBuffer();  // fast differential
     pagesUntilFullRefresh--;
   }
 
