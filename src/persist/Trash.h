@@ -13,7 +13,7 @@ constexpr size_t kDefaultCap = 50;
 
 /// Move `path` into a new trash slot. Returns true on success.
 ///
-/// If `path` points to a book file (epub/xtc/txt/md), the book's cache
+/// If `path` points to a book file (epub/txt/md), the book's cache
 /// dir and its `_QUOTES.txt` sidecar are also moved into the same slot.
 /// On failure (partial moves), the slot directory is left in place so
 /// the user can inspect it manually; nothing is ever hard-deleted.

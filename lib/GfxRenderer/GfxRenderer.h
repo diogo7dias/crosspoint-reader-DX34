@@ -78,6 +78,18 @@ class GfxRenderer {
   // recording to the (non-const) FontCacheManager.
   mutable FontCacheManager* fontCacheManager_ = nullptr;
 
+  // Tiled grayscale strip target. When active, drawPixel()/clearScreen()
+  // operate on a caller-owned scratch holding one horizontal band of physical
+  // rows [_stripY0, _stripY0 + _stripRows) (panelWidthBytes wide) instead of
+  // the shared framebuffer, clipping pixels outside the band. Lets grayscale
+  // planes render band-by-band straight to the controller without destroying
+  // the BW framebuffer (no storeBwBuffer). Mutable because the render path is
+  // const. See beginStripTarget()/endStripTarget().
+  mutable uint8_t* _stripBuf = nullptr;
+  mutable int _stripY0 = 0;
+  mutable int _stripRows = 0;
+  mutable bool _stripActive = false;
+
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
   void freeBwBufferChunks();
@@ -120,6 +132,26 @@ class GfxRenderer {
   uint16_t getPanelWidth() const { return panelWidth; }
   uint16_t getPanelHeight() const { return panelHeight; }
   uint16_t getPanelWidthBytes() const { return panelWidthBytes; }
+
+  // Tiled grayscale strip target. While active, drawPixel() and clearScreen()
+  // operate on `scratch` (panelWidthBytes * stripRows bytes, holding physical
+  // rows [stripY0, stripY0 + stripRows)) instead of the framebuffer; pixels
+  // whose physical row falls outside the band are clipped. The clip is applied
+  // after the orientation rotate, so it is orientation-agnostic.
+  void beginStripTarget(uint8_t* scratch, int stripY0, int stripRows) const;
+  void endStripTarget() const;
+
+  // Band culling for tiled grayscale. Takes a glyph bounding box in logical
+  // screen coords and returns false only when a strip is active AND the box's
+  // physical y-extent lies entirely outside the active band. True when no strip.
+  bool glyphIntersectsStrip(int x0, int y0, int x1, int y1) const;
+
+  // Active pixel-write target for raw writers (DirectPixelWriter) that bypass
+  // drawPixel. When a strip target is active these return the band scratch plus
+  // its physical-row origin and extent; otherwise the full framebuffer.
+  uint8_t* getWriteTarget() const { return _stripActive ? _stripBuf : frameBuffer; }
+  int getWriteOriginY() const { return _stripActive ? _stripY0 : 0; }
+  int getWriteRows() const { return _stripActive ? _stripRows : panelHeight; }
 
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
@@ -206,6 +238,10 @@ class GfxRenderer {
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
   void displayGrayBuffer(const uint8_t* lut = nullptr, bool factoryMode = false) const;
+  // OEM grayscale preconditioning settle (preBwMid). Call after the B/W base is
+  // displayed and before writing grayscale planes so the gc nudge paints clean
+  // grey on the X3. No-op on the X4.
+  void preconditionGrayscale() const;
 
   // Two-pass grayscale render. drawFn is called twice: once with the LSB render mode set
   // (writes BW RAM plane), then with the MSB mode set (writes RED RAM plane). The method
@@ -213,6 +249,23 @@ class GfxRenderer {
   // displayGrayBuffer, and resets renderMode to BW on completion. storeBwBuffer /
   // restoreBwBuffer remain the caller's responsibility.
   void renderGrayscale(GrayscaleMode mode, const std::function<void()>& drawFn);
+
+  // Tiled grayscale: render each plane band-by-band into an ~8 KB scratch and
+  // stream each band straight to controller RAM (writeGrayscalePlaneStrip),
+  // leaving the BW framebuffer intact (no storeBwBuffer). drawFn is called once
+  // per band per plane; the strip target clips it to the band. Requires the BW
+  // base frame to already be displayed. No-op (returns false) when the panel
+  // has no strip support or the scratch cannot be allocated. This is the tiled
+  // analogue of renderGrayscale(Differential, drawFn) for the X3.
+  bool renderGrayscaleTiled(const std::function<void()>& drawFn);
+
+  // Tiled grayscale (X4 setRamArea / X3 PTL): stream one band of a plane from
+  // `scratch` (panelWidthBytes * numRows, physical rows [yStart, yStart+numRows))
+  // straight to controller RAM. On the X3 the band is polarity-flipped (^0xFF)
+  // to match copyGrayscaleLsbBuffers. supportsStripGrayscale() gates use.
+  void writeGrayscalePlaneStrip(bool lsbPlane, uint8_t* scratch, int yStart, int numRows) const;
+  bool supportsStripGrayscale() const;
+
   bool storeBwBuffer();    // Returns true if buffer was stored successfully
   void restoreBwBuffer();  // Restore and free the stored buffer
   void cleanupGrayscaleWithFrameBuffer() const;

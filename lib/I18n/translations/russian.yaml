@@ -30,7 +30,6 @@ STR_FONT_LOAD_FAILED: "Шрифт слишком большой — сохран
 STR_EMPTY_FILE: "Пустой файл"
 STR_OUT_OF_BOUNDS: "Выход за пределы"
 STR_LOADING: "Загрузка..."
-STR_LOAD_XTC_FAILED: "Не удалось загрузить XTC"
 STR_LOAD_TXT_FAILED: "Не удалось загрузить TXT"
 STR_LOAD_EPUB_FAILED: "Не удалось загрузить EPUB"
 STR_SD_CARD_ERROR: "Ошибка SD-карты"

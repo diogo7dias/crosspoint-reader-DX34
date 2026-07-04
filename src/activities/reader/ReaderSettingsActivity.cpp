@@ -175,8 +175,7 @@ void ReaderSettingsActivity::buildSettingsList() {
   // --- Helper: conditionally push a reader setting, applying filters ---
   auto pushReader = [&](ReaderSettingInfo&& s) {
     // Skip entries never shown in the in-reader settings screen
-    if (s.valuePtr == &CrossPointSettings::orientation || s.valuePtr == &CrossPointSettings::debugBorders ||
-        s.valuePtr == &CrossPointSettings::textAntiAliasing) {
+    if (s.valuePtr == &CrossPointSettings::orientation || s.valuePtr == &CrossPointSettings::debugBorders) {
       return;
     }
     if (txt && s.valuePtr == &CrossPointSettings::readerStyleMode) {

@@ -17,25 +17,36 @@
  * 3. Fetch remote progress
  * 4. Show comparison and options (Apply/Upload)
  * 5. Apply or upload progress
+ *
+ * Runs with the book RELEASED: the caller pre-computes the local KOReader
+ * position + chapter name and frees Epub/Section before entering, so the TLS
+ * handshake has heap to work with (an open book starves the WiFi driver's
+ * DMA buffers — upstream releases the epub here for the same reason). The
+ * epub is reloaded on demand only AFTER the network fetch, for mapping the
+ * remote position back to a local page.
  */
 class KOReaderSyncActivity final : public ActivityWithSubactivity {
  public:
   using OnCancelCallback = std::function<void()>;
-  using OnSyncCompleteCallback = std::function<void(int newSpineIndex, int newPageNumber)>;
+  // remoteAnchor: HTML id embedded in the remote XPath (may be empty). The
+  // reader floors the percentage-estimated page to this anchor's page so a
+  // position just past a chapter heading never lands in the previous chapter.
+  using OnSyncCompleteCallback =
+      std::function<void(int newSpineIndex, int newPageNumber, const std::string& remoteAnchor)>;
 
-  explicit KOReaderSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                const std::shared_ptr<Epub>& epub, const std::string& epubPath, int currentSpineIndex,
-                                int currentPage, int totalPagesInSpine, OnCancelCallback onCancel,
+  explicit KOReaderSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& epubPath,
+                                int currentSpineIndex, int currentPage, int totalPagesInSpine,
+                                KOReaderPosition localKoPos, std::string localChapterName, OnCancelCallback onCancel,
                                 OnSyncCompleteCallback onSyncComplete)
       : ActivityWithSubactivity("KOReaderSync", renderer, mappedInput),
-        epub(epub),
         epubPath(epubPath),
         currentSpineIndex(currentSpineIndex),
         currentPage(currentPage),
         totalPagesInSpine(totalPagesInSpine),
         remoteProgress{},
         remotePosition{},
-        localProgress{},
+        localProgress(std::move(localKoPos)),
+        localChapterName(std::move(localChapterName)),
         onCancel(std::move(onCancel)),
         onSyncComplete(std::move(onSyncComplete)) {}
 
@@ -58,6 +69,8 @@ class KOReaderSyncActivity final : public ActivityWithSubactivity {
     NO_CREDENTIALS
   };
 
+  // Loaded on demand AFTER the network fetch (see class comment); null while
+  // the TLS handshake runs.
   std::shared_ptr<Epub> epub;
   std::string epubPath;
   int currentSpineIndex;
@@ -73,8 +86,11 @@ class KOReaderSyncActivity final : public ActivityWithSubactivity {
   KOReaderProgress remoteProgress;
   CrossPointPosition remotePosition;
 
-  // Local progress as KOReader format (for display)
+  // Local progress as KOReader format, pre-computed by the caller while the
+  // epub was still loaded (for display + upload).
   KOReaderPosition localProgress;
+  // Local chapter title, pre-computed by the caller (empty = no TOC entry).
+  std::string localChapterName;
 
   // Selection in result screen (0=Apply, 1=Upload)
   int selectedOption = 0;
@@ -83,6 +99,7 @@ class KOReaderSyncActivity final : public ActivityWithSubactivity {
   OnSyncCompleteCallback onSyncComplete;
 
   void onWifiSelectionComplete(bool success);
+  bool ensureEpubLoaded();
   void performSync();
   void performUpload();
 };

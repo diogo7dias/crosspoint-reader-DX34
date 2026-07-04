@@ -12,7 +12,6 @@
 #include <MemoryPolicy.h>
 #include <Txt.h>
 #include <WiFi.h>
-#include <Xtc.h>
 #include <esp_heap_caps.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
@@ -95,9 +94,6 @@ std::unique_ptr<crosspoint::ws::WsUploadSession> g_wsUploadSession;
 std::string bookCachePath(const std::string& filePath) {
   if (StringUtils::checkFileExtension(filePath, ".epub")) {
     return BookFingerprint::cacheDirName("epub", filePath, Paths::kDataDir);
-  }
-  if (StringUtils::checkFileExtension(filePath, ".xtc") || StringUtils::checkFileExtension(filePath, ".xtch")) {
-    return BookFingerprint::cacheDirName("xtc", filePath, Paths::kDataDir);
   }
   if (StringUtils::checkFileExtension(filePath, ".txt") || StringUtils::checkFileExtension(filePath, ".md")) {
     return BookFingerprint::cacheDirName("txt", filePath, Paths::kDataDir);

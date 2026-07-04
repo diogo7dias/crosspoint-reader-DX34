@@ -4,7 +4,6 @@
 #include <HalStorage.h>
 #include <Serialization.h>
 #include <Txt.h>
-#include <Xtc.h>
 
 #include "Paths.h"
 #include "StringUtils.h"
@@ -63,39 +62,6 @@ std::optional<int> getEpubPercent(const std::string& path) {
 
   const int percent = static_cast<int>(epub.calculateProgress(safeSpineIndex, chapterProgress) * 100.0f + 0.5f);
   return clampValue(percent, 0, 100);
-}
-
-std::optional<int> getXtcPercent(const std::string& path) {
-  Xtc xtc(path, Paths::kDataDir);
-  if (!xtc.load()) {
-    return std::nullopt;
-  }
-
-  FsFile f;
-  const std::string xtcProgPath = xtc.getCachePath() + "/progress.bin";
-  const std::string xtcBakPath = xtc.getCachePath() + "/progress.bin.bak";
-  bool xtcOpened = Storage.openFileForRead("BPR", xtcProgPath, f);
-  if (!xtcOpened && Storage.exists(xtcBakPath.c_str())) {
-    xtcOpened = Storage.openFileForRead("BPR", xtcBakPath, f);
-  }
-  if (!xtcOpened) {
-    return std::nullopt;
-  }
-
-  uint8_t data[4];
-  if (f.read(data, sizeof(data)) != sizeof(data)) {
-    f.close();
-    return std::nullopt;
-  }
-  f.close();
-
-  const uint32_t currentPage = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
-  const uint32_t pageCount = xtc.getPageCount();
-  if (pageCount == 0) {
-    return std::nullopt;
-  }
-  const uint32_t safePage = (currentPage >= pageCount) ? (pageCount - 1) : currentPage;
-  return clampValue(static_cast<int>(xtc.calculateProgress(safePage)), 0, 100);
 }
 
 std::optional<int> getTxtPercent(const std::string& path) {
@@ -170,9 +136,6 @@ namespace BookProgress {
 std::optional<int> getPercent(const std::string& path) {
   if (StringUtils::checkFileExtension(path, ".epub")) {
     return getEpubPercent(path);
-  }
-  if (StringUtils::checkFileExtension(path, ".xtc") || StringUtils::checkFileExtension(path, ".xtch")) {
-    return getXtcPercent(path);
   }
   if (StringUtils::checkFileExtension(path, ".txt") || StringUtils::checkFileExtension(path, ".md")) {
     return getTxtPercent(path);

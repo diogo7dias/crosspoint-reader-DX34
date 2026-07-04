@@ -95,7 +95,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   LOG_DBG("HTTP", "Content-Length: %zu", contentLength);
 
   // Reject absurdly large downloads that would exhaust SD or run forever.
-  // 100 MB is generous for any supported file type (epub, bmp, xtc).
+  // 100 MB is generous for any supported file type (epub, bmp).
   constexpr size_t kMaxDownloadSize = 100 * 1024 * 1024;
   if (contentLength > kMaxDownloadSize) {
     LOG_ERR("HTTP", "Content-Length %zu exceeds max %zu", contentLength, kMaxDownloadSize);

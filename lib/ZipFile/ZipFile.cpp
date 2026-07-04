@@ -14,28 +14,25 @@
 #endif
 
 namespace {
-// Single static read buffer for both stored-method and DEFLATE paths in
+// Shared chunk size for both stored-method and DEFLATE paths in
 // readFileToStream. Sized at 4 KB — every existing caller passes
 // chunkSize <= 4 KB (Epub.cpp / Section.cpp / parsers). Callers that
-// would pass more are clamped at the use site. See the BSS rationale
+// would pass more are clamped at the use site. See the heap rationale
 // comment inside the DEFLATE branch.
 constexpr size_t kZipReadChunkBytes = 4096;
-uint8_t zipReadChunkBuffer[kZipReadChunkBytes];
-
-// Shared static decompressor used by readFileToStream's DEFLATE branch
-// and inflateOneShot (the readFileToMemory path). Sharing one struct is
-// safe because ZIP decompression is single-threaded — the main loop
-// serialises every caller — and each entry memsets + tinfl_init's the
-// struct before use, so residual state from a prior call is wiped.
-tinfl_decompressor staticInflator;
 }  // namespace
 
 bool inflateOneShot(const uint8_t* inputBuf, const size_t deflatedSize, uint8_t* outputBuf, const size_t inflatedSize) {
-  // Reuse the shared BSS decompressor instead of allocating ~11 KB on
-  // the heap. Same single-threaded justification as the staticInflator
-  // declaration above. The memset+tinfl_init at the top of every entry
-  // wipes any residual state from the previous caller.
-  tinfl_decompressor* const inflator = &staticInflator;
+  // Transient ~11 KB decompressor state, allocated per call (upstream's
+  // pattern — see the heap rationale in readFileToStream's DEFLATE branch).
+  // Shed-aware: a short block sheds the font-glyph cache once and retries.
+  auto inflatorOwner = crosspoint::mem::CMallocPtr<tinfl_decompressor>(
+      static_cast<tinfl_decompressor*>(crosspoint::mem::tryMallocShed(sizeof(tinfl_decompressor))));  // alloc-ok
+  if (!inflatorOwner) {
+    LOG_ERR("ZIP", "Failed to allocate inflator (%zu bytes)", sizeof(tinfl_decompressor));
+    return false;
+  }
+  tinfl_decompressor* const inflator = inflatorOwner.get();
   memset(inflator, 0, sizeof(*inflator));
   tinfl_init(inflator);
 
@@ -538,15 +535,22 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   const auto inflatedDataSize = fileStat.uncompressedSize;
 
   if (fileStat.method == MZ_NO_COMPRESSION) {
-    // no deflation, just read content. Use the shared static read buffer
-    // (see kZipReadChunkBytes below) — same justification as the inflator
-    // path: single-threaded, never re-entered, removes a 4 KB contiguous
-    // demand from the heap during section layout.
+    // no deflation, just read content. Transient read buffer, allocated per
+    // call (upstream's pattern; RAII frees it on every exit path).
     const size_t effectiveChunk = chunkSize > kZipReadChunkBytes ? kZipReadChunkBytes : chunkSize;
+    auto readBuf = crosspoint::mem::CMallocPtr<uint8_t>(
+        static_cast<uint8_t*>(crosspoint::mem::tryMallocShed(effectiveChunk)));  // alloc-ok
+    if (!readBuf) {
+      LOG_ERR("ZIP", "Failed to allocate stored-read buffer (%zu bytes)", effectiveChunk);
+      if (!wasOpen) {
+        close();
+      }
+      return false;
+    }
 
     size_t remaining = inflatedDataSize;
     while (remaining > 0) {
-      const size_t dataRead = file.read(zipReadChunkBuffer, remaining < effectiveChunk ? remaining : effectiveChunk);
+      const size_t dataRead = file.read(readBuf.get(), remaining < effectiveChunk ? remaining : effectiveChunk);
       if (dataRead == 0) {
 #ifdef ESP_PLATFORM
         LOG_DIAG("ZIP", "OOM/IO stored read: free=%u largest=%u min=%u remaining=%u", (unsigned)ESP.getFreeHeap(),
@@ -561,7 +565,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
         return false;
       }
 
-      if (out.write(zipReadChunkBuffer, dataRead) != dataRead) {
+      if (out.write(readBuf.get(), dataRead) != dataRead) {
         LOG_ERR("ZIP", "Failed to write all output bytes to stream");
         return false;
       }
@@ -575,31 +579,44 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
   }
 
   if (fileStat.method == MZ_DEFLATED) {
-    // BSS rationale (applies to outputBuffer here, and to staticInflator
-    // and zipReadChunkBuffer at file scope):
-    //
-    // The 32 KB sliding-window dictionary, the ~11 KB tinfl_decompressor
-    // struct, and the per-call file read buffer all used to come from
-    // malloc. Hardware capture 2026-04-24 caught the failure mode: user
-    // switches fonts mid-book, layout re-runs, largest free block has
-    // fragmented below 32 KB, malloc returns null, section build fails,
-    // user sees "Couldn't lay out this section (memory fragmented)".
-    //
-    // Reserving these as BSS (function-scope or file-scope statics) costs
-    // ~47 KB of permanent SRAM (~15% of the ESP32-C3's 320 KB) but
-    // removes every contiguous demand the EPUB-open path makes on the
-    // heap. ZIP decompression is single-threaded — the main loop
-    // serialises every caller — so sharing the statics across calls is
-    // safe without locking.
-    static uint8_t outputBuffer[TINFL_LZ_DICT_SIZE];
+    // Heap rationale: the 32 KB sliding-window dictionary, the ~11 KB
+    // tinfl_decompressor and the 4 KB read buffer were permanent BSS statics
+    // from 2026-04-24 (font-switch relayout could fragment the largest free
+    // block below 32 KB and fail the section build). That reservation cost
+    // ~47 KB of SRAM around the clock and starved every TLS handshake —
+    // KOSync could never connect (~37 KB total free at the settings screen
+    // vs the ~55 KB a handshake needs). Upstream allocates per call; this
+    // matches it, but through the shed-aware seam: on a short block the
+    // font-glyph cache (the usual fragmenter during reading) is shed once
+    // and the alloc retried, which covers the 2026-04-24 failure mode
+    // without the permanent tax. RAII frees all three on every exit path.
+    auto outputBufOwner = crosspoint::mem::CMallocPtr<uint8_t>(
+        static_cast<uint8_t*>(crosspoint::mem::tryMallocShed(TINFL_LZ_DICT_SIZE)));  // alloc-ok
+    auto inflatorOwner = crosspoint::mem::CMallocPtr<tinfl_decompressor>(
+        static_cast<tinfl_decompressor*>(crosspoint::mem::tryMallocShed(sizeof(tinfl_decompressor))));  // alloc-ok
+    const size_t effectiveChunk = chunkSize > kZipReadChunkBytes ? kZipReadChunkBytes : chunkSize;
+    auto readBufOwner = crosspoint::mem::CMallocPtr<uint8_t>(
+        static_cast<uint8_t*>(crosspoint::mem::tryMallocShed(effectiveChunk)));  // alloc-ok
+    if (!outputBufOwner || !inflatorOwner || !readBufOwner) {
+#ifdef ESP_PLATFORM
+      LOG_DIAG("ZIP", "OOM deflate buffers: free=%u largest=%u min=%u", (unsigned)ESP.getFreeHeap(),
+               (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)ESP.getMinFreeHeap());
+#else
+      LOG_ERR("ZIP", "Failed to allocate deflate buffers");
+#endif
+      if (!wasOpen) {
+        close();
+      }
+      return false;
+    }
+    uint8_t* const outputBuffer = outputBufOwner.get();
     memset(outputBuffer, 0, TINFL_LZ_DICT_SIZE);
 
-    tinfl_decompressor* const inflator = &staticInflator;
+    tinfl_decompressor* const inflator = inflatorOwner.get();
     memset(inflator, 0, sizeof(*inflator));
     tinfl_init(inflator);
 
-    const size_t effectiveChunk = chunkSize > kZipReadChunkBytes ? kZipReadChunkBytes : chunkSize;
-    uint8_t* const fileReadBuffer = zipReadChunkBuffer;
+    uint8_t* const fileReadBuffer = readBufOwner.get();
 
     size_t fileRemainingBytes = deflatedDataSize;
     size_t processedOutputBytes = 0;
@@ -646,8 +663,6 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
           if (!wasOpen) {
             close();
           }
-          // staticInflator + zipReadChunkBuffer + outputBuffer are static
-          // BSS — nothing to free here.
           return false;
         }
         // Update output position in buffer (with wraparound)

@@ -6,7 +6,6 @@
 #include <JsonSettingsIO.h>
 #include <Logging.h>
 #include <Serialization.h>
-#include <Xtc.h>
 
 #include <algorithm>
 #include <cctype>
@@ -346,13 +345,6 @@ RecentBook RecentBooksStore::getDataFromBook(std::string path) const {
     Epub epub(path, Paths::kDataDir);
     epub.load(false, true);
     return RecentBook{path, epub.getTitle(), epub.getAuthor(), epub.getThumbBmpPath()};
-  } else if (StringUtils::checkFileExtension(lastBookFileName, ".xtch") ||
-             StringUtils::checkFileExtension(lastBookFileName, ".xtc")) {
-    // Handle XTC file
-    Xtc xtc(path, Paths::kDataDir);
-    if (xtc.load()) {
-      return RecentBook{path, xtc.getTitle(), xtc.getAuthor(), xtc.getThumbBmpPath()};
-    }
   } else if (StringUtils::checkFileExtension(lastBookFileName, ".txt") ||
              StringUtils::checkFileExtension(lastBookFileName, ".md")) {
     return RecentBook{path, lastBookFileName, "", ""};

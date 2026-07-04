@@ -7,7 +7,7 @@
  *     that were scattered across EpubReaderActivity (9 call sites, 7-line dance
  *     at each site with easy-to-miss bookkeeping).
  *   - Format-neutral: Position carries {spineIndex, page, pageCount}; single-page
- *     formats (TXT/XTC) leave spineIndex=0, pageCount=1. Byte layout of
+ *     formats (TXT) leave spineIndex=0, pageCount=1. Byte layout of
  *     progress.bin lives in the Sink, not here.
  *   - Host-testable: IProgressSink is a pure virtual (prod writes SD via HalStorage,
  *     tests use an in-memory vector). No SdFat, no Arduino, no millis().
@@ -15,7 +15,7 @@
  *
  * Intentionally NOT wired into EpubReaderActivity in this stage. Stage 2 (next
  * PR) integrates behind READER_V2 gate with V1 parallel; stage 3 migrates
- * TxtReaderActivity + XtcReaderActivity which duplicate the same pattern.
+ * TxtReaderActivity which duplicates the same pattern.
  */
 #pragma once
 

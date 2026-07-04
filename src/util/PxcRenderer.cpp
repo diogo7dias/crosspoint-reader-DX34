@@ -43,7 +43,7 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::Gray
 
   const int width = static_cast<int>(pxcWidth);
   const int height = static_cast<int>(pxcHeight);
-  renderer.renderGrayscale(mode, [&]() {
+  auto decode = [&]() {
     file.seek(dataOffset);
     DirectPixelWriter pw;
     pw.init(renderer);
@@ -59,7 +59,18 @@ bool renderPxc(GfxRenderer& renderer, const std::string& path, GfxRenderer::Gray
     // Drawn into each plane so the overlay is baked into the grayscale frame
     // (fillRect/drawText are GRAY2-aware and invert polarity accordingly).
     if (overlay) overlay();
-  });
+  };
+
+  // X3 (UC8253): tiled strip grayscale — real 4-level grey without greying the
+  // whole panel. The decode re-runs per band (the strip target clips it), so the
+  // pxc is re-read a few times; fine for a one-shot wallpaper/cover/preview. The
+  // caller must have displayed the B/W silhouette base first. X4 keeps the
+  // full-frame path.
+  if (renderer.getPanelWidth() == 792) {
+    renderer.renderGrayscaleTiled(decode);
+  } else {
+    renderer.renderGrayscale(mode, decode);
+  }
 
   file.close();
   return true;

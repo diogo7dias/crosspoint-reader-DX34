@@ -6,7 +6,6 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <Txt.h>
-#include <Xtc.h>
 #include <esp_heap_caps.h>
 #include <esp_task_wdt.h>
 
@@ -302,22 +301,37 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const char* so
   }
   if (overlay) overlay();
 
-  // FAST_REFRESH for snappier sleep entry. Grayscale path below handles its
-  // own pre-flash (HALF for factory mode) so contrast on the final frame is
-  // not compromised when greyscale overlay runs.
-  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-
-  if (hasGreyscale) {
-    const auto mode =
-        SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
-    renderer.renderGrayscale(mode, [&]() {
-      bitmap.rewindToData();
-      renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
-      // Re-draw the overlay into each grayscale plane: the FAST_REFRESH frame
-      // above is wiped by the factory pre-flash, so without this the label /
-      // badge would vanish on greyscale wallpapers.
-      if (overlay) overlay();
-    });
+  // A plain B/W image gets a snappy FAST refresh. A greyscale image renders via
+  // the gc differential bank over a clean WHITE base (see renderPxcSleepScreen —
+  // the X3 has no grayscale factory LUT, so FactoryQuality would be invisible;
+  // the gc bank renders real 4-level grey on both panels). Clear the B/W draw
+  // from above, scrub white, then one gc pass that redraws the bitmap + overlay
+  // into the grayscale planes.
+  if (renderer.getPanelWidth() == 792) {
+    // X3: display the B/W cover with a clean FULL refresh; if the source has grey,
+    // the tiled strip path overlays real 4-level grey (stays crisp B/W otherwise).
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+    if (hasGreyscale) {
+      renderer.renderGrayscaleTiled([&]() {
+        bitmap.rewindToData();
+        renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
+        if (overlay) overlay();
+      });
+    }
+  } else {
+    // X4: original behavior, unchanged — FAST base then a 4-level grayscale pass
+    // for greyscale-source covers (factory pre-flash handles its own contrast,
+    // so the overlay is re-drawn into each grayscale plane below).
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    if (hasGreyscale) {
+      const auto mode =
+          SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
+      renderer.renderGrayscale(mode, [&]() {
+        bitmap.rewindToData();
+        renderer.drawBitmap(bitmap, x, y, drawWidth, drawHeight, cropX, cropY);
+        if (overlay) overlay();
+      });
+    }
   }
 
   renderer.setDarkMode(wasDarkMode);
@@ -341,23 +355,8 @@ void SleepActivity::renderCoverSleepScreen() const {
   std::string coverBmpPath;
   bool cropped = SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
 
-  // Check if the current book is XTC, TXT, or EPUB
-  if (StringUtils::checkFileExtension(APP_STATE.openEpubPath, ".xtc") ||
-      StringUtils::checkFileExtension(APP_STATE.openEpubPath, ".xtch")) {
-    // Handle XTC file
-    Xtc lastXtc(APP_STATE.openEpubPath, Paths::kDataDir);
-    if (!lastXtc.load()) {
-      LOG_ERR("SLP", "Failed to load last XTC");
-      return (this->*renderNoCoverSleepScreen)();
-    }
-
-    if (!lastXtc.generateCoverBmp()) {
-      LOG_ERR("SLP", "Failed to generate XTC cover bmp");
-      return (this->*renderNoCoverSleepScreen)();
-    }
-
-    coverBmpPath = lastXtc.getCoverBmpPath();
-  } else if (StringUtils::checkFileExtension(APP_STATE.openEpubPath, ".txt")) {
+  // Check if the current book is TXT or EPUB
+  if (StringUtils::checkFileExtension(APP_STATE.openEpubPath, ".txt")) {
     // Handle TXT file - looks for cover image in the same folder
     Txt lastTxt(APP_STATE.openEpubPath, Paths::kDataDir);
     if (!lastTxt.load()) {
@@ -407,12 +406,6 @@ void SleepActivity::renderCoverSleepScreen() const {
 }
 
 bool SleepActivity::renderPxcSleepScreen(const std::string& path, const char* sourceFilename) const {
-  // Sleep wallpapers cover the full screen with no overlay underneath, so
-  // Factory mode (with its pre-flash) gives the best image quality.
-  // Differential is the fallback when the user has the factory LUT off.
-  const auto mode =
-      SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
-
   // Overlays must be baked into the grayscale planes — drawing them after
   // renderGrayscale would push a stale plane buffer (reversed-looking image)
   // and a full-screen wallpaper would cover them anyway. The filename label
@@ -425,6 +418,25 @@ bool SleepActivity::renderPxcSleepScreen(const std::string& path, const char* so
     overlay = [this]() { drawSleepFavoriteBadge(renderer); };
   }
 
+  // X3 (UC8253) has no hardware grayscale LUT, so a grayscale wallpaper renders
+  // invisible/washed. Show a crisp B/W wallpaper: FULL flash to clean the panel,
+  // draw the wallpaper, HALF flash to show it. X3-only — the X4 path below is
+  // left exactly as it was.
+  if (renderer.getPanelWidth() == 792) {
+    // X3: draw the B/W silhouette, display it with a clean FULL refresh (clears
+    // the prior reader/home frame), then the tiled strip path paints it in real
+    // 4-level grey. Overlay baked into both the base and the grey planes.
+    if (!PxcRenderer::streamPxcAsBw(renderer, path)) return false;
+    if (overlay) overlay();
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+    return PxcRenderer::renderPxc(renderer, path, GfxRenderer::GrayscaleMode::Differential, overlay);
+  }
+
+  // X4 (SSD1677): original behavior, unchanged. Factory mode (with its pre-flash)
+  // gives the best image quality; Differential is the fallback when the factory
+  // LUT is off.
+  const auto mode =
+      SETTINGS.useFactoryLUT ? GfxRenderer::GrayscaleMode::FactoryQuality : GfxRenderer::GrayscaleMode::Differential;
   return PxcRenderer::renderPxc(renderer, path, mode, overlay);
 }
 

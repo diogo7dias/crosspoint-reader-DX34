@@ -157,12 +157,12 @@ void test_exit_force_flushes_and_clears_boldswap() {
 }
 
 void test_enter_skips_orientation_when_opted_out() {
-  // XTC path: applyOrientationOnEnter=false — pre-rendered, never orients on open.
+  // applyOrientationOnEnter=false: a pre-rendered reader that never orients on open.
   FakeSink sink;
   FakeEnv env;
   FakeDisplay display;
   ReaderSession s({sink, env, display},
-                  ReaderHooks{[] { return std::string("/b.xtc"); }, [] { return ReaderPosition{0, 0, 1}; }},
+                  ReaderHooks{[] { return std::string("/b.dat"); }, [] { return ReaderPosition{0, 0, 1}; }},
                   crosspoint::reader::ReaderProgressTracker::kDefaultDebounceMs, /*applyOrientationOnEnter=*/false);
   s.enter({0, 0, 1});
   TEST_ASSERT_EQUAL(0, display.orientationApplies);  // not applied

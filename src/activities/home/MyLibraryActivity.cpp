@@ -7,7 +7,6 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Txt.h>
-#include <Xtc.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -429,8 +428,7 @@ std::string MyLibraryActivity::getBasename(const std::string& path) {
 }
 
 bool MyLibraryActivity::isBookFile(const std::string& filename) {
-  return StringUtils::checkFileExtension(filename, ".epub") || StringUtils::checkFileExtension(filename, ".xtch") ||
-         StringUtils::checkFileExtension(filename, ".xtc") || StringUtils::checkFileExtension(filename, ".txt") ||
+  return StringUtils::checkFileExtension(filename, ".epub") || StringUtils::checkFileExtension(filename, ".txt") ||
          StringUtils::checkFileExtension(filename, ".md");
 }
 
@@ -1723,7 +1721,12 @@ void MyLibraryActivity::renderPxcImageView() {
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   nextRefreshMode = HalDisplay::FAST_REFRESH;
 
-  if (renderer.storeBwBuffer()) {
+  if (renderer.getPanelWidth() == 792) {
+    // X3: tiled strip grayscale (renderPxc runs it internally; it streams
+    // band-by-band and re-syncs from the live BW framebuffer, so no full-frame
+    // storeBwBuffer save/restore is needed).
+    PxcRenderer::renderPxc(renderer, selectedFilePath, GfxRenderer::GrayscaleMode::Differential);
+  } else if (renderer.storeBwBuffer()) {
     PxcRenderer::renderPxc(renderer, selectedFilePath, GfxRenderer::GrayscaleMode::Differential);
     renderer.restoreBwBuffer();
   }

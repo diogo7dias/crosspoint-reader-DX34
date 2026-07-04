@@ -5,13 +5,13 @@
  * Owns the progress observe→debounce→flush orchestration (via the host-tested
  * ReaderProgressTracker) and the onEnter skeleton (refresh decision, orientation,
  * bold-swap, recent-book registration) that EpubReaderActivity / TxtReaderActivity
- * / XtcReaderActivity each hand-rolled. The reader supplies its content model
+ * each hand-rolled. The reader supplies its content model
  * through ReaderHooks; every hardware/global dependency is behind a port, so the
  * whole class is host-compilable and the orchestration is host-testable with
  * in-memory fakes (no GfxRenderer, SETTINGS, RECENT_BOOKS, or millis() here).
  *
  * Deliberately does NOT own: the orientation/render-mode toggles (real per-reader
- * nuance — Txt re-lays-out, Xtc is pre-rendered, Epub differs), section/page
+ * nuance — Txt re-lays-out, Epub differs), section/page
  * loading, footnotes, highlight, draw, or the deferred-action queue (per-reader
  * DeferredActionQueue, RFC #167). Those stay in the activity; toggles compose
  * progress() for their flush/seed.
@@ -69,8 +69,7 @@ class ReaderSession {
   };
 
   // applyOrientationOnEnter: Epub/Txt re-apply SETTINGS.orientation to the
-  // renderer on enter; the pre-rendered XTC reader does not (false) — its bitmaps
-  // are fixed and it never applied orientation on open.
+  // renderer on enter.
   ReaderSession(Ports ports, ReaderHooks hooks, uint32_t debounceMs = ReaderProgressTracker::kDefaultDebounceMs,
                 bool applyOrientationOnEnter = true)
       : env_(ports.env),

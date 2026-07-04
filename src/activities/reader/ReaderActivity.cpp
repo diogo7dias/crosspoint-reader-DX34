@@ -16,8 +16,6 @@
 #include "ReadingThemeStore.h"
 #include "Txt.h"
 #include "TxtReaderActivity.h"
-#include "Xtc.h"
-#include "XtcReaderActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
 #include "util/StringUtils.h"
 #include "util/TransitionFeedback.h"
@@ -28,10 +26,6 @@ std::string ReaderActivity::extractFolderPath(const std::string& filePath) {
     return "/";
   }
   return filePath.substr(0, lastSlash);
-}
-
-bool ReaderActivity::isXtcFile(const std::string& path) {
-  return StringUtils::checkFileExtension(path, ".xtc") || StringUtils::checkFileExtension(path, ".xtch");
 }
 
 bool ReaderActivity::isTxtFile(const std::string& path) {
@@ -84,25 +78,6 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
   return nullptr;
 }
 
-std::unique_ptr<Xtc> ReaderActivity::loadXtc(const std::string& path) {
-  if (!Storage.exists(path.c_str())) {
-    LOG_ERR("READER", "File does not exist: %s", path.c_str());
-    return nullptr;
-  }
-
-  auto xtc = std::unique_ptr<Xtc>(new (std::nothrow) Xtc(path, Paths::kDataDir));
-  if (!xtc) {
-    LOG_ERR("READER", "OOM new Xtc");
-    return nullptr;
-  }
-  if (xtc->load()) {
-    return xtc;
-  }
-
-  LOG_ERR("READER", "Failed to load XTC");
-  return nullptr;
-}
-
 std::unique_ptr<Txt> ReaderActivity::loadTxt(const std::string& path) {
   if (!Storage.exists(path.c_str())) {
     LOG_ERR("READER", "File does not exist: %s", path.c_str());
@@ -142,16 +117,6 @@ void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
       [this](const std::string& path) { openBookPath(path); }));
 }
 
-void ReaderActivity::onGoToXtcReader(std::unique_ptr<Xtc> xtc) {
-  const auto xtcPath = xtc->getPath();
-  ReadingThemeStore::loadBookSettingsIntoCurrent(xtc->getCachePath());
-  currentBookPath = xtcPath;
-  exitActivity();
-  enterNewActivity(new (std::nothrow) XtcReaderActivity(
-      renderer, mappedInput, std::move(xtc), [this, xtcPath] { goToLibrary(xtcPath); }, [this] { onGoBack(); },
-      [this](const std::string& path) { openBookPath(path); }));
-}
-
 void ReaderActivity::onGoToTxtReader(std::unique_ptr<Txt> txt) {
   const auto txtPath = txt->getPath();
   ReadingThemeStore::loadBookSettingsIntoCurrent(txt->getCachePath());
@@ -183,18 +148,6 @@ void ReaderActivity::openBookPath(const std::string& bookPath) {
   TransitionFeedback::resetStacking();
   TransitionFeedback::show(renderer, tr(STR_OPENING_BOOK));
   currentBookPath = bookPath;
-
-  if (isXtcFile(bookPath)) {
-    auto xtc = loadXtc(bookPath);
-    if (xtc) {
-      TransitionFeedback::maybeShowStillWorkingToast(renderer);
-      onGoToXtcReader(std::move(xtc));
-    } else {
-      exitActivity();
-      enterNewActivity(new (std::nothrow) FullScreenMessageActivity(renderer, mappedInput, tr(STR_LOAD_XTC_FAILED)));
-    }
-    return;
-  }
 
   if (isQuotesFile(bookPath)) {
     exitActivity();

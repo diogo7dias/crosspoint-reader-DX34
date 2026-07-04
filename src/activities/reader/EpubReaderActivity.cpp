@@ -31,6 +31,7 @@
 #include "MappedInputManager.h"
 #include "MemoryPolicy.h"
 #include "QuotesViewerActivity.h"
+#include "ReaderActivity.h"
 #include "ReaderCommon.h"
 #include "ReaderInkCentering.h"
 #include "ReaderLayoutSafety.h"
@@ -341,6 +342,34 @@ void EpubReaderActivity::onExit() {
   epub.reset();
   layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
   invalidateStatusBarCaches();
+}
+
+void EpubReaderActivity::reloadEpubAfterSync(const std::string& path) {
+  if (epub) {
+    return;
+  }
+  // Mirror of the load essentials the first entry runs (ReaderActivity::
+  // loadEpub + the onEnter follow-ups). The book was released so the KOReader
+  // sync TLS handshake had heap; the network is done, take it all back.
+  auto reloaded = ReaderActivity::loadEpub(path);
+  if (!reloaded) {
+    LOG_ERR("ERS", "epub reload after sync failed (free=%u largest=%u) — returning home", (unsigned)ESP.getFreeHeap(),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    if (onGoHome) onGoHome();
+    return;
+  }
+  {
+    RenderLock lock(*this);
+    epub = std::move(reloaded);
+  }
+  if (SETTINGS.readerStyleMode != CrossPointSettings::READER_STYLE_USER) {
+    if (!epub->ensureCssCache(nullptr)) {
+      LOG_ERR("EPUB", "CSS cache reload failed — book renders without CSS");
+    }
+  }
+  epub->setupCacheDir();
+  EpdFontFamily::setReaderBoldSwapEnabled(RECENT_BOOKS.getBoldSwap(epub->getPath()));
+  layoutHeapAnchor_ = crosspoint::layout::LayoutArena::create(kLayoutHeapAnchorBytes);
 }
 
 void EpubReaderActivity::invalidateStatusBarCaches() { statusBar_.invalidateTitleCaches(); }
@@ -1214,25 +1243,68 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::SYNC: {
-      if (KOREADER_STORE.hasCredentials()) {
+      if (KOREADER_STORE.hasCredentials() && epub) {
         const int currentPage = section ? section->currentPage : 0;
         const int totalPages = section ? section->pageCount : 0;
+
+        // Pre-compute everything that needs the epub while it is still in
+        // RAM — the sync activity runs with the book RELEASED (below).
+        // toKOReader streams the chapter XHTML and emits a real element XPath
+        // with character offset (CrossInk's resolver), so the receiving device
+        // can find the exact text position regardless of its page layout.
+        const CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPages};
+        KOReaderPosition localKoPos = ProgressMapper::toKOReader(epub, localPos);
+        const int tocIdx = epub->getTocIndexForSpineIndex(currentSpineIndex);
+        std::string localChapterName = (tocIdx >= 0) ? epub->getTocItem(tocIdx).title : "";
+        const std::string epubPath = epub->getPath();
+
+        // Persist the position so a cancel/crash resumes at the right page.
+        saveProgress(currentSpineIndex, currentPage, totalPages);
+
         exitActivity();
+
+        // Release Epub + Section + the 24KB layout anchor before the sync
+        // activity runs: the TLS handshake + WiFi driver need DMA-capable
+        // heap that an open book leaves no room for (in-book capture:
+        // free=44KB, the WiFi driver's 10.4KB buffer alloc fails → sync
+        // always errored). Upstream releases the epub here for the same
+        // reason. Drain MUST complete before the resets close SD handles
+        // (SPI-mutex race, same rule as onExit).
+        if (section) nextPageNumber = section->currentPage;
+        clearPageCache();
+        ::crosspoint::persist::AsyncWriter::instance().drainBlocking();
+        {
+          RenderLock lock(*this);
+          section.reset();
+          epub.reset();
+        }
+        layoutHeapAnchor_ = crosspoint::layout::LayoutArena();
+        LOG_INF("ERS", "epub released for sync: free=%u largest=%u", (unsigned)ESP.getFreeHeap(),
+                (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+
         enterNewActivity(new (std::nothrow) KOReaderSyncActivity(
-            renderer, mappedInput, epub, epub->getPath(), currentSpineIndex, currentPage, totalPages,
-            [this]() {
-              // On cancel - defer exit to avoid use-after-free
+            renderer, mappedInput, epubPath, currentSpineIndex, currentPage, totalPages, std::move(localKoPos),
+            std::move(localChapterName),
+            [this, epubPath]() {
+              // On cancel - reload the released book, defer exit (use-after-free)
+              reloadEpubAfterSync(epubPath);
               pendingSubactivityExit = true;
             },
-            [this](int newSpineIndex, int newPage) {
-              // On sync complete - update position and defer exit
-              if (currentSpineIndex != newSpineIndex || (section && section->currentPage != newPage)) {
+            [this, epubPath](int newSpineIndex, int newPage, const std::string& remoteAnchor) {
+              // On sync complete - reload the released book at the new position
+              reloadEpubAfterSync(epubPath);
+              LOG_DIAG("KOSyncApply", "spine %d page %d -> spine %d page %d anchor='%s'", currentSpineIndex,
+                       nextPageNumber, newSpineIndex, newPage, remoteAnchor.c_str());
+              if (currentSpineIndex != newSpineIndex || nextPageNumber != newPage) {
                 TransitionFeedback::show(renderer, tr(STR_LOADING));
                 currentSpineIndex = newSpineIndex;
                 nextPageNumber = newPage;
                 clearPageCache();
-                section.reset();
               }
+              // Floor applied when the section rebuilds (see ensureSectionLoaded):
+              // the estimated page can round to just before the anchor's chapter
+              // heading, which reads as landing in the previous chapter.
+              pendingSyncAnchorFloor_ = remoteAnchor;
               pendingSubactivityExit = true;
             }));
       }
@@ -1505,6 +1577,11 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
   // Apply any pending cross-section navigation now that we know the new page count.
   if (nextPageNumber == UINT16_MAX) {
     section->currentPage = section->pageCount - 1;
+  } else if (nextPageNumber >= section->pageCount) {
+    // Estimated page (e.g. KOReader-sync Apply into a different chapter whose
+    // page count wasn't known at estimate time) can exceed the rebuilt
+    // section — clamp to the last page instead of walking off the end.
+    section->currentPage = section->pageCount > 0 ? section->pageCount - 1 : 0;
   } else {
     section->currentPage = nextPageNumber;
   }
@@ -1526,6 +1603,22 @@ bool EpubReaderActivity::ensureSectionLoaded(const uint16_t viewportWidth, const
       section->currentPage = anchorPage;
     }
     pendingAnchor.clear();
+  }
+
+  // KOReader-sync Apply: the percentage-estimated page can round to just
+  // BEFORE the remote position's chapter heading (shared spine files hold
+  // several chapters), which reads as landing in the wrong chapter. The
+  // remote XPath carries the nearest anchor at-or-before the real position —
+  // never land before it. Unlike pendingAnchor above this is a FLOOR, not a
+  // jump: when the estimate is already past the anchor it stands.
+  if (!pendingSyncAnchorFloor_.empty()) {
+    const int anchorPage = section->getPageForAnchor(pendingSyncAnchorFloor_);
+    if (anchorPage > section->currentPage && anchorPage < section->pageCount) {
+      LOG_DIAG("KOSyncApply", "anchor floor '%s': page %d -> %d", pendingSyncAnchorFloor_.c_str(),
+               section->currentPage, anchorPage);
+      section->currentPage = anchorPage;
+    }
+    pendingSyncAnchorFloor_.clear();
   }
 
   // One more chance to blink "Opening book..." before section-init dismiss — catches slow
@@ -2460,40 +2553,66 @@ bool EpubReaderActivity::renderContents(const Page& page, const int orientedMarg
 
   const bool pageHasImages = page.hasImages();
 
-  // Page-turn refresh cadence — identical on X3 and X4 (user request: run the
-  // X3 on the exact X4 path). Fast differential for most turns, a HALF clear
-  // every N pages (getRefreshFrequency) and on image pages. No X3 special-case.
-  if (pagesUntilFullRefresh <= 1 || pageHasImages) {
+  // Page-turn refresh — CrossPoint-exact, device-agnostic (the SDK driver owns
+  // every panel difference; CrossPoint has zero app-level X3 special-casing).
+  if (pageHasImages) {
+    if (renderer.getPanelWidth() == 792) {
+      // X3 (UC8253): display the B/W page (text + 1-bit image) as the base with a
+      // clean HALF refresh; the tiled grayscale overlay below then paints the
+      // image region in real 4-level grey via the strip path, leaving the crisp
+      // black text untouched. No blank-box trick needed.
+      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    } else {
+      // X4: Double FAST_REFRESH with selective image blanking (pablohc's
+      // technique): HALF_REFRESH sets particles too firmly for the grayscale LUT
+      // to adjust. Instead, blank only the image area and do two fast refreshes.
+      // Step 1: display page with image area blanked (text appears, image white)
+      // Step 2: re-render with images and display again (images appear clean)
+      int16_t imgX, imgY, imgW, imgH;
+      if (page.getImageBoundingBox(imgX, imgY, imgW, imgH)) {
+        renderer.fillRect(imgX + orientedMarginLeft, imgY + contentY, imgW, imgH, false);
+        renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+
+        // Re-render page content to restore images into the blanked area.
+        // Status bar is not re-rendered to avoid reading stale dynamic values.
+        page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, contentY);
+        renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+      } else {
+        renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      }
+    }
+    // The grayscale pass below leaves gray charge in the image region that a
+    // plain fast diff on the *next* page can't clear, so text there ghosts
+    // gray. Force the next ordinary page onto the HALF ghost-cleanup path,
+    // which drives every pixel to its target regardless of residue.
+    pagesUntilFullRefresh = 1;
+  } else if (pagesUntilFullRefresh <= 1) {
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else {
-    renderer.displayBuffer();  // fast differential
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     pagesUntilFullRefresh--;
   }
 
-  // Differential grayscale overlay. For image pages the image area always gets
-  // the 2-bit overlay over the BW text/status base. With Text Anti-Aliasing on
-  // (SETTINGS.textAntiAliasing), the glyphs are also re-drawn in the grey pass:
-  // the BW base keeps the crisp black core, and this overlay lightens the glyph
-  // EDGE pixels (bmpVal 1/2) to grey → anti-aliased text (same technique as
-  // upstream CrossPoint). Costs the slow greyscale refresh every page (Snappy
-  // LAW), which is why it is an opt-in global toggle, off by default.
-  const bool textAA = SETTINGS.textAntiAliasing != 0;
-  if ((pageHasImages || textAA) && renderer.storeBwBuffer()) {
+  // Grayscale overlay for image pages: the image area gets a 4-level grey overlay
+  // over the BW text/status base (LSB/MSB planes + displayGrayBuffer; the SDK
+  // driver owns the waveform). X4 uses the full-frame differential (storeBwBuffer
+  // peak). X3 uses the TILED strip path — it streams each plane band-by-band and
+  // fires one full-panel differential, so only the image RAM moves and the crisp
+  // black text stays put (the full-frame gc would grey the whole page on the
+  // UC8253). Text contributes nothing to the grey planes (solid black → (0,0)),
+  // so rendering images-only is equivalent to the whole page.
+  if (pageHasImages) {
     const Page* pagePtr = &page;
     const int ml = orientedMarginLeft;
     const int cy = contentY;
-    const int aaFontId = SETTINGS.getReaderFontId();
-    auto drawGrey = [&, pagePtr, ml, cy, aaFontId, textAA]() {
-      pagePtr->renderImages(renderer, ml, cy);
-      if (textAA) pagePtr->render(renderer, aaFontId, ml, cy);
-    };
-    renderer.renderGrayscale(GfxRenderer::GrayscaleMode::Differential, drawGrey);
-    renderer.restoreBwBuffer();
-    // Force the next page after an image page to take the HALF_REFRESH branch
-    // above, fully clearing any residual grayscale state so text doesn't ghost
-    // through. Cheaper than a FULL_REFRESH and visually identical.
-    pagesUntilFullRefresh = 1;
+    auto drawGrey = [&, pagePtr, ml, cy]() { pagePtr->renderImages(renderer, ml, cy); };
+    if (renderer.getPanelWidth() == 792) {
+      renderer.renderGrayscaleTiled(drawGrey);
+    } else if (renderer.storeBwBuffer()) {
+      renderer.renderGrayscale(GfxRenderer::GrayscaleMode::Differential, drawGrey);
+      renderer.restoreBwBuffer();
+    }
   }
 
   renderer.setTextRenderStyle(CrossPointSettings::kRenderStyleCrisp);

@@ -21,7 +21,7 @@ using crosspoint::reader::ReaderState;
 
 namespace {
 
-// Epub config: all gestures on. (Default ctor is the leaner txt/xtc shape.)
+// Epub config: all gestures on. (Default ctor is the leaner txt shape.)
 ReaderInputConfig epubCfg() {
   ReaderInputConfig c;
   c.doubleTapToggle = true;

@@ -240,14 +240,27 @@ void GfxRenderer::drawPixel(const int x, const int y, const bool state) const {
     return;
   }
 
+  // Tiled grayscale: redirect writes to the strip scratch and clip to the
+  // current band. Single predictable branch on the hot per-pixel path; no-op
+  // (full frame) when no strip is active.
+  uint8_t* target = frameBuffer;
+  uint32_t rowY = static_cast<uint32_t>(phyY);
+  if (_stripActive) {
+    if (phyY < _stripY0 || phyY >= _stripY0 + _stripRows) {
+      return;  // pixel outside the band currently being rendered
+    }
+    target = _stripBuf;
+    rowY = static_cast<uint32_t>(phyY - _stripY0);
+  }
+
   // Calculate byte position and bit position
-  const uint32_t byteIndex = phyY * panelWidthBytes + (phyX / 8);
+  const uint32_t byteIndex = rowY * panelWidthBytes + (phyX / 8);
   const uint8_t bitPosition = 7 - (phyX % 8);  // MSB first
 
   if (state) {
-    frameBuffer[byteIndex] &= ~(1 << bitPosition);  // Clear bit
+    target[byteIndex] &= ~(1 << bitPosition);  // Clear bit
   } else {
-    frameBuffer[byteIndex] |= 1 << bitPosition;  // Set bit
+    target[byteIndex] |= 1 << bitPosition;  // Set bit
   }
 }
 
@@ -883,7 +896,41 @@ static unsigned long start_ms = 0;
 
 void GfxRenderer::clearScreen(const uint8_t color) const {
   start_ms = millis();
+  if (_stripActive) {
+    // Clear only the active band's scratch, not the shared framebuffer.
+    memset(_stripBuf, color, static_cast<size_t>(panelWidthBytes) * _stripRows);
+    return;
+  }
   display.clearScreen(color);
+}
+
+void GfxRenderer::beginStripTarget(uint8_t* scratch, int stripY0, int stripRows) const {
+  _stripBuf = scratch;
+  _stripY0 = stripY0;
+  _stripRows = stripRows;
+  _stripActive = true;
+}
+
+void GfxRenderer::endStripTarget() const {
+  _stripActive = false;
+  _stripBuf = nullptr;
+  _stripY0 = 0;
+  _stripRows = 0;
+}
+
+bool GfxRenderer::glyphIntersectsStrip(int x0, int y0, int x1, int y1) const {
+  if (!_stripActive) {
+    return true;
+  }
+  // Rotate the two opposite bbox corners to physical coords; for 90-degree
+  // orientations the physical bbox stays axis-aligned, so min/max of the two
+  // rotated corners' Y bounds the glyph's physical y-extent.
+  int ax, ay, bx, by;
+  rotateCoordinates(orientation, x0, y0, &ax, &ay, panelWidth, panelHeight);
+  rotateCoordinates(orientation, x1, y1, &bx, &by, panelWidth, panelHeight);
+  const int minY = ay < by ? ay : by;
+  const int maxY = ay > by ? ay : by;
+  return !(maxY < _stripY0 || minY >= _stripY0 + _stripRows);
 }
 
 void GfxRenderer::invertScreen() const {
@@ -1142,6 +1189,8 @@ void GfxRenderer::displayGrayBuffer(const uint8_t* lut, bool factoryMode) const 
   display.displayGrayBuffer(fadingFix, lut, factoryMode);
 }
 
+void GfxRenderer::preconditionGrayscale() const { display.preconditionGrayscale(); }
+
 #ifdef FREEINK_DISPLAY
 // freeink-sdk's drivers supply their own factory grayscale LUTs internally and,
 // when passed a null `lut`, fall back to their OEM factory bank (see
@@ -1196,6 +1245,68 @@ void GfxRenderer::renderGrayscale(GrayscaleMode mode, const std::function<void()
   displayGrayBuffer(lut, factory);
   setRenderMode(BW);
 }
+
+bool GfxRenderer::renderGrayscaleTiled(const std::function<void()>& drawFn) {
+  if (!supportsStripGrayscale()) {
+    return false;
+  }
+  constexpr int STRIP_ROWS = 80;
+  const int gh = panelHeight;
+  const int gwBytes = panelWidthBytes;
+  auto scratch = makeUniqueNoThrow<uint8_t[]>(static_cast<size_t>(gwBytes) * STRIP_ROWS);
+  if (!scratch) {
+    LOG_ERR("GFX", "OOM: grayscale strip scratch (%d bytes); skipping tiled grayscale", gwBytes * STRIP_ROWS);
+    return false;
+  }
+
+  // Each plane is rendered band-by-band into the scratch and streamed straight
+  // to controller RAM, leaving the BW framebuffer intact. drawFn is clipped to
+  // the active band by drawPixel()/DirectPixelWriter, so per-band re-rendering
+  // is correct. displayGrayBuffer() then fires one full-panel differential
+  // refresh; only the strip-touched RAM moves.
+  setRenderMode(GRAYSCALE_LSB);
+  for (int y = 0; y < gh; y += STRIP_ROWS) {
+    const int rows = (gh - y < STRIP_ROWS) ? (gh - y) : STRIP_ROWS;
+    beginStripTarget(scratch.get(), y, rows);
+    clearScreen(0x00);
+    drawFn();
+    endStripTarget();
+    writeGrayscalePlaneStrip(true, scratch.get(), y, rows);
+  }
+
+  setRenderMode(GRAYSCALE_MSB);
+  for (int y = 0; y < gh; y += STRIP_ROWS) {
+    const int rows = (gh - y < STRIP_ROWS) ? (gh - y) : STRIP_ROWS;
+    beginStripTarget(scratch.get(), y, rows);
+    clearScreen(0x00);
+    drawFn();
+    endStripTarget();
+    writeGrayscalePlaneStrip(false, scratch.get(), y, rows);
+  }
+
+  setRenderMode(BW);
+  displayGrayBuffer(nullptr, false);
+  // BW framebuffer is intact; re-sync controller RAM for the next differential
+  // page turn directly from it.
+  cleanupGrayscaleWithFrameBuffer();
+  return true;
+}
+
+void GfxRenderer::writeGrayscalePlaneStrip(bool lsbPlane, uint8_t* scratch, int yStart, int numRows) const {
+  const size_t nBytes = static_cast<size_t>(panelWidthBytes) * numRows;
+  if (getPanelWidth() == 792) {
+    // freeink's UC8253 (X3) grayscale plane path renders our plane polarity
+    // inverted (same reason copyGrayscaleLsbBuffers XORs on the X3). Flip the
+    // band before streaming, then restore so the caller's scratch is unchanged.
+    for (size_t i = 0; i < nBytes; i++) scratch[i] ^= 0xFF;
+    display.writeGrayscalePlaneStrip(lsbPlane, scratch, static_cast<uint16_t>(yStart), static_cast<uint16_t>(numRows));
+    for (size_t i = 0; i < nBytes; i++) scratch[i] ^= 0xFF;
+    return;
+  }
+  display.writeGrayscalePlaneStrip(lsbPlane, scratch, static_cast<uint16_t>(yStart), static_cast<uint16_t>(numRows));
+}
+
+bool GfxRenderer::supportsStripGrayscale() const { return display.supportsStripGrayscale(); }
 
 void GfxRenderer::freeBwBufferChunks() {
   for (auto& bwBufferChunk : bwBufferChunks) {

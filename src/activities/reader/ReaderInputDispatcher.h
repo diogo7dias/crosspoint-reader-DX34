@@ -56,13 +56,13 @@ struct ReaderState {
   bool hasSection = false;   // section != nullptr
 };
 
-// Per-reader gesture opt-in (epub: all on; txt/xtc: leaner). OpenMenu and
+// Per-reader gesture opt-in (epub: all on; txt: leaner). OpenMenu and
 // LongPressConfirm are semantic slots each reader maps to its own action.
 struct ReaderInputConfig {
   bool doubleTapToggle = true;   // Confirm double-tap -> ToggleTextRenderMode
   bool longPressConfirm = true;  // Confirm long-press -> LongPressConfirm
   bool footnoteBack = false;     // Back restores footnote when inFootnote (epub)
-  bool chapterSkip = false;      // held page button -> SkipChapter* (epub + xtc)
+  bool chapterSkip = false;      // held page button -> SkipChapter* (epub)
 };
 
 enum class ReaderAction : uint8_t {

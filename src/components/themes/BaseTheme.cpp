@@ -92,8 +92,7 @@ bool endsWithIgnoreCase(const char* text, const char* suffix) {
 }
 
 bool isBookFile(const char* name) {
-  return endsWithIgnoreCase(name, ".epub") || endsWithIgnoreCase(name, ".xtc") || endsWithIgnoreCase(name, ".xtch") ||
-         endsWithIgnoreCase(name, ".txt") || endsWithIgnoreCase(name, ".md");
+  return endsWithIgnoreCase(name, ".epub") || endsWithIgnoreCase(name, ".txt") || endsWithIgnoreCase(name, ".md");
 }
 
 bool isImageFile(const char* name) { return endsWithIgnoreCase(name, ".bmp") || endsWithIgnoreCase(name, ".pxc"); }

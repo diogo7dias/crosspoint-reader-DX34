@@ -32,8 +32,8 @@ std::string formatPageCounterText(uint8_t mode, int currentPage, int totalPages)
 bool shouldFullRefreshOnEnter(const std::string& bookPath);
 
 // Persist the currently opened book as the last-opened entry and add it to
-// the recent books list. Shared by all three reader activities (Epub, Txt,
-// Xtc). Callers remain responsible for any subsequent moveBookToRecents()
+// the recent books list. Shared by both reader activities (Epub, Txt).
+// Callers remain responsible for any subsequent moveBookToRecents()
 // step because its post-hook differs per reader.
 // Inlined so each reader's call site compiles down to the same sequence it
 // previously had, avoiding a cross-translation-unit call overhead.

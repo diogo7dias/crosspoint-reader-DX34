@@ -5,7 +5,6 @@
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Txt.h>
-#include <Xtc.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
@@ -36,8 +35,7 @@ bool endsWithIgnoreCase(const std::string& s, const char* suffix) {
 }
 
 bool isBookPath(const std::string& path) {
-  return endsWithIgnoreCase(path, ".epub") || endsWithIgnoreCase(path, ".xtch") || endsWithIgnoreCase(path, ".xtc") ||
-         endsWithIgnoreCase(path, ".txt") || endsWithIgnoreCase(path, ".md");
+  return endsWithIgnoreCase(path, ".epub") || endsWithIgnoreCase(path, ".txt") || endsWithIgnoreCase(path, ".md");
 }
 
 std::string basenameOf(const std::string& path) {
@@ -89,9 +87,6 @@ int nextSequenceNumber() {
 std::string cachePathForBook(const std::string& path) {
   if (endsWithIgnoreCase(path, ".epub")) {
     return Epub(path, Paths::kDataDir).getCachePath();
-  }
-  if (endsWithIgnoreCase(path, ".xtc") || endsWithIgnoreCase(path, ".xtch")) {
-    return Xtc(path, Paths::kDataDir).getCachePath();
   }
   if (endsWithIgnoreCase(path, ".txt") || endsWithIgnoreCase(path, ".md")) {
     return Txt(path, Paths::kDataDir).getCachePath();

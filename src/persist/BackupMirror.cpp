@@ -90,7 +90,7 @@ void snapshotBookCaches() {
     entry.getName(nameBuf, sizeof(nameBuf));
     entry.close();
     const std::string dirName = nameBuf;
-    if (!startsWith(dirName, "epub_") && !startsWith(dirName, "xtc_") && !startsWith(dirName, "txt_")) {
+    if (!startsWith(dirName, "epub_") && !startsWith(dirName, "txt_")) {
       continue;
     }
     const std::string cachePath = std::string(Paths::kDataDir) + "/" + dirName;

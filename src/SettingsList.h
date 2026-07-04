@@ -96,7 +96,8 @@ inline const std::vector<SettingInfo>& getSettingsList() {
         "paragraphAlignment", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_FIRST_LINE_INDENT, &CrossPointSettings::firstLineIndentMode,
                                   {StrId::STR_BOOK_STYLE_OPT, StrId::STR_NONE_OPT, StrId::STR_INDENT_SMALL,
-                                   StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE, StrId::STR_INDENT_MEGA},
+                                   StrId::STR_INDENT_MEDIUM, StrId::STR_INDENT_LARGE, StrId::STR_INDENT_MEGA,
+                                   StrId::STR_INDENT_HUGE},
                                   "firstLineIndentMode", StrId::STR_CAT_READER));
     s.push_back(SettingInfo::Enum(StrId::STR_READER_STYLE_MODE, &CrossPointSettings::readerStyleMode,
                                   {StrId::STR_READER_STYLE_USER, StrId::STR_READER_STYLE_HYBRID}, "readerStyleMode",
@@ -120,8 +121,10 @@ inline const std::vector<SettingInfo>& getSettingsList() {
     s.push_back(SettingInfo::Enum(StrId::STR_TEXT_RENDER_MODE, &CrossPointSettings::textRenderMode,
                                   {StrId::STR_RENDER_CRISP, StrId::STR_RENDER_DARK},
                                   "textRenderMode", StrId::STR_CAT_READER));
-    s.push_back(SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing, "textAntiAliasing",
-                                    StrId::STR_CAT_READER));
+    // (Lector) Text Anti-Aliasing toggle removed: the grey second pass over the
+    // glyphs washed out reading pages (grey text settling ~1s after the turn)
+    // and its benefit was imperceptible on e-ink. The textAntiAliasing field
+    // stays in CrossPointSettings purely for settings.bin layout compatibility.
     s.push_back(SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled,
                                     "hyphenationEnabled", StrId::STR_CAT_READER));
 

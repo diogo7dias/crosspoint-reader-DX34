@@ -81,6 +81,10 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   int cachedSpineIndex = 0;
   int cachedChapterTotalPageCount = 0;
   std::string pendingAnchor;
+  // KOReader-sync Apply: anchor from the remote XPath. Applied as a FLOOR on
+  // the rebuilt section's page (never land before the anchor's chapter
+  // heading), unlike pendingAnchor which jumps exactly to its page.
+  std::string pendingSyncAnchorFloor_;
   bool pendingSubactivityExit = false;  // Defer subactivity exit to avoid use-after-free
   bool pendingGoHome = false;           // Defer go home to avoid race condition with display task
   bool pendingGoLibrary = false;        // Defer go library after destructive actions
@@ -191,6 +195,9 @@ class EpubReaderActivity final : public ActivityWithSubactivity {
   // reboot (silentRestartToReader reboots without flushing, and page-turn
   // writes are deferred to lifecycle events).
   void persistProgressBeforeRestart();
+  // Reload the book that was released for the KOReader-sync TLS window (see
+  // MenuAction::SYNC). No-op if the epub is still loaded.
+  void reloadEpubAfterSync(const std::string& path);
   void invalidateStatusBarCaches();
   void clearPageCache();
   std::shared_ptr<Page> getCachedPage(int pageIndex) const;

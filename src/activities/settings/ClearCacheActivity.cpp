@@ -35,7 +35,7 @@ void ClearCacheActivity::onEnter() {
 
 void ClearCacheActivity::onExit() { ActivityWithSubactivity::onExit(); }
 
-// Stream-scan the reading-cache dirs (/.crosspoint/{epub_,xtc_,txt_}*) and sum
+// Stream-scan the reading-cache dirs (/.crosspoint/{epub_,txt_}*) and sum
 // their file sizes for the "how much will this free" display. Two-pass like
 // clearCache(): collect dir names, close root, then sum each dir's files. Bounded
 // RAM (just the dir-name list + a running total).
@@ -53,8 +53,8 @@ void ClearCacheActivity::scanCacheSize() {
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
     file.getName(name, sizeof(name));
     const std::string itemName(name);
-    const bool isCacheDir = file.isDirectory() && (itemName.rfind("epub_", 0) == 0 || itemName.rfind("xtc_", 0) == 0 ||
-                                                   itemName.rfind("txt_", 0) == 0);
+    const bool isCacheDir =
+        file.isDirectory() && (itemName.rfind("epub_", 0) == 0 || itemName.rfind("txt_", 0) == 0);
     file.close();
     if (isCacheDir) cacheDirs.push_back(std::string(Paths::kDataDir) + "/" + itemName);
   }
@@ -86,7 +86,7 @@ void ClearCacheActivity::render(Activity::RenderLock&&) {
                                  (cacheBooks == 1 ? " book" : " books");
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 90, sizeLine.c_str(), true, EpdFontFamily::REGULAR);
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 60, "Clears generated cache files", true);
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 30, "for EPUB/XTC/TXT books.", true);
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 30, "for EPUB/TXT books.", true);
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10, "Reading progress is preserved.", true,
                               EpdFontFamily::REGULAR);
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 30, "Books may re-index when opened.", true);
@@ -153,8 +153,8 @@ void ClearCacheActivity::clearCache() {
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
     file.getName(name, sizeof(name));
     const std::string itemName(name);
-    const bool isCacheDir = file.isDirectory() && (itemName.rfind("epub_", 0) == 0 || itemName.rfind("xtc_", 0) == 0 ||
-                                                   itemName.rfind("txt_", 0) == 0);
+    const bool isCacheDir =
+        file.isDirectory() && (itemName.rfind("epub_", 0) == 0 || itemName.rfind("txt_", 0) == 0);
     file.close();
     if (isCacheDir) {
       cacheDirs.push_back(std::string(Paths::kDataDir) + "/" + itemName);

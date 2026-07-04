@@ -30,8 +30,17 @@ struct DirectPixelWriter {
   // (100) both render correctly. Cached in init() so writePixel() stays branchless.
   int strideBytes;
 
+  // Active write target: for tiled grayscale, fb is the band scratch, originY is
+  // the band's top physical row, and clipRows is the band height; off-band pixels
+  // are dropped. With no strip active these collapse to the full frame (originY 0,
+  // clipRows panelHeight) so the clip doubles as a bounds guard.
+  int originY;
+  int clipRows;
+
   void init(GfxRenderer& renderer) {
-    fb = renderer.getFrameBuffer();
+    fb = renderer.getWriteTarget();
+    originY = renderer.getWriteOriginY();
+    clipRows = renderer.getWriteRows();
     mode = renderer.getRenderMode();
     // Physical panel geometry at runtime (X4 800x480, X3 792x528). Using the
     // compile-time HalDisplay::DISPLAY_* constants here baked in the X4 stride
@@ -136,7 +145,12 @@ struct DirectPixelWriter {
     const int phyX = rowPhyXBase + logicalX * phyXStepX;
     const int phyY = rowPhyYBase + logicalX * phyYStepX;
 
-    const uint16_t byteIndex = phyY * strideBytes + (phyX >> 3);
+    // Band-local row. The unsigned compare drops both off-band pixels (strip
+    // mode) and any out-of-frame row (full-frame mode) in one branch.
+    const int sy = phyY - originY;
+    if (static_cast<unsigned>(sy) >= static_cast<unsigned>(clipRows)) return;
+
+    const uint16_t byteIndex = static_cast<uint16_t>(sy * strideBytes + (phyX >> 3));
     const uint8_t bitMask = 1 << (7 - (phyX & 7));
 
     if (state) {

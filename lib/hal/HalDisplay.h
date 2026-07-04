@@ -54,6 +54,17 @@ class HalDisplay {
   void copyGrayscaleMsbBuffers(const uint8_t* msbBuffer);
   void cleanupGrayscaleBuffers(const uint8_t* bwBuffer);
 
+  // OEM grayscale preconditioning (preBwMid settle). Call after the B/W base is
+  // displayed and before writing grayscale planes so the weak gc nudge paints
+  // clean grey on the X3 (UC8253). No-op on the X4 (its grayscale needs none).
+  void preconditionGrayscale();
+
+  // Tiled grayscale: stream one band of a plane (lsbPlane selects LSB/MSB RAM)
+  // straight to the controller RAM; supportsStripGrayscale() gates the path.
+  // See EInkDisplay::writeGrayscalePlaneStrip.
+  void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* rows, uint16_t yStart, uint16_t numRows);
+  bool supportsStripGrayscale() const;
+
   void displayGrayBuffer(bool turnOffScreen = false, const uint8_t* lut = nullptr, bool factoryMode = false);
 
  private:

@@ -9,6 +9,7 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
 #include "MappedInputManager.h"
+#include "ReaderActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/themes/BaseTheme.h"
 #include "fontIds.h"
@@ -72,6 +73,22 @@ void KOReaderSyncActivity::onWifiSelectionComplete(const bool success) {
   performSync();
 }
 
+bool KOReaderSyncActivity::ensureEpubLoaded() {
+  if (epub) {
+    return true;
+  }
+  // The caller released the book so the TLS handshake had heap; reload it now
+  // (network is done) to map the remote position back to a local page.
+  LOG_DBG("KOSync", "Loading epub for progress mapping (heap: %u)", (unsigned)ESP.getFreeHeap());
+  auto loaded = ReaderActivity::loadEpub(epubPath);
+  if (!loaded) {
+    LOG_ERR("KOSync", "Failed to reload epub for progress mapping");
+    return false;
+  }
+  epub = std::move(loaded);
+  return true;
+}
+
 void KOReaderSyncActivity::performSync() {
   // Calculate document hash based on user's preferred method
   if (KOREADER_STORE.getMatchMethod() == DocumentMatchMethod::FILENAME) {
@@ -121,14 +138,24 @@ void KOReaderSyncActivity::performSync() {
     return;
   }
 
-  // Convert remote progress to CrossPoint position
+  // Network is done — reload the released book to map the remote position.
+  if (!ensureEpubLoaded()) {
+    {
+      RenderLock lock(*this);
+      state = SYNC_FAILED;
+      statusMessage = tr(STR_HASH_FAILED);
+    }
+    requestUpdate();
+    return;
+  }
+
+  // Convert remote progress to CrossPoint position: the mapper streams the
+  // chapter XHTML and resolves the remote XPath to a character-exact text
+  // position, then converts to a local page. Local progress in KOReader
+  // format (localProgress) was pre-computed by the caller.
   hasRemoteProgress = true;
   KOReaderPosition koPos = {remoteProgress.progress, remoteProgress.percentage};
-  remotePosition = ProgressMapper::toCrossPoint(epub, koPos, totalPagesInSpine);
-
-  // Calculate local progress in KOReader format (for display)
-  CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPagesInSpine};
-  localProgress = ProgressMapper::toKOReader(epub, localPos);
+  remotePosition = ProgressMapper::toCrossPoint(epub, koPos, currentSpineIndex, totalPagesInSpine);
 
   {
     RenderLock lock(*this);
@@ -147,14 +174,12 @@ void KOReaderSyncActivity::performUpload() {
   requestUpdate();
   requestUpdateAndWait();
 
-  // Convert current position to KOReader format
-  CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPagesInSpine};
-  KOReaderPosition koPos = ProgressMapper::toKOReader(epub, localPos);
-
+  // Local position in KOReader format was pre-computed by the caller while
+  // the epub was still loaded — the upload path never needs the book in RAM.
   KOReaderProgress progress;
   progress.document = documentHash;
-  progress.progress = koPos.xpath;
-  progress.percentage = koPos.percentage;
+  progress.progress = localProgress.xpath;
+  progress.percentage = localProgress.percentage;
 
   const auto result = KOReaderSyncClient::updateProgress(progress);
 
@@ -266,15 +291,16 @@ void KOReaderSyncActivity::render(Activity::RenderLock&&) {
     // Show comparison
     renderer.drawCenteredText(UI_10_FONT_ID, 120, tr(STR_PROGRESS_FOUND), true, EpdFontFamily::REGULAR);
 
-    // Get chapter names from TOC
-    const int remoteTocIndex = epub->getTocIndexForSpineIndex(remotePosition.spineIndex);
-    const int localTocIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
+    // Remote chapter name from the reloaded epub's TOC (SHOWING_RESULT is only
+    // reachable after ensureEpubLoaded()); local name was pre-computed by the
+    // caller before the book was released.
+    const int remoteTocIndex = epub ? epub->getTocIndexForSpineIndex(remotePosition.spineIndex) : -1;
     const std::string remoteChapter =
         (remoteTocIndex >= 0) ? epub->getTocItem(remoteTocIndex).title
                               : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(remotePosition.spineIndex + 1));
-    const std::string localChapter =
-        (localTocIndex >= 0) ? epub->getTocItem(localTocIndex).title
-                             : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(currentSpineIndex + 1));
+    const std::string localChapter = !localChapterName.empty()
+                                         ? localChapterName
+                                         : (std::string(tr(STR_SECTION_PREFIX)) + std::to_string(currentSpineIndex + 1));
 
     // Remote progress - chapter and page
     renderer.drawText(UI_10_FONT_ID, 20, 160, tr(STR_REMOTE_LABEL), true);
@@ -381,8 +407,11 @@ void KOReaderSyncActivity::loop() {
 
     if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
       if (selectedOption == 0) {
-        // Apply remote progress
-        onSyncComplete(remotePosition.spineIndex, remotePosition.pageNumber);
+        // Apply remote progress. The anchor id captured while resolving the
+        // remote XPath floors the estimated page reader-side (never lands
+        // before the chapter heading the position sits under).
+        onSyncComplete(remotePosition.spineIndex, remotePosition.pageNumber,
+                       std::string(remotePosition.xpathAnchorId));
       } else if (selectedOption == 1) {
         // Upload local progress
         performUpload();

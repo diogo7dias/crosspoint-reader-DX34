@@ -6,7 +6,6 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Utf8.h>
-#include <Xtc.h>
 
 #include <algorithm>
 #include <cctype>

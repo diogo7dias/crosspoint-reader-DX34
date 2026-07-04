@@ -41,8 +41,8 @@ void maybeShowStillWorkingToast(GfxRenderer& renderer);
 
 // Stop the reassurance repaint without touching the popup stack or
 // display. Use after a successful first render on code paths that don't
-// call dismiss() (e.g. XtcReaderActivity, which visually replaces the
-// popup via renderPage's full-frame draw) so page-turn renders after the
+// call dismiss() (e.g. a reader that visually replaces the popup via a
+// full-frame draw) so page-turn renders after the
 // first don't accidentally re-trigger the repaint.
 void markOpenComplete();
 

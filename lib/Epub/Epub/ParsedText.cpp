@@ -622,14 +622,15 @@ void ParsedText::applyParagraphIndent(const GfxRenderer& renderer, const int fon
   }
 
   // INDENT_MEGA (5): first line starts ~1/4 of the way across the text column.
-  // Clamp so the indent never eats more than 60% of the column (leaves >=40% for
-  // text) and is never smaller than a normal one-em indent.
-  if (firstLineIndentMode == 5) {
-    int mega = viewportWidth / 4;
+  // INDENT_HUGE (6): ~1/6 across — between Large (1.4em) and Mega. Both use the
+  // same column-fraction model with identical clamps: never more than 60% of the
+  // column (leaves >=40% for text), never smaller than a normal one-em indent.
+  if (firstLineIndentMode == 5 || firstLineIndentMode == 6) {
+    int indent = (firstLineIndentMode == 5) ? (viewportWidth / 4) : (viewportWidth / 6);
     const int maxIndent = (viewportWidth * 3) / 5;
-    if (mega > maxIndent) mega = maxIndent;
-    if (mega < emWidth) mega = emWidth;
-    blockStyle.textIndent = static_cast<int16_t>(mega);
+    if (indent > maxIndent) indent = maxIndent;
+    if (indent < emWidth) indent = emWidth;
+    blockStyle.textIndent = static_cast<int16_t>(indent);
     blockStyle.textIndentDefined = true;
     return;
   }
