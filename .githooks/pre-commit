@@ -1,0 +1,4 @@
+#!/bin/sh
+# pre-commit: run repo checks. Enable with bin/install-git-hooks.
+hookdir=$(dirname "$0")
+"$hookdir/check-token-limit" || exit 1

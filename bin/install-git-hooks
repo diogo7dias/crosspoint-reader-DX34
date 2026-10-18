@@ -1,0 +1,8 @@
+#!/bin/sh
+# Point git at the versioned hooks in .githooks (token limit check and others).
+set -e
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+chmod +x .githooks/* 2>/dev/null || true
+git config core.hooksPath .githooks
+echo "Git hooks enabled: core.hooksPath = .githooks"

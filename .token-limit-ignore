@@ -1,0 +1,6 @@
+# Generated or vendored, not agent-authored
+lib/EpdFont/builtinFonts/
+lib/expat/
+lib/uzlib/
+lib/miniz/third_party/
+lib/picojpeg/
