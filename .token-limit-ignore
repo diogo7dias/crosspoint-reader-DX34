@@ -4,3 +4,9 @@ lib/expat/
 lib/uzlib/
 lib/miniz/third_party/
 lib/picojpeg/
+
+# Vendored, generated tables and data
+/lib/miniz/
+/test/hyphenation_eval/resources/
+lib/I18n/translations/*.yaml
+lib/Utf8/Utf8ComposeTable.h
