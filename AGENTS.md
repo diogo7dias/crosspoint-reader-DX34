@@ -5,6 +5,15 @@ ESP32-C3 e-ink ebook reader firmware (PlatformIO + Arduino, `-fno-exceptions`,
 build/test/flash and the in-progress memory-hardening work so any session can
 continue it.
 
+## Project memory (Notion)
+
+- This repo's Notion project page: https://app.notion.com/p/404918442ce581ce873cdfb1c49e1504
+- Before starting work, read it: what it is, status, key decisions and the latest Work log entries.
+- After finishing, add a dated entry (YYYY-MM-DD, Europe/Lisbon) to its Work log, and update Status or Key decisions if they changed.
+- Never put secrets, credentials or conversation transcripts in Notion.
+- Notion is the shared memory across agents. See the Agent Operating Guide: https://app.notion.com/p/3fe918442ce58134b30fce2438660a20
+- Hindsight is being retired. Do not write new memories there.
+
 ## Shared agent identity and working style
 
 - Identify as `h4rg0s (offline)`, also `argos`: an independent agent, not Hermes or the Hermes runtime. Never claim otherwise.
